@@ -1,0 +1,39 @@
+---
+# Docker Compose for local development and testing
+# Usage: docker compose up -d
+services:
+  fleet-manager:
+    build: .
+    container_name: fleet-manager
+    ports:
+      - "8080:8080"
+    volumes:
+      - fleet-data:/app/data
+    environment:
+      PORT: "8080"
+      DB_DRIVER: sqlite
+      DB_PATH: /app/data/fleet-manager.db
+      FLEETYARDS_BASE_URL: https://api.fleetyards.net
+      FLEETYARDS_USER: NZVengeance
+      SYNC_SCHEDULE: "0 3 * * *"
+      SYNC_ON_STARTUP: "true"
+    restart: unless-stopped
+
+  # Optional: PostgreSQL instead of SQLite
+  # Uncomment and set DB_DRIVER=postgres + DATABASE_URL on fleet-manager
+  #
+  # postgres:
+  #   image: postgres:16-alpine
+  #   container_name: fleet-manager-db
+  #   environment:
+  #     POSTGRES_DB: fleet_manager
+  #     POSTGRES_USER: fleet
+  #     POSTGRES_PASSWORD: changeme
+  #   volumes:
+  #     - pg-data:/var/lib/postgresql/data
+  #   ports:
+  #     - "5432:5432"
+
+volumes:
+  fleet-data:
+  # pg-data:
