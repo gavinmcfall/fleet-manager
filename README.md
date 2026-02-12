@@ -28,7 +28,7 @@ All configuration is done via environment variables. This makes it easy to confi
 | `DB_PATH` | `./data/fleet-manager.db` | No | SQLite database file path (only used when `DB_DRIVER=sqlite`) |
 | `DATABASE_URL` | — | When `DB_DRIVER=postgres` | PostgreSQL connection string (e.g. `postgres://user:pass@host:5432/dbname?sslmode=disable`) |
 | `FLEETYARDS_BASE_URL` | `https://api.fleetyards.net` | No | FleetYards API base URL |
-| `FLEETYARDS_USER` | — | **Yes** | Your FleetYards username — used for hangar sync |
+| `FLEETYARDS_USER` | — | No | Your FleetYards username — enables public hangar sync option |
 | `SYNC_SCHEDULE` | `0 3 * * *` | No | Cron expression for the nightly sync schedule (default: 3:00 AM) |
 | `SYNC_ON_STARTUP` | `true` | No | If `true`, runs an initial sync when the app starts and the database is empty |
 | `STATIC_DIR` | `./frontend/dist` | No | Path to the built React frontend assets inside the container |

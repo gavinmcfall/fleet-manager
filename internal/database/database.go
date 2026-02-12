@@ -204,32 +204,43 @@ func (db *DB) GetShipCount(ctx context.Context) (int, error) {
 
 // --- Vehicle Operations ---
 
-func (db *DB) UpsertVehicle(ctx context.Context, v *models.Vehicle) error {
+// InsertVehicle inserts a vehicle and returns its ID.
+// Always use after ClearAllVehicles for clean-slate imports.
+func (db *DB) InsertVehicle(ctx context.Context, v *models.Vehicle) (int, error) {
 	query := fmt.Sprintf(`
 		INSERT INTO vehicles (ship_slug, ship_name, custom_name, manufacturer_name, manufacturer_code,
-			flagship, public, source, last_synced_at)
-		VALUES (?, ?, ?, ?, ?, ?, ?, ?, %s)
-		%s`,
+			flagship, public, loaner, paint_name, source, last_synced_at)
+		VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, %s)`,
 		db.now(),
-		db.onConflictUpdate("ship_slug, source",
-			"ship_name=excluded.ship_name, custom_name=excluded.custom_name, manufacturer_name=excluded.manufacturer_name, manufacturer_code=excluded.manufacturer_code, flagship=excluded.flagship, public=excluded.public, last_synced_at=excluded.last_synced_at"),
 	)
 
 	if db.driver == "postgres" {
 		query = replacePlaceholders(query)
+		query += " RETURNING id"
+		var id int
+		err := db.conn.QueryRowContext(ctx, query,
+			v.ShipSlug, v.ShipName, v.CustomName, v.ManufacturerName, v.ManufacturerCode,
+			v.Flagship, v.Public, v.Loaner, v.PaintName, v.Source,
+		).Scan(&id)
+		return id, err
 	}
 
-	_, err := db.conn.ExecContext(ctx, query,
+	res, err := db.conn.ExecContext(ctx, query,
 		v.ShipSlug, v.ShipName, v.CustomName, v.ManufacturerName, v.ManufacturerCode,
-		v.Flagship, v.Public, v.Source,
+		v.Flagship, v.Public, v.Loaner, v.PaintName, v.Source,
 	)
-	return err
+	if err != nil {
+		return 0, err
+	}
+	id, err := res.LastInsertId()
+	return int(id), err
 }
 
 func (db *DB) GetAllVehicles(ctx context.Context) ([]models.Vehicle, error) {
 	rows, err := db.conn.QueryContext(ctx, `
 		SELECT v.id, v.ship_slug, v.ship_name, v.custom_name, v.manufacturer_name,
-			v.manufacturer_code, v.flagship, v.public, v.source, v.last_synced_at,
+			v.manufacturer_code, v.flagship, v.public, v.loaner, v.paint_name,
+			v.source, v.last_synced_at,
 			s.focus, s.size_label, s.cargo, s.min_crew, s.max_crew, s.pledge_price,
 			s.production_status, s.scm_speed, s.image_url
 		FROM vehicles v
@@ -249,6 +260,7 @@ func (db *DB) GetAllVehicles(ctx context.Context) ([]models.Vehicle, error) {
 
 		err := rows.Scan(&v.ID, &v.ShipSlug, &v.ShipName, &v.CustomName,
 			&v.ManufacturerName, &v.ManufacturerCode, &v.Flagship, &v.Public,
+			&v.Loaner, &v.PaintName,
 			&v.Source, &v.LastSyncedAt,
 			&focus, &sizeLabel, &cargo, &minCrew, &maxCrew, &pledgePrice,
 			&prodStatus, &scmSpeed, &imageURL)
@@ -290,17 +302,56 @@ func (db *DB) ClearVehiclesBySource(ctx context.Context, source string) error {
 	return err
 }
 
+func (db *DB) ClearAllVehicles(ctx context.Context) error {
+	_, err := db.conn.ExecContext(ctx, "DELETE FROM vehicles")
+	return err
+}
+
+// EnrichVehicle updates a vehicle with supplementary FleetYards data
+func (db *DB) EnrichVehicle(ctx context.Context, vehicleID int, canonicalSlug string, loaner bool, paintName string) error {
+	query := "UPDATE vehicles SET ship_slug = ?, loaner = ?, paint_name = ? WHERE id = ?"
+	if db.driver == "postgres" {
+		query = replacePlaceholders(query)
+	}
+	_, err := db.conn.ExecContext(ctx, query, canonicalSlug, loaner, paintName, vehicleID)
+	return err
+}
+
+// --- Settings Operations ---
+
+func (db *DB) GetSetting(ctx context.Context, key string) (string, error) {
+	query := "SELECT value FROM settings WHERE key = ?"
+	if db.driver == "postgres" {
+		query = replacePlaceholders(query)
+	}
+	var value string
+	err := db.conn.QueryRowContext(ctx, query, key).Scan(&value)
+	if err != nil {
+		return "", nil // Key not found = empty
+	}
+	return value, nil
+}
+
+func (db *DB) SetSetting(ctx context.Context, key, value string) error {
+	query := "INSERT INTO settings (key, value) VALUES (?, ?) ON CONFLICT(key) DO UPDATE SET value=excluded.value"
+	if db.driver == "postgres" {
+		query = replacePlaceholders(query)
+	}
+	_, err := db.conn.ExecContext(ctx, query, key, value)
+	return err
+}
+
 // --- Hangar Import Operations ---
 
 func (db *DB) UpsertHangarImport(ctx context.Context, h *models.HangarImportDetail) error {
 	query := fmt.Sprintf(`
-		INSERT INTO hangar_imports (vehicle_id, ship_code, lti, warbond, pledge_id,
+		INSERT INTO hangar_imports (vehicle_id, ship_slug, ship_code, lti, warbond, pledge_id,
 			pledge_name, pledge_date, pledge_cost, entity_type, imported_at)
-		VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, %s)
+		VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, %s)
 		%s`,
 		db.now(),
 		db.onConflictUpdate("pledge_id",
-			"vehicle_id=excluded.vehicle_id, ship_code=excluded.ship_code, lti=excluded.lti, warbond=excluded.warbond, pledge_name=excluded.pledge_name, pledge_date=excluded.pledge_date, pledge_cost=excluded.pledge_cost, entity_type=excluded.entity_type, imported_at=excluded.imported_at"),
+			"vehicle_id=excluded.vehicle_id, ship_slug=excluded.ship_slug, ship_code=excluded.ship_code, lti=excluded.lti, warbond=excluded.warbond, pledge_name=excluded.pledge_name, pledge_date=excluded.pledge_date, pledge_cost=excluded.pledge_cost, entity_type=excluded.entity_type, imported_at=excluded.imported_at"),
 	)
 
 	if db.driver == "postgres" {
@@ -308,7 +359,7 @@ func (db *DB) UpsertHangarImport(ctx context.Context, h *models.HangarImportDeta
 	}
 
 	_, err := db.conn.ExecContext(ctx, query,
-		h.VehicleID, h.ShipCode, h.LTI, h.Warbond, h.PledgeID,
+		h.VehicleID, h.ShipSlug, h.ShipCode, h.LTI, h.Warbond, h.PledgeID,
 		h.PledgeName, h.PledgeDate, h.PledgeCost, h.EntityType,
 	)
 	return err
@@ -316,7 +367,7 @@ func (db *DB) UpsertHangarImport(ctx context.Context, h *models.HangarImportDeta
 
 func (db *DB) GetHangarImports(ctx context.Context) ([]models.HangarImportDetail, error) {
 	rows, err := db.conn.QueryContext(ctx, `
-		SELECT id, vehicle_id, ship_code, lti, warbond, pledge_id,
+		SELECT id, vehicle_id, ship_slug, ship_code, lti, warbond, pledge_id,
 			pledge_name, pledge_date, pledge_cost, entity_type, imported_at
 		FROM hangar_imports ORDER BY imported_at DESC`)
 	if err != nil {
@@ -327,7 +378,7 @@ func (db *DB) GetHangarImports(ctx context.Context) ([]models.HangarImportDetail
 	var imports []models.HangarImportDetail
 	for rows.Next() {
 		var h models.HangarImportDetail
-		err := rows.Scan(&h.ID, &h.VehicleID, &h.ShipCode, &h.LTI, &h.Warbond,
+		err := rows.Scan(&h.ID, &h.VehicleID, &h.ShipSlug, &h.ShipCode, &h.LTI, &h.Warbond,
 			&h.PledgeID, &h.PledgeName, &h.PledgeDate, &h.PledgeCost, &h.EntityType,
 			&h.ImportedAt)
 		if err != nil {
@@ -400,76 +451,152 @@ func (db *DB) GetLatestSyncStatus(ctx context.Context) ([]models.SyncStatus, err
 
 // --- Helpers ---
 
-// GetVehiclesWithInsurance returns vehicles joined with their hangar import data
-func (db *DB) GetVehiclesWithInsurance(ctx context.Context) ([]models.Vehicle, error) {
-	vehicles, err := db.GetAllVehicles(ctx)
+// GetVehicleIDBySlug returns the ID of a vehicle matching the given slug (any source)
+func (db *DB) GetVehicleIDBySlug(ctx context.Context, slug string) (int, error) {
+	query := "SELECT id FROM vehicles WHERE ship_slug = ? LIMIT 1"
+	if db.driver == "postgres" {
+		query = replacePlaceholders(query)
+	}
+	var id int
+	err := db.conn.QueryRowContext(ctx, query, slug).Scan(&id)
 	if err != nil {
-		return nil, err
+		return 0, err
 	}
+	return id, nil
+}
 
-	imports, err := db.GetHangarImports(ctx)
-	if err != nil {
-		return nil, err
-	}
-
-	// Index imports by ship_code for matching
-	importMap := make(map[string]*models.HangarImportDetail)
-	for i := range imports {
-		importMap[imports[i].ShipCode] = &imports[i]
-	}
-
-	// Match vehicles to imports
-	for i := range vehicles {
-		// Try to match by ship_slug -> ship_code mapping
-		// HangarXplor uses codes like "MISC_Fortune", FleetYards uses slugs like "fortune"
-		for code, imp := range importMap {
-			if matchShipToImport(vehicles[i].ShipSlug, vehicles[i].ShipName, code, imp.PledgeID) {
-				vehicles[i].HangarImport = imp
-				break
-			}
+// FindShipSlug tries to find a matching ship in the reference DB.
+// Tries: exact slug match, then name LIKE match, then partial slug match.
+// Returns the matched slug or empty string if no match found.
+func (db *DB) FindShipSlug(ctx context.Context, candidateSlugs []string, displayName string) string {
+	// 1. Try exact slug match for each candidate
+	for _, slug := range candidateSlugs {
+		if slug == "" {
+			continue
+		}
+		query := "SELECT slug FROM ships WHERE slug = ? LIMIT 1"
+		if db.driver == "postgres" {
+			query = replacePlaceholders(query)
+		}
+		var found string
+		if err := db.conn.QueryRowContext(ctx, query, slug).Scan(&found); err == nil {
+			return found
 		}
 	}
 
+	// 2. Try LIKE match on ship name
+	if displayName != "" {
+		query := "SELECT slug FROM ships WHERE LOWER(name) = LOWER(?) LIMIT 1"
+		if db.driver == "postgres" {
+			query = replacePlaceholders(query)
+		}
+		var found string
+		if err := db.conn.QueryRowContext(ctx, query, displayName).Scan(&found); err == nil {
+			return found
+		}
+	}
+
+	// 3. Try partial slug match (slug contains candidate)
+	for _, slug := range candidateSlugs {
+		if slug == "" || len(slug) < 3 {
+			continue
+		}
+		query := "SELECT slug FROM ships WHERE slug LIKE ? LIMIT 1"
+		if db.driver == "postgres" {
+			query = replacePlaceholders(query)
+		}
+		var found string
+		pattern := slug + "%"
+		if err := db.conn.QueryRowContext(ctx, query, pattern).Scan(&found); err == nil {
+			return found
+		}
+	}
+
+	return ""
+}
+
+// GetVehiclesWithInsurance returns vehicles joined with their hangar import data via SQL
+func (db *DB) GetVehiclesWithInsurance(ctx context.Context) ([]models.Vehicle, error) {
+	rows, err := db.conn.QueryContext(ctx, `
+		SELECT v.id, v.ship_slug, v.ship_name, v.custom_name, v.manufacturer_name,
+			v.manufacturer_code, v.flagship, v.public, v.loaner, v.paint_name,
+			v.source, v.last_synced_at,
+			s.focus, s.size_label, s.cargo, s.min_crew, s.max_crew, s.pledge_price,
+			s.production_status, s.scm_speed, s.image_url,
+			hi.id, hi.lti, hi.warbond, hi.pledge_id, hi.pledge_name,
+			hi.pledge_date, hi.pledge_cost, hi.entity_type
+		FROM vehicles v
+		LEFT JOIN ships s ON v.ship_slug = s.slug
+		LEFT JOIN hangar_imports hi ON hi.vehicle_id = v.id
+		ORDER BY v.ship_name`)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	var vehicles []models.Vehicle
+	for rows.Next() {
+		var v models.Vehicle
+		var focus, sizeLabel, prodStatus, imageURL sql.NullString
+		var cargo, scmSpeed, pledgePrice sql.NullFloat64
+		var minCrew, maxCrew sql.NullInt64
+		// hangar_import nullable fields
+		var hiID sql.NullInt64
+		var hiLTI, hiWarbond sql.NullBool
+		var hiPledgeID, hiPledgeName, hiPledgeDate, hiPledgeCost, hiEntityType sql.NullString
+
+		err := rows.Scan(&v.ID, &v.ShipSlug, &v.ShipName, &v.CustomName,
+			&v.ManufacturerName, &v.ManufacturerCode, &v.Flagship, &v.Public,
+			&v.Loaner, &v.PaintName,
+			&v.Source, &v.LastSyncedAt,
+			&focus, &sizeLabel, &cargo, &minCrew, &maxCrew, &pledgePrice,
+			&prodStatus, &scmSpeed, &imageURL,
+			&hiID, &hiLTI, &hiWarbond, &hiPledgeID, &hiPledgeName,
+			&hiPledgeDate, &hiPledgeCost, &hiEntityType)
+		if err != nil {
+			return nil, err
+		}
+
+		if focus.Valid {
+			v.Ship = &models.Ship{
+				Focus:            focus.String,
+				SizeLabel:        sizeLabel.String,
+				Cargo:            cargo.Float64,
+				MinCrew:          int(minCrew.Int64),
+				MaxCrew:          int(maxCrew.Int64),
+				PledgePrice:      pledgePrice.Float64,
+				ProductionStatus: prodStatus.String,
+				SCMSpeed:         scmSpeed.Float64,
+				ImageURL:         imageURL.String,
+			}
+		}
+
+		if hiID.Valid {
+			v.HangarImport = &models.HangarImportDetail{
+				ID:         int(hiID.Int64),
+				LTI:        hiLTI.Bool,
+				Warbond:    hiWarbond.Bool,
+				PledgeID:   hiPledgeID.String,
+				PledgeName: hiPledgeName.String,
+				PledgeDate: hiPledgeDate.String,
+				PledgeCost: hiPledgeCost.String,
+				EntityType: hiEntityType.String,
+			}
+		}
+
+		vehicles = append(vehicles, v)
+	}
 	return vehicles, nil
 }
 
-// matchShipToImport attempts to match a vehicle to a hangar import
-func matchShipToImport(slug, shipName, shipCode, pledgeID string) bool {
-	// Simple matching: check if the ship name appears in the ship code
-	// e.g., slug "fortune" matches code "MISC_Fortune"
-	if len(slug) > 0 && len(shipCode) > 0 {
-		// Normalize for comparison
-		slugLower := toLower(slug)
-		codeLower := toLower(shipCode)
-		if contains(codeLower, slugLower) {
-			return true
-		}
-	}
-	return false
+// RawQuery executes a raw query and returns rows (for diagnostics)
+func (db *DB) RawQuery(ctx context.Context, query string) (*sql.Rows, error) {
+	return db.conn.QueryContext(ctx, query)
 }
 
-func toLower(s string) string {
-	b := make([]byte, len(s))
-	for i := range s {
-		c := s[i]
-		if c >= 'A' && c <= 'Z' {
-			c += 'a' - 'A'
-		}
-		b[i] = c
-	}
-	return string(b)
-}
-
-func contains(s, substr string) bool {
-	if len(substr) > len(s) {
-		return false
-	}
-	for i := 0; i <= len(s)-len(substr); i++ {
-		if s[i:i+len(substr)] == substr {
-			return true
-		}
-	}
-	return false
+// RawQueryRow executes a raw query and returns a single row (for diagnostics)
+func (db *DB) RawQueryRow(ctx context.Context, query string) *sql.Row {
+	return db.conn.QueryRowContext(ctx, query)
 }
 
 // replacePlaceholders converts ? to $1, $2, etc. for PostgreSQL

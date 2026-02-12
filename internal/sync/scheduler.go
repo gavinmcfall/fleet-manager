@@ -29,9 +29,14 @@ func NewScheduler(db *database.DB, client *fleetyards.Client, cfg *config.Config
 	}
 }
 
+// Client returns the FleetYards API client (used for enrichment)
+func (s *Scheduler) Client() *fleetyards.Client {
+	return s.client
+}
+
 // Start begins the scheduled sync jobs
 func (s *Scheduler) Start() error {
-	// Schedule nightly ship database sync
+	// Schedule nightly ship database sync (reference data only, not user's hangar)
 	_, err := s.cron.AddFunc(s.cfg.SyncSchedule, func() {
 		ctx, cancel := context.WithTimeout(context.Background(), 10*time.Minute)
 		defer cancel()
@@ -39,14 +44,6 @@ func (s *Scheduler) Start() error {
 		log.Info().Msg("scheduled ship sync starting")
 		if err := s.SyncShips(ctx); err != nil {
 			log.Error().Err(err).Msg("scheduled ship sync failed")
-		}
-
-		// Also sync hangar if username configured
-		if s.cfg.FleetYardsUser != "" {
-			log.Info().Msg("scheduled hangar sync starting")
-			if err := s.SyncHangar(ctx); err != nil {
-				log.Error().Err(err).Msg("scheduled hangar sync failed")
-			}
 		}
 	})
 	if err != nil {
@@ -56,13 +53,12 @@ func (s *Scheduler) Start() error {
 	s.cron.Start()
 	log.Info().Str("schedule", s.cfg.SyncSchedule).Msg("sync scheduler started")
 
-	// Run on startup if configured
+	// Run ship DB sync on startup if configured
 	if s.cfg.SyncOnStartup {
 		go func() {
 			ctx, cancel := context.WithTimeout(context.Background(), 10*time.Minute)
 			defer cancel()
 
-			// Check if we already have data
 			count, _ := s.db.GetShipCount(ctx)
 			if count == 0 {
 				log.Info().Msg("no ships in database, running startup sync")
@@ -71,16 +67,6 @@ func (s *Scheduler) Start() error {
 				}
 			} else {
 				log.Info().Int("count", count).Msg("ships already in database, skipping startup sync")
-			}
-
-			if s.cfg.FleetYardsUser != "" {
-				vCount, _ := s.db.GetVehicleCount(ctx)
-				if vCount == 0 {
-					log.Info().Msg("no vehicles in database, running startup hangar sync")
-					if err := s.SyncHangar(ctx); err != nil {
-						log.Error().Err(err).Msg("startup hangar sync failed")
-					}
-				}
 			}
 		}()
 	}
@@ -122,10 +108,11 @@ func (s *Scheduler) SyncShips(ctx context.Context) error {
 	return nil
 }
 
-// SyncHangar fetches the user's hangar from FleetYards and upserts vehicles
-func (s *Scheduler) SyncHangar(ctx context.Context) error {
-	if s.cfg.FleetYardsUser == "" {
-		return fmt.Errorf("FLEETYARDS_USER not configured")
+// SyncHangarForUser fetches the user's public hangar from FleetYards.
+// Clears all existing vehicles and hangar imports — this is a full replacement.
+func (s *Scheduler) SyncHangarForUser(ctx context.Context, username string) error {
+	if username == "" {
+		return fmt.Errorf("FleetYards username not configured")
 	}
 
 	syncID, _ := s.db.InsertSyncStatus(ctx, &models.SyncStatus{
@@ -133,28 +120,30 @@ func (s *Scheduler) SyncHangar(ctx context.Context) error {
 		Status:   "running",
 	})
 
-	vehicles, err := s.client.FetchHangar(ctx, s.cfg.FleetYardsUser)
+	vehicles, err := s.client.FetchHangar(ctx, username)
 	if err != nil {
 		s.db.UpdateSyncStatus(ctx, syncID, "error", 0, err.Error())
 		return fmt.Errorf("fetching hangar: %w", err)
 	}
 
-	// Clear existing fleetyards vehicles and re-insert
-	if err := s.db.ClearVehiclesBySource(ctx, "fleetyards"); err != nil {
+	// Clear ALL existing vehicles and imports (clean slate)
+	if err := s.db.ClearAllVehicles(ctx); err != nil {
 		s.db.UpdateSyncStatus(ctx, syncID, "error", 0, err.Error())
 		return fmt.Errorf("clearing vehicles: %w", err)
 	}
+	s.db.ClearHangarImports(ctx)
 
 	count := 0
 	for i := range vehicles {
-		if err := s.db.UpsertVehicle(ctx, &vehicles[i]); err != nil {
-			log.Warn().Err(err).Str("slug", vehicles[i].ShipSlug).Msg("failed to upsert vehicle")
+		if _, err := s.db.InsertVehicle(ctx, &vehicles[i]); err != nil {
+			log.Warn().Err(err).Str("slug", vehicles[i].ShipSlug).Msg("failed to insert vehicle")
 			continue
 		}
 		count++
 	}
 
 	s.db.UpdateSyncStatus(ctx, syncID, "success", count, "")
-	log.Info().Int("synced", count).Str("user", s.cfg.FleetYardsUser).Msg("hangar sync complete")
+	s.db.SetSetting(ctx, "hangar_source", "fleetyards")
+	log.Info().Int("synced", count).Str("user", username).Msg("hangar sync complete")
 	return nil
 }

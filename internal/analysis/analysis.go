@@ -218,8 +218,14 @@ func buildGapAnalysis(vehicles []models.Vehicle, allShips []models.Ship) []GapIt
 	for _, cr := range criticalRoles {
 		hasRole := false
 		for _, term := range cr.matchTerms {
-			if ownedRoles[term] {
-				hasRole = true
+			// Check if any owned role contains this term (not exact match)
+			for ownedRole := range ownedRoles {
+				if strings.Contains(ownedRole, term) {
+					hasRole = true
+					break
+				}
+			}
+			if hasRole {
 				break
 			}
 		}

@@ -40,6 +40,8 @@ type Vehicle struct {
 	ManufacturerCode string   `json:"manufacturer_code"`
 	Flagship        bool      `json:"flagship"`
 	Public          bool      `json:"public"`
+	Loaner          bool      `json:"loaner"`
+	PaintName       string    `json:"paint_name"`
 	Source          string    `json:"source"` // "fleetyards" or "hangarxplor"
 	LastSyncedAt    time.Time `json:"last_synced_at"`
 
@@ -54,6 +56,7 @@ type Vehicle struct {
 type HangarImportDetail struct {
 	ID          int       `json:"id"`
 	VehicleID   int       `json:"vehicle_id"`
+	ShipSlug    string    `json:"ship_slug"`
 	ShipCode    string    `json:"ship_code"`
 	LTI         bool      `json:"lti"`
 	Warbond     bool      `json:"warbond"`
@@ -67,7 +70,7 @@ type HangarImportDetail struct {
 
 // HangarXplorEntry represents a single entry from HangarXplor JSON export
 type HangarXplorEntry struct {
-	Unidentified     bool   `json:"unidentified,omitempty"`
+	Unidentified     string `json:"unidentified,omitempty"`
 	ShipCode         string `json:"ship_code"`
 	ShipName         string `json:"ship_name,omitempty"`
 	ManufacturerCode string `json:"manufacturer_code"`

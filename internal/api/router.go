@@ -3,6 +3,7 @@ package api
 import (
 	"context"
 	"encoding/json"
+	"fmt"
 	"io"
 	"net/http"
 	"os"
@@ -71,6 +72,12 @@ func (s *Server) Router() http.Handler {
 			r.Delete("/hangarxplor", s.clearHangarImports)
 		})
 
+		// Settings
+		r.Route("/settings", func(r chi.Router) {
+			r.Get("/fleetyards-user", s.getFleetYardsUserSetting)
+			r.Put("/fleetyards-user", s.setFleetYardsUserSetting)
+		})
+
 		// Fleet analysis
 		r.Get("/analysis", s.getAnalysis)
 
@@ -79,7 +86,11 @@ func (s *Server) Router() http.Handler {
 			r.Get("/status", s.getSyncStatus)
 			r.Post("/ships", s.triggerShipSync)
 			r.Post("/hangar", s.triggerHangarSync)
+			r.Post("/enrich", s.triggerEnrich)
 		})
+
+		// Debug
+		r.Get("/debug/imports", s.debugImports)
 	})
 
 	// Serve frontend SPA
@@ -94,18 +105,29 @@ func (s *Server) healthCheck(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusOK, map[string]string{"status": "ok"})
 }
 
+// getFleetYardsUser returns the effective FleetYards username (DB setting first, env var fallback)
+func (s *Server) getFleetYardsUser(ctx context.Context) string {
+	if dbUser, _ := s.db.GetSetting(ctx, "fleetyards_user"); dbUser != "" {
+		return dbUser
+	}
+	return s.cfg.FleetYardsUser
+}
+
 func (s *Server) getStatus(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
 	shipCount, _ := s.db.GetShipCount(ctx)
 	vehicleCount, _ := s.db.GetVehicleCount(ctx)
 	syncStatus, _ := s.db.GetLatestSyncStatus(ctx)
+	hangarSource, _ := s.db.GetSetting(ctx, "hangar_source")
+	fleetYardsUser := s.getFleetYardsUser(ctx)
 
 	writeJSON(w, http.StatusOK, map[string]interface{}{
-		"ships":       shipCount,
-		"vehicles":    vehicleCount,
-		"sync_status": syncStatus,
+		"ships":         shipCount,
+		"vehicles":      vehicleCount,
+		"hangar_source": hangarSource,
+		"sync_status":   syncStatus,
 		"config": map[string]interface{}{
-			"fleetyards_user": s.cfg.FleetYardsUser,
+			"fleetyards_user": fleetYardsUser,
 			"sync_schedule":   s.cfg.SyncSchedule,
 			"db_driver":       s.cfg.DBDriver,
 		},
@@ -174,32 +196,81 @@ func (s *Server) importHangarXplor(w http.ResponseWriter, r *http.Request) {
 
 	ctx := r.Context()
 
-	// Clear existing imports and re-import
+	// Clean slate — clear all existing vehicles and imports
+	if err := s.db.ClearAllVehicles(ctx); err != nil {
+		writeError(w, http.StatusInternalServerError, "Failed to clear vehicles: "+err.Error())
+		return
+	}
 	if err := s.db.ClearHangarImports(ctx); err != nil {
 		writeError(w, http.StatusInternalServerError, "Failed to clear old imports: "+err.Error())
 		return
 	}
 
-	// Also upsert as vehicles with source "hangarxplor"
-	if err := s.db.ClearVehiclesBySource(ctx, "hangarxplor"); err != nil {
-		log.Warn().Err(err).Msg("failed to clear hangarxplor vehicles")
-	}
-
 	imported := 0
 	for _, entry := range entries {
-		// Create/update vehicle
+		// The "name" field is always the real variant/pledge name (e.g. "Carrack Expedition with Pisces Expedition")
+		// The "ship_name" field is the base model name OR a user custom name (e.g. "Jean-Luc")
+		displayName := entry.Name
+
+		// Generate slug candidates to try matching against ships DB
+		codeSlug := slugFromShipCode(entry.ShipCode) // e.g. "hull-d", "idris-p"
+		nameSlug := slugFromName(displayName)         // e.g. "hull-d", "atls"
+		lookupSlug := ""
+		if entry.Lookup != "" {
+			lookupSlug = slugFromName(entry.Lookup) // for unidentified ships
+		}
+		// Compact versions strip all non-alphanumeric (handles "a-t-l-s" -> "atls")
+		compactCode := compactSlug(codeSlug)
+		compactName := compactSlug(nameSlug)
+
+		// Try to find a match in the ships reference table
+		candidates := []string{codeSlug, nameSlug, lookupSlug, compactCode, compactName}
+		matchedSlug := s.db.FindShipSlug(ctx, candidates, displayName)
+		if matchedSlug == "" {
+			// No match found — use best-effort slug from code
+			matchedSlug = codeSlug
+		}
+
+		// Detect custom name: if ship_name is present and doesn't look like
+		// part of the model name, it's a user-assigned custom name
+		customName := ""
+		if entry.ShipName != "" {
+			// Check if ship_name is a custom name (not related to the ship code or display name)
+			snLower := toLower(entry.ShipName)
+			codeLower := toLower(entry.ShipCode)
+			nameLower := toLower(displayName)
+			isCustom := true
+			// If ship_name appears in the code or display name, it's the model name
+			if containsStr(codeLower, toLower(slugFromName(entry.ShipName))) {
+				isCustom = false
+			}
+			if containsStr(nameLower, snLower) || containsStr(snLower, nameLower) {
+				isCustom = false
+			}
+			if isCustom {
+				customName = entry.ShipName
+			}
+		}
+
+		// Create vehicle entry
 		v := &models.Vehicle{
-			ShipSlug:         slugFromShipCode(entry.ShipCode),
-			ShipName:         entry.Name,
-			CustomName:       "",
+			ShipSlug:         matchedSlug,
+			ShipName:         displayName,
+			CustomName:       customName,
 			ManufacturerName: entry.ManufacturerName,
 			ManufacturerCode: entry.ManufacturerCode,
 			Source:           "hangarxplor",
 		}
-		s.db.UpsertVehicle(ctx, v)
+		vehicleID, err := s.db.InsertVehicle(ctx, v)
+		if err != nil {
+			log.Warn().Err(err).Str("ship", displayName).Msg("failed to insert vehicle")
+			continue
+		}
 
-		// Create import detail
+		// Create import detail with pledge/insurance info
 		h := &models.HangarImportDetail{
+			VehicleID:  vehicleID,
+			ShipSlug:   matchedSlug,
 			ShipCode:   entry.ShipCode,
 			LTI:        entry.LTI,
 			Warbond:    entry.Warbond,
@@ -211,13 +282,24 @@ func (s *Server) importHangarXplor(w http.ResponseWriter, r *http.Request) {
 		}
 
 		if err := s.db.UpsertHangarImport(ctx, h); err != nil {
-			log.Warn().Err(err).Str("ship", entry.Name).Msg("failed to import hangar entry")
+			log.Warn().Err(err).Str("ship", displayName).Int("vehicle_id", vehicleID).Msg("failed to import hangar entry")
 			continue
 		}
+
+		log.Info().
+			Str("ship", displayName).
+			Str("slug", matchedSlug).
+			Int("vehicle_id", vehicleID).
+			Bool("lti", entry.LTI).
+			Str("pledge_id", entry.PledgeID).
+			Msg("imported entry")
 		imported++
 	}
 
 	log.Info().Int("imported", imported).Int("total", len(entries)).Msg("hangarxplor import complete")
+
+	// Persist active source
+	s.db.SetSetting(ctx, "hangar_source", "hangarxplor")
 
 	writeJSON(w, http.StatusOK, map[string]interface{}{
 		"imported": imported,
@@ -290,15 +372,19 @@ func (s *Server) triggerShipSync(w http.ResponseWriter, r *http.Request) {
 }
 
 func (s *Server) triggerHangarSync(w http.ResponseWriter, r *http.Request) {
-	if s.cfg.FleetYardsUser == "" {
-		writeError(w, http.StatusBadRequest, "FLEETYARDS_USER not configured")
+	fleetYardsUser := s.getFleetYardsUser(r.Context())
+	if fleetYardsUser == "" {
+		writeError(w, http.StatusBadRequest, "FleetYards username not configured — set it on the Import page")
 		return
 	}
+
+	// Set source immediately so UI reflects the choice
+	s.db.SetSetting(r.Context(), "hangar_source", "fleetyards")
 
 	go func() {
 		ctx, cancel := context.WithTimeout(context.Background(), 5*time.Minute)
 		defer cancel()
-		if err := s.scheduler.SyncHangar(ctx); err != nil {
+		if err := s.scheduler.SyncHangarForUser(ctx, fleetYardsUser); err != nil {
 			log.Error().Err(err).Msg("manual hangar sync failed")
 		}
 	}()
@@ -308,7 +394,158 @@ func (s *Server) triggerHangarSync(w http.ResponseWriter, r *http.Request) {
 	})
 }
 
+// --- Settings ---
+
+func (s *Server) getFleetYardsUserSetting(w http.ResponseWriter, r *http.Request) {
+	user := s.getFleetYardsUser(r.Context())
+	writeJSON(w, http.StatusOK, map[string]string{"fleetyards_user": user})
+}
+
+func (s *Server) setFleetYardsUserSetting(w http.ResponseWriter, r *http.Request) {
+	var req struct {
+		Username string `json:"username"`
+	}
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		writeError(w, http.StatusBadRequest, "Invalid JSON")
+		return
+	}
+	if err := s.db.SetSetting(r.Context(), "fleetyards_user", req.Username); err != nil {
+		writeError(w, http.StatusInternalServerError, "Failed to save setting")
+		return
+	}
+	log.Info().Str("username", req.Username).Msg("fleetyards username updated")
+	writeJSON(w, http.StatusOK, map[string]string{"fleetyards_user": req.Username})
+}
+
+// --- Enrich ---
+
+func (s *Server) triggerEnrich(w http.ResponseWriter, r *http.Request) {
+	fleetYardsUser := s.getFleetYardsUser(r.Context())
+	if fleetYardsUser == "" {
+		writeError(w, http.StatusBadRequest, "FleetYards username not configured — set it on the Import page")
+		return
+	}
+
+	go func() {
+		ctx, cancel := context.WithTimeout(context.Background(), 5*time.Minute)
+		defer cancel()
+		if err := s.enrichFromFleetYards(ctx, fleetYardsUser); err != nil {
+			log.Error().Err(err).Msg("enrichment failed")
+		}
+	}()
+
+	writeJSON(w, http.StatusAccepted, map[string]string{
+		"message": "Enrichment started — fetching FleetYards data",
+	})
+}
+
+// enrichFromFleetYards fetches the FleetYards public hangar and updates
+// existing vehicles with supplementary data (loaner, paint, canonical slug).
+func (s *Server) enrichFromFleetYards(ctx context.Context, username string) error {
+	fyVehicles, err := s.scheduler.Client().FetchHangar(ctx, username)
+	if err != nil {
+		return fmt.Errorf("fetching fleetyards hangar: %w", err)
+	}
+
+	// Index FleetYards vehicles by slug for matching
+	fyBySlug := make(map[string]*models.Vehicle)
+	for i := range fyVehicles {
+		fyBySlug[fyVehicles[i].ShipSlug] = &fyVehicles[i]
+	}
+
+	// Get existing vehicles from DB
+	vehicles, err := s.db.GetAllVehicles(ctx)
+	if err != nil {
+		return fmt.Errorf("reading vehicles: %w", err)
+	}
+
+	enriched := 0
+	for _, v := range vehicles {
+		// Try to find matching FleetYards entry
+		fy, ok := fyBySlug[v.ShipSlug]
+		if !ok {
+			// Try partial match — FleetYards slug might be a longer version
+			for fySlug, fyV := range fyBySlug {
+				if containsStr(fySlug, v.ShipSlug) || containsStr(v.ShipSlug, fySlug) {
+					fy = fyV
+					break
+				}
+			}
+		}
+		if fy == nil {
+			continue
+		}
+
+		// Update with supplementary data
+		if err := s.db.EnrichVehicle(ctx, v.ID, fy.ShipSlug, fy.Loaner, fy.PaintName); err != nil {
+			log.Warn().Err(err).Str("slug", v.ShipSlug).Msg("failed to enrich vehicle")
+			continue
+		}
+		enriched++
+	}
+
+	log.Info().Int("enriched", enriched).Int("total", len(vehicles)).Msg("fleetyards enrichment complete")
+	return nil
+}
+
 // --- Frontend SPA ---
+
+func (s *Server) debugImports(w http.ResponseWriter, r *http.Request) {
+	ctx := r.Context()
+
+	// Get first 5 vehicles
+	type debugVehicle struct {
+		ID       int    `json:"id"`
+		ShipSlug string `json:"ship_slug"`
+		ShipName string `json:"ship_name"`
+		Source   string `json:"source"`
+	}
+	var vehicles []debugVehicle
+	rows, err := s.db.RawQuery(ctx, "SELECT id, ship_slug, ship_name, source FROM vehicles LIMIT 5")
+	if err == nil {
+		defer rows.Close()
+		for rows.Next() {
+			var v debugVehicle
+			rows.Scan(&v.ID, &v.ShipSlug, &v.ShipName, &v.Source)
+			vehicles = append(vehicles, v)
+		}
+	}
+
+	// Get first 5 hangar_imports
+	type debugImport struct {
+		ID        int    `json:"id"`
+		VehicleID int    `json:"vehicle_id"`
+		ShipSlug  string `json:"ship_slug"`
+		PledgeID  string `json:"pledge_id"`
+		LTI       bool   `json:"lti"`
+	}
+	var imports []debugImport
+	rows2, err := s.db.RawQuery(ctx, "SELECT id, vehicle_id, ship_slug, pledge_id, lti FROM hangar_imports LIMIT 5")
+	if err == nil {
+		defer rows2.Close()
+		for rows2.Next() {
+			var h debugImport
+			rows2.Scan(&h.ID, &h.VehicleID, &h.ShipSlug, &h.PledgeID, &h.LTI)
+			imports = append(imports, h)
+		}
+	}
+
+	// Count of joined rows
+	var joinCount int
+	s.db.RawQueryRow(ctx, "SELECT COUNT(*) FROM vehicles v INNER JOIN hangar_imports hi ON hi.vehicle_id = v.id").Scan(&joinCount)
+
+	var vehicleCount, importCount int
+	s.db.RawQueryRow(ctx, "SELECT COUNT(*) FROM vehicles").Scan(&vehicleCount)
+	s.db.RawQueryRow(ctx, "SELECT COUNT(*) FROM hangar_imports").Scan(&importCount)
+
+	writeJSON(w, http.StatusOK, map[string]interface{}{
+		"vehicle_count":       vehicleCount,
+		"import_count":        importCount,
+		"join_count":          joinCount,
+		"sample_vehicles":     vehicles,
+		"sample_imports":      imports,
+	})
+}
 
 func (s *Server) serveFrontend(r chi.Router) {
 	staticDir := s.cfg.StaticDir
@@ -348,13 +585,72 @@ func writeError(w http.ResponseWriter, status int, message string) {
 	writeJSON(w, status, map[string]string{"error": message})
 }
 
-// slugFromShipCode converts "MISC_Fortune" -> "fortune"
+// slugFromShipCode converts "MISC_Hull_D" -> "hull-d", "ANVL_F7A_Hornet_Mk_I" -> "f7a-hornet-mk-i"
+// Strips the manufacturer prefix (first segment) and joins the rest with hyphens.
 func slugFromShipCode(code string) string {
 	parts := splitOnUnderscore(code)
-	if len(parts) > 1 {
-		return toLower(parts[len(parts)-1])
+	if len(parts) <= 1 {
+		return toLower(code)
 	}
-	return toLower(code)
+	// Strip manufacturer prefix (first part), join rest with hyphens
+	modelParts := parts[1:]
+	result := make([]byte, 0, len(code))
+	for i, p := range modelParts {
+		if p == "" {
+			continue
+		}
+		if i > 0 && len(result) > 0 {
+			result = append(result, '-')
+		}
+		result = append(result, []byte(toLower(p))...)
+	}
+	return string(result)
+}
+
+// slugFromName converts a display name to a slug: "Hull D" -> "hull-d", "A.T.L.S." -> "atls"
+// Strips all punctuation except hyphens; spaces become hyphens.
+func slugFromName(name string) string {
+	result := make([]byte, 0, len(name))
+	prevDash := false
+	for i := 0; i < len(name); i++ {
+		c := name[i]
+		if c >= 'A' && c <= 'Z' {
+			c += 'a' - 'A'
+		}
+		if c == ' ' || c == '_' {
+			if !prevDash && len(result) > 0 {
+				result = append(result, '-')
+				prevDash = true
+			}
+			continue
+		}
+		if (c >= 'a' && c <= 'z') || (c >= '0' && c <= '9') || c == '-' {
+			result = append(result, c)
+			prevDash = (c == '-')
+		}
+		// All other punctuation (dots, commas, etc.) is stripped
+	}
+	// Trim trailing dashes
+	for len(result) > 0 && result[len(result)-1] == '-' {
+		result = result[:len(result)-1]
+	}
+	return string(result)
+}
+
+// compactSlug strips ALL non-alphanumeric characters: "a-t-l-s" -> "atls", "f7a-hornet-mk-i" -> "f7ahornetmki"
+// Used as a fallback candidate for acronym-style names.
+func compactSlug(s string) string {
+	result := make([]byte, 0, len(s))
+	for i := 0; i < len(s); i++ {
+		c := s[i]
+		if c >= 'A' && c <= 'Z' {
+			c += 'a' - 'A'
+		}
+		if (c >= 'a' && c <= 'z') || (c >= '0' && c <= '9') {
+			result = append(result, c)
+		}
+	}
+	return string(result)
 }
 
 func splitOnUnderscore(s string) []string {
@@ -368,6 +664,18 @@ func splitOnUnderscore(s string) []string {
 	}
 	parts = append(parts, s[start:])
 	return parts
+}
+
+func containsStr(s, substr string) bool {
+	if len(substr) == 0 || len(substr) > len(s) {
+		return false
+	}
+	for i := 0; i <= len(s)-len(substr); i++ {
+		if s[i:i+len(substr)] == substr {
+			return true
+		}
+	}
+	return false
 }
 
 func toLower(s string) string {

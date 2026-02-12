@@ -20,6 +20,15 @@ async function postJSON(path, body) {
   return res.json()
 }
 
+async function putJSON(path, body) {
+  const res = await fetch(`${BASE}${path}`, {
+    method: 'PUT',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(body),
+  })
+  return res.json()
+}
+
 export function useAPI(path) {
   const [data, setData] = useState(null)
   const [loading, setLoading] = useState(true)
@@ -74,4 +83,12 @@ export async function importHangarXplor(jsonData) {
 export async function clearHangarImports() {
   const res = await fetch(`${BASE}/import/hangarxplor`, { method: 'DELETE' })
   return res.json()
+}
+
+export async function setFleetYardsUser(username) {
+  return putJSON('/settings/fleetyards-user', { username })
+}
+
+export async function triggerEnrich() {
+  return postJSON('/sync/enrich')
 }

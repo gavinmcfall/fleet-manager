@@ -14,12 +14,23 @@ func (db *DB) migrate() error {
 		db.migrationVehicles(),
 		db.migrationHangarImports(),
 		db.migrationSyncStatus(),
+		db.migrationSettings(),
 	}
 
 	for i, m := range migrations {
 		if _, err := db.conn.Exec(m); err != nil {
 			return fmt.Errorf("migration %d: %w", i, err)
 		}
+	}
+
+	// Safe ALTER TABLE migrations (ignore "column already exists" errors)
+	safeAlters := []string{
+		"ALTER TABLE vehicles ADD COLUMN loaner BOOLEAN NOT NULL DEFAULT FALSE",
+		"ALTER TABLE vehicles ADD COLUMN paint_name TEXT NOT NULL DEFAULT ''",
+		"ALTER TABLE hangar_imports ADD COLUMN ship_slug TEXT NOT NULL DEFAULT ''",
+	}
+	for _, q := range safeAlters {
+		db.conn.Exec(q) // Ignore errors - column may already exist
 	}
 
 	log.Info().Msg("migrations complete")
@@ -67,17 +78,20 @@ func (db *DB) migrationVehicles() string {
 		manufacturer_code TEXT NOT NULL DEFAULT '',
 		flagship BOOLEAN NOT NULL DEFAULT FALSE,
 		public BOOLEAN NOT NULL DEFAULT TRUE,
+		loaner BOOLEAN NOT NULL DEFAULT FALSE,
+		paint_name TEXT NOT NULL DEFAULT '',
 		source TEXT NOT NULL DEFAULT 'fleetyards',
-		last_synced_at %s,
-		UNIQUE(ship_slug, source)
+		last_synced_at %s
 	)`, db.autoIncrement(), ts)
 }
+
 
 func (db *DB) migrationHangarImports() string {
 	ts := db.timestampType()
 	return fmt.Sprintf(`CREATE TABLE IF NOT EXISTS hangar_imports (
 		id %s,
 		vehicle_id INTEGER NOT NULL DEFAULT 0,
+		ship_slug TEXT NOT NULL DEFAULT '',
 		ship_code TEXT NOT NULL DEFAULT '',
 		lti BOOLEAN NOT NULL DEFAULT FALSE,
 		warbond BOOLEAN NOT NULL DEFAULT FALSE,
@@ -101,4 +115,11 @@ func (db *DB) migrationSyncStatus() string {
 		started_at %s,
 		completed_at %s
 	)`, db.autoIncrement(), ts, ts)
+}
+
+func (db *DB) migrationSettings() string {
+	return `CREATE TABLE IF NOT EXISTS settings (
+		key TEXT PRIMARY KEY NOT NULL,
+		value TEXT NOT NULL DEFAULT ''
+	)`
 }

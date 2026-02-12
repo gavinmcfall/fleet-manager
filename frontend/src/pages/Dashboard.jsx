@@ -1,5 +1,5 @@
 import React from 'react'
-import { useStatus, useAnalysis, triggerShipSync, triggerHangarSync } from '../hooks/useAPI'
+import { useStatus, useAnalysis, triggerShipSync } from '../hooks/useAPI'
 import { RefreshCw, Rocket, Package, Users, Shield, AlertTriangle } from 'lucide-react'
 import { PieChart, Pie, Cell, ResponsiveContainer, Tooltip, BarChart, Bar, XAxis, YAxis } from 'recharts'
 
@@ -11,11 +11,6 @@ export default function Dashboard() {
 
   const handleSyncShips = async () => {
     await triggerShipSync()
-    setTimeout(refetchStatus, 2000)
-  }
-
-  const handleSyncHangar = async () => {
-    await triggerHangarSync()
     setTimeout(refetchStatus, 2000)
   }
 
@@ -42,10 +37,7 @@ export default function Dashboard() {
         </div>
         <div className="flex gap-2">
           <button onClick={handleSyncShips} className="btn-primary flex items-center gap-2">
-            <RefreshCw className="w-3.5 h-3.5" /> Sync Ships
-          </button>
-          <button onClick={handleSyncHangar} className="btn-primary flex items-center gap-2">
-            <RefreshCw className="w-3.5 h-3.5" /> Sync Hangar
+            <RefreshCw className="w-3.5 h-3.5" /> Sync Ship DB
           </button>
         </div>
       </div>

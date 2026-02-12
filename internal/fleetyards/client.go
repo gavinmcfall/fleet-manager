@@ -73,18 +73,39 @@ type apiSpeeds struct {
 	SCMSpeed float64 `json:"scmSpeed"`
 }
 
-type apiVehicle struct {
-	Name             string `json:"name"`
-	Slug             string `json:"slug"`
-	ShipCode         string `json:"shipCode"`
-	ManufacturerName string `json:"manufacturerName"`
-	ManufacturerCode string `json:"manufacturerCode"`
-	ShipName         string `json:"shipName"`
-	Wanted           bool   `json:"wanted"`
-	Flagship         bool   `json:"flagship"`
-	Public           bool   `json:"public"`
-	NameVisible      bool   `json:"nameVisible"`
-	SaleNotify       bool   `json:"saleNotify"`
+type apiHangarEntry struct {
+	ID     string         `json:"id"`
+	Loaner bool           `json:"loaner"`
+	Model  *apiHangarModel `json:"model"`
+	Paint  *apiHangarPaint `json:"paint"`
+}
+
+type apiHangarModel struct {
+	Name             string      `json:"name"`
+	Slug             string      `json:"slug"`
+	SCIdentifier     string      `json:"scIdentifier"`
+	Focus            string      `json:"focus"`
+	Classification   string      `json:"classification"`
+	ProductionStatus string      `json:"productionStatus"`
+	PledgePrice      float64     `json:"pledgePrice"`
+	Manufacturer     *apiMfr     `json:"manufacturer"`
+	Metrics          *apiMetrics `json:"metrics"`
+	Media            *apiMedia   `json:"media"`
+}
+
+type apiMetrics struct {
+	Size      string  `json:"size"`
+	SizeLabel string  `json:"sizeLabel"`
+	Cargo     float64 `json:"cargo"`
+	Length    float64 `json:"length"`
+	Beam      float64 `json:"beam"`
+	Height    float64 `json:"height"`
+	Mass      float64 `json:"mass"`
+}
+
+type apiHangarPaint struct {
+	Name string `json:"name"`
+	Slug string `json:"slug"`
 }
 
 // --- Fetch methods ---
@@ -138,36 +159,65 @@ func (c *Client) FetchHangar(ctx context.Context, username string) ([]models.Veh
 		return nil, fmt.Errorf("username is required")
 	}
 
-	url := fmt.Sprintf("%s/v1/users/%s/vehicles", c.baseURL, username)
-	log.Debug().Str("url", url).Str("user", username).Msg("fetching hangar")
+	var allVehicles []models.Vehicle
+	page := 1
+	perPage := 30
 
-	body, err := c.doGet(ctx, url)
-	if err != nil {
-		return nil, fmt.Errorf("fetching hangar: %w", err)
-	}
+	for {
+		url := fmt.Sprintf("%s/v1/public/hangars/%s?page=%d&perPage=%d", c.baseURL, username, page, perPage)
+		log.Debug().Str("url", url).Int("page", page).Msg("fetching hangar page")
 
-	var apiVehicles []apiVehicle
-	if err := json.Unmarshal(body, &apiVehicles); err != nil {
-		return nil, fmt.Errorf("parsing hangar: %w", err)
-	}
-
-	var vehicles []models.Vehicle
-	for _, av := range apiVehicles {
-		v := models.Vehicle{
-			ShipSlug:         av.Slug,
-			ShipName:         av.ShipName,
-			CustomName:       av.Name,
-			ManufacturerName: av.ManufacturerName,
-			ManufacturerCode: av.ManufacturerCode,
-			Flagship:         av.Flagship,
-			Public:           av.Public,
-			Source:           "fleetyards",
+		body, err := c.doGet(ctx, url)
+		if err != nil {
+			return allVehicles, fmt.Errorf("fetching hangar page %d: %w", page, err)
 		}
-		vehicles = append(vehicles, v)
+
+		var entries []apiHangarEntry
+		if err := json.Unmarshal(body, &entries); err != nil {
+			return allVehicles, fmt.Errorf("parsing hangar page %d: %w", page, err)
+		}
+
+		if len(entries) == 0 {
+			break
+		}
+
+		for _, e := range entries {
+			if e.Model == nil {
+				continue
+			}
+
+			v := models.Vehicle{
+				ShipSlug:   e.Model.Slug,
+				ShipName:   e.Model.Name,
+				Source:     "fleetyards",
+				Public:     true,
+				Loaner:     e.Loaner,
+			}
+
+			if e.Model.Manufacturer != nil {
+				v.ManufacturerName = e.Model.Manufacturer.Name
+				v.ManufacturerCode = e.Model.Manufacturer.Code
+			}
+
+			if e.Paint != nil {
+				v.PaintName = e.Paint.Name
+			}
+
+			allVehicles = append(allVehicles, v)
+		}
+
+		log.Info().Int("page", page).Int("count", len(entries)).Int("total", len(allVehicles)).Msg("fetched hangar page")
+
+		if len(entries) < perPage {
+			break
+		}
+
+		page++
+		time.Sleep(500 * time.Millisecond)
 	}
 
-	log.Info().Int("count", len(vehicles)).Str("user", username).Msg("fetched hangar")
-	return vehicles, nil
+	log.Info().Int("count", len(allVehicles)).Str("user", username).Msg("fetched hangar")
+	return allVehicles, nil
 }
 
 // FetchShipDetail fetches detailed info for a single ship
