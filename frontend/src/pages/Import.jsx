@@ -388,20 +388,57 @@ export default function Import() {
       )}
 
       {status === 'success' && result && (
-        <div className="panel p-5 flex items-center gap-3 border-l-2 border-l-sc-success">
-          <CheckCircle className="w-5 h-5 text-sc-success" />
-          <div>
-            <span className="text-sm text-white font-medium">
-              {result.source === 'fleetyards' ? 'Hangar sync started!' :
-               result.source === 'enrich' ? 'Enrichment started!' :
-               'Import complete!'}
-            </span>
-            {result.imported != null && (
-              <span className="text-sm text-gray-400 ml-2">
-                {result.imported} of {result.total} entries imported
+        <div className="panel border-l-2 border-l-sc-success">
+          <div className="p-5 flex items-center gap-3">
+            <CheckCircle className="w-5 h-5 text-sc-success" />
+            <div>
+              <span className="text-sm text-white font-medium">
+                {result.source === 'fleetyards' ? 'Hangar sync started!' :
+                 result.source === 'enrich' ? 'Enrichment complete!' :
+                 'Import complete!'}
               </span>
-            )}
+              {result.imported != null && (
+                <span className="text-sm text-gray-400 ml-2">
+                  {result.imported} of {result.total} entries imported
+                </span>
+              )}
+            </div>
           </div>
+
+          {/* Enrichment Stats */}
+          {result.source === 'enrich' && result.enriched != null && (
+            <div className="px-5 pb-5">
+              <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 mt-3">
+                <div className="bg-sc-darker rounded p-3 text-center">
+                  <div className="text-lg font-display font-bold text-sc-success">{result.enriched}</div>
+                  <div className="text-xs font-mono text-gray-500">Enriched</div>
+                </div>
+                {result.loaners_added > 0 && (
+                  <div className="bg-sc-darker rounded p-3 text-center">
+                    <div className="text-lg font-display font-bold text-sc-accent">{result.loaners_added}</div>
+                    <div className="text-xs font-mono text-gray-500">Loaners</div>
+                  </div>
+                )}
+                {result.paints_added > 0 && (
+                  <div className="bg-sc-darker rounded p-3 text-center">
+                    <div className="text-lg font-display font-bold text-sc-accent">{result.paints_added}</div>
+                    <div className="text-xs font-mono text-gray-500">Paints</div>
+                  </div>
+                )}
+                {result.slugs_improved > 0 && (
+                  <div className="bg-sc-darker rounded p-3 text-center">
+                    <div className="text-lg font-display font-bold text-sc-accent">{result.slugs_improved}</div>
+                    <div className="text-xs font-mono text-gray-500">Slug Matches</div>
+                  </div>
+                )}
+              </div>
+              {result.skipped > 0 && (
+                <p className="text-xs text-gray-500 mt-3">
+                  {result.skipped} ship{result.skipped !== 1 ? 's' : ''} couldn't be matched with FleetYards data
+                </p>
+              )}
+            </div>
+          )}
         </div>
       )}
 

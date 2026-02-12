@@ -426,25 +426,40 @@ func (s *Server) triggerEnrich(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	go func() {
-		ctx, cancel := context.WithTimeout(context.Background(), 5*time.Minute)
-		defer cancel()
-		if err := s.enrichFromFleetYards(ctx, fleetYardsUser); err != nil {
-			log.Error().Err(err).Msg("enrichment failed")
-		}
-	}()
+	ctx, cancel := context.WithTimeout(r.Context(), 2*time.Minute)
+	defer cancel()
 
-	writeJSON(w, http.StatusAccepted, map[string]string{
-		"message": "Enrichment started — fetching FleetYards data",
-	})
+	stats, err := s.enrichFromFleetYards(ctx, fleetYardsUser)
+	if err != nil {
+		log.Error().Err(err).Msg("enrichment failed")
+		writeError(w, http.StatusInternalServerError, fmt.Sprintf("Enrichment failed: %v", err))
+		return
+	}
+
+	writeJSON(w, http.StatusOK, stats)
+}
+
+type EnrichmentStats struct {
+	Total          int      `json:"total"`
+	Enriched       int      `json:"enriched"`
+	Skipped        int      `json:"skipped"`
+	Failed         int      `json:"failed"`
+	LoanersAdded   int      `json:"loaners_added"`
+	PaintsAdded    int      `json:"paints_added"`
+	SlugsImproved  int      `json:"slugs_improved"`
+	FailedSlugs    []string `json:"failed_slugs,omitempty"`
 }
 
 // enrichFromFleetYards fetches the FleetYards public hangar and updates
 // existing vehicles with supplementary data (loaner, paint, canonical slug).
-func (s *Server) enrichFromFleetYards(ctx context.Context, username string) error {
+func (s *Server) enrichFromFleetYards(ctx context.Context, username string) (*EnrichmentStats, error) {
+	stats := &EnrichmentStats{
+		FailedSlugs: []string{},
+	}
+
 	fyVehicles, err := s.scheduler.Client().FetchHangar(ctx, username)
 	if err != nil {
-		return fmt.Errorf("fetching fleetyards hangar: %w", err)
+		return nil, fmt.Errorf("fetching fleetyards hangar: %w", err)
 	}
 
 	// Index FleetYards vehicles by slug for matching
@@ -456,10 +471,11 @@ func (s *Server) enrichFromFleetYards(ctx context.Context, username string) erro
 	// Get existing vehicles from DB
 	vehicles, err := s.db.GetAllVehicles(ctx)
 	if err != nil {
-		return fmt.Errorf("reading vehicles: %w", err)
+		return nil, fmt.Errorf("reading vehicles: %w", err)
 	}
 
-	enriched := 0
+	stats.Total = len(vehicles)
+
 	for _, v := range vehicles {
 		// Try to find matching FleetYards entry
 		fy, ok := fyBySlug[v.ShipSlug]
@@ -473,19 +489,50 @@ func (s *Server) enrichFromFleetYards(ctx context.Context, username string) erro
 			}
 		}
 		if fy == nil {
+			stats.Skipped++
+			stats.FailedSlugs = append(stats.FailedSlugs, v.ShipSlug)
 			continue
 		}
+
+		// Track what's being added
+		originalSlug := v.ShipSlug
+		originalLoaner := v.Loaner
+		originalPaint := v.PaintName
 
 		// Update with supplementary data
 		if err := s.db.EnrichVehicle(ctx, v.ID, fy.ShipSlug, fy.Loaner, fy.PaintName); err != nil {
 			log.Warn().Err(err).Str("slug", v.ShipSlug).Msg("failed to enrich vehicle")
+			stats.Failed++
 			continue
 		}
-		enriched++
+
+		stats.Enriched++
+
+		// Count what changed
+		if fy.ShipSlug != originalSlug && fy.ShipSlug != "" {
+			stats.SlugsImproved++
+		}
+		if fy.Loaner && !originalLoaner {
+			stats.LoanersAdded++
+		}
+		if fy.PaintName != "" && originalPaint == "" {
+			stats.PaintsAdded++
+		}
 	}
 
-	log.Info().Int("enriched", enriched).Int("total", len(vehicles)).Msg("fleetyards enrichment complete")
-	return nil
+	// Limit failed slugs to first 10 for readability
+	if len(stats.FailedSlugs) > 10 {
+		stats.FailedSlugs = append(stats.FailedSlugs[:10], "...")
+	}
+
+	log.Info().
+		Int("enriched", stats.Enriched).
+		Int("total", stats.Total).
+		Int("loaners", stats.LoanersAdded).
+		Int("paints", stats.PaintsAdded).
+		Msg("fleetyards enrichment complete")
+
+	return stats, nil
 }
 
 // --- Frontend SPA ---
