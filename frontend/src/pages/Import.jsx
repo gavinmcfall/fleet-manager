@@ -39,6 +39,22 @@ export default function Import() {
 
   // --- FleetYards Sync ---
   const handleFleetYardsSync = async () => {
+    // Warn if switching from HangarXplor
+    if (currentSource === 'hangarxplor') {
+      const confirmed = window.confirm(
+        '⚠️ WARNING: You currently have HangarXplor data loaded.\n\n' +
+        'Syncing from FleetYards will REPLACE all your existing data, including:\n' +
+        '• Insurance details (LTI status)\n' +
+        '• Pledge information (costs, dates, warbond status)\n' +
+        '• Custom ship names\n\n' +
+        'FleetYards does not include this data, so it will be lost.\n\n' +
+        'Are you sure you want to continue?'
+      )
+      if (!confirmed) {
+        return
+      }
+    }
+
     setStatus('syncing')
     setError(null)
     setResult(null)
@@ -151,7 +167,8 @@ export default function Import() {
         </div>
         <div className="p-4">
           <p className="text-xs text-gray-500 mb-3">
-            Your public hangar username on <span className="font-mono text-gray-400">fleetyards.net</span> — used for syncing and enrichment
+            Your hangar username on <span className="font-mono text-gray-400">fleetyards.net</span> — used for syncing and enrichment.{' '}
+            <span className="text-sc-warn">Your hangar must be set to public</span> during sync (you can make it private again after).
           </p>
           <div className="flex gap-2">
             <input
@@ -185,6 +202,17 @@ export default function Import() {
         </div>
       )}
 
+      {/* Warning about replacing data */}
+      {vehicleCount > 0 && (
+        <div className="panel p-3 flex items-start gap-2 border-l-2 border-l-sc-warn">
+          <AlertTriangle className="w-4 h-4 text-sc-warn shrink-0 mt-0.5" />
+          <p className="text-xs text-gray-400">
+            Importing from a different source will <span className="text-sc-warn font-medium">replace</span> your
+            current hangar data. Enrichment only adds to existing data.
+          </p>
+        </div>
+      )}
+
       {/* Two Source Options */}
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
         {/* Option 1: FleetYards */}
@@ -198,9 +226,18 @@ export default function Import() {
           </div>
           <div className="p-5 space-y-4">
             <p className="text-sm text-gray-400">
-              Syncs your public hangar directly from FleetYards. Requires your hangar to be set to public
-              on <span className="font-mono text-gray-300">fleetyards.net</span>.
+              Syncs your public hangar directly from FleetYards.
             </p>
+            <div className="p-3 rounded bg-blue-500/10 border border-blue-500/20 text-xs text-blue-300 space-y-1">
+              <div className="flex items-start gap-2">
+                <Globe className="w-3.5 h-3.5 shrink-0 mt-0.5" />
+                <div>
+                  <span className="font-medium">Requires public hangar:</span> Your hangar on{' '}
+                  <span className="font-mono">fleetyards.net</span> must be set to public during sync.
+                  You can make it private again immediately after.
+                </div>
+              </div>
+            </div>
             <div className="text-xs text-gray-500 space-y-1">
               <div className="flex items-center gap-2">
                 <ArrowRight className="w-3 h-3 text-sc-accent" />
@@ -308,10 +345,14 @@ export default function Import() {
           </div>
           <div className="p-5 space-y-3">
             <p className="text-sm text-gray-400">
-              Pull supplementary data from your FleetYards public hangar to enhance your HangarXplor import.
+              Pull supplementary data from your FleetYards hangar to enhance your HangarXplor import.
               This adds loaner flags, paint/livery names, and improves ship database matching — without
               replacing your pledge and insurance data.
             </p>
+            <div className="p-2.5 rounded bg-blue-500/10 border border-blue-500/20 text-xs text-blue-300">
+              <span className="font-medium">Note:</span> Your FleetYards hangar must be public during enrichment.
+              You can make it private again after.
+            </div>
             <button
               onClick={handleEnrich}
               disabled={status === 'enriching'}
@@ -330,17 +371,6 @@ export default function Import() {
               )}
             </button>
           </div>
-        </div>
-      )}
-
-      {/* Warning about replacing data */}
-      {vehicleCount > 0 && (
-        <div className="panel p-3 flex items-start gap-2 border-l-2 border-l-sc-warn">
-          <AlertTriangle className="w-4 h-4 text-sc-warn shrink-0 mt-0.5" />
-          <p className="text-xs text-gray-400">
-            Importing from a different source will <span className="text-sc-warn font-medium">replace</span> your
-            current hangar data. Enrichment only adds to existing data.
-          </p>
         </div>
       )}
 
@@ -458,7 +488,15 @@ export default function Import() {
           <ol className="space-y-2 text-sm text-gray-400">
             <li className="flex gap-2">
               <span className="text-sc-accent font-mono font-bold shrink-0">1.</span>
-              Install the HangarXplor browser extension for Chrome/Edge
+              Install the HangarXplor browser extension from{' '}
+              <a
+                href="https://hangarxplor.space/"
+                target="_blank"
+                rel="noopener noreferrer"
+                className="text-sc-accent hover:underline"
+              >
+                https://hangarxplor.space/
+              </a>
             </li>
             <li className="flex gap-2">
               <span className="text-sc-accent font-mono font-bold shrink-0">2.</span>

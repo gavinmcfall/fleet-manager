@@ -92,3 +92,37 @@ export async function setFleetYardsUser(username) {
 export async function triggerEnrich() {
   return postJSON('/sync/enrich')
 }
+
+// LLM Configuration
+export function useLLMConfig() {
+  return useAPI('/settings/llm-config')
+}
+
+export async function setLLMConfig(config) {
+  return putJSON('/settings/llm-config', config)
+}
+
+export async function testLLMConnection(provider, apiKey) {
+  return postJSON('/llm/test-connection', { provider, api_key: apiKey })
+}
+
+export async function generateAIAnalysis() {
+  return postJSON('/llm/generate-analysis')
+}
+
+export function useLatestAIAnalysis() {
+  return useAPI('/llm/latest-analysis')
+}
+
+export function useAIAnalysisHistory() {
+  return useAPI('/llm/analysis-history')
+}
+
+export async function deleteAIAnalysis(id) {
+  const res = await fetch(`${BASE}/llm/analysis/${id}`, { method: 'DELETE' })
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({ error: res.statusText }))
+    throw new Error(err.error || res.statusText)
+  }
+  return res.json()
+}

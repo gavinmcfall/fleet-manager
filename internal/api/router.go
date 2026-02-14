@@ -2,12 +2,14 @@ package api
 
 import (
 	"context"
+	"database/sql"
 	"encoding/json"
 	"fmt"
 	"io"
 	"net/http"
 	"os"
 	"path/filepath"
+	"strconv"
 	"time"
 
 	"github.com/go-chi/chi/v5"
@@ -15,20 +17,29 @@ import (
 	"github.com/go-chi/cors"
 	"github.com/nzvengeance/fleet-manager/internal/analysis"
 	"github.com/nzvengeance/fleet-manager/internal/config"
+	"github.com/nzvengeance/fleet-manager/internal/crypto"
 	"github.com/nzvengeance/fleet-manager/internal/database"
+	"github.com/nzvengeance/fleet-manager/internal/llm"
 	"github.com/nzvengeance/fleet-manager/internal/models"
 	syncsvc "github.com/nzvengeance/fleet-manager/internal/sync"
 	"github.com/rs/zerolog/log"
+	"golang.org/x/time/rate"
 )
 
 type Server struct {
-	db        *database.DB
-	cfg       *config.Config
-	scheduler *syncsvc.Scheduler
+	db             *database.DB
+	cfg            *config.Config
+	scheduler      *syncsvc.Scheduler
+	llmRateLimiter *rate.Limiter
 }
 
 func NewServer(db *database.DB, cfg *config.Config, scheduler *syncsvc.Scheduler) *Server {
-	return &Server{db: db, cfg: cfg, scheduler: scheduler}
+	return &Server{
+		db:             db,
+		cfg:            cfg,
+		scheduler:      scheduler,
+		llmRateLimiter: rate.NewLimiter(rate.Every(10*time.Second), 1), // 1 request per 10 seconds
+	}
 }
 
 func (s *Server) Router() http.Handler {
@@ -39,7 +50,7 @@ func (s *Server) Router() http.Handler {
 	r.Use(middleware.RealIP)
 	r.Use(middleware.Logger)
 	r.Use(middleware.Recoverer)
-	r.Use(middleware.Timeout(60 * time.Second))
+	r.Use(middleware.Timeout(5 * time.Minute)) // Increased for LLM AI analysis operations
 	r.Use(cors.Handler(cors.Options{
 		AllowedOrigins:   []string{"*"},
 		AllowedMethods:   []string{"GET", "POST", "PUT", "DELETE", "OPTIONS"},
@@ -76,6 +87,22 @@ func (s *Server) Router() http.Handler {
 		r.Route("/settings", func(r chi.Router) {
 			r.Get("/fleetyards-user", s.getFleetYardsUserSetting)
 			r.Put("/fleetyards-user", s.setFleetYardsUserSetting)
+
+			// LLM configuration
+			r.Get("/llm-config", s.getLLMConfig)
+			r.Put("/llm-config", s.setLLMConfig)
+		})
+
+		// LLM operations
+		r.Route("/llm", func(r chi.Router) {
+			// Rate limit only expensive API calls, not local DB reads
+			r.With(s.rateLimitLLM).Post("/test-connection", s.testLLMConnection)
+			r.With(s.rateLimitLLM).Post("/generate-analysis", s.generateAIAnalysis)
+
+			// No rate limit on local DB reads/deletes
+			r.Get("/latest-analysis", s.getLatestAIAnalysis)
+			r.Get("/analysis-history", s.getAIAnalysisHistory)
+			r.Delete("/analysis/{id}", s.deleteAIAnalysis)
 		})
 
 		// Fleet analysis
@@ -84,9 +111,11 @@ func (s *Server) Router() http.Handler {
 		// Sync management
 		r.Route("/sync", func(r chi.Router) {
 			r.Get("/status", s.getSyncStatus)
+			r.Get("/sc-wiki-status", s.getSCWikiSyncStatus)
 			r.Post("/ships", s.triggerShipSync)
 			r.Post("/hangar", s.triggerHangarSync)
 			r.Post("/enrich", s.triggerEnrich)
+			r.Post("/scwiki", s.triggerSCWikiSync)
 		})
 
 		// Debug
@@ -97,6 +126,19 @@ func (s *Server) Router() http.Handler {
 	s.serveFrontend(r)
 
 	return r
+}
+
+// --- Middleware ---
+
+// rateLimitLLM rate limits LLM API calls to prevent cost explosion
+func (s *Server) rateLimitLLM(next http.Handler) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if !s.llmRateLimiter.Allow() {
+			writeError(w, http.StatusTooManyRequests, "Rate limit exceeded - please wait before making another LLM request")
+			return
+		}
+		next.ServeHTTP(w, r)
+	})
 }
 
 // --- Health & Status ---
@@ -394,6 +436,65 @@ func (s *Server) triggerHangarSync(w http.ResponseWriter, r *http.Request) {
 	})
 }
 
+func (s *Server) triggerSCWikiSync(w http.ResponseWriter, r *http.Request) {
+	if !s.cfg.SCWikiEnabled {
+		writeError(w, http.StatusBadRequest, "SC Wiki sync not enabled")
+		return
+	}
+
+	go func() {
+		ctx, cancel := context.WithTimeout(context.Background(), 30*time.Minute)
+		defer cancel()
+		if err := s.scheduler.SyncSCWiki(ctx); err != nil {
+			log.Error().Err(err).Msg("manual SC Wiki sync failed")
+		}
+	}()
+
+	writeJSON(w, http.StatusAccepted, map[string]string{
+		"message": "SC Wiki sync started",
+	})
+}
+
+func (s *Server) getSCWikiSyncStatus(w http.ResponseWriter, r *http.Request) {
+	ctx := r.Context()
+
+	rows, err := s.db.RawConn().QueryContext(ctx, `
+		SELECT endpoint, last_sync_at, total_records, sync_status, error_message
+		FROM sc_sync_metadata
+		ORDER BY endpoint
+	`)
+	if err != nil {
+		writeError(w, http.StatusInternalServerError, "Database query failed")
+		return
+	}
+	defer rows.Close()
+
+	type SyncStatus struct {
+		Endpoint     string  `json:"endpoint"`
+		LastSyncAt   *string `json:"last_sync_at"`
+		TotalRecords int     `json:"total_records"`
+		Status       string  `json:"status"`
+		ErrorMessage string  `json:"error_message"`
+	}
+
+	var statuses []SyncStatus
+	for rows.Next() {
+		var s SyncStatus
+		var lastSyncAt sql.NullTime
+		if err := rows.Scan(&s.Endpoint, &lastSyncAt, &s.TotalRecords, &s.Status, &s.ErrorMessage); err != nil {
+			log.Warn().Err(err).Msg("scan sync status failed")
+			continue
+		}
+		if lastSyncAt.Valid {
+			formatted := lastSyncAt.Time.Format(time.RFC3339)
+			s.LastSyncAt = &formatted
+		}
+		statuses = append(statuses, s)
+	}
+
+	writeJSON(w, http.StatusOK, statuses)
+}
+
 // --- Settings ---
 
 func (s *Server) getFleetYardsUserSetting(w http.ResponseWriter, r *http.Request) {
@@ -533,6 +634,298 @@ func (s *Server) enrichFromFleetYards(ctx context.Context, username string) (*En
 		Msg("fleetyards enrichment complete")
 
 	return stats, nil
+}
+
+// --- LLM Configuration ---
+
+func (s *Server) getLLMConfig(w http.ResponseWriter, r *http.Request) {
+	ctx := r.Context()
+
+	provider, _ := s.db.GetSetting(ctx, "llm_provider")
+	encryptedKey, _ := s.db.GetSetting(ctx, "llm_api_key")
+	model, _ := s.db.GetSetting(ctx, "llm_model")
+
+	// Mask the API key for display
+	maskedKey := ""
+	if encryptedKey != "" {
+		decrypted, err := crypto.Decrypt(encryptedKey)
+		if err == nil {
+			maskedKey = crypto.MaskAPIKey(decrypted)
+		}
+	}
+
+	writeJSON(w, http.StatusOK, map[string]interface{}{
+		"provider":     provider,
+		"api_key_set":  encryptedKey != "",
+		"api_key_mask": maskedKey,
+		"model":        model,
+	})
+}
+
+func (s *Server) setLLMConfig(w http.ResponseWriter, r *http.Request) {
+	var req struct {
+		Provider string `json:"provider"`
+		APIKey   string `json:"api_key"`
+		Model    string `json:"model"`
+	}
+
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		writeError(w, http.StatusBadRequest, "Invalid JSON")
+		return
+	}
+
+	ctx := r.Context()
+
+	// Check if this is a clear operation (all empty)
+	isClearing := req.Provider == "" && req.APIKey == "" && req.Model == ""
+
+	if isClearing {
+		// Clear all LLM settings
+		if err := s.db.SetSetting(ctx, "llm_provider", ""); err != nil {
+			writeError(w, http.StatusInternalServerError, "Failed to clear provider")
+			return
+		}
+		if err := s.db.SetSetting(ctx, "llm_api_key", ""); err != nil {
+			writeError(w, http.StatusInternalServerError, "Failed to clear API key")
+			return
+		}
+		if err := s.db.SetSetting(ctx, "llm_model", ""); err != nil {
+			writeError(w, http.StatusInternalServerError, "Failed to clear model")
+			return
+		}
+
+		log.Info().Msg("LLM configuration cleared")
+
+		writeJSON(w, http.StatusOK, map[string]string{
+			"message": "LLM configuration cleared",
+		})
+		return
+	}
+
+	// Validate provider for normal save operations
+	validProviders := map[string]bool{
+		llm.ProviderOpenAI:    true,
+		llm.ProviderAnthropic: true,
+		llm.ProviderGoogle:    true,
+	}
+	if !validProviders[req.Provider] {
+		writeError(w, http.StatusBadRequest, "Invalid provider")
+		return
+	}
+
+	// Encrypt API key
+	encryptedKey, err := crypto.Encrypt(req.APIKey)
+	if err != nil {
+		writeError(w, http.StatusInternalServerError, "Failed to encrypt API key")
+		return
+	}
+
+	// Save settings
+	if err := s.db.SetSetting(ctx, "llm_provider", req.Provider); err != nil {
+		writeError(w, http.StatusInternalServerError, "Failed to save provider")
+		return
+	}
+
+	if err := s.db.SetSetting(ctx, "llm_api_key", encryptedKey); err != nil {
+		writeError(w, http.StatusInternalServerError, "Failed to save API key")
+		return
+	}
+
+	if err := s.db.SetSetting(ctx, "llm_model", req.Model); err != nil {
+		writeError(w, http.StatusInternalServerError, "Failed to save model")
+		return
+	}
+
+	log.Info().Str("provider", req.Provider).Msg("LLM configuration updated")
+
+	writeJSON(w, http.StatusOK, map[string]string{
+		"message": "LLM configuration saved",
+	})
+}
+
+func (s *Server) testLLMConnection(w http.ResponseWriter, r *http.Request) {
+	var req struct {
+		Provider string `json:"provider"`
+		APIKey   string `json:"api_key"`
+	}
+
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		writeError(w, http.StatusBadRequest, "Invalid JSON")
+		return
+	}
+
+	// Validate required fields
+	if req.Provider == "" || req.APIKey == "" {
+		writeError(w, http.StatusBadRequest, "Provider and API key are required")
+		return
+	}
+
+	client, err := llm.NewClient(req.Provider, req.APIKey)
+	if err != nil {
+		writeError(w, http.StatusBadRequest, err.Error())
+		return
+	}
+
+	ctx := r.Context()
+
+	// Test connection
+	if err := client.TestConnection(ctx); err != nil {
+		writeError(w, http.StatusUnauthorized, "API key is invalid: "+err.Error())
+		return
+	}
+
+	// Fetch available models
+	models, err := client.ListModels(ctx)
+	if err != nil {
+		writeError(w, http.StatusInternalServerError, "Failed to fetch models: "+err.Error())
+		return
+	}
+
+	writeJSON(w, http.StatusOK, map[string]interface{}{
+		"success": true,
+		"models":  models,
+	})
+}
+
+func (s *Server) generateAIAnalysis(w http.ResponseWriter, r *http.Request) {
+	ctx := r.Context()
+
+	log.Info().Msg("AI fleet analysis request received")
+
+	// Get LLM config
+	provider, _ := s.db.GetSetting(ctx, "llm_provider")
+	encryptedKey, _ := s.db.GetSetting(ctx, "llm_api_key")
+	model, _ := s.db.GetSetting(ctx, "llm_model")
+
+	if provider == "" || encryptedKey == "" {
+		log.Warn().Msg("AI analysis failed: LLM not configured")
+		writeError(w, http.StatusBadRequest, "LLM not configured")
+		return
+	}
+
+	log.Info().
+		Str("provider", provider).
+		Str("model", model).
+		Msg("Using LLM configuration")
+
+	// Decrypt API key
+	apiKey, err := crypto.Decrypt(encryptedKey)
+	if err != nil {
+		log.Error().Err(err).Msg("Failed to decrypt API key")
+		writeError(w, http.StatusInternalServerError, "Failed to decrypt API key")
+		return
+	}
+
+	// Create client
+	client, err := llm.NewClient(provider, apiKey)
+	if err != nil {
+		log.Error().Err(err).Str("provider", provider).Msg("Failed to create LLM client")
+		writeError(w, http.StatusInternalServerError, err.Error())
+		return
+	}
+
+	// Get fleet data
+	vehicles, err := s.db.GetVehiclesWithInsurance(ctx)
+	if err != nil {
+		log.Error().Err(err).Msg("Failed to fetch vehicles for AI analysis")
+		writeError(w, http.StatusInternalServerError, "Failed to fetch vehicles")
+		return
+	}
+
+	log.Info().
+		Int("vehicle_count", len(vehicles)).
+		Str("provider", provider).
+		Str("model", model).
+		Msg("Generating AI fleet analysis...")
+
+	// Generate analysis
+	result, err := client.GenerateFleetAnalysis(ctx, model, vehicles)
+	if err != nil {
+		log.Error().
+			Err(err).
+			Str("provider", provider).
+			Str("model", model).
+			Msg("AI analysis failed")
+		writeError(w, http.StatusInternalServerError, "AI analysis failed: "+err.Error())
+		return
+	}
+
+	log.Info().
+		Int("result_length", len(result)).
+		Str("provider", provider).
+		Msg("AI fleet analysis completed successfully")
+
+	// Save analysis to database
+	analysisID, err := s.db.SaveAIAnalysis(ctx, provider, model, len(vehicles), result)
+	if err != nil {
+		log.Error().Err(err).Msg("Failed to save AI analysis to database")
+		// Don't fail the request - analysis was successful, just couldn't save
+	} else {
+		log.Info().Int64("analysis_id", analysisID).Msg("AI analysis saved to database")
+	}
+
+	writeJSON(w, http.StatusOK, map[string]interface{}{
+		"analysis": result,
+		"id":       analysisID,
+	})
+}
+
+func (s *Server) getLatestAIAnalysis(w http.ResponseWriter, r *http.Request) {
+	ctx := r.Context()
+
+	analysis, err := s.db.GetLatestAIAnalysis(ctx)
+	if err != nil {
+		log.Error().Err(err).Msg("Failed to fetch latest AI analysis")
+		writeError(w, http.StatusInternalServerError, "Failed to fetch analysis")
+		return
+	}
+
+	if analysis == nil {
+		writeJSON(w, http.StatusOK, map[string]interface{}{
+			"analysis": nil,
+		})
+		return
+	}
+
+	writeJSON(w, http.StatusOK, analysis)
+}
+
+func (s *Server) getAIAnalysisHistory(w http.ResponseWriter, r *http.Request) {
+	ctx := r.Context()
+
+	analyses, err := s.db.GetAIAnalysisHistory(ctx, 50)
+	if err != nil {
+		log.Error().Err(err).Msg("Failed to fetch AI analysis history")
+		writeError(w, http.StatusInternalServerError, "Failed to fetch history")
+		return
+	}
+
+	writeJSON(w, http.StatusOK, map[string]interface{}{
+		"history": analyses,
+	})
+}
+
+func (s *Server) deleteAIAnalysis(w http.ResponseWriter, r *http.Request) {
+	ctx := r.Context()
+	idStr := chi.URLParam(r, "id")
+
+	id, err := strconv.ParseInt(idStr, 10, 64)
+	if err != nil {
+		writeError(w, http.StatusBadRequest, "Invalid analysis ID")
+		return
+	}
+
+	if err := s.db.DeleteAIAnalysis(ctx, id); err != nil {
+		log.Error().Err(err).Int64("analysis_id", id).Msg("Failed to delete AI analysis")
+		writeError(w, http.StatusInternalServerError, "Failed to delete analysis")
+		return
+	}
+
+	log.Info().Int64("analysis_id", id).Msg("AI analysis deleted")
+
+	writeJSON(w, http.StatusOK, map[string]interface{}{
+		"success": true,
+	})
 }
 
 // --- Frontend SPA ---

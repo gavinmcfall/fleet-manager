@@ -43,6 +43,7 @@ type apiShip struct {
 	MinCrew          int           `json:"minCrew"`
 	MaxCrew          int           `json:"maxCrew"`
 	PledgePrice      float64       `json:"pledgePrice"`
+	OnSale           bool          `json:"onSale"`
 	ProductionStatus string        `json:"productionStatus"`
 	Description      string        `json:"description"`
 	Classification   string        `json:"classification"`
@@ -67,6 +68,9 @@ type apiMedia struct {
 
 type apiImage struct {
 	Source string `json:"source"`
+	Small  string `json:"small"`
+	Medium string `json:"medium"`
+	Large  string `json:"large"`
 }
 
 type apiSpeeds struct {
@@ -286,6 +290,7 @@ func convertAPIShip(as apiShip, rawJSON []byte) models.Ship {
 		MinCrew:          as.MinCrew,
 		MaxCrew:          as.MaxCrew,
 		PledgePrice:      as.PledgePrice,
+		OnSale:           as.OnSale,
 		ProductionStatus: as.ProductionStatus,
 		Description:      as.Description,
 		Classification:   as.Classification,
@@ -298,6 +303,9 @@ func convertAPIShip(as apiShip, rawJSON []byte) models.Ship {
 
 	if as.Media != nil && as.Media.StoreImage != nil {
 		ship.ImageURL = as.Media.StoreImage.Source
+		ship.ImageURLSmall = as.Media.StoreImage.Small
+		ship.ImageURLMedium = as.Media.StoreImage.Medium
+		ship.ImageURLLarge = as.Media.StoreImage.Large
 	}
 
 	if as.Links != nil {

@@ -11,6 +11,7 @@ import (
 
 	"github.com/nzvengeance/fleet-manager/internal/api"
 	"github.com/nzvengeance/fleet-manager/internal/config"
+	"github.com/nzvengeance/fleet-manager/internal/crypto"
 	"github.com/nzvengeance/fleet-manager/internal/database"
 	"github.com/nzvengeance/fleet-manager/internal/fleetyards"
 	syncsvc "github.com/nzvengeance/fleet-manager/internal/sync"
@@ -24,6 +25,19 @@ func main() {
 	log.Logger = log.Output(zerolog.ConsoleWriter{Out: os.Stdout, TimeFormat: time.RFC3339})
 
 	log.Info().Msg("Fleet Manager starting up")
+
+	// Initialize encryption
+	encKey := os.Getenv("ENCRYPTION_KEY")
+	if encKey == "" {
+		// Check if we're in production mode
+		if os.Getenv("DATABASE_URL") != "" || os.Getenv("ENVIRONMENT") == "production" {
+			log.Fatal().Msg("ENCRYPTION_KEY must be set in production - generate with: openssl rand -base64 32")
+		}
+		log.Warn().Msg("ENCRYPTION_KEY not set - generating random key (development only)")
+	}
+	if err := crypto.InitEncryption(encKey); err != nil {
+		log.Fatal().Err(err).Msg("failed to initialize encryption")
+	}
 
 	// Load config
 	cfg := config.Load()
@@ -52,7 +66,7 @@ func main() {
 		Addr:         fmt.Sprintf(":%s", cfg.Port),
 		Handler:      srv.Router(),
 		ReadTimeout:  15 * time.Second,
-		WriteTimeout: 60 * time.Second,
+		WriteTimeout: 5 * time.Minute, // Increased for LLM AI analysis operations
 		IdleTimeout:  60 * time.Second,
 	}
 

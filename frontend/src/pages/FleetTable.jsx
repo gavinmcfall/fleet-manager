@@ -136,13 +136,24 @@ export default function FleetTable() {
               {sorted.map((v, i) => (
                 <tr key={i} className="hover:bg-white/[0.02] transition-colors">
                   <td className="table-cell">
-                    <div className="flex items-center gap-2">
-                      {v.flagship && <Star className="w-3 h-3 text-sc-warn fill-sc-warn" />}
-                      <div>
-                        <span className="font-medium text-white">{v.ship_name}</span>
-                        {v.custom_name && (
-                          <span className="block text-xs text-gray-500 italic">"{v.custom_name}"</span>
-                        )}
+                    <div className="flex items-center gap-3">
+                      {v.ship?.image_url && (
+                        <img
+                          src={v.ship.image_url}
+                          alt={v.ship_name}
+                          loading="lazy"
+                          className="w-16 h-16 object-cover rounded border border-sc-border/50"
+                          onError={(e) => e.target.style.display = 'none'}
+                        />
+                      )}
+                      <div className="flex items-center gap-2">
+                        {v.flagship && <Star className="w-3 h-3 text-sc-warn fill-sc-warn" />}
+                        <div>
+                          <span className="font-medium text-white">{v.ship_name}</span>
+                          {v.custom_name && (
+                            <span className="block text-xs text-gray-500 italic">"{v.custom_name}"</span>
+                          )}
+                        </div>
                       </div>
                     </div>
                   </td>
