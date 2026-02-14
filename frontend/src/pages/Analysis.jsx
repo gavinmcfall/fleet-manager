@@ -1,6 +1,7 @@
-import React from 'react'
-import { useAnalysis } from '../hooks/useAPI'
-import { AlertCircle, AlertTriangle, Info, Copy, ChevronRight } from 'lucide-react'
+import React, { useState, useEffect } from 'react'
+import ReactMarkdown from 'react-markdown'
+import { useAnalysis, useLLMConfig, generateAIAnalysis, useLatestAIAnalysis } from '../hooks/useAPI'
+import { AlertCircle, AlertTriangle, Info, Copy, ChevronRight, Sparkles, Loader } from 'lucide-react'
 
 const PRIORITY_CONFIG = {
   high: { icon: AlertCircle, color: 'text-sc-danger', bg: 'bg-sc-danger/10', border: 'border-sc-danger/20', label: 'HIGH' },
@@ -10,6 +11,29 @@ const PRIORITY_CONFIG = {
 
 export default function Analysis() {
   const { data: analysis, loading, error } = useAnalysis()
+  const { data: llmConfig } = useLLMConfig()
+  const { data: latestAnalysis } = useLatestAIAnalysis()
+  const [aiInsights, setAIInsights] = useState(null)
+  const [generating, setGenerating] = useState(false)
+
+  // Load latest analysis on mount
+  useEffect(() => {
+    if (latestAnalysis?.analysis) {
+      setAIInsights(latestAnalysis.analysis)
+    }
+  }, [latestAnalysis])
+
+  const handleGenerateAI = async () => {
+    setGenerating(true)
+    try {
+      const result = await generateAIAnalysis()
+      setAIInsights(result.analysis)
+    } catch (err) {
+      alert('Failed to generate AI analysis: ' + err.message)
+    } finally {
+      setGenerating(false)
+    }
+  }
 
   if (loading) return <div className="text-gray-500 font-mono text-sm p-8">Analysing fleet...</div>
   if (error) return <div className="text-sc-danger font-mono text-sm p-8">Error: {error}</div>
@@ -27,6 +51,44 @@ export default function Analysis() {
       </div>
 
       <div className="glow-line" />
+
+      {/* AI Insights Button (only if LLM configured) */}
+      {llmConfig?.api_key_set && (
+        <div className="flex justify-end">
+          <button
+            onClick={handleGenerateAI}
+            disabled={generating}
+            className="btn-primary flex items-center gap-2"
+          >
+            {generating ? (
+              <>
+                <Loader className="w-4 h-4 animate-spin" />
+                Generating AI Insights...
+              </>
+            ) : (
+              <>
+                <Sparkles className="w-4 h-4" />
+                Generate AI Insights
+              </>
+            )}
+          </button>
+        </div>
+      )}
+
+      {/* AI Insights Panel */}
+      {aiInsights && (
+        <div className="panel">
+          <div className="panel-header flex items-center gap-2">
+            <Sparkles className="w-3.5 h-3.5" />
+            AI Fleet Insights
+          </div>
+          <div className="p-5">
+            <div className="prose prose-invert prose-sm max-w-none text-gray-300">
+              <ReactMarkdown>{aiInsights}</ReactMarkdown>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* Gap Analysis */}
       <div>

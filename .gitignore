@@ -1,0 +1,57 @@
+# Code Review
+.codereview/
+
+# Environment files (sensitive data)
+.env
+.env.local
+.env.*.local
+
+# Build artifacts
+fleet-manager
+/fleet-manager
+*.exe
+*.exe~
+*.dll
+*.so
+*.dylib
+
+# Test binaries
+*.test
+
+# Go workspace file
+go.work
+
+# Database files
+data/
+*.db
+*.db-shm
+*.db-wal
+
+# IDE / Editor files
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+.DS_Store
+
+# Node modules (frontend)
+frontend/node_modules/
+frontend/.pnpm-store/
+
+# Frontend build artifacts (checked in, but keeping for reference)
+# frontend/dist/
+
+# Logs
+*.log
+logs/
+
+# Temporary files
+tmp/
+temp/
+*.tmp
+
+# OS files
+Thumbs.db
+.Spotlight-V100
+.Trashes

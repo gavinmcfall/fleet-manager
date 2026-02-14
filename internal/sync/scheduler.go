@@ -9,6 +9,7 @@ import (
 	"github.com/nzvengeance/fleet-manager/internal/database"
 	"github.com/nzvengeance/fleet-manager/internal/fleetyards"
 	"github.com/nzvengeance/fleet-manager/internal/models"
+	"github.com/nzvengeance/fleet-manager/internal/scwiki"
 	"github.com/robfig/cron/v3"
 	"github.com/rs/zerolog/log"
 )
@@ -16,16 +17,43 @@ import (
 type Scheduler struct {
 	db     *database.DB
 	client *fleetyards.Client
-	cfg    *config.Config
-	cron   *cron.Cron
+	scwiki *scwiki.Syncer
+	// scwikiV2  *scwiki.SyncClientV2  // Disabled - needs model updates
+	cfg  *config.Config
+	cron *cron.Cron
 }
 
 func NewScheduler(db *database.DB, client *fleetyards.Client, cfg *config.Config) *Scheduler {
+	// Initialize SC Wiki API syncer if enabled (legacy)
+	var scwikiSyncer *scwiki.Syncer
+	if cfg.SCWikiEnabled {
+		scwikiClient := scwiki.NewClient(cfg.SCWikiRateLimit, cfg.SCWikiBurst)
+		scwikiSyncer = scwiki.NewSyncer(scwikiClient, db.RawConn(), cfg.DBDriver)
+		log.Info().
+			Float64("rate_limit", cfg.SCWikiRateLimit).
+			Int("burst", cfg.SCWikiBurst).
+			Msg("SC Wiki API sync enabled (legacy)")
+	}
+
+	// Initialize SC Wiki V2 syncer if repo path is configured
+	// DISABLED: sync_v2 needs model updates to match current VehicleV2 structure
+	/*
+	var scwikiV2Syncer *scwiki.SyncClientV2
+	if cfg.SCDataRepoPath != "" {
+		scwikiV2Syncer = scwiki.NewSyncClientV2(db.RawConn(), cfg.DBDriver, cfg.SCDataRepoPath)
+		log.Info().
+			Str("repo_path", cfg.SCDataRepoPath).
+			Msg("SC Wiki V2 sync enabled (scunpacked-data)")
+	}
+	*/
+
 	return &Scheduler{
 		db:     db,
 		client: client,
-		cfg:    cfg,
-		cron:   cron.New(),
+		scwiki: scwikiSyncer,
+		// scwikiV2: scwikiV2Syncer,  // Disabled
+		cfg:  cfg,
+		cron: cron.New(),
 	}
 }
 
@@ -48,6 +76,22 @@ func (s *Scheduler) Start() error {
 	})
 	if err != nil {
 		return fmt.Errorf("adding cron job: %w", err)
+	}
+
+	// Schedule nightly SC Wiki sync if enabled
+	if s.scwiki != nil {
+		_, err := s.cron.AddFunc(s.cfg.SyncSchedule, func() {
+			ctx, cancel := context.WithTimeout(context.Background(), 30*time.Minute)
+			defer cancel()
+
+			log.Info().Msg("scheduled SC Wiki sync starting")
+			if err := s.SyncSCWiki(ctx); err != nil {
+				log.Error().Err(err).Msg("scheduled SC Wiki sync failed")
+			}
+		})
+		if err != nil {
+			return fmt.Errorf("adding SC Wiki cron job: %w", err)
+		}
 	}
 
 	s.cron.Start()
@@ -145,5 +189,33 @@ func (s *Scheduler) SyncHangarForUser(ctx context.Context, username string) erro
 	s.db.UpdateSyncStatus(ctx, syncID, "success", count, "")
 	s.db.SetSetting(ctx, "hangar_source", "fleetyards")
 	log.Info().Int("synced", count).Str("user", username).Msg("hangar sync complete")
+	return nil
+}
+
+// SyncSCWiki syncs Star Citizen data from SC Wiki API
+func (s *Scheduler) SyncSCWiki(ctx context.Context) error {
+	// V2 (scunpacked-data) sync disabled - needs model updates
+	/*
+	if s.scwikiV2 != nil {
+		log.Info().Msg("SC Wiki V2 sync starting (scunpacked-data)")
+		if err := s.scwikiV2.SyncAll(ctx); err != nil {
+			return fmt.Errorf("SC Wiki V2 sync failed: %w", err)
+		}
+		log.Info().Msg("SC Wiki V2 sync complete")
+		return nil
+	}
+	*/
+
+	// Use API sync
+	if s.scwiki == nil {
+		return fmt.Errorf("SC Wiki API sync not enabled (set SC_WIKI_ENABLED=true)")
+	}
+
+	log.Info().Msg("SC Wiki API sync starting")
+	if err := s.scwiki.SyncAll(ctx); err != nil {
+		return fmt.Errorf("SC Wiki API sync failed: %w", err)
+	}
+
+	log.Info().Msg("SC Wiki API sync complete")
 	return nil
 }

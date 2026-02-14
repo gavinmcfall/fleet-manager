@@ -15,5 +15,15 @@ export default defineConfig({
   build: {
     outDir: 'dist',
     sourcemap: false,
+    rollupOptions: {
+      output: {
+        manualChunks: {
+          // React core
+          'vendor-react': ['react', 'react-dom', 'react-router-dom'],
+          // UI libraries
+          'vendor-ui': ['lucide-react', 'react-markdown'],
+        },
+      },
+    },
   },
 })

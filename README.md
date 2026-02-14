@@ -21,18 +21,45 @@ A self-hosted Star Citizen fleet management dashboard. Syncs ship data from [Fle
 
 All configuration is done via environment variables. This makes it easy to configure in Docker, Docker Compose, or Kubernetes.
 
+**Quick Start**: Copy `.env.example` to `.env` and customize for your environment.
+
+### Server Configuration
+
 | Variable | Default | Required | Description |
 |---|---|---|---|
 | `PORT` | `8080` | No | HTTP server listen port |
+| `BASE_URL` | `http://localhost:8080` | No | Base URL of the application (used for generating links) |
+| `STATIC_DIR` | `./frontend/dist` | No | Path to the built React frontend assets |
+
+### Database Configuration
+
+| Variable | Default | Required | Description |
+|---|---|---|---|
 | `DB_DRIVER` | `sqlite` | No | Database driver — `sqlite` or `postgres` |
 | `DB_PATH` | `./data/fleet-manager.db` | No | SQLite database file path (only used when `DB_DRIVER=sqlite`) |
 | `DATABASE_URL` | — | When `DB_DRIVER=postgres` | PostgreSQL connection string (e.g. `postgres://user:pass@host:5432/dbname?sslmode=disable`) |
+
+### FleetYards API Configuration
+
+| Variable | Default | Required | Description |
+|---|---|---|---|
 | `FLEETYARDS_BASE_URL` | `https://api.fleetyards.net` | No | FleetYards API base URL |
 | `FLEETYARDS_USER` | — | No | Your FleetYards username — enables public hangar sync option |
+
+### SC Wiki API Configuration
+
+| Variable | Default | Required | Description |
+|---|---|---|---|
+| `SC_WIKI_ENABLED` | `true` | No | Enable SC Wiki API sync for ship/component reference data |
+| `SC_WIKI_RATE_LIMIT` | `1.0` | No | SC Wiki API rate limit (requests per second) |
+| `SC_WIKI_BURST` | `5` | No | SC Wiki API burst size (max concurrent requests) |
+
+### Sync Configuration
+
+| Variable | Default | Required | Description |
+|---|---|---|---|
 | `SYNC_SCHEDULE` | `0 3 * * *` | No | Cron expression for the nightly sync schedule (default: 3:00 AM) |
 | `SYNC_ON_STARTUP` | `true` | No | If `true`, runs an initial sync when the app starts and the database is empty |
-| `STATIC_DIR` | `./frontend/dist` | No | Path to the built React frontend assets inside the container |
-| `BASE_URL` | `http://localhost:8080` | No | Base URL of the application (used for generating links) |
 
 ---
 
@@ -516,21 +543,46 @@ make clean    # Remove build artifacts
 
 ## API Reference
 
+### System Endpoints
+
 | Method | Path | Description |
 |---|---|---|
 | `GET` | `/api/health` | Health check (used by k8s liveness/readiness probes) |
 | `GET` | `/api/status` | System status — ship count, vehicle count, sync history, config |
+
+### Ship Database
+
+| Method | Path | Description |
+|---|---|---|
 | `GET` | `/api/ships` | List all ships in database |
 | `GET` | `/api/ships/{slug}` | Get a single ship by FleetYards slug |
+
+### Fleet Management
+
+| Method | Path | Description |
+|---|---|---|
 | `GET` | `/api/vehicles` | List vehicles in your hangar |
 | `GET` | `/api/vehicles/with-insurance` | Vehicles joined with HangarXplor insurance data |
+| `GET` | `/api/analysis` | Fleet gap analysis, redundancy detection, insurance summary |
+
+### Data Import
+
+| Method | Path | Description |
+|---|---|---|
 | `POST` | `/api/import/hangarxplor` | Import HangarXplor JSON (send the array as the request body) |
 | `GET` | `/api/import/hangarxplor` | Get current HangarXplor import data |
 | `DELETE` | `/api/import/hangarxplor` | Clear all HangarXplor import data |
-| `GET` | `/api/analysis` | Fleet gap analysis, redundancy detection, insurance summary |
-| `GET` | `/api/sync/status` | Recent sync history (last 10 entries) |
-| `POST` | `/api/sync/ships` | Trigger a manual ship database sync |
-| `POST` | `/api/sync/hangar` | Trigger a manual hangar sync |
+
+### Sync Management
+
+| Method | Path | Description |
+|---|---|---|
+| `GET` | `/api/sync/status` | FleetYards sync history (last 10 entries) |
+| `GET` | `/api/sync/sc-wiki-status` | SC Wiki API sync status (manufacturers, vehicles, items) |
+| `POST` | `/api/sync/ships` | Trigger a manual FleetYards ship database sync |
+| `POST` | `/api/sync/hangar` | Trigger a manual FleetYards hangar sync |
+| `POST` | `/api/sync/scwiki` | Trigger a manual SC Wiki API sync (components, ships, manufacturers) |
+| `POST` | `/api/sync/enrich` | Enrich HangarXplor data with FleetYards metadata |
 
 ---
 

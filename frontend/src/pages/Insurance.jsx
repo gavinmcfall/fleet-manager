@@ -1,17 +1,47 @@
-import React from 'react'
+import React, { useState, useMemo } from 'react'
 import { useAnalysis } from '../hooks/useAPI'
 import { Shield, ShieldAlert, ShieldQuestion, Calendar, DollarSign, Tag } from 'lucide-react'
 
 export default function Insurance() {
   const { data: analysis, loading, error } = useAnalysis()
+  const [filterLTI, setFilterLTI] = useState('all') // 'all', 'lti', 'nonlti'
+  const [filterWarbond, setFilterWarbond] = useState('all') // 'all', 'warbond', 'nonwarbond'
 
   if (loading) return <div className="text-gray-500 font-mono text-sm p-8">Loading insurance data...</div>
   if (error) return <div className="text-sc-danger font-mono text-sm p-8">Error: {error}</div>
 
   const ins = analysis?.insurance_summary || {}
-  const lti = ins.lti_ships || []
-  const nonLTI = ins.non_lti_ships || []
+  const allShips = [...(ins.lti_ships || []), ...(ins.non_lti_ships || [])]
   const unknown = ins.unknown_ships || []
+
+  // Dynamically determine available filter options from fleet data
+  const hasLTI = useMemo(() => allShips.some(s => s.lti), [allShips])
+  const hasNonLTI = useMemo(() => allShips.some(s => !s.lti), [allShips])
+  const hasWarbond = useMemo(() => allShips.some(s => s.warbond), [allShips])
+  const hasNonWarbond = useMemo(() => allShips.some(s => !s.warbond), [allShips])
+
+  const filteredShips = useMemo(() => {
+    let ships = [...allShips]
+
+    // Filter by LTI
+    if (filterLTI === 'lti') {
+      ships = ships.filter(s => s.lti)
+    } else if (filterLTI === 'nonlti') {
+      ships = ships.filter(s => !s.lti)
+    }
+
+    // Filter by Warbond
+    if (filterWarbond === 'warbond') {
+      ships = ships.filter(s => s.warbond)
+    } else if (filterWarbond === 'nonwarbond') {
+      ships = ships.filter(s => !s.warbond)
+    }
+
+    return ships
+  }, [allShips, filterLTI, filterWarbond])
+
+  const lti = filteredShips.filter(s => s.lti)
+  const nonLTI = filteredShips.filter(s => !s.lti)
 
   return (
     <div className="space-y-6">
@@ -23,6 +53,29 @@ export default function Insurance() {
       </div>
 
       <div className="glow-line" />
+
+      {/* Filters */}
+      <div className="flex gap-3 items-center">
+        <select
+          value={filterLTI}
+          onChange={(e) => setFilterLTI(e.target.value)}
+          className="bg-sc-panel border border-sc-border rounded px-3 py-2 text-sm font-mono text-gray-300 focus:outline-none focus:border-sc-accent/50"
+        >
+          <option value="all">All Insurance</option>
+          {hasLTI && <option value="lti">LTI Only</option>}
+          {hasNonLTI && <option value="nonlti">Non-LTI Only</option>}
+        </select>
+        <select
+          value={filterWarbond}
+          onChange={(e) => setFilterWarbond(e.target.value)}
+          className="bg-sc-panel border border-sc-border rounded px-3 py-2 text-sm font-mono text-gray-300 focus:outline-none focus:border-sc-accent/50"
+        >
+          <option value="all">All Purchases</option>
+          {hasWarbond && <option value="warbond">Warbond Only</option>}
+          {hasNonWarbond && <option value="nonwarbond">Non-Warbond Only</option>}
+        </select>
+        <span className="text-xs font-mono text-gray-500">{filteredShips.length} ships</span>
+      </div>
 
       {/* Summary Cards */}
       <div className="grid grid-cols-3 gap-4">

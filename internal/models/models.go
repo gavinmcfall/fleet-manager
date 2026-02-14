@@ -24,7 +24,11 @@ type Ship struct {
 	ProductionStatus   string    `json:"production_status"`
 	Description        string    `json:"description"`
 	Classification     string    `json:"classification"`
+	OnSale             bool      `json:"on_sale"`
 	ImageURL           string    `json:"image_url"`
+	ImageURLSmall      string    `json:"image_url_small"`
+	ImageURLMedium     string    `json:"image_url_medium"`
+	ImageURLLarge      string    `json:"image_url_large"`
 	FleetYardsURL      string    `json:"fleetyards_url"`
 	LastSyncedAt       time.Time `json:"last_synced_at"`
 	RawJSON            string    `json:"-"`
@@ -146,4 +150,14 @@ type InsuranceEntry struct {
 	PledgeDate string `json:"pledge_date,omitempty"`
 	LTI        bool   `json:"lti"`
 	Warbond    bool   `json:"warbond"`
+}
+
+// AIAnalysis represents a saved AI fleet analysis
+type AIAnalysis struct {
+	ID           int64     `json:"id"`
+	CreatedAt    time.Time `json:"created_at"`
+	Provider     string    `json:"provider"`
+	Model        string    `json:"model"`
+	VehicleCount int       `json:"vehicle_count"`
+	Analysis     string    `json:"analysis"`
 }

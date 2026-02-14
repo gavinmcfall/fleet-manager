@@ -71,6 +71,11 @@ func (db *DB) Close() error {
 	return db.conn.Close()
 }
 
+// RawConn returns the underlying sql.DB connection
+func (db *DB) RawConn() *sql.DB {
+	return db.conn
+}
+
 // placeholder returns the correct placeholder syntax for the driver
 func (db *DB) placeholder(n int) string {
 	if db.driver == "postgres" {
@@ -117,9 +122,10 @@ func (db *DB) UpsertShip(ctx context.Context, ship *models.Ship) error {
 	query := fmt.Sprintf(`
 		INSERT INTO ships (slug, name, sc_identifier, manufacturer_name, manufacturer_code,
 			focus, size_label, length, beam, height, mass, cargo, min_crew, max_crew,
-			scm_speed, pledge_price, production_status, description, classification,
-			image_url, fleetyards_url, last_synced_at, raw_json)
-		VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, %s, ?)
+			scm_speed, pledge_price, on_sale, production_status, description, classification,
+			image_url, image_url_small, image_url_medium, image_url_large,
+			fleetyards_url, last_synced_at, raw_json)
+		VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, %s, ?)
 		%s`,
 		db.now(),
 		db.onConflictUpdate("slug", `
@@ -128,11 +134,12 @@ func (db *DB) UpsertShip(ctx context.Context, ship *models.Ship) error {
 			focus=excluded.focus, size_label=excluded.size_label,
 			length=excluded.length, beam=excluded.beam, height=excluded.height, mass=excluded.mass,
 			cargo=excluded.cargo, min_crew=excluded.min_crew, max_crew=excluded.max_crew,
-			scm_speed=excluded.scm_speed, pledge_price=excluded.pledge_price,
+			scm_speed=excluded.scm_speed, pledge_price=excluded.pledge_price, on_sale=excluded.on_sale,
 			production_status=excluded.production_status, description=excluded.description,
 			classification=excluded.classification, image_url=excluded.image_url,
-			fleetyards_url=excluded.fleetyards_url, last_synced_at=excluded.last_synced_at,
-			raw_json=excluded.raw_json`),
+			image_url_small=excluded.image_url_small, image_url_medium=excluded.image_url_medium,
+			image_url_large=excluded.image_url_large, fleetyards_url=excluded.fleetyards_url,
+			last_synced_at=excluded.last_synced_at, raw_json=excluded.raw_json`),
 	)
 
 	if db.driver == "postgres" {
@@ -142,9 +149,10 @@ func (db *DB) UpsertShip(ctx context.Context, ship *models.Ship) error {
 	_, err := db.conn.ExecContext(ctx, query,
 		ship.Slug, ship.Name, ship.SCIdentifier, ship.ManufacturerName, ship.ManufacturerCode,
 		ship.Focus, ship.SizeLabel, ship.Length, ship.Beam, ship.Height, ship.Mass,
-		ship.Cargo, ship.MinCrew, ship.MaxCrew, ship.SCMSpeed, ship.PledgePrice,
+		ship.Cargo, ship.MinCrew, ship.MaxCrew, ship.SCMSpeed, ship.PledgePrice, ship.OnSale,
 		ship.ProductionStatus, ship.Description, ship.Classification,
-		ship.ImageURL, ship.FleetYardsURL, ship.RawJSON,
+		ship.ImageURL, ship.ImageURLSmall, ship.ImageURLMedium, ship.ImageURLLarge,
+		ship.FleetYardsURL, ship.RawJSON,
 	)
 	return err
 }
@@ -153,8 +161,9 @@ func (db *DB) GetAllShips(ctx context.Context) ([]models.Ship, error) {
 	rows, err := db.conn.QueryContext(ctx, `
 		SELECT id, slug, name, sc_identifier, manufacturer_name, manufacturer_code,
 			focus, size_label, length, beam, height, mass, cargo, min_crew, max_crew,
-			scm_speed, pledge_price, production_status, description, classification,
-			image_url, fleetyards_url, last_synced_at
+			scm_speed, pledge_price, on_sale, production_status, description, classification,
+			image_url, image_url_small, image_url_medium, image_url_large,
+			fleetyards_url, last_synced_at
 		FROM ships ORDER BY name`)
 	if err != nil {
 		return nil, err
@@ -166,8 +175,9 @@ func (db *DB) GetAllShips(ctx context.Context) ([]models.Ship, error) {
 		var s models.Ship
 		err := rows.Scan(&s.ID, &s.Slug, &s.Name, &s.SCIdentifier, &s.ManufacturerName,
 			&s.ManufacturerCode, &s.Focus, &s.SizeLabel, &s.Length, &s.Beam, &s.Height,
-			&s.Mass, &s.Cargo, &s.MinCrew, &s.MaxCrew, &s.SCMSpeed, &s.PledgePrice,
+			&s.Mass, &s.Cargo, &s.MinCrew, &s.MaxCrew, &s.SCMSpeed, &s.PledgePrice, &s.OnSale,
 			&s.ProductionStatus, &s.Description, &s.Classification, &s.ImageURL,
+			&s.ImageURLSmall, &s.ImageURLMedium, &s.ImageURLLarge,
 			&s.FleetYardsURL, &s.LastSyncedAt)
 		if err != nil {
 			return nil, err
@@ -178,7 +188,7 @@ func (db *DB) GetAllShips(ctx context.Context) ([]models.Ship, error) {
 }
 
 func (db *DB) GetShipBySlug(ctx context.Context, slug string) (*models.Ship, error) {
-	query := "SELECT id, slug, name, sc_identifier, manufacturer_name, manufacturer_code, focus, size_label, length, beam, height, mass, cargo, min_crew, max_crew, scm_speed, pledge_price, production_status, description, classification, image_url, fleetyards_url, last_synced_at FROM ships WHERE slug = ?"
+	query := "SELECT id, slug, name, sc_identifier, manufacturer_name, manufacturer_code, focus, size_label, length, beam, height, mass, cargo, min_crew, max_crew, scm_speed, pledge_price, on_sale, production_status, description, classification, image_url, image_url_small, image_url_medium, image_url_large, fleetyards_url, last_synced_at FROM ships WHERE slug = ?"
 	if db.driver == "postgres" {
 		query = replacePlaceholders(query)
 	}
@@ -187,8 +197,9 @@ func (db *DB) GetShipBySlug(ctx context.Context, slug string) (*models.Ship, err
 	err := db.conn.QueryRowContext(ctx, query, slug).Scan(
 		&s.ID, &s.Slug, &s.Name, &s.SCIdentifier, &s.ManufacturerName,
 		&s.ManufacturerCode, &s.Focus, &s.SizeLabel, &s.Length, &s.Beam, &s.Height,
-		&s.Mass, &s.Cargo, &s.MinCrew, &s.MaxCrew, &s.SCMSpeed, &s.PledgePrice,
+		&s.Mass, &s.Cargo, &s.MinCrew, &s.MaxCrew, &s.SCMSpeed, &s.PledgePrice, &s.OnSale,
 		&s.ProductionStatus, &s.Description, &s.Classification, &s.ImageURL,
+		&s.ImageURLSmall, &s.ImageURLMedium, &s.ImageURLLarge,
 		&s.FleetYardsURL, &s.LastSyncedAt)
 	if err == sql.ErrNoRows {
 		return nil, nil
@@ -613,4 +624,72 @@ func replacePlaceholders(query string) string {
 		}
 	}
 	return string(result)
+}
+
+// SaveAIAnalysis stores a new AI fleet analysis
+func (db *DB) SaveAIAnalysis(ctx context.Context, provider, model string, vehicleCount int, analysis string) (int64, error) {
+	query := `INSERT INTO ai_analyses (provider, model, vehicle_count, analysis) VALUES (?, ?, ?, ?)`
+	if db.driver == "postgres" {
+		query = replacePlaceholders(query)
+	}
+
+	result, err := db.conn.ExecContext(ctx, query, provider, model, vehicleCount, analysis)
+	if err != nil {
+		return 0, err
+	}
+
+	return result.LastInsertId()
+}
+
+// GetLatestAIAnalysis retrieves the most recent AI analysis
+func (db *DB) GetLatestAIAnalysis(ctx context.Context) (*models.AIAnalysis, error) {
+	query := `SELECT id, created_at, provider, model, vehicle_count, analysis FROM ai_analyses ORDER BY created_at DESC LIMIT 1`
+
+	var a models.AIAnalysis
+	err := db.conn.QueryRowContext(ctx, query).Scan(&a.ID, &a.CreatedAt, &a.Provider, &a.Model, &a.VehicleCount, &a.Analysis)
+	if err == sql.ErrNoRows {
+		return nil, nil
+	}
+	if err != nil {
+		return nil, err
+	}
+
+	return &a, nil
+}
+
+// GetAIAnalysisHistory retrieves all AI analyses, newest first
+func (db *DB) GetAIAnalysisHistory(ctx context.Context, limit int) ([]models.AIAnalysis, error) {
+	if limit == 0 {
+		limit = 50
+	}
+
+	query := fmt.Sprintf(`SELECT id, created_at, provider, model, vehicle_count, analysis FROM ai_analyses ORDER BY created_at DESC LIMIT %d`, limit)
+
+	rows, err := db.conn.QueryContext(ctx, query)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	var analyses []models.AIAnalysis
+	for rows.Next() {
+		var a models.AIAnalysis
+		if err := rows.Scan(&a.ID, &a.CreatedAt, &a.Provider, &a.Model, &a.VehicleCount, &a.Analysis); err != nil {
+			return nil, err
+		}
+		analyses = append(analyses, a)
+	}
+
+	return analyses, rows.Err()
+}
+
+// DeleteAIAnalysis deletes a specific AI analysis by ID
+func (db *DB) DeleteAIAnalysis(ctx context.Context, id int64) error {
+	query := `DELETE FROM ai_analyses WHERE id = ?`
+	if db.driver == "postgres" {
+		query = replacePlaceholders(query)
+	}
+
+	_, err := db.conn.ExecContext(ctx, query, id)
+	return err
 }
