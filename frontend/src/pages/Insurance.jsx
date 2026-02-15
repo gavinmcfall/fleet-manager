@@ -16,9 +16,9 @@ export default function Insurance() {
     let allShips = [...ltiShips, ...nonLTIShips]
 
     if (filterLTI === 'lti') {
-      allShips = allShips.filter(s => s.lti)
+      allShips = allShips.filter(s => s.is_lifetime)
     } else if (filterLTI === 'nonlti') {
-      allShips = allShips.filter(s => !s.lti)
+      allShips = allShips.filter(s => !s.is_lifetime)
     }
 
     if (filterWarbond === 'warbond') {
@@ -28,8 +28,8 @@ export default function Insurance() {
     }
 
     return {
-      lti: allShips.filter(s => s.lti),
-      nonLTI: allShips.filter(s => !s.lti),
+      lti: allShips.filter(s => s.is_lifetime),
+      nonLTI: allShips.filter(s => !s.is_lifetime),
       unknown: unknownShips
     }
   }, [ins, filterLTI, filterWarbond])
@@ -184,10 +184,12 @@ function InsuranceRow({ ship }) {
             {ship.pledge_date}
           </span>
         )}
-        {ship.lti ? (
+        {ship.is_lifetime ? (
           <span className="badge badge-lti">LTI</span>
         ) : (
-          <span className="badge badge-nonlti">STD</span>
+          <span className="badge badge-nonlti">
+            {ship.insurance_label || 'Standard'}
+          </span>
         )}
         {ship.warbond && <span className="badge badge-warbond">WB</span>}
       </div>

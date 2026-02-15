@@ -1,6 +1,6 @@
 import React, { useState, useRef, useEffect } from 'react'
-import { useStatus, triggerHangarSync, importHangarXplor, setFleetYardsUser, triggerEnrich } from '../hooks/useAPI'
-import { Upload, FileJson, CheckCircle, XCircle, Globe, RefreshCw, AlertTriangle, ArrowRight, Sparkles, Save, Settings } from 'lucide-react'
+import { useStatus, importHangarXplor, setFleetYardsUser } from '../hooks/useAPI'
+import { Upload, FileJson, CheckCircle, XCircle, AlertTriangle, Save, Settings } from 'lucide-react'
 
 export default function Import() {
   const { data: appStatus, refetch: refetchStatus } = useStatus()
@@ -12,7 +12,6 @@ export default function Import() {
   const [usernameSaved, setUsernameSaved] = useState(false)
   const fileRef = useRef(null)
 
-  const currentSource = appStatus?.hangar_source || ''
   const vehicleCount = appStatus?.vehicles || 0
   const fleetyardsUser = appStatus?.config?.fleetyards_user || ''
 
@@ -34,57 +33,6 @@ export default function Import() {
       refetchStatus()
     } catch (err) {
       setError(err.message)
-    }
-  }
-
-  // --- FleetYards Sync ---
-  const handleFleetYardsSync = async () => {
-    // Warn if switching from HangarXplor
-    if (currentSource === 'hangarxplor') {
-      const confirmed = window.confirm(
-        '⚠️ WARNING: You currently have HangarXplor data loaded.\n\n' +
-        'Syncing from FleetYards will REPLACE all your existing data, including:\n' +
-        '• Insurance details (LTI status)\n' +
-        '• Pledge information (costs, dates, warbond status)\n' +
-        '• Custom ship names\n\n' +
-        'FleetYards does not include this data, so it will be lost.\n\n' +
-        'Are you sure you want to continue?'
-      )
-      if (!confirmed) {
-        return
-      }
-    }
-
-    setStatus('syncing')
-    setError(null)
-    setResult(null)
-    setPreview(null)
-
-    try {
-      const res = await triggerHangarSync()
-      setResult({ message: res.message, source: 'fleetyards' })
-      setStatus('success')
-      setTimeout(refetchStatus, 3000)
-    } catch (err) {
-      setError(err.message)
-      setStatus('error')
-    }
-  }
-
-  // --- Enrich ---
-  const handleEnrich = async () => {
-    setStatus('enriching')
-    setError(null)
-    setResult(null)
-
-    try {
-      const res = await triggerEnrich()
-      setResult({ message: res.message, source: 'enrich' })
-      setStatus('success')
-      setTimeout(refetchStatus, 3000)
-    } catch (err) {
-      setError(err.message)
-      setStatus('error')
     }
   }
 
@@ -133,7 +81,7 @@ export default function Import() {
 
     try {
       const res = await importHangarXplor(preview.data)
-      setResult({ ...res, source: 'hangarxplor' })
+      setResult(res)
       setStatus('success')
       setPreview(null)
       setTimeout(refetchStatus, 2000)
@@ -143,17 +91,12 @@ export default function Import() {
     }
   }
 
-  const sourceLabel = {
-    fleetyards: 'FleetYards',
-    hangarxplor: 'HangarXplor',
-  }
-
   return (
     <div className="space-y-6">
       <div>
         <h2 className="font-display font-bold text-2xl tracking-wider text-white">IMPORT HANGAR</h2>
         <p className="text-xs font-mono text-gray-500 mt-1">
-          Choose a source to populate your fleet — only one source is active at a time
+          Import your fleet from HangarXplor to populate ships, insurance, and pledge data
         </p>
       </div>
 
@@ -167,8 +110,8 @@ export default function Import() {
         </div>
         <div className="p-4">
           <p className="text-xs text-gray-500 mb-3">
-            Your hangar username on <span className="font-mono text-gray-400">fleetyards.net</span> — used for syncing and enrichment.{' '}
-            <span className="text-sc-warn">Your hangar must be set to public</span> during sync (you can make it private again after).
+            Your username on <span className="font-mono text-gray-400">fleetyards.net</span> — used for
+            reference data sync (ship images, specs). Not required for HangarXplor import.
           </p>
           <div className="flex gap-2">
             <input
@@ -191,13 +134,12 @@ export default function Import() {
         </div>
       </div>
 
-      {/* Current Source Indicator */}
+      {/* Current Fleet Indicator */}
       {vehicleCount > 0 && (
         <div className="panel p-4 flex items-center gap-3 border-l-2 border-l-sc-accent">
           <CheckCircle className="w-4 h-4 text-sc-accent shrink-0" />
           <span className="text-sm text-gray-300">
-            Currently loaded: <span className="text-white font-medium">{vehicleCount} ships</span> from{' '}
-            <span className="text-sc-accent font-medium">{sourceLabel[currentSource] || 'Unknown'}</span>
+            Currently loaded: <span className="text-white font-medium">{vehicleCount} ships</span>
           </span>
         </div>
       )}
@@ -207,172 +149,61 @@ export default function Import() {
         <div className="panel p-3 flex items-start gap-2 border-l-2 border-l-sc-warn">
           <AlertTriangle className="w-4 h-4 text-sc-warn shrink-0 mt-0.5" />
           <p className="text-xs text-gray-400">
-            Importing from a different source will <span className="text-sc-warn font-medium">replace</span> your
-            current hangar data. Enrichment only adds to existing data.
+            Importing will <span className="text-sc-warn font-medium">replace</span> your
+            current fleet data with the new import.
           </p>
         </div>
       )}
 
-      {/* Two Source Options */}
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
-        {/* Option 1: FleetYards */}
-        <div className={`panel transition-all ${currentSource === 'fleetyards' ? 'ring-1 ring-sc-accent/30' : ''}`}>
-          <div className="panel-header flex items-center gap-2">
-            <Globe className="w-3.5 h-3.5" />
-            FleetYards Public Hangar
-            {currentSource === 'fleetyards' && (
-              <span className="ml-auto text-[10px] font-mono bg-sc-accent/20 text-sc-accent px-2 py-0.5 rounded">ACTIVE</span>
-            )}
-          </div>
-          <div className="p-5 space-y-4">
-            <p className="text-sm text-gray-400">
-              Syncs your public hangar directly from FleetYards.
-            </p>
-            <div className="p-3 rounded bg-blue-500/10 border border-blue-500/20 text-xs text-blue-300 space-y-1">
-              <div className="flex items-start gap-2">
-                <Globe className="w-3.5 h-3.5 shrink-0 mt-0.5" />
-                <div>
-                  <span className="font-medium">Requires public hangar:</span> Your hangar on{' '}
-                  <span className="font-mono">fleetyards.net</span> must be set to public during sync.
-                  You can make it private again immediately after.
-                </div>
-              </div>
-            </div>
-            <div className="text-xs text-gray-500 space-y-1">
-              <div className="flex items-center gap-2">
-                <ArrowRight className="w-3 h-3 text-sc-accent" />
-                <span>Ship names, manufacturer, paint/livery</span>
-              </div>
-              <div className="flex items-center gap-2">
-                <ArrowRight className="w-3 h-3 text-sc-accent" />
-                <span>Loaner detection</span>
-              </div>
-              <div className="flex items-center gap-2">
-                <ArrowRight className="w-3 h-3 text-gray-600" />
-                <span className="text-gray-600">No insurance/pledge data</span>
-              </div>
-            </div>
-
-            {fleetyardsUser ? (
-              <div className="space-y-2">
-                <p className="text-xs font-mono text-gray-500">
-                  Syncing as: <span className="text-gray-300">{fleetyardsUser}</span>
-                </p>
-                <button
-                  onClick={handleFleetYardsSync}
-                  disabled={status === 'syncing'}
-                  className="btn-primary w-full flex items-center justify-center gap-2"
-                >
-                  {status === 'syncing' ? (
-                    <>
-                      <div className="w-3.5 h-3.5 border-2 border-white border-t-transparent rounded-full animate-spin" />
-                      Syncing...
-                    </>
-                  ) : (
-                    <>
-                      <RefreshCw className="w-3.5 h-3.5" />
-                      {currentSource === 'fleetyards' ? 'Re-sync from FleetYards' : 'Sync from FleetYards'}
-                    </>
-                  )}
-                </button>
-              </div>
-            ) : (
-              <div className="p-3 rounded bg-sc-warn/10 border border-sc-warn/20">
-                <p className="text-xs text-sc-warn flex items-center gap-2">
-                  <AlertTriangle className="w-3.5 h-3.5 shrink-0" />
-                  Enter your FleetYards username above to enable
-                </p>
-              </div>
-            )}
-          </div>
+      {/* HangarXplor Import */}
+      <div className="panel">
+        <div className="panel-header flex items-center gap-2">
+          <FileJson className="w-3.5 h-3.5" />
+          HangarXplor Import
         </div>
-
-        {/* Option 2: HangarXplor */}
-        <div className={`panel transition-all ${currentSource === 'hangarxplor' ? 'ring-1 ring-sc-accent/30' : ''}`}>
-          <div className="panel-header flex items-center gap-2">
-            <FileJson className="w-3.5 h-3.5" />
-            HangarXplor Import
-            {currentSource === 'hangarxplor' && (
-              <span className="ml-auto text-[10px] font-mono bg-sc-accent/20 text-sc-accent px-2 py-0.5 rounded">ACTIVE</span>
-            )}
+        <div className="p-5 space-y-4">
+          <p className="text-sm text-gray-400">
+            Upload a JSON export from the HangarXplor browser extension. Includes full
+            pledge and insurance details. Ship data is automatically enriched from the
+            reference database (images, specs, manufacturer info).
+          </p>
+          <div className="text-xs text-gray-500 space-y-1">
+            <div className="flex items-center gap-2">
+              <span className="w-1.5 h-1.5 rounded-full bg-sc-accent" />
+              <span>Ship names, manufacturer, images (from reference DB)</span>
+            </div>
+            <div className="flex items-center gap-2">
+              <span className="w-1.5 h-1.5 rounded-full bg-sc-accent" />
+              <span>LTI / insurance type, warbond status</span>
+            </div>
+            <div className="flex items-center gap-2">
+              <span className="w-1.5 h-1.5 rounded-full bg-sc-accent" />
+              <span>Pledge name, date, and cost</span>
+            </div>
+            <div className="flex items-center gap-2">
+              <span className="w-1.5 h-1.5 rounded-full bg-sc-accent" />
+              <span>Custom ship names</span>
+            </div>
           </div>
-          <div className="p-5 space-y-4">
-            <p className="text-sm text-gray-400">
-              Upload a JSON export from the HangarXplor browser extension. Includes full
-              pledge and insurance details.
-            </p>
-            <div className="text-xs text-gray-500 space-y-1">
-              <div className="flex items-center gap-2">
-                <ArrowRight className="w-3 h-3 text-sc-accent" />
-                <span>Ship names, manufacturer</span>
-              </div>
-              <div className="flex items-center gap-2">
-                <ArrowRight className="w-3 h-3 text-sc-accent" />
-                <span>LTI / insurance status, warbond</span>
-              </div>
-              <div className="flex items-center gap-2">
-                <ArrowRight className="w-3 h-3 text-sc-accent" />
-                <span>Pledge name, date, and cost</span>
-              </div>
-            </div>
 
-            <div
-              className="p-4 border-2 border-dashed border-sc-border hover:border-sc-accent/30 transition-colors cursor-pointer rounded text-center"
-              onClick={() => fileRef.current?.click()}
-            >
-              <input
-                ref={fileRef}
-                type="file"
-                accept=".json"
-                className="hidden"
-                onChange={handleFile}
-              />
-              <Upload className="w-6 h-6 mx-auto text-gray-600 mb-2" />
-              <p className="text-xs text-gray-400">
-                Drop <span className="text-gray-300 font-mono">.json</span> file or click to browse
-              </p>
-            </div>
+          <div
+            className="p-4 border-2 border-dashed border-sc-border hover:border-sc-accent/30 transition-colors cursor-pointer rounded text-center"
+            onClick={() => fileRef.current?.click()}
+          >
+            <input
+              ref={fileRef}
+              type="file"
+              accept=".json"
+              className="hidden"
+              onChange={handleFile}
+            />
+            <Upload className="w-6 h-6 mx-auto text-gray-600 mb-2" />
+            <p className="text-xs text-gray-400">
+              Drop <span className="text-gray-300 font-mono">.json</span> file or click to browse
+            </p>
           </div>
         </div>
       </div>
-
-      {/* Enrich Option - only when HangarXplor is active and FY user is set */}
-      {currentSource === 'hangarxplor' && fleetyardsUser && (
-        <div className="panel">
-          <div className="panel-header flex items-center gap-2">
-            <Sparkles className="w-3.5 h-3.5" />
-            Enrich from FleetYards
-          </div>
-          <div className="p-5 space-y-3">
-            <p className="text-sm text-gray-400">
-              Pull supplementary data from your FleetYards hangar to enhance your HangarXplor import.
-              This adds loaner flags, paint/livery names, and improves ship database matching — without
-              replacing your pledge and insurance data.
-            </p>
-            <div className="p-2.5 rounded bg-blue-500/10 border border-blue-500/20 text-xs text-blue-300">
-              <span className="font-medium">Note:</span> Your FleetYards hangar must be public during enrichment.
-              You can make it private again after.
-            </div>
-            <button
-              onClick={handleEnrich}
-              disabled={status === 'enriching'}
-              className="btn-primary flex items-center justify-center gap-2"
-            >
-              {status === 'enriching' ? (
-                <>
-                  <div className="w-3.5 h-3.5 border-2 border-white border-t-transparent rounded-full animate-spin" />
-                  Enriching...
-                </>
-              ) : (
-                <>
-                  <Sparkles className="w-3.5 h-3.5" />
-                  Enrich from FleetYards ({fleetyardsUser})
-                </>
-              )}
-            </button>
-          </div>
-        </div>
-      )}
 
       {/* HangarXplor Preview */}
       {preview && (
@@ -408,12 +239,10 @@ export default function Import() {
       )}
 
       {/* Status Messages */}
-      {(status === 'importing' || status === 'enriching') && (
+      {status === 'importing' && (
         <div className="panel p-5 flex items-center gap-3">
           <div className="w-4 h-4 border-2 border-sc-accent border-t-transparent rounded-full animate-spin" />
-          <span className="text-sm text-gray-300">
-            {status === 'enriching' ? 'Enriching from FleetYards...' : 'Importing...'}
-          </span>
+          <span className="text-sm text-gray-300">Importing...</span>
         </div>
       )}
 
@@ -422,11 +251,7 @@ export default function Import() {
           <div className="p-5 flex items-center gap-3">
             <CheckCircle className="w-5 h-5 text-sc-success" />
             <div>
-              <span className="text-sm text-white font-medium">
-                {result.source === 'fleetyards' ? 'Hangar sync started!' :
-                 result.source === 'enrich' ? 'Enrichment complete!' :
-                 'Import complete!'}
-              </span>
+              <span className="text-sm text-white font-medium">Import complete!</span>
               {result.imported != null && (
                 <span className="text-sm text-gray-400 ml-2">
                   {result.imported} of {result.total} entries imported
@@ -434,41 +259,6 @@ export default function Import() {
               )}
             </div>
           </div>
-
-          {/* Enrichment Stats */}
-          {result.source === 'enrich' && result.enriched != null && (
-            <div className="px-5 pb-5">
-              <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 mt-3">
-                <div className="bg-sc-darker rounded p-3 text-center">
-                  <div className="text-lg font-display font-bold text-sc-success">{result.enriched}</div>
-                  <div className="text-xs font-mono text-gray-500">Enriched</div>
-                </div>
-                {result.loaners_added > 0 && (
-                  <div className="bg-sc-darker rounded p-3 text-center">
-                    <div className="text-lg font-display font-bold text-sc-accent">{result.loaners_added}</div>
-                    <div className="text-xs font-mono text-gray-500">Loaners</div>
-                  </div>
-                )}
-                {result.paints_added > 0 && (
-                  <div className="bg-sc-darker rounded p-3 text-center">
-                    <div className="text-lg font-display font-bold text-sc-accent">{result.paints_added}</div>
-                    <div className="text-xs font-mono text-gray-500">Paints</div>
-                  </div>
-                )}
-                {result.slugs_improved > 0 && (
-                  <div className="bg-sc-darker rounded p-3 text-center">
-                    <div className="text-lg font-display font-bold text-sc-accent">{result.slugs_improved}</div>
-                    <div className="text-xs font-mono text-gray-500">Slug Matches</div>
-                  </div>
-                )}
-              </div>
-              {result.skipped > 0 && (
-                <p className="text-xs text-gray-500 mt-3">
-                  {result.skipped} ship{result.skipped !== 1 ? 's' : ''} couldn't be matched with FleetYards data
-                </p>
-              )}
-            </div>
-          )}
         </div>
       )}
 

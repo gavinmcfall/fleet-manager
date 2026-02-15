@@ -25,9 +25,6 @@ type Config struct {
 	SCWikiRateLimit float64 // requests per second
 	SCWikiBurst     int     // burst size
 
-	// SC Wiki V2 (scunpacked-data repo)
-	SCDataRepoPath string // path to scunpacked-data repository
-
 	// Sync
 	SyncSchedule  string // cron expression
 	SyncOnStartup bool
@@ -48,7 +45,6 @@ func Load() *Config {
 		SCWikiEnabled:     getEnvBool("SC_WIKI_ENABLED", true),
 		SCWikiRateLimit:   getEnvFloat("SC_WIKI_RATE_LIMIT", 1.0),
 		SCWikiBurst:       getEnvInt("SC_WIKI_BURST", 5),
-		SCDataRepoPath:    getEnv("SC_DATA_REPO_PATH", ""),
 		SyncSchedule:      getEnv("SYNC_SCHEDULE", "0 3 * * *"), // 3am daily
 		SyncOnStartup:     getEnvBool("SYNC_ON_STARTUP", true),
 		StaticDir:         getEnv("STATIC_DIR", "./frontend/dist"),

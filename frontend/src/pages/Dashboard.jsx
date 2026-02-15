@@ -32,7 +32,7 @@ export default function Dashboard() {
         <div>
           <h2 className="font-display font-bold text-2xl tracking-wider text-white">FLEET OVERVIEW</h2>
           <p className="text-xs font-mono text-gray-500 mt-1">
-            {status?.ships || 0} ships in database · {status?.vehicles || 0} in hangar
+            {status?.ships || 0} ships in database &middot; {status?.vehicles || 0} in fleet
           </p>
         </div>
         <div className="flex gap-2">
@@ -152,10 +152,10 @@ export default function Dashboard() {
                       </span>
                     </td>
                     <td className="px-5 py-3 text-sm font-mono text-gray-300">
-                      {s.sync_type}
+                      {s.source_label || s.endpoint}
                     </td>
                     <td className="px-5 py-3 text-sm font-mono text-gray-400 text-right">
-                      {s.item_count.toLocaleString()}
+                      {(s.record_count || 0).toLocaleString()}
                     </td>
                     <td className="px-5 py-3 text-xs font-mono text-gray-500">
                       {new Date(s.started_at).toLocaleString()}

@@ -9,25 +9,39 @@ import (
 func (db *DB) migrate() error {
 	log.Info().Msg("running database migrations")
 
+	// Step 1: Rename old tables if they exist (safe to re-run)
+	db.renameOldTables()
+
+	// Step 2: Create new schema
 	migrations := []string{
-		db.migrationShips(),
+		// Lookup tables
+		db.migrationVehicleTypes(),
+		db.migrationInsuranceTypes(),
+		db.migrationSyncSources(),
+		db.migrationProductionStatuses(),
+		// Core reference data
+		db.migrationManufacturers(),
+		db.migrationGameVersions(),
 		db.migrationVehicles(),
-		db.migrationHangarImports(),
-		db.migrationSyncStatus(),
-		db.migrationSettings(),
+		db.migrationPorts(),
+		db.migrationComponents(),
+		db.migrationFPSWeapons(),
+		db.migrationFPSArmour(),
+		db.migrationFPSAttachments(),
+		db.migrationFPSAmmo(),
+		db.migrationFPSUtilities(),
+		db.migrationPaints(),
+		db.migrationVehicleLoaners(),
+		// User data
+		db.migrationUsers(),
+		db.migrationUserFleet(),
+		db.migrationUserPaints(),
+		db.migrationUserLLMConfigs(),
+		db.migrationUserSettings(),
+		// Sync & audit
+		db.migrationSyncHistory(),
 		db.migrationAIAnalyses(),
-		// SC Wiki API tables (V1 - for API sync)
-		db.migrationSCGameVersions(),
-		db.migrationSCManufacturers(),
-		db.migrationSCVehicles(),
-		db.migrationSCItems(),
-		db.migrationSCPorts(),
-		db.migrationSCShipMatrixVehicles(),
-		db.migrationSCCommLinks(),
-		db.migrationSCGalactapedia(),
-		db.migrationSCSyncMetadata(),
-		// Note: V2 tables (manufacturers, sc_vehicles_v2) are for scunpacked-data repo sync
-		// and are currently disabled. They use different schemas.
+		db.migrationAppSettings(),
 	}
 
 	for i, m := range migrations {
@@ -36,403 +50,193 @@ func (db *DB) migrate() error {
 		}
 	}
 
-	// Safe ALTER TABLE migrations (ignore "column already exists" errors)
-	safeAlters := []string{
-		"ALTER TABLE vehicles ADD COLUMN loaner BOOLEAN NOT NULL DEFAULT FALSE",
-		"ALTER TABLE vehicles ADD COLUMN paint_name TEXT NOT NULL DEFAULT ''",
-		"ALTER TABLE hangar_imports ADD COLUMN ship_slug TEXT NOT NULL DEFAULT ''",
-		"ALTER TABLE ships ADD COLUMN on_sale BOOLEAN NOT NULL DEFAULT FALSE",
-		"ALTER TABLE ships ADD COLUMN image_url_small TEXT NOT NULL DEFAULT ''",
-		"ALTER TABLE ships ADD COLUMN image_url_medium TEXT NOT NULL DEFAULT ''",
-		"ALTER TABLE ships ADD COLUMN image_url_large TEXT NOT NULL DEFAULT ''",
-	}
-	for _, q := range safeAlters {
-		db.conn.Exec(q) // Ignore errors - column may already exist
-	}
+	// Step 3: Seed lookup tables
+	db.seedLookupTables()
+
+	// Step 4: Create default user if none exists
+	db.ensureDefaultUser()
+
+	// Step 5: Drop legacy tables (data has been migrated to default user)
+	db.dropOldTables()
 
 	log.Info().Msg("migrations complete")
 	return nil
 }
 
-func (db *DB) migrationShips() string {
+// renameOldTables renames legacy tables so new schema can use the clean names.
+// Errors are ignored — tables may not exist on a fresh DB.
+func (db *DB) renameOldTables() {
+	renames := []struct {
+		oldName string
+		newName string
+	}{
+		{"ships", "old_ships"},
+		{"vehicles", "old_vehicles"},
+		{"hangar_imports", "old_hangar_imports"},
+		{"sync_status", "old_sync_status"},
+		{"sc_manufacturers", "old_sc_manufacturers"},
+		{"sc_vehicles", "old_sc_vehicles"},
+		{"sc_items", "old_sc_items"},
+		{"sc_ports", "old_sc_ports"},
+		{"sc_game_versions", "old_sc_game_versions"},
+		{"sc_shipmatrix_vehicles", "old_sc_shipmatrix_vehicles"},
+		{"sc_sync_metadata", "old_sc_sync_metadata"},
+		{"sc_comm_links", "old_sc_comm_links"},
+		{"sc_galactapedia", "old_sc_galactapedia"},
+		{"settings", "old_settings"},
+		{"ai_analyses", "old_ai_analyses"},
+	}
+
+	for _, r := range renames {
+		db.conn.Exec(fmt.Sprintf("ALTER TABLE %s RENAME TO %s", r.oldName, r.newName))
+	}
+}
+
+// dropOldTables removes legacy tables that have been renamed with old_ prefix.
+// Called after ensureDefaultUser (which reads old_settings for migration).
+// Errors are ignored — tables may not exist on a fresh DB.
+func (db *DB) dropOldTables() {
+	tables := []string{
+		"old_ships",
+		"old_vehicles",
+		"old_hangar_imports",
+		"old_sync_status",
+		"old_sc_manufacturers",
+		"old_sc_vehicles",
+		"old_sc_items",
+		"old_sc_ports",
+		"old_sc_game_versions",
+		"old_sc_shipmatrix_vehicles",
+		"old_sc_sync_metadata",
+		"old_sc_comm_links",
+		"old_sc_galactapedia",
+		"old_settings",
+		"old_ai_analyses",
+	}
+
+	for _, t := range tables {
+		db.conn.Exec(fmt.Sprintf("DROP TABLE IF EXISTS %s", t))
+	}
+}
+
+// --- Lookup Tables ---
+
+func (db *DB) migrationVehicleTypes() string {
+	return `CREATE TABLE IF NOT EXISTS vehicle_types (
+		id INTEGER PRIMARY KEY,
+		key TEXT UNIQUE NOT NULL,
+		label TEXT NOT NULL
+	)`
+}
+
+func (db *DB) migrationInsuranceTypes() string {
+	return `CREATE TABLE IF NOT EXISTS insurance_types (
+		id INTEGER PRIMARY KEY,
+		key TEXT UNIQUE NOT NULL,
+		label TEXT NOT NULL,
+		duration_months INTEGER,
+		is_lifetime BOOLEAN NOT NULL DEFAULT FALSE
+	)`
+}
+
+func (db *DB) migrationSyncSources() string {
+	return `CREATE TABLE IF NOT EXISTS sync_sources (
+		id INTEGER PRIMARY KEY,
+		key TEXT UNIQUE NOT NULL,
+		label TEXT NOT NULL
+	)`
+}
+
+func (db *DB) migrationProductionStatuses() string {
+	return `CREATE TABLE IF NOT EXISTS production_statuses (
+		id INTEGER PRIMARY KEY,
+		key TEXT UNIQUE NOT NULL,
+		label TEXT NOT NULL
+	)`
+}
+
+// --- Core Reference Data ---
+
+func (db *DB) migrationManufacturers() string {
 	ts := db.timestampType()
-	return fmt.Sprintf(`CREATE TABLE IF NOT EXISTS ships (
+	return fmt.Sprintf(`CREATE TABLE IF NOT EXISTS manufacturers (
 		id %s,
-		slug TEXT UNIQUE NOT NULL,
-		name TEXT NOT NULL DEFAULT '',
-		sc_identifier TEXT NOT NULL DEFAULT '',
-		manufacturer_name TEXT NOT NULL DEFAULT '',
-		manufacturer_code TEXT NOT NULL DEFAULT '',
-		focus TEXT NOT NULL DEFAULT '',
-		size_label TEXT NOT NULL DEFAULT '',
-		length REAL NOT NULL DEFAULT 0,
-		beam REAL NOT NULL DEFAULT 0,
-		height REAL NOT NULL DEFAULT 0,
-		mass REAL NOT NULL DEFAULT 0,
-		cargo REAL NOT NULL DEFAULT 0,
-		min_crew INTEGER NOT NULL DEFAULT 0,
-		max_crew INTEGER NOT NULL DEFAULT 0,
-		scm_speed REAL NOT NULL DEFAULT 0,
-		pledge_price REAL NOT NULL DEFAULT 0,
-		production_status TEXT NOT NULL DEFAULT '',
-		description TEXT NOT NULL DEFAULT '',
-		classification TEXT NOT NULL DEFAULT '',
-		image_url TEXT NOT NULL DEFAULT '',
-		fleetyards_url TEXT NOT NULL DEFAULT '',
-		last_synced_at %s,
-		raw_json TEXT NOT NULL DEFAULT ''
-	)`, db.autoIncrement(), ts)
+		uuid TEXT UNIQUE NOT NULL,
+		name TEXT NOT NULL,
+		slug TEXT NOT NULL,
+		code TEXT,
+		known_for TEXT,
+		description TEXT,
+		logo_url TEXT,
+		raw_data TEXT,
+		created_at %s DEFAULT CURRENT_TIMESTAMP,
+		updated_at %s DEFAULT CURRENT_TIMESTAMP
+	)`, db.autoIncrement(), ts, ts)
+}
+
+func (db *DB) migrationGameVersions() string {
+	ts := db.timestampType()
+	return fmt.Sprintf(`CREATE TABLE IF NOT EXISTS game_versions (
+		id %s,
+		uuid TEXT UNIQUE NOT NULL,
+		code TEXT UNIQUE NOT NULL,
+		channel TEXT,
+		is_default BOOLEAN DEFAULT FALSE,
+		released_at %s,
+		created_at %s DEFAULT CURRENT_TIMESTAMP,
+		updated_at %s DEFAULT CURRENT_TIMESTAMP
+	)`, db.autoIncrement(), ts, ts, ts)
 }
 
 func (db *DB) migrationVehicles() string {
 	ts := db.timestampType()
 	return fmt.Sprintf(`CREATE TABLE IF NOT EXISTS vehicles (
 		id %s,
-		ship_slug TEXT NOT NULL DEFAULT '',
-		ship_name TEXT NOT NULL DEFAULT '',
-		custom_name TEXT NOT NULL DEFAULT '',
-		manufacturer_name TEXT NOT NULL DEFAULT '',
-		manufacturer_code TEXT NOT NULL DEFAULT '',
-		flagship BOOLEAN NOT NULL DEFAULT FALSE,
-		public BOOLEAN NOT NULL DEFAULT TRUE,
-		loaner BOOLEAN NOT NULL DEFAULT FALSE,
-		paint_name TEXT NOT NULL DEFAULT '',
-		source TEXT NOT NULL DEFAULT 'fleetyards',
-		last_synced_at %s
-	)`, db.autoIncrement(), ts)
-}
-
-
-func (db *DB) migrationHangarImports() string {
-	ts := db.timestampType()
-	return fmt.Sprintf(`CREATE TABLE IF NOT EXISTS hangar_imports (
-		id %s,
-		vehicle_id INTEGER NOT NULL DEFAULT 0,
-		ship_slug TEXT NOT NULL DEFAULT '',
-		ship_code TEXT NOT NULL DEFAULT '',
-		lti BOOLEAN NOT NULL DEFAULT FALSE,
-		warbond BOOLEAN NOT NULL DEFAULT FALSE,
-		pledge_id TEXT UNIQUE NOT NULL,
-		pledge_name TEXT NOT NULL DEFAULT '',
-		pledge_date TEXT NOT NULL DEFAULT '',
-		pledge_cost TEXT NOT NULL DEFAULT '',
-		entity_type TEXT NOT NULL DEFAULT '',
-		imported_at %s
-	)`, db.autoIncrement(), ts)
-}
-
-func (db *DB) migrationSyncStatus() string {
-	ts := db.timestampType()
-	return fmt.Sprintf(`CREATE TABLE IF NOT EXISTS sync_status (
-		id %s,
-		sync_type TEXT NOT NULL DEFAULT '',
-		status TEXT NOT NULL DEFAULT '',
-		item_count INTEGER NOT NULL DEFAULT 0,
-		error_message TEXT NOT NULL DEFAULT '',
-		started_at %s,
-		completed_at %s
-	)`, db.autoIncrement(), ts, ts)
-}
-
-func (db *DB) migrationSettings() string {
-	return `CREATE TABLE IF NOT EXISTS settings (
-		key TEXT PRIMARY KEY NOT NULL,
-		value TEXT NOT NULL DEFAULT ''
-	)`
-}
-
-func (db *DB) migrationAIAnalyses() string {
-	ts := db.timestampType()
-	return fmt.Sprintf(`CREATE TABLE IF NOT EXISTS ai_analyses (
-		id INTEGER PRIMARY KEY AUTOINCREMENT,
-		created_at %s NOT NULL DEFAULT CURRENT_TIMESTAMP,
-		provider TEXT NOT NULL,
-		model TEXT NOT NULL,
-		vehicle_count INTEGER NOT NULL,
-		analysis TEXT NOT NULL
-	)`, ts)
-}
-
-// SC Wiki API Migrations
-
-func (db *DB) migrationSCSyncMetadata() string {
-	ts := db.timestampType()
-	return fmt.Sprintf(`CREATE TABLE IF NOT EXISTS sc_sync_metadata (
-		endpoint TEXT PRIMARY KEY NOT NULL,
-		last_sync_at %s,
-		last_updated_record %s,
-		total_records INTEGER NOT NULL DEFAULT 0,
-		sync_status TEXT NOT NULL DEFAULT '',
-		error_message TEXT NOT NULL DEFAULT '',
-		created_at %s,
-		updated_at %s
-	)`, ts, ts, ts, ts)
-}
-
-func (db *DB) migrationSCGameVersions() string {
-	ts := db.timestampType()
-	return fmt.Sprintf(`CREATE TABLE IF NOT EXISTS sc_game_versions (
-		id %s,
 		uuid TEXT UNIQUE,
-		code TEXT UNIQUE NOT NULL,
-		channel TEXT NOT NULL DEFAULT '',
-		is_default BOOLEAN NOT NULL DEFAULT FALSE,
-		released_at %s,
-		data TEXT NOT NULL DEFAULT '',
-		created_at %s,
-		updated_at %s
-	)`, db.autoIncrement(), ts, ts, ts)
-}
-
-func (db *DB) migrationSCManufacturers() string {
-	ts := db.timestampType()
-	return fmt.Sprintf(`CREATE TABLE IF NOT EXISTS sc_manufacturers (
-		id %s,
-		uuid TEXT UNIQUE NOT NULL,
-		name TEXT NOT NULL DEFAULT '',
-		slug TEXT NOT NULL DEFAULT '',
-		known_for TEXT NOT NULL DEFAULT '',
-		description TEXT NOT NULL DEFAULT '',
-		logo_url TEXT NOT NULL DEFAULT '',
-		data TEXT NOT NULL DEFAULT '',
-		created_at %s,
-		updated_at %s
-	)`, db.autoIncrement(), ts, ts)
-}
-
-func (db *DB) migrationSCVehicles() string {
-	ts := db.timestampType()
-	sql := fmt.Sprintf(`CREATE TABLE IF NOT EXISTS sc_vehicles (
-		id %s,
-		uuid TEXT UNIQUE NOT NULL,
-		class_name TEXT NOT NULL DEFAULT '',
-		name TEXT NOT NULL DEFAULT '',
-		slug TEXT NOT NULL DEFAULT '',
-		manufacturer_id INTEGER,
-		size INTEGER NOT NULL DEFAULT 0,
-		size_class INTEGER NOT NULL DEFAULT 0,
-		career TEXT NOT NULL DEFAULT '',
-		role TEXT NOT NULL DEFAULT '',
-		is_vehicle BOOLEAN NOT NULL DEFAULT FALSE,
-		is_gravlev BOOLEAN NOT NULL DEFAULT FALSE,
-		is_spaceship BOOLEAN NOT NULL DEFAULT FALSE,
-		mass_total REAL NOT NULL DEFAULT 0,
-		cargo_capacity REAL NOT NULL DEFAULT 0,
-		vehicle_inventory REAL NOT NULL DEFAULT 0,
-		crew_min INTEGER NOT NULL DEFAULT 0,
-		crew_max INTEGER NOT NULL DEFAULT 0,
-		speed_max REAL NOT NULL DEFAULT 0,
-		game_version_id INTEGER,
-		data TEXT NOT NULL DEFAULT '',
-		created_at %s,
-		updated_at %s
-	)`, db.autoIncrement(), ts, ts)
-
-	if db.driver == "sqlite" {
-		return sql
-	}
-	// PostgreSQL indexes
-	return sql + `
-	CREATE INDEX IF NOT EXISTS idx_sc_vehicles_name ON sc_vehicles(name);
-	CREATE INDEX IF NOT EXISTS idx_sc_vehicles_slug ON sc_vehicles(slug);
-	CREATE INDEX IF NOT EXISTS idx_sc_vehicles_manufacturer ON sc_vehicles(manufacturer_id);
-	CREATE INDEX IF NOT EXISTS idx_sc_vehicles_version ON sc_vehicles(game_version_id);
-	`
-}
-
-func (db *DB) migrationSCItems() string {
-	ts := db.timestampType()
-	sql := fmt.Sprintf(`CREATE TABLE IF NOT EXISTS sc_items (
-		id %s,
-		uuid TEXT UNIQUE NOT NULL,
-		class_name TEXT NOT NULL DEFAULT '',
-		name TEXT NOT NULL DEFAULT '',
-		slug TEXT NOT NULL DEFAULT '',
-		manufacturer_id INTEGER,
-		type TEXT NOT NULL DEFAULT '',
-		sub_type TEXT NOT NULL DEFAULT '',
-		size INTEGER NOT NULL DEFAULT 0,
-		grade TEXT NOT NULL DEFAULT '',
-		data TEXT NOT NULL DEFAULT '',
-		game_version_id INTEGER,
-		created_at %s,
-		updated_at %s
-	)`, db.autoIncrement(), ts, ts)
-
-	if db.driver == "sqlite" {
-		return sql
-	}
-	// PostgreSQL indexes
-	return sql + `
-	CREATE INDEX IF NOT EXISTS idx_sc_items_name ON sc_items(name);
-	CREATE INDEX IF NOT EXISTS idx_sc_items_type ON sc_items(type);
-	CREATE INDEX IF NOT EXISTS idx_sc_items_manufacturer ON sc_items(manufacturer_id);
-	`
-}
-
-func (db *DB) migrationSCShipMatrixVehicles() string {
-	ts := db.timestampType()
-	return fmt.Sprintf(`CREATE TABLE IF NOT EXISTS sc_shipmatrix_vehicles (
-		id %s,
-		uuid TEXT UNIQUE,
-		name TEXT NOT NULL DEFAULT '',
-		slug TEXT NOT NULL DEFAULT '',
-		pledge_price REAL NOT NULL DEFAULT 0,
-		price_auec REAL NOT NULL DEFAULT 0,
-		sc_vehicle_uuid TEXT NOT NULL DEFAULT '',
-		data TEXT NOT NULL DEFAULT '',
-		created_at %s,
-		updated_at %s
-	)`, db.autoIncrement(), ts, ts)
-}
-
-func (db *DB) migrationSCCommLinks() string {
-	ts := db.timestampType()
-	return fmt.Sprintf(`CREATE TABLE IF NOT EXISTS sc_comm_links (
-		id %s,
-		uuid TEXT UNIQUE,
-		title TEXT NOT NULL DEFAULT '',
-		slug TEXT NOT NULL DEFAULT '',
-		published_at %s,
-		data TEXT NOT NULL DEFAULT '',
-		created_at %s,
-		updated_at %s
-	)`, db.autoIncrement(), ts, ts, ts)
-}
-
-func (db *DB) migrationSCGalactapedia() string {
-	ts := db.timestampType()
-	return fmt.Sprintf(`CREATE TABLE IF NOT EXISTS sc_galactapedia (
-		id %s,
-		uuid TEXT UNIQUE,
-		title TEXT NOT NULL DEFAULT '',
-		slug TEXT NOT NULL DEFAULT '',
-		data TEXT NOT NULL DEFAULT '',
-		created_at %s,
-		updated_at %s
-	)`, db.autoIncrement(), ts, ts)
-}
-
-func (db *DB) migrationSCCelestialObjects() string {
-	ts := db.timestampType()
-	return fmt.Sprintf(`CREATE TABLE IF NOT EXISTS sc_celestial_objects (
-		id %s,
-		uuid TEXT UNIQUE,
-		name TEXT NOT NULL DEFAULT '',
-		type TEXT NOT NULL DEFAULT '',
-		data TEXT NOT NULL DEFAULT '',
-		created_at %s,
-		updated_at %s
-	)`, db.autoIncrement(), ts, ts)
-}
-
-func (db *DB) migrationSCStarsystems() string {
-	ts := db.timestampType()
-	return fmt.Sprintf(`CREATE TABLE IF NOT EXISTS sc_starsystems (
-		id %s,
-		uuid TEXT UNIQUE,
-		name TEXT NOT NULL DEFAULT '',
-		data TEXT NOT NULL DEFAULT '',
-		created_at %s,
-		updated_at %s
-	)`, db.autoIncrement(), ts, ts)
-}
-
-// V2 Migrations for scunpacked-data (simplified schema)
-
-func (db *DB) migrationSCManufacturersV2() string {
-	ts := db.timestampType()
-	sql := fmt.Sprintf(`CREATE TABLE IF NOT EXISTS manufacturers (
-		uuid TEXT PRIMARY KEY,
-		name TEXT NOT NULL,
-		code TEXT NOT NULL UNIQUE,
-		known_for TEXT,
-		description TEXT,
-		created_at %s DEFAULT CURRENT_TIMESTAMP,
-		updated_at %s DEFAULT CURRENT_TIMESTAMP
-	)`, ts, ts)
-
-	if db.driver == "sqlite" {
-		return sql
-	}
-	return sql + `
-	CREATE INDEX IF NOT EXISTS idx_manufacturers_code ON manufacturers(code);
-	`
-}
-
-func (db *DB) migrationSCVehiclesV2() string {
-	ts := db.timestampType()
-	fk := ""
-	if db.driver == "postgres" {
-		fk = "FOREIGN KEY (manufacturer_uuid) REFERENCES manufacturers(uuid) ON DELETE SET NULL,"
-	}
-
-	sql := fmt.Sprintf(`CREATE TABLE IF NOT EXISTS sc_vehicles_v2 (
-		uuid TEXT PRIMARY KEY,
+		slug TEXT UNIQUE NOT NULL,
 		name TEXT NOT NULL,
 		class_name TEXT,
-		manufacturer_uuid TEXT,
-		%s
-		size_class INTEGER,
+		manufacturer_id INTEGER REFERENCES manufacturers(id),
+		vehicle_type_id INTEGER REFERENCES vehicle_types(id),
+		production_status_id INTEGER REFERENCES production_statuses(id),
+		size INTEGER,
+		size_label TEXT,
 		focus TEXT,
-		type TEXT,
-		is_spaceship BOOLEAN DEFAULT true,
-		is_vehicle BOOLEAN DEFAULT false,
-		is_gravlev BOOLEAN DEFAULT false,
-		production_status TEXT,
+		classification TEXT,
+		description TEXT,
 		length REAL,
-		width REAL,
+		beam REAL,
 		height REAL,
-		mass_hull REAL,
-		mass_loadout REAL,
-		mass_total REAL,
-		cargo_capacity REAL,
+		mass REAL,
+		cargo REAL,
 		vehicle_inventory REAL,
 		crew_min INTEGER,
 		crew_max INTEGER,
-		crew_weapon INTEGER,
-		health REAL,
 		speed_scm REAL,
 		speed_max REAL,
-		agility_pitch REAL,
-		agility_yaw REAL,
-		agility_roll REAL,
-		shield_hp REAL,
-		shield_regen REAL,
-		shield_face_type TEXT,
-		game_version TEXT,
+		health REAL,
+		pledge_price REAL,
+		price_auec REAL,
+		on_sale BOOLEAN DEFAULT FALSE,
+		image_url TEXT,
+		image_url_small TEXT,
+		image_url_medium TEXT,
+		image_url_large TEXT,
+		fleetyards_url TEXT,
+		game_version_id INTEGER REFERENCES game_versions(id),
+		raw_data TEXT,
 		created_at %s DEFAULT CURRENT_TIMESTAMP,
 		updated_at %s DEFAULT CURRENT_TIMESTAMP
-	)`, fk, ts, ts)
-
-	if db.driver == "sqlite" {
-		return sql
-	}
-	return sql + `
-	CREATE INDEX IF NOT EXISTS idx_sc_vehicles_v2_manufacturer ON sc_vehicles_v2(manufacturer_uuid);
-	CREATE INDEX IF NOT EXISTS idx_sc_vehicles_v2_type ON sc_vehicles_v2(type);
-	CREATE INDEX IF NOT EXISTS idx_sc_vehicles_v2_focus ON sc_vehicles_v2(focus);
-	CREATE INDEX IF NOT EXISTS idx_sc_vehicles_v2_production_status ON sc_vehicles_v2(production_status);
-	`
+	)`, db.autoIncrement(), ts, ts)
 }
 
-func (db *DB) migrationSCPorts() string {
+func (db *DB) migrationPorts() string {
 	ts := db.timestampType()
-	fk := ""
-	if db.driver == "postgres" {
-		fk = `
-		FOREIGN KEY (vehicle_uuid) REFERENCES sc_vehicles_v2(uuid) ON DELETE CASCADE,
-		FOREIGN KEY (parent_port_id) REFERENCES sc_ports(id) ON DELETE CASCADE,
-		FOREIGN KEY (equipped_item_uuid) REFERENCES sc_items_v2(uuid) ON DELETE SET NULL,
-		`
-	}
-
-	sql := fmt.Sprintf(`CREATE TABLE IF NOT EXISTS sc_ports (
+	return fmt.Sprintf(`CREATE TABLE IF NOT EXISTS ports (
 		id %s,
-		uuid TEXT UNIQUE,
-		vehicle_uuid TEXT NOT NULL,
-		parent_port_id INTEGER,
-		%s
+		uuid TEXT UNIQUE NOT NULL,
+		vehicle_id INTEGER NOT NULL REFERENCES vehicles(id),
+		parent_port_id INTEGER REFERENCES ports(id),
 		name TEXT NOT NULL,
 		position TEXT,
 		category_label TEXT,
@@ -440,106 +244,338 @@ func (db *DB) migrationSCPorts() string {
 		size_max INTEGER,
 		port_type TEXT,
 		port_subtype TEXT,
-		class_name TEXT,
 		equipped_item_uuid TEXT,
-		editable BOOLEAN,
-		editable_children BOOLEAN,
+		editable BOOLEAN DEFAULT TRUE,
 		health REAL,
 		created_at %s DEFAULT CURRENT_TIMESTAMP
-	)`, db.autoIncrement(), fk, ts)
-
-	if db.driver == "sqlite" {
-		return sql
-	}
-	return sql + `
-	CREATE INDEX IF NOT EXISTS idx_sc_ports_vehicle ON sc_ports(vehicle_uuid);
-	CREATE INDEX IF NOT EXISTS idx_sc_ports_parent ON sc_ports(parent_port_id);
-	CREATE INDEX IF NOT EXISTS idx_sc_ports_item ON sc_ports(equipped_item_uuid);
-	CREATE INDEX IF NOT EXISTS idx_sc_ports_category ON sc_ports(category_label);
-	CREATE INDEX IF NOT EXISTS idx_sc_ports_type ON sc_ports(port_type);
-	`
+	)`, db.autoIncrement(), ts)
 }
 
-func (db *DB) migrationSCItemsV2() string {
+func (db *DB) migrationComponents() string {
 	ts := db.timestampType()
-	fk := ""
-	if db.driver == "postgres" {
-		fk = "FOREIGN KEY (manufacturer_uuid) REFERENCES manufacturers(uuid) ON DELETE SET NULL,"
-	}
-
-	sql := fmt.Sprintf(`CREATE TABLE IF NOT EXISTS sc_items_v2 (
-		uuid TEXT PRIMARY KEY,
+	return fmt.Sprintf(`CREATE TABLE IF NOT EXISTS components (
+		id %s,
+		uuid TEXT UNIQUE NOT NULL,
 		name TEXT NOT NULL,
-		class_name TEXT NOT NULL,
-		manufacturer_uuid TEXT,
-		%s
+		slug TEXT,
+		class_name TEXT,
+		manufacturer_id INTEGER REFERENCES manufacturers(id),
 		type TEXT NOT NULL,
 		sub_type TEXT,
-		classification TEXT,
 		size INTEGER,
-		grade INTEGER,
-		class TEXT,
-		width REAL,
-		height REAL,
-		length REAL,
-		mass REAL,
-		volume_scu REAL,
+		grade TEXT,
 		description TEXT,
-		metadata TEXT,
-		is_base_variant BOOLEAN,
-		tags TEXT,
-		game_version TEXT,
+		game_version_id INTEGER REFERENCES game_versions(id),
+		raw_data TEXT,
 		created_at %s DEFAULT CURRENT_TIMESTAMP,
 		updated_at %s DEFAULT CURRENT_TIMESTAMP
-	)`, fk, ts, ts)
-
-	if db.driver == "sqlite" {
-		return sql
-	}
-	return sql + `
-	CREATE INDEX IF NOT EXISTS idx_sc_items_v2_manufacturer ON sc_items_v2(manufacturer_uuid);
-	CREATE INDEX IF NOT EXISTS idx_sc_items_v2_type ON sc_items_v2(type);
-	CREATE INDEX IF NOT EXISTS idx_sc_items_v2_sub_type ON sc_items_v2(sub_type);
-	CREATE INDEX IF NOT EXISTS idx_sc_items_v2_classification ON sc_items_v2(classification);
-	CREATE INDEX IF NOT EXISTS idx_sc_items_v2_size ON sc_items_v2(size);
-	CREATE INDEX IF NOT EXISTS idx_sc_items_v2_grade ON sc_items_v2(grade);
-	`
+	)`, db.autoIncrement(), ts, ts)
 }
 
-func (db *DB) migrationSCVehicleLoaners() string {
-	fk := ""
-	if db.driver == "postgres" {
-		fk = `,
-		FOREIGN KEY (vehicle_uuid) REFERENCES sc_vehicles_v2(uuid) ON DELETE CASCADE,
-		FOREIGN KEY (loaner_uuid) REFERENCES sc_vehicles_v2(uuid) ON DELETE CASCADE
-		`
-	}
-
-	sql := fmt.Sprintf(`CREATE TABLE IF NOT EXISTS sc_vehicle_loaners (
-		vehicle_uuid TEXT NOT NULL,
-		loaner_uuid TEXT NOT NULL,
-		PRIMARY KEY (vehicle_uuid, loaner_uuid)
-		%s
-	)`, fk)
-
-	if db.driver == "sqlite" {
-		return sql
-	}
-	return sql + `
-	CREATE INDEX IF NOT EXISTS idx_sc_vehicle_loaners_vehicle ON sc_vehicle_loaners(vehicle_uuid);
-	CREATE INDEX IF NOT EXISTS idx_sc_vehicle_loaners_loaner ON sc_vehicle_loaners(loaner_uuid);
-	`
-}
-
-func (db *DB) migrationSCSyncStatus() string {
+func (db *DB) migrationFPSWeapons() string {
 	ts := db.timestampType()
-	return fmt.Sprintf(`CREATE TABLE IF NOT EXISTS sc_sync_status (
+	return fmt.Sprintf(`CREATE TABLE IF NOT EXISTS fps_weapons (
 		id %s,
-		category TEXT NOT NULL UNIQUE,
-		last_synced_at %s,
-		file_checksum TEXT,
-		status TEXT,
-		error_message TEXT,
-		records_synced INTEGER DEFAULT 0
+		uuid TEXT UNIQUE NOT NULL,
+		name TEXT NOT NULL,
+		slug TEXT,
+		class_name TEXT,
+		manufacturer_id INTEGER REFERENCES manufacturers(id),
+		sub_type TEXT,
+		size INTEGER,
+		description TEXT,
+		game_version_id INTEGER REFERENCES game_versions(id),
+		raw_data TEXT,
+		created_at %s DEFAULT CURRENT_TIMESTAMP,
+		updated_at %s DEFAULT CURRENT_TIMESTAMP
+	)`, db.autoIncrement(), ts, ts)
+}
+
+func (db *DB) migrationFPSArmour() string {
+	ts := db.timestampType()
+	return fmt.Sprintf(`CREATE TABLE IF NOT EXISTS fps_armour (
+		id %s,
+		uuid TEXT UNIQUE NOT NULL,
+		name TEXT NOT NULL,
+		slug TEXT,
+		class_name TEXT,
+		manufacturer_id INTEGER REFERENCES manufacturers(id),
+		sub_type TEXT,
+		size INTEGER,
+		grade TEXT,
+		description TEXT,
+		game_version_id INTEGER REFERENCES game_versions(id),
+		raw_data TEXT,
+		created_at %s DEFAULT CURRENT_TIMESTAMP,
+		updated_at %s DEFAULT CURRENT_TIMESTAMP
+	)`, db.autoIncrement(), ts, ts)
+}
+
+func (db *DB) migrationFPSAttachments() string {
+	ts := db.timestampType()
+	return fmt.Sprintf(`CREATE TABLE IF NOT EXISTS fps_attachments (
+		id %s,
+		uuid TEXT UNIQUE NOT NULL,
+		name TEXT NOT NULL,
+		slug TEXT,
+		class_name TEXT,
+		manufacturer_id INTEGER REFERENCES manufacturers(id),
+		sub_type TEXT,
+		size INTEGER,
+		description TEXT,
+		game_version_id INTEGER REFERENCES game_versions(id),
+		raw_data TEXT,
+		created_at %s DEFAULT CURRENT_TIMESTAMP,
+		updated_at %s DEFAULT CURRENT_TIMESTAMP
+	)`, db.autoIncrement(), ts, ts)
+}
+
+func (db *DB) migrationFPSAmmo() string {
+	ts := db.timestampType()
+	return fmt.Sprintf(`CREATE TABLE IF NOT EXISTS fps_ammo (
+		id %s,
+		uuid TEXT UNIQUE NOT NULL,
+		name TEXT NOT NULL,
+		slug TEXT,
+		class_name TEXT,
+		manufacturer_id INTEGER REFERENCES manufacturers(id),
+		sub_type TEXT,
+		description TEXT,
+		game_version_id INTEGER REFERENCES game_versions(id),
+		raw_data TEXT,
+		created_at %s DEFAULT CURRENT_TIMESTAMP,
+		updated_at %s DEFAULT CURRENT_TIMESTAMP
+	)`, db.autoIncrement(), ts, ts)
+}
+
+func (db *DB) migrationFPSUtilities() string {
+	ts := db.timestampType()
+	return fmt.Sprintf(`CREATE TABLE IF NOT EXISTS fps_utilities (
+		id %s,
+		uuid TEXT UNIQUE NOT NULL,
+		name TEXT NOT NULL,
+		slug TEXT,
+		class_name TEXT,
+		manufacturer_id INTEGER REFERENCES manufacturers(id),
+		sub_type TEXT,
+		description TEXT,
+		game_version_id INTEGER REFERENCES game_versions(id),
+		raw_data TEXT,
+		created_at %s DEFAULT CURRENT_TIMESTAMP,
+		updated_at %s DEFAULT CURRENT_TIMESTAMP
+	)`, db.autoIncrement(), ts, ts)
+}
+
+func (db *DB) migrationPaints() string {
+	ts := db.timestampType()
+	return fmt.Sprintf(`CREATE TABLE IF NOT EXISTS paints (
+		id %s,
+		uuid TEXT UNIQUE,
+		name TEXT NOT NULL,
+		slug TEXT,
+		vehicle_id INTEGER REFERENCES vehicles(id),
+		image_url TEXT,
+		raw_data TEXT,
+		created_at %s DEFAULT CURRENT_TIMESTAMP,
+		updated_at %s DEFAULT CURRENT_TIMESTAMP
+	)`, db.autoIncrement(), ts, ts)
+}
+
+func (db *DB) migrationVehicleLoaners() string {
+	return `CREATE TABLE IF NOT EXISTS vehicle_loaners (
+		vehicle_id INTEGER NOT NULL REFERENCES vehicles(id),
+		loaner_id INTEGER NOT NULL REFERENCES vehicles(id),
+		PRIMARY KEY (vehicle_id, loaner_id)
+	)`
+}
+
+// --- User Data ---
+
+func (db *DB) migrationUsers() string {
+	ts := db.timestampType()
+	return fmt.Sprintf(`CREATE TABLE IF NOT EXISTS users (
+		id %s,
+		username TEXT UNIQUE NOT NULL,
+		handle TEXT,
+		email TEXT,
+		fleetyards_username TEXT,
+		created_at %s DEFAULT CURRENT_TIMESTAMP,
+		updated_at %s DEFAULT CURRENT_TIMESTAMP
+	)`, db.autoIncrement(), ts, ts)
+}
+
+func (db *DB) migrationUserFleet() string {
+	ts := db.timestampType()
+	return fmt.Sprintf(`CREATE TABLE IF NOT EXISTS user_fleet (
+		id %s,
+		user_id INTEGER NOT NULL REFERENCES users(id),
+		vehicle_id INTEGER NOT NULL REFERENCES vehicles(id),
+		insurance_type_id INTEGER REFERENCES insurance_types(id),
+		warbond BOOLEAN NOT NULL DEFAULT FALSE,
+		is_loaner BOOLEAN NOT NULL DEFAULT FALSE,
+		pledge_id TEXT,
+		pledge_name TEXT,
+		pledge_cost TEXT,
+		pledge_date TEXT,
+		custom_name TEXT,
+		equipped_paint_id INTEGER REFERENCES paints(id),
+		imported_at %s DEFAULT CURRENT_TIMESTAMP
 	)`, db.autoIncrement(), ts)
+}
+
+func (db *DB) migrationUserPaints() string {
+	return fmt.Sprintf(`CREATE TABLE IF NOT EXISTS user_paints (
+		id %s,
+		user_id INTEGER NOT NULL REFERENCES users(id),
+		paint_id INTEGER NOT NULL REFERENCES paints(id),
+		UNIQUE(user_id, paint_id)
+	)`, db.autoIncrement())
+}
+
+func (db *DB) migrationUserLLMConfigs() string {
+	ts := db.timestampType()
+	return fmt.Sprintf(`CREATE TABLE IF NOT EXISTS user_llm_configs (
+		id %s,
+		user_id INTEGER NOT NULL REFERENCES users(id),
+		provider TEXT NOT NULL,
+		encrypted_api_key TEXT NOT NULL,
+		model TEXT,
+		created_at %s DEFAULT CURRENT_TIMESTAMP,
+		updated_at %s DEFAULT CURRENT_TIMESTAMP,
+		UNIQUE(user_id, provider)
+	)`, db.autoIncrement(), ts, ts)
+}
+
+func (db *DB) migrationUserSettings() string {
+	return fmt.Sprintf(`CREATE TABLE IF NOT EXISTS user_settings (
+		id %s,
+		user_id INTEGER NOT NULL REFERENCES users(id),
+		key TEXT NOT NULL,
+		value TEXT NOT NULL,
+		UNIQUE(user_id, key)
+	)`, db.autoIncrement())
+}
+
+// --- Sync & Audit ---
+
+func (db *DB) migrationSyncHistory() string {
+	ts := db.timestampType()
+	return fmt.Sprintf(`CREATE TABLE IF NOT EXISTS sync_history (
+		id %s,
+		source_id INTEGER NOT NULL REFERENCES sync_sources(id),
+		endpoint TEXT,
+		status TEXT NOT NULL,
+		record_count INTEGER DEFAULT 0,
+		error_message TEXT,
+		started_at %s DEFAULT CURRENT_TIMESTAMP,
+		completed_at %s
+	)`, db.autoIncrement(), ts, ts)
+}
+
+func (db *DB) migrationAIAnalyses() string {
+	ts := db.timestampType()
+	return fmt.Sprintf(`CREATE TABLE IF NOT EXISTS ai_analyses (
+		id %s,
+		user_id INTEGER NOT NULL REFERENCES users(id),
+		provider TEXT NOT NULL,
+		model TEXT NOT NULL,
+		vehicle_count INTEGER NOT NULL,
+		analysis TEXT NOT NULL,
+		created_at %s NOT NULL DEFAULT CURRENT_TIMESTAMP
+	)`, db.autoIncrement(), ts)
+}
+
+func (db *DB) migrationAppSettings() string {
+	return `CREATE TABLE IF NOT EXISTS app_settings (
+		key TEXT PRIMARY KEY,
+		value TEXT NOT NULL
+	)`
+}
+
+// --- Seed Data ---
+
+func (db *DB) seedLookupTables() {
+	// Vehicle types
+	vehicleTypes := []struct {
+		id    int
+		key   string
+		label string
+	}{
+		{1, "spaceship", "Spaceship"},
+		{2, "ground_vehicle", "Ground Vehicle"},
+		{3, "gravlev", "Gravlev"},
+	}
+	for _, vt := range vehicleTypes {
+		db.conn.Exec("INSERT OR IGNORE INTO vehicle_types (id, key, label) VALUES (?, ?, ?)", vt.id, vt.key, vt.label)
+	}
+
+	// Insurance types
+	insuranceTypes := []struct {
+		id             int
+		key            string
+		label          string
+		durationMonths *int
+		isLifetime     bool
+	}{
+		{1, "lti", "Lifetime Insurance", nil, true},
+		{2, "120_month", "120-Month Insurance", intPtr(120), false},
+		{3, "72_month", "72-Month Insurance", intPtr(72), false},
+		{4, "6_month", "6-Month Insurance", intPtr(6), false},
+		{5, "3_month", "3-Month Insurance", intPtr(3), false},
+		{6, "standard", "Standard Insurance", nil, false},
+		{7, "unknown", "Unknown Insurance", nil, false},
+	}
+	for _, it := range insuranceTypes {
+		db.conn.Exec("INSERT OR IGNORE INTO insurance_types (id, key, label, duration_months, is_lifetime) VALUES (?, ?, ?, ?, ?)",
+			it.id, it.key, it.label, it.durationMonths, it.isLifetime)
+	}
+
+	// Sync sources
+	syncSources := []struct {
+		id    int
+		key   string
+		label string
+	}{
+		{1, "scwiki", "SC Wiki API"},
+		{2, "fleetyards", "FleetYards (Reference Only)"},
+		{3, "hangarxplor", "HangarXplor"},
+	}
+	for _, ss := range syncSources {
+		db.conn.Exec("INSERT OR IGNORE INTO sync_sources (id, key, label) VALUES (?, ?, ?)", ss.id, ss.key, ss.label)
+	}
+
+	// Production statuses
+	productionStatuses := []struct {
+		id    int
+		key   string
+		label string
+	}{
+		{1, "flight_ready", "Flight Ready"},
+		{2, "in_production", "In Production"},
+		{3, "in_concept", "In Concept"},
+		{4, "unknown", "Unknown"},
+	}
+	for _, ps := range productionStatuses {
+		db.conn.Exec("INSERT OR IGNORE INTO production_statuses (id, key, label) VALUES (?, ?, ?)", ps.id, ps.key, ps.label)
+	}
+}
+
+func (db *DB) ensureDefaultUser() {
+	var count int
+	db.conn.QueryRow("SELECT COUNT(*) FROM users").Scan(&count)
+	if count == 0 {
+		// Try to pull FleetYards username from old settings
+		fyUser := ""
+		db.conn.QueryRow("SELECT value FROM old_settings WHERE key = 'fleetyards_user'").Scan(&fyUser)
+
+		db.conn.Exec(
+			"INSERT INTO users (username, handle, fleetyards_username) VALUES (?, ?, ?)",
+			"default", "", fyUser,
+		)
+		log.Info().Str("fleetyards_username", fyUser).Msg("created default user")
+	}
+}
+
+func intPtr(n int) *int {
+	return &n
 }

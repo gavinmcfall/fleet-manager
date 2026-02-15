@@ -9,6 +9,8 @@
 # Build artifacts
 fleet-manager
 /fleet-manager
+server
+/server
 *.exe
 *.exe~
 *.dll

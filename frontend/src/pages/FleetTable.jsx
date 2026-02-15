@@ -1,53 +1,53 @@
 import React, { useState, useMemo } from 'react'
-import { useVehicles } from '../hooks/useAPI'
-import { ArrowUpDown, Search, Star } from 'lucide-react'
+import { useFleet } from '../hooks/useAPI'
+import { ArrowUpDown, Search } from 'lucide-react'
 
 export default function FleetTable() {
-  const { data: vehicles, loading, error } = useVehicles()
-  const [sortKey, setSortKey] = useState('ship_name')
+  const { data: fleet, loading, error } = useFleet()
+  const [sortKey, setSortKey] = useState('vehicle_name')
   const [sortDir, setSortDir] = useState('asc')
   const [filter, setFilter] = useState('')
   const [sizeFilter, setSizeFilter] = useState('all')
 
   const sizes = useMemo(() => {
-    if (!vehicles) return []
-    const s = new Set(vehicles.map((v) => v.ship?.size_label || 'Unknown'))
+    if (!fleet) return []
+    const s = new Set(fleet.map((v) => v.size_label || 'Unknown'))
     return ['all', ...Array.from(s).sort()]
-  }, [vehicles])
+  }, [fleet])
 
   const sorted = useMemo(() => {
-    if (!vehicles) return []
-    let items = [...vehicles]
+    if (!fleet) return []
+    let items = [...fleet]
 
     // Text filter
     if (filter) {
       const f = filter.toLowerCase()
       items = items.filter(
         (v) =>
-          v.ship_name.toLowerCase().includes(f) ||
+          v.vehicle_name?.toLowerCase().includes(f) ||
           v.custom_name?.toLowerCase().includes(f) ||
           v.manufacturer_name?.toLowerCase().includes(f) ||
-          v.ship?.focus?.toLowerCase().includes(f)
+          v.focus?.toLowerCase().includes(f)
       )
     }
 
     // Size filter
     if (sizeFilter !== 'all') {
-      items = items.filter((v) => (v.ship?.size_label || 'Unknown') === sizeFilter)
+      items = items.filter((v) => (v.size_label || 'Unknown') === sizeFilter)
     }
 
     // Sort
     items.sort((a, b) => {
       let va, vb
       switch (sortKey) {
-        case 'ship_name': va = a.ship_name; vb = b.ship_name; break
+        case 'vehicle_name': va = a.vehicle_name; vb = b.vehicle_name; break
         case 'manufacturer': va = a.manufacturer_name; vb = b.manufacturer_name; break
-        case 'size': va = a.ship?.size_label || ''; vb = b.ship?.size_label || ''; break
-        case 'cargo': va = a.ship?.cargo || 0; vb = b.ship?.cargo || 0; break
-        case 'pledge': va = a.ship?.pledge_price || 0; vb = b.ship?.pledge_price || 0; break
-        case 'crew': va = a.ship?.min_crew || 0; vb = b.ship?.min_crew || 0; break
-        case 'focus': va = a.ship?.focus || ''; vb = b.ship?.focus || ''; break
-        default: va = a.ship_name; vb = b.ship_name
+        case 'size': va = a.size_label || ''; vb = b.size_label || ''; break
+        case 'cargo': va = a.cargo || 0; vb = b.cargo || 0; break
+        case 'pledge': va = a.pledge_price || 0; vb = b.pledge_price || 0; break
+        case 'crew': va = a.crew_min || 0; vb = b.crew_min || 0; break
+        case 'focus': va = a.focus || ''; vb = b.focus || ''; break
+        default: va = a.vehicle_name; vb = b.vehicle_name
       }
       if (typeof va === 'string') {
         const cmp = va.localeCompare(vb)
@@ -57,7 +57,7 @@ export default function FleetTable() {
     })
 
     return items
-  }, [vehicles, filter, sizeFilter, sortKey, sortDir])
+  }, [fleet, filter, sizeFilter, sortKey, sortDir])
 
   const toggleSort = (key) => {
     if (sortKey === key) {
@@ -110,7 +110,7 @@ export default function FleetTable() {
             <thead>
               <tr className="bg-sc-darker/50">
                 {[
-                  { key: 'ship_name', label: 'Ship' },
+                  { key: 'vehicle_name', label: 'Ship' },
                   { key: 'manufacturer', label: 'Manufacturer' },
                   { key: 'size', label: 'Size' },
                   { key: 'focus', label: 'Role' },
@@ -137,49 +137,46 @@ export default function FleetTable() {
                 <tr key={i} className="hover:bg-white/[0.02] transition-colors">
                   <td className="table-cell">
                     <div className="flex items-center gap-3">
-                      {v.ship?.image_url && (
+                      {v.image_url && (
                         <img
-                          src={v.ship.image_url}
-                          alt={v.ship_name}
+                          src={v.image_url}
+                          alt={v.vehicle_name}
                           loading="lazy"
                           className="w-16 h-16 object-cover rounded border border-sc-border/50"
                           onError={(e) => e.target.style.display = 'none'}
                         />
                       )}
-                      <div className="flex items-center gap-2">
-                        {v.flagship && <Star className="w-3 h-3 text-sc-warn fill-sc-warn" />}
-                        <div>
-                          <span className="font-medium text-white">{v.ship_name}</span>
-                          {v.custom_name && (
-                            <span className="block text-xs text-gray-500 italic">"{v.custom_name}"</span>
-                          )}
-                        </div>
+                      <div>
+                        <span className="font-medium text-white">{v.vehicle_name}</span>
+                        {v.custom_name && (
+                          <span className="block text-xs text-gray-500 italic">"{v.custom_name}"</span>
+                        )}
                       </div>
                     </div>
                   </td>
                   <td className="table-cell text-gray-400">{v.manufacturer_name}</td>
                   <td className="table-cell">
-                    <span className="badge badge-size">{v.ship?.size_label || '?'}</span>
+                    <span className="badge badge-size">{v.size_label || '?'}</span>
                   </td>
-                  <td className="table-cell text-gray-400">{v.ship?.focus || '-'}</td>
+                  <td className="table-cell text-gray-400">{v.focus || '-'}</td>
                   <td className="table-cell font-mono text-gray-400">
-                    {v.ship?.cargo ? v.ship.cargo.toLocaleString() : '-'}
-                  </td>
-                  <td className="table-cell font-mono text-gray-400">
-                    {v.ship?.min_crew || 0}-{v.ship?.max_crew || 0}
+                    {v.cargo ? v.cargo.toLocaleString() : '-'}
                   </td>
                   <td className="table-cell font-mono text-gray-400">
-                    {v.ship?.pledge_price ? `$${v.ship.pledge_price}` : '-'}
+                    {v.crew_min || 0}-{v.crew_max || 0}
+                  </td>
+                  <td className="table-cell font-mono text-gray-400">
+                    {v.pledge_price ? `$${v.pledge_price}` : '-'}
                   </td>
                   <td className="table-cell">
-                    {v.hangar_import ? (
-                      v.hangar_import.lti ? (
+                    {v.insurance_label ? (
+                      v.is_lifetime ? (
                         <span className="badge badge-lti">LTI</span>
                       ) : (
-                        <span className="badge badge-nonlti">Standard</span>
+                        <span className="badge badge-nonlti">{v.insurance_label}</span>
                       )
                     ) : (
-                      <span className="text-xs text-gray-600">—</span>
+                      <span className="text-xs text-gray-600">&mdash;</span>
                     )}
                   </td>
                 </tr>
