@@ -1,17 +1,41 @@
-import React from 'react'
+import React, { useState, useMemo } from 'react'
 import { useAnalysis } from '../hooks/useAPI'
 import { Shield, ShieldAlert, ShieldQuestion, Calendar, DollarSign, Tag } from 'lucide-react'
 
 export default function Insurance() {
   const { data: analysis, loading, error } = useAnalysis()
+  const [filterLTI, setFilterLTI] = useState('all')
+  const [filterWarbond, setFilterWarbond] = useState('all')
+
+  const ins = analysis?.insurance_summary
+  const { lti, nonLTI, unknown } = useMemo(() => {
+    const ltiShips = ins?.lti_ships || []
+    const nonLTIShips = ins?.non_lti_ships || []
+    const unknownShips = ins?.unknown_ships || []
+
+    let allShips = [...ltiShips, ...nonLTIShips]
+
+    if (filterLTI === 'lti') {
+      allShips = allShips.filter(s => s.lti)
+    } else if (filterLTI === 'nonlti') {
+      allShips = allShips.filter(s => !s.lti)
+    }
+
+    if (filterWarbond === 'warbond') {
+      allShips = allShips.filter(s => s.warbond)
+    } else if (filterWarbond === 'nonwarbond') {
+      allShips = allShips.filter(s => !s.warbond)
+    }
+
+    return {
+      lti: allShips.filter(s => s.lti),
+      nonLTI: allShips.filter(s => !s.lti),
+      unknown: unknownShips
+    }
+  }, [ins, filterLTI, filterWarbond])
 
   if (loading) return <div className="text-gray-500 font-mono text-sm p-8">Loading insurance data...</div>
   if (error) return <div className="text-sc-danger font-mono text-sm p-8">Error: {error}</div>
-
-  const ins = analysis?.insurance_summary || {}
-  const lti = ins.lti_ships || []
-  const nonLTI = ins.non_lti_ships || []
-  const unknown = ins.unknown_ships || []
 
   return (
     <div className="space-y-6">
@@ -23,6 +47,31 @@ export default function Insurance() {
       </div>
 
       <div className="glow-line" />
+
+      {/* Filters */}
+      <div className="flex gap-3 items-center">
+        <select
+          value={filterLTI}
+          onChange={(e) => setFilterLTI(e.target.value)}
+          className="bg-sc-panel border border-sc-border rounded px-3 py-2 text-sm font-mono text-gray-300 focus:outline-none focus:border-sc-accent/50"
+        >
+          <option value="all">All Insurance</option>
+          <option value="lti">LTI Only</option>
+          <option value="nonlti">Non-LTI Only</option>
+        </select>
+        <select
+          value={filterWarbond}
+          onChange={(e) => setFilterWarbond(e.target.value)}
+          className="bg-sc-panel border border-sc-border rounded px-3 py-2 text-sm font-mono text-gray-300 focus:outline-none focus:border-sc-accent/50"
+        >
+          <option value="all">All Purchases</option>
+          <option value="warbond">Warbond Only</option>
+          <option value="nonwarbond">Non-Warbond Only</option>
+        </select>
+        <span className="text-xs font-mono text-gray-500">
+          {lti.length + nonLTI.length} ships
+        </span>
+      </div>
 
       {/* Summary Cards */}
       <div className="grid grid-cols-3 gap-4">
