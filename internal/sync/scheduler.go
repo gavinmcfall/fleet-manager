@@ -79,17 +79,30 @@ func (s *Scheduler) Start() error {
 	// Run reference sync on startup if configured
 	if s.cfg.SyncOnStartup {
 		go func() {
-			ctx, cancel := context.WithTimeout(context.Background(), 10*time.Minute)
+			ctx, cancel := context.WithTimeout(context.Background(), 30*time.Minute)
 			defer cancel()
 
 			count, _ := s.db.GetVehicleCount(ctx)
 			if count == 0 {
 				log.Info().Msg("no vehicles in database, running startup sync")
 				if err := s.SyncShips(ctx); err != nil {
-					log.Error().Err(err).Msg("startup ship sync failed")
+					log.Error().Err(err).Msg("startup FleetYards sync failed")
 				}
 			} else {
-				log.Info().Int("count", count).Msg("vehicles already in database, skipping startup sync")
+				log.Info().Int("count", count).Msg("vehicles already in database, skipping FleetYards startup sync")
+			}
+
+			// Also run SC Wiki sync on startup to populate manufacturers, components, ports
+			if s.scwiki != nil {
+				mfgCount, _ := s.db.GetManufacturerCount(ctx)
+				if mfgCount == 0 {
+					log.Info().Msg("no manufacturers in database, running SC Wiki startup sync")
+					if err := s.SyncSCWiki(ctx); err != nil {
+						log.Error().Err(err).Msg("startup SC Wiki sync failed")
+					}
+				} else {
+					log.Info().Int("count", mfgCount).Msg("manufacturers already in database, skipping SC Wiki startup sync")
+				}
 			}
 		}()
 	}

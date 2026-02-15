@@ -529,6 +529,12 @@ func (db *DB) GetVehicleCount(ctx context.Context) (int, error) {
 	return count, err
 }
 
+func (db *DB) GetManufacturerCount(ctx context.Context) (int, error) {
+	var count int
+	err := db.conn.QueryRowContext(ctx, "SELECT COUNT(*) FROM manufacturers").Scan(&count)
+	return count, err
+}
+
 func (db *DB) GetVehicleIDBySlug(ctx context.Context, slug string) (int, error) {
 	query := db.prepareQuery("SELECT id FROM vehicles WHERE slug = ? LIMIT 1")
 	var id int
