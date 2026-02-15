@@ -1,6 +1,10 @@
 package scwiki
 
-import "time"
+import (
+	"encoding/json"
+	"fmt"
+	"time"
+)
 
 // GameVersion represents a Star Citizen game version
 type GameVersion struct {
@@ -17,12 +21,34 @@ type GameVersion struct {
 type Manufacturer struct {
 	UUID        string    `json:"uuid"`
 	Name        string    `json:"name"`
+	Code        string    `json:"code"`
 	Slug        string    `json:"slug"`
 	KnownFor    string    `json:"known_for"`
 	Description string    `json:"description"`
 	LogoURL     string    `json:"logo_url"`
 	CreatedAt   time.Time `json:"created_at"`
 	UpdatedAt   time.Time `json:"updated_at"`
+}
+
+// FlexString handles JSON values that can be string or number (e.g. grade: "A" or grade: 1)
+type FlexString string
+
+func (f *FlexString) UnmarshalJSON(data []byte) error {
+	// Try string first
+	var s string
+	if err := json.Unmarshal(data, &s); err == nil {
+		*f = FlexString(s)
+		return nil
+	}
+	// Try number
+	var n float64
+	if err := json.Unmarshal(data, &n); err == nil {
+		*f = FlexString(fmt.Sprintf("%v", n))
+		return nil
+	}
+	// Null or other
+	*f = ""
+	return nil
 }
 
 // Item represents an in-game item (component, weapon, etc.)
@@ -35,7 +61,7 @@ type Item struct {
 	Type         string                 `json:"type"`
 	SubType      string                 `json:"sub_type"`
 	Size         int                    `json:"size"`
-	Grade        string                 `json:"grade"`
+	Grade        FlexString             `json:"grade"`
 	GameVersion  *GameVersion           `json:"game_version"`
 	RawData      map[string]interface{} `json:"-"`
 	CreatedAt    time.Time              `json:"created_at"`
@@ -91,62 +117,3 @@ type VehicleSpeed struct {
 	Max float64 `json:"max"`
 }
 
-// ShipMatrixVehicle represents ship matrix data
-type ShipMatrixVehicle struct {
-	UUID           string    `json:"uuid"`
-	Name           string    `json:"name"`
-	Slug           string    `json:"slug"`
-	PledgePrice    float64   `json:"pledge_price"`
-	PriceAUEC      float64   `json:"price_auec"`
-	SCVehicleUUID  string    `json:"sc_vehicle_uuid"`
-	CreatedAt      time.Time `json:"created_at"`
-	UpdatedAt      time.Time `json:"updated_at"`
-}
-
-// CommLink represents an official Star Citizen news post
-type CommLink struct {
-	UUID        string    `json:"uuid"`
-	Title       string    `json:"title"`
-	Slug        string    `json:"slug"`
-	PublishedAt time.Time `json:"published_at"`
-	CreatedAt   time.Time `json:"created_at"`
-	UpdatedAt   time.Time `json:"updated_at"`
-}
-
-// Galactapedia represents a lore entry
-type Galactapedia struct {
-	UUID      string    `json:"uuid"`
-	Title     string    `json:"title"`
-	Slug      string    `json:"slug"`
-	CreatedAt time.Time `json:"created_at"`
-	UpdatedAt time.Time `json:"updated_at"`
-}
-
-// CelestialObject represents a celestial object
-type CelestialObject struct {
-	UUID      string    `json:"uuid"`
-	Name      string    `json:"name"`
-	Type      string    `json:"type"`
-	CreatedAt time.Time `json:"created_at"`
-	UpdatedAt time.Time `json:"updated_at"`
-}
-
-// Starsystem represents a star system
-type Starsystem struct {
-	UUID      string    `json:"uuid"`
-	Name      string    `json:"name"`
-	CreatedAt time.Time `json:"created_at"`
-	UpdatedAt time.Time `json:"updated_at"`
-}
-
-// SyncMetadata tracks sync state for each endpoint
-type SyncMetadata struct {
-	Endpoint          string    `json:"endpoint"`
-	LastSyncAt        time.Time `json:"last_sync_at"`
-	LastUpdatedRecord time.Time `json:"last_updated_record"`
-	TotalRecords      int       `json:"total_records"`
-	SyncStatus        string    `json:"sync_status"`
-	ErrorMessage      string    `json:"error_message"`
-	CreatedAt         time.Time `json:"created_at"`
-	UpdatedAt         time.Time `json:"updated_at"`
-}

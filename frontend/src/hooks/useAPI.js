@@ -56,8 +56,8 @@ export function useShips() {
   return useAPI('/ships')
 }
 
-export function useVehicles() {
-  return useAPI('/vehicles/with-insurance')
+export function useFleet() {
+  return useAPI('/vehicles')
 }
 
 export function useAnalysis() {
@@ -72,25 +72,12 @@ export async function triggerShipSync() {
   return postJSON('/sync/ships')
 }
 
-export async function triggerHangarSync() {
-  return postJSON('/sync/hangar')
-}
-
 export async function importHangarXplor(jsonData) {
   return postJSON('/import/hangarxplor', jsonData)
 }
 
-export async function clearHangarImports() {
-  const res = await fetch(`${BASE}/import/hangarxplor`, { method: 'DELETE' })
-  return res.json()
-}
-
 export async function setFleetYardsUser(username) {
   return putJSON('/settings/fleetyards-user', { username })
-}
-
-export async function triggerEnrich() {
-  return postJSON('/sync/enrich')
 }
 
 // LLM Configuration

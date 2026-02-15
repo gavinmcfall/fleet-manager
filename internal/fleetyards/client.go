@@ -6,7 +6,6 @@ import (
 	"fmt"
 	"io"
 	"net/http"
-	"strconv"
 	"time"
 
 	"github.com/nzvengeance/fleet-manager/internal/models"
@@ -30,27 +29,27 @@ func NewClient(baseURL string) *Client {
 // --- Raw API response types ---
 
 type apiShip struct {
-	Slug             string        `json:"slug"`
-	Name             string        `json:"name"`
-	SCIdentifier     string        `json:"scIdentifier"`
-	Focus            string        `json:"focus"`
-	SizeLabel        string        `json:"sizeLabel"`
-	Length           float64       `json:"length"`
-	Beam             float64       `json:"beam"`
-	Height           float64       `json:"height"`
-	Mass             float64       `json:"mass"`
-	Cargo            float64       `json:"cargo"`
-	MinCrew          int           `json:"minCrew"`
-	MaxCrew          int           `json:"maxCrew"`
-	PledgePrice      float64       `json:"pledgePrice"`
-	OnSale           bool          `json:"onSale"`
-	ProductionStatus string        `json:"productionStatus"`
-	Description      string        `json:"description"`
-	Classification   string        `json:"classification"`
-	Links            *apiLinks     `json:"links"`
-	Manufacturer     *apiMfr       `json:"manufacturer"`
-	Media            *apiMedia     `json:"media"`
-	Speeds           *apiSpeeds    `json:"speeds"`
+	Slug             string    `json:"slug"`
+	Name             string    `json:"name"`
+	SCIdentifier     string    `json:"scIdentifier"`
+	Focus            string    `json:"focus"`
+	SizeLabel        string    `json:"sizeLabel"`
+	Length           float64   `json:"length"`
+	Beam             float64   `json:"beam"`
+	Height           float64   `json:"height"`
+	Mass             float64   `json:"mass"`
+	Cargo            float64   `json:"cargo"`
+	MinCrew          int       `json:"minCrew"`
+	MaxCrew          int       `json:"maxCrew"`
+	PledgePrice      float64   `json:"pledgePrice"`
+	OnSale           bool      `json:"onSale"`
+	ProductionStatus string    `json:"productionStatus"`
+	Description      string    `json:"description"`
+	Classification   string    `json:"classification"`
+	Links            *apiLinks `json:"links"`
+	Manufacturer     *apiMfr   `json:"manufacturer"`
+	Media            *apiMedia `json:"media"`
+	Speeds           *apiSpeeds `json:"speeds"`
 }
 
 type apiLinks struct {
@@ -77,46 +76,12 @@ type apiSpeeds struct {
 	SCMSpeed float64 `json:"scmSpeed"`
 }
 
-type apiHangarEntry struct {
-	ID     string         `json:"id"`
-	Loaner bool           `json:"loaner"`
-	Model  *apiHangarModel `json:"model"`
-	Paint  *apiHangarPaint `json:"paint"`
-}
-
-type apiHangarModel struct {
-	Name             string      `json:"name"`
-	Slug             string      `json:"slug"`
-	SCIdentifier     string      `json:"scIdentifier"`
-	Focus            string      `json:"focus"`
-	Classification   string      `json:"classification"`
-	ProductionStatus string      `json:"productionStatus"`
-	PledgePrice      float64     `json:"pledgePrice"`
-	Manufacturer     *apiMfr     `json:"manufacturer"`
-	Metrics          *apiMetrics `json:"metrics"`
-	Media            *apiMedia   `json:"media"`
-}
-
-type apiMetrics struct {
-	Size      string  `json:"size"`
-	SizeLabel string  `json:"sizeLabel"`
-	Cargo     float64 `json:"cargo"`
-	Length    float64 `json:"length"`
-	Beam      float64 `json:"beam"`
-	Height    float64 `json:"height"`
-	Mass      float64 `json:"mass"`
-}
-
-type apiHangarPaint struct {
-	Name string `json:"name"`
-	Slug string `json:"slug"`
-}
-
 // --- Fetch methods ---
 
-// FetchAllShips retrieves the full ship database from FleetYards API with pagination
-func (c *Client) FetchAllShips(ctx context.Context) ([]models.Ship, error) {
-	var allShips []models.Ship
+// FetchAllShips retrieves the full ship database from FleetYards API with pagination.
+// Returns Vehicle references (slug, name, images, specs) for merging into the unified vehicles table.
+func (c *Client) FetchAllShips(ctx context.Context) ([]models.Vehicle, error) {
+	var allVehicles []models.Vehicle
 	page := 1
 	perPage := 50
 
@@ -126,12 +91,12 @@ func (c *Client) FetchAllShips(ctx context.Context) ([]models.Ship, error) {
 
 		body, err := c.doGet(ctx, url)
 		if err != nil {
-			return allShips, fmt.Errorf("fetching page %d: %w", page, err)
+			return allVehicles, fmt.Errorf("fetching page %d: %w", page, err)
 		}
 
 		var apiShips []apiShip
 		if err := json.Unmarshal(body, &apiShips); err != nil {
-			return allShips, fmt.Errorf("parsing page %d: %w", page, err)
+			return allVehicles, fmt.Errorf("parsing page %d: %w", page, err)
 		}
 
 		if len(apiShips) == 0 {
@@ -139,93 +104,25 @@ func (c *Client) FetchAllShips(ctx context.Context) ([]models.Ship, error) {
 		}
 
 		for _, as := range apiShips {
-			ship := convertAPIShip(as, body)
-			allShips = append(allShips, ship)
+			v := convertAPIShipToVehicle(as)
+			allVehicles = append(allVehicles, v)
 		}
 
-		log.Info().Int("page", page).Int("count", len(apiShips)).Int("total", len(allShips)).Msg("fetched ships page")
+		log.Info().Int("page", page).Int("count", len(apiShips)).Int("total", len(allVehicles)).Msg("fetched ships page")
 
 		if len(apiShips) < perPage {
 			break
 		}
 
 		page++
-		// Be polite to the API
 		time.Sleep(500 * time.Millisecond)
 	}
 
-	return allShips, nil
-}
-
-// FetchHangar retrieves a user's public hangar from FleetYards API
-func (c *Client) FetchHangar(ctx context.Context, username string) ([]models.Vehicle, error) {
-	if username == "" {
-		return nil, fmt.Errorf("username is required")
-	}
-
-	var allVehicles []models.Vehicle
-	page := 1
-	perPage := 30
-
-	for {
-		url := fmt.Sprintf("%s/v1/public/hangars/%s?page=%d&perPage=%d", c.baseURL, username, page, perPage)
-		log.Debug().Str("url", url).Int("page", page).Msg("fetching hangar page")
-
-		body, err := c.doGet(ctx, url)
-		if err != nil {
-			return allVehicles, fmt.Errorf("fetching hangar page %d: %w", page, err)
-		}
-
-		var entries []apiHangarEntry
-		if err := json.Unmarshal(body, &entries); err != nil {
-			return allVehicles, fmt.Errorf("parsing hangar page %d: %w", page, err)
-		}
-
-		if len(entries) == 0 {
-			break
-		}
-
-		for _, e := range entries {
-			if e.Model == nil {
-				continue
-			}
-
-			v := models.Vehicle{
-				ShipSlug:   e.Model.Slug,
-				ShipName:   e.Model.Name,
-				Source:     "fleetyards",
-				Public:     true,
-				Loaner:     e.Loaner,
-			}
-
-			if e.Model.Manufacturer != nil {
-				v.ManufacturerName = e.Model.Manufacturer.Name
-				v.ManufacturerCode = e.Model.Manufacturer.Code
-			}
-
-			if e.Paint != nil {
-				v.PaintName = e.Paint.Name
-			}
-
-			allVehicles = append(allVehicles, v)
-		}
-
-		log.Info().Int("page", page).Int("count", len(entries)).Int("total", len(allVehicles)).Msg("fetched hangar page")
-
-		if len(entries) < perPage {
-			break
-		}
-
-		page++
-		time.Sleep(500 * time.Millisecond)
-	}
-
-	log.Info().Int("count", len(allVehicles)).Str("user", username).Msg("fetched hangar")
 	return allVehicles, nil
 }
 
 // FetchShipDetail fetches detailed info for a single ship
-func (c *Client) FetchShipDetail(ctx context.Context, slug string) (*models.Ship, error) {
+func (c *Client) FetchShipDetail(ctx context.Context, slug string) (*models.Vehicle, error) {
 	url := fmt.Sprintf("%s/v1/models/%s", c.baseURL, slug)
 	body, err := c.doGet(ctx, url)
 	if err != nil {
@@ -237,8 +134,8 @@ func (c *Client) FetchShipDetail(ctx context.Context, slug string) (*models.Ship
 		return nil, err
 	}
 
-	ship := convertAPIShip(as, body)
-	return &ship, nil
+	v := convertAPIShipToVehicle(as)
+	return &v, nil
 }
 
 // --- HTTP helpers ---
@@ -259,72 +156,69 @@ func (c *Client) doGet(ctx context.Context, url string) ([]byte, error) {
 
 	if resp.StatusCode != http.StatusOK {
 		body, _ := io.ReadAll(resp.Body)
-		return nil, fmt.Errorf("HTTP %d: %s", resp.StatusCode, string(body[:min(200, len(body))]))
+		limit := len(body)
+		if limit > 200 {
+			limit = 200
+		}
+		return nil, fmt.Errorf("HTTP %d: %s", resp.StatusCode, string(body[:limit]))
 	}
 
 	return io.ReadAll(resp.Body)
 }
 
-// GetTotalPages reads the total page count from the response headers
-func getTotalPages(resp *http.Response) int {
-	total := resp.Header.Get("X-Total-Pages")
-	if total == "" {
-		return 1
+// convertAPIShipToVehicle maps FleetYards API response to the unified Vehicle model.
+// FleetYards provides images, pledge pricing, focus, specs, and the canonical slug.
+func convertAPIShipToVehicle(as apiShip) models.Vehicle {
+	v := models.Vehicle{
+		Slug:           as.Slug,
+		Name:           as.Name,
+		ClassName:      as.SCIdentifier,
+		Focus:          as.Focus,
+		SizeLabel:      as.SizeLabel,
+		Length:         as.Length,
+		Beam:           as.Beam,
+		Height:         as.Height,
+		Mass:           as.Mass,
+		Cargo:          as.Cargo,
+		CrewMin:        as.MinCrew,
+		CrewMax:        as.MaxCrew,
+		PledgePrice:    as.PledgePrice,
+		OnSale:         as.OnSale,
+		Description:    as.Description,
+		Classification: as.Classification,
 	}
-	n, _ := strconv.Atoi(total)
-	return n
-}
 
-func convertAPIShip(as apiShip, rawJSON []byte) models.Ship {
-	ship := models.Ship{
-		Slug:             as.Slug,
-		Name:             as.Name,
-		SCIdentifier:     as.SCIdentifier,
-		Focus:            as.Focus,
-		SizeLabel:        as.SizeLabel,
-		Length:           as.Length,
-		Beam:             as.Beam,
-		Height:           as.Height,
-		Mass:             as.Mass,
-		Cargo:            as.Cargo,
-		MinCrew:          as.MinCrew,
-		MaxCrew:          as.MaxCrew,
-		PledgePrice:      as.PledgePrice,
-		OnSale:           as.OnSale,
-		ProductionStatus: as.ProductionStatus,
-		Description:      as.Description,
-		Classification:   as.Classification,
+	// Map production status string to key
+	switch as.ProductionStatus {
+	case "flight-ready":
+		v.ProductionStatus = "flight_ready"
+	case "in-production":
+		v.ProductionStatus = "in_production"
+	case "in-concept":
+		v.ProductionStatus = "in_concept"
+	default:
+		v.ProductionStatus = as.ProductionStatus
 	}
 
 	if as.Manufacturer != nil {
-		ship.ManufacturerName = as.Manufacturer.Name
-		ship.ManufacturerCode = as.Manufacturer.Code
+		v.ManufacturerName = as.Manufacturer.Name
+		v.ManufacturerCode = as.Manufacturer.Code
 	}
 
 	if as.Media != nil && as.Media.StoreImage != nil {
-		ship.ImageURL = as.Media.StoreImage.Source
-		ship.ImageURLSmall = as.Media.StoreImage.Small
-		ship.ImageURLMedium = as.Media.StoreImage.Medium
-		ship.ImageURLLarge = as.Media.StoreImage.Large
+		v.ImageURL = as.Media.StoreImage.Source
+		v.ImageURLSmall = as.Media.StoreImage.Small
+		v.ImageURLMedium = as.Media.StoreImage.Medium
+		v.ImageURLLarge = as.Media.StoreImage.Large
 	}
 
 	if as.Links != nil {
-		ship.FleetYardsURL = as.Links.FleetYardsURL
+		v.FleetYardsURL = as.Links.FleetYardsURL
 	}
 
 	if as.Speeds != nil {
-		ship.SCMSpeed = as.Speeds.SCMSpeed
+		v.SpeedSCM = as.Speeds.SCMSpeed
 	}
 
-	// Store the per-item JSON is expensive for bulk, skip for now
-	// ship.RawJSON = string(rawJSON)
-
-	return ship
-}
-
-func min(a, b int) int {
-	if a < b {
-		return a
-	}
-	return b
+	return v
 }

@@ -51,112 +51,102 @@ var roleMapping = map[string]string{
 	"Snub Fighter":      "Snub",
 }
 
-// AnalyzeFleet performs comprehensive fleet analysis
-func AnalyzeFleet(vehicles []models.Vehicle, allShips []models.Ship) *models.FleetAnalysis {
+// AnalyzeFleet performs comprehensive fleet analysis using user fleet entries
+// (which have reference data JOINed in) and the full vehicle reference list.
+func AnalyzeFleet(fleet []models.UserFleetEntry, allVehicles []models.Vehicle) *models.FleetAnalysis {
 	analysis := &models.FleetAnalysis{
 		SizeDistribution: make(map[string]int),
 		RoleCategories:   make(map[string][]string),
 	}
 
-	// Build analysis
-	analysis.Overview = buildOverview(vehicles)
-	analysis.SizeDistribution = buildSizeDistribution(vehicles)
-	analysis.RoleCategories = buildRoleCategories(vehicles)
-	analysis.GapAnalysis = buildGapAnalysis(vehicles, allShips)
-	analysis.Redundancies = buildRedundancies(vehicles)
-	analysis.InsuranceSummary = buildInsuranceSummary(vehicles)
+	analysis.Overview = buildOverview(fleet)
+	analysis.SizeDistribution = buildSizeDistribution(fleet)
+	analysis.RoleCategories = buildRoleCategories(fleet)
+	analysis.GapAnalysis = buildGapAnalysis(fleet, allVehicles)
+	analysis.Redundancies = buildRedundancies(fleet)
+	analysis.InsuranceSummary = buildInsuranceSummary(fleet)
 
 	return analysis
 }
 
-func buildOverview(vehicles []models.Vehicle) models.FleetOverview {
+func buildOverview(fleet []models.UserFleetEntry) models.FleetOverview {
 	overview := models.FleetOverview{
-		TotalVehicles: len(vehicles),
+		TotalVehicles: len(fleet),
 	}
 
-	for _, v := range vehicles {
-		if v.Ship != nil {
-			overview.TotalCargo += v.Ship.Cargo
-			overview.TotalPledgeValue += v.Ship.PledgePrice
-			overview.MinCrew += v.Ship.MinCrew
-			overview.MaxCrew += v.Ship.MaxCrew
+	for _, e := range fleet {
+		overview.TotalCargo += e.Cargo
+		overview.TotalPledgeValue += e.PledgePrice
+		overview.MinCrew += e.CrewMin
+		overview.MaxCrew += e.CrewMax
 
-			if v.Ship.ProductionStatus == "flight-ready" {
-				overview.FlightReady++
-			} else {
-				overview.InConcept++
-			}
+		if e.ProductionStatus == "flight_ready" {
+			overview.FlightReady++
+		} else if e.ProductionStatus != "" {
+			overview.InConcept++
 		}
 
-		if v.HangarImport != nil {
-			if v.HangarImport.LTI {
-				overview.LTICount++
-			} else {
-				overview.NonLTICount++
-			}
+		if e.IsLifetime {
+			overview.LTICount++
+		} else if e.InsuranceTypeID != nil {
+			overview.NonLTICount++
 		}
 	}
 
 	return overview
 }
 
-func buildSizeDistribution(vehicles []models.Vehicle) map[string]int {
+func buildSizeDistribution(fleet []models.UserFleetEntry) map[string]int {
 	dist := make(map[string]int)
-	for _, v := range vehicles {
+	for _, e := range fleet {
 		size := "Unknown"
-		if v.Ship != nil && v.Ship.SizeLabel != "" {
-			size = v.Ship.SizeLabel
+		if e.SizeLabel != "" {
+			size = e.SizeLabel
 		}
 		dist[size]++
 	}
 	return dist
 }
 
-func buildRoleCategories(vehicles []models.Vehicle) map[string][]string {
+func buildRoleCategories(fleet []models.UserFleetEntry) map[string][]string {
 	categories := make(map[string][]string)
-	for _, v := range vehicles {
-		focus := ""
-		if v.Ship != nil {
-			focus = v.Ship.Focus
-		}
-
+	for _, e := range fleet {
 		category := "Uncategorised"
 		for key, cat := range roleMapping {
-			if strings.EqualFold(focus, key) || strings.Contains(strings.ToLower(focus), strings.ToLower(key)) {
+			if strings.EqualFold(e.Focus, key) || strings.Contains(strings.ToLower(e.Focus), strings.ToLower(key)) {
 				category = cat
 				break
 			}
 		}
 
-		displayName := v.ShipName
-		if v.CustomName != "" {
-			displayName = v.ShipName + " \"" + v.CustomName + "\""
+		displayName := e.VehicleName
+		if e.CustomName != "" {
+			displayName = e.VehicleName + " \"" + e.CustomName + "\""
 		}
 		categories[category] = append(categories[category], displayName)
 	}
 	return categories
 }
 
-func buildGapAnalysis(vehicles []models.Vehicle, allShips []models.Ship) []GapItem {
+func buildGapAnalysis(fleet []models.UserFleetEntry, allVehicles []models.Vehicle) []models.GapItem {
 	// Collect roles the user has
 	ownedRoles := make(map[string]bool)
-	for _, v := range vehicles {
-		if v.Ship != nil && v.Ship.Focus != "" {
-			ownedRoles[strings.ToLower(v.Ship.Focus)] = true
+	for _, e := range fleet {
+		if e.Focus != "" {
+			ownedRoles[strings.ToLower(e.Focus)] = true
 		}
 	}
 
-	// Collect all possible roles from the ship database
+	// Collect all possible roles from the vehicle reference database
 	allRoles := make(map[string]int)
-	for _, s := range allShips {
-		if s.Focus != "" {
-			allRoles[strings.ToLower(s.Focus)]++
+	for _, v := range allVehicles {
+		if v.Focus != "" {
+			allRoles[strings.ToLower(v.Focus)]++
 		}
 	}
 
 	var gaps []models.GapItem
 
-	// Define important gameplay roles and check for gaps
 	criticalRoles := []struct {
 		role        string
 		matchTerms  []string
@@ -218,7 +208,6 @@ func buildGapAnalysis(vehicles []models.Vehicle, allShips []models.Ship) []GapIt
 	for _, cr := range criticalRoles {
 		hasRole := false
 		for _, term := range cr.matchTerms {
-			// Check if any owned role contains this term (not exact match)
 			for ownedRole := range ownedRoles {
 				if strings.Contains(ownedRole, term) {
 					hasRole = true
@@ -242,19 +231,16 @@ func buildGapAnalysis(vehicles []models.Vehicle, allShips []models.Ship) []GapIt
 	return gaps
 }
 
-type GapItem = models.GapItem
-
-func buildRedundancies(vehicles []models.Vehicle) []models.RedundancyGroup {
-	// Group vehicles by focus/role
+func buildRedundancies(fleet []models.UserFleetEntry) []models.RedundancyGroup {
 	roleShips := make(map[string][]string)
-	for _, v := range vehicles {
+	for _, e := range fleet {
 		focus := "Unknown"
-		if v.Ship != nil && v.Ship.Focus != "" {
-			focus = v.Ship.Focus
+		if e.Focus != "" {
+			focus = e.Focus
 		}
-		displayName := v.ShipName
-		if v.CustomName != "" {
-			displayName = v.ShipName + " \"" + v.CustomName + "\""
+		displayName := e.VehicleName
+		if e.CustomName != "" {
+			displayName = e.VehicleName + " \"" + e.CustomName + "\""
 		}
 		roleShips[focus] = append(roleShips[focus], displayName)
 	}
@@ -265,7 +251,6 @@ func buildRedundancies(vehicles []models.Vehicle) []models.RedundancyGroup {
 			redundancies = append(redundancies, models.RedundancyGroup{
 				Role:  role,
 				Ships: ships,
-				Notes: "",
 			})
 		}
 	}
@@ -273,27 +258,26 @@ func buildRedundancies(vehicles []models.Vehicle) []models.RedundancyGroup {
 	return redundancies
 }
 
-func buildInsuranceSummary(vehicles []models.Vehicle) models.InsuranceSummary {
+func buildInsuranceSummary(fleet []models.UserFleetEntry) models.InsuranceSummary {
 	summary := models.InsuranceSummary{}
 
-	for _, v := range vehicles {
+	for _, e := range fleet {
 		entry := models.InsuranceEntry{
-			ShipName:   v.ShipName,
-			CustomName: v.CustomName,
+			ShipName:       e.VehicleName,
+			CustomName:     e.CustomName,
+			PledgeCost:     e.PledgeCost,
+			PledgeName:     e.PledgeName,
+			PledgeDate:     e.PledgeDate,
+			InsuranceLabel: e.InsuranceLabel,
+			DurationMonths: e.DurationMonths,
+			IsLifetime:     e.IsLifetime,
+			Warbond:        e.Warbond,
 		}
 
-		if v.HangarImport != nil {
-			entry.LTI = v.HangarImport.LTI
-			entry.Warbond = v.HangarImport.Warbond
-			entry.PledgeCost = v.HangarImport.PledgeCost
-			entry.PledgeName = v.HangarImport.PledgeName
-			entry.PledgeDate = v.HangarImport.PledgeDate
-
-			if v.HangarImport.LTI {
-				summary.LTIShips = append(summary.LTIShips, entry)
-			} else {
-				summary.NonLTIShips = append(summary.NonLTIShips, entry)
-			}
+		if e.IsLifetime {
+			summary.LTIShips = append(summary.LTIShips, entry)
+		} else if e.InsuranceTypeID != nil {
+			summary.NonLTIShips = append(summary.NonLTIShips, entry)
 		} else {
 			summary.UnknownShips = append(summary.UnknownShips, entry)
 		}
