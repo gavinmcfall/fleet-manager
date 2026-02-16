@@ -41,8 +41,8 @@ data/
 frontend/node_modules/
 frontend/.pnpm-store/
 
-# Frontend build artifacts (checked in, but keeping for reference)
-# frontend/dist/
+# Frontend build artifacts (built in CI/Docker)
+frontend/dist/
 
 # Logs
 *.log

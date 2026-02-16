@@ -14,7 +14,6 @@ services:
       DB_DRIVER: sqlite
       DB_PATH: /app/data/fleet-manager.db
       FLEETYARDS_BASE_URL: https://api.fleetyards.net
-      FLEETYARDS_USER: NZVengeance
       SYNC_SCHEDULE: "0 3 * * *"
       SYNC_ON_STARTUP: "true"
     restart: unless-stopped

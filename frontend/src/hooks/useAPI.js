@@ -68,16 +68,12 @@ export function useSyncStatus() {
   return useAPI('/sync/status')
 }
 
-export async function triggerShipSync() {
-  return postJSON('/sync/ships')
+export async function triggerImageSync() {
+  return postJSON('/sync/images')
 }
 
 export async function importHangarXplor(jsonData) {
   return postJSON('/import/hangarxplor', jsonData)
-}
-
-export async function setFleetYardsUser(username) {
-  return putJSON('/settings/fleetyards-user', { username })
 }
 
 // LLM Configuration

@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"strings"
 
 	"github.com/nzvengeance/fleet-manager/internal/config"
 	"github.com/nzvengeance/fleet-manager/internal/models"
@@ -90,6 +91,22 @@ func (db *DB) autoIncrement() string {
 		return "SERIAL PRIMARY KEY"
 	}
 	return "INTEGER PRIMARY KEY AUTOINCREMENT"
+}
+
+func (db *DB) insertIgnore(table, cols, conflictCol string, numParams int) string {
+	ph := db.placeholders(numParams)
+	if db.driver == "postgres" {
+		return fmt.Sprintf("INSERT INTO %s (%s) VALUES (%s) ON CONFLICT (%s) DO NOTHING", table, cols, ph, conflictCol)
+	}
+	return fmt.Sprintf("INSERT OR IGNORE INTO %s (%s) VALUES (%s)", table, cols, ph)
+}
+
+func (db *DB) placeholders(n int) string {
+	parts := make([]string, n)
+	for i := range parts {
+		parts[i] = "?"
+	}
+	return strings.Join(parts, ", ")
 }
 
 func (db *DB) onConflictUpdate(conflictCol, updateCols string) string {
@@ -212,7 +229,7 @@ func (db *DB) ResolveManufacturerID(ctx context.Context, name, code string) (int
 	}
 	// Try name as prefix (FleetYards "Tumbril" → SC Wiki "Tumbril Land Systems")
 	if name != "" {
-		query := db.prepareQuery("SELECT id FROM manufacturers WHERE name LIKE ? LIMIT 1")
+		query := db.prepareQuery("SELECT id FROM manufacturers WHERE name LIKE ? ORDER BY name LIMIT 1")
 		var id int
 		if err := db.conn.QueryRowContext(ctx, query, name+"%").Scan(&id); err == nil {
 			return id, nil
@@ -226,13 +243,16 @@ func (db *DB) ResolveManufacturerID(ctx context.Context, name, code string) (int
 			LIMIT 2`)
 		rows, err := db.conn.QueryContext(ctx, query, code+"%", code)
 		if err == nil {
+			defer rows.Close()
 			var ids []int
 			for rows.Next() {
 				var id int
-				rows.Scan(&id)
+				if err := rows.Scan(&id); err != nil {
+					log.Warn().Err(err).Msg("scan error in ResolveManufacturerID")
+					continue
+				}
 				ids = append(ids, id)
 			}
-			rows.Close()
 			if len(ids) == 1 {
 				return ids[0], nil
 			}
@@ -315,7 +335,7 @@ func (db *DB) UpsertVehicle(ctx context.Context, v *models.Vehicle) (int, error)
 			length, beam, height, mass, cargo, vehicle_inventory, crew_min, crew_max,
 			speed_scm, speed_max, health, pledge_price, price_auec, on_sale,
 			image_url, image_url_small, image_url_medium, image_url_large,
-			fleetyards_url, game_version_id, raw_data, updated_at)
+			pledge_url, game_version_id, raw_data, updated_at)
 		VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, %s)
 		%s`,
 		db.now(),
@@ -348,7 +368,7 @@ func (db *DB) UpsertVehicle(ctx context.Context, v *models.Vehicle) (int, error)
 			image_url_small=COALESCE(excluded.image_url_small, vehicles.image_url_small),
 			image_url_medium=COALESCE(excluded.image_url_medium, vehicles.image_url_medium),
 			image_url_large=COALESCE(excluded.image_url_large, vehicles.image_url_large),
-			fleetyards_url=COALESCE(excluded.fleetyards_url, vehicles.fleetyards_url),
+			pledge_url=COALESCE(excluded.pledge_url, vehicles.pledge_url),
 			game_version_id=COALESCE(excluded.game_version_id, vehicles.game_version_id),
 			raw_data=COALESCE(excluded.raw_data, vehicles.raw_data),
 			updated_at=excluded.updated_at`),
@@ -367,7 +387,7 @@ func (db *DB) UpsertVehicle(ctx context.Context, v *models.Vehicle) (int, error)
 		nullableFloat(v.PledgePrice), nullableFloat(v.PriceAUEC), v.OnSale,
 		nullableStr(v.ImageURL), nullableStr(v.ImageURLSmall),
 		nullableStr(v.ImageURLMedium), nullableStr(v.ImageURLLarge),
-		nullableStr(v.FleetYardsURL), v.GameVersionID, nullableStr(v.RawData),
+		nullableStr(v.PledgeURL), v.GameVersionID, nullableStr(v.RawData),
 	}
 
 	if db.driver == "postgres" {
@@ -392,7 +412,7 @@ func (db *DB) GetAllVehicles(ctx context.Context) ([]models.Vehicle, error) {
 			v.length, v.beam, v.height, v.mass, v.cargo,
 			v.crew_min, v.crew_max, v.speed_scm, v.pledge_price, v.on_sale,
 			v.image_url, v.image_url_small, v.image_url_medium, v.image_url_large,
-			v.fleetyards_url,
+			v.pledge_url,
 			m.name, m.code,
 			ps.key
 		FROM vehicles v
@@ -446,14 +466,14 @@ func (db *DB) GetAllVehicles(ctx context.Context) ([]models.Vehicle, error) {
 		v.ImageURLSmall = imageURLSmall.String
 		v.ImageURLMedium = imageURLMedium.String
 		v.ImageURLLarge = imageURLLarge.String
-		v.FleetYardsURL = fyURL.String
+		v.PledgeURL = fyURL.String
 		v.ManufacturerName = mfName.String
 		v.ManufacturerCode = mfCode.String
 		v.ProductionStatus = psKey.String
 
 		vehicles = append(vehicles, v)
 	}
-	return vehicles, nil
+	return vehicles, rows.Err()
 }
 
 func (db *DB) GetVehicleBySlug(ctx context.Context, slug string) (*models.Vehicle, error) {
@@ -463,7 +483,7 @@ func (db *DB) GetVehicleBySlug(ctx context.Context, slug string) (*models.Vehicl
 			v.length, v.beam, v.height, v.mass, v.cargo,
 			v.crew_min, v.crew_max, v.speed_scm, v.pledge_price, v.on_sale,
 			v.image_url, v.image_url_small, v.image_url_medium, v.image_url_large,
-			v.fleetyards_url,
+			v.pledge_url,
 			m.name, m.code,
 			ps.key
 		FROM vehicles v
@@ -515,7 +535,7 @@ func (db *DB) GetVehicleBySlug(ctx context.Context, slug string) (*models.Vehicl
 	v.ImageURLSmall = imageURLSmall.String
 	v.ImageURLMedium = imageURLMedium.String
 	v.ImageURLLarge = imageURLLarge.String
-	v.FleetYardsURL = fyURL.String
+	v.PledgeURL = fyURL.String
 	v.ManufacturerName = mfName.String
 	v.ManufacturerCode = mfCode.String
 	v.ProductionStatus = psKey.String
@@ -577,6 +597,39 @@ func (db *DB) FindVehicleSlug(ctx context.Context, candidateSlugs []string, disp
 	}
 
 	return ""
+}
+
+// UpdateVehicleImages updates only image columns for a vehicle by slug.
+// Used by the FleetYards image-only sync.
+func (db *DB) UpdateVehicleImages(ctx context.Context, slug, imageURL, small, medium, large string) error {
+	query := db.prepareQuery(`UPDATE vehicles SET
+		image_url = ?, image_url_small = ?, image_url_medium = ?, image_url_large = ?,
+		updated_at = ` + db.now() + `
+		WHERE slug = ?`)
+	_, err := db.conn.ExecContext(ctx, query, imageURL, small, medium, large, slug)
+	return err
+}
+
+// SyncVehicleLoaners replaces the loaners for a vehicle with the given loaner slugs.
+func (db *DB) SyncVehicleLoaners(ctx context.Context, vehicleID int, loanerSlugs []string) error {
+	// Delete existing loaners for this vehicle
+	delQuery := db.prepareQuery("DELETE FROM vehicle_loaners WHERE vehicle_id = ?")
+	if _, err := db.conn.ExecContext(ctx, delQuery, vehicleID); err != nil {
+		return fmt.Errorf("deleting old loaners: %w", err)
+	}
+
+	// Insert new loaners (resolve slug → id)
+	insQuery := db.prepareQuery("INSERT OR IGNORE INTO vehicle_loaners (vehicle_id, loaner_id) SELECT ?, id FROM vehicles WHERE slug = ?")
+	if db.driver == "postgres" {
+		insQuery = db.prepareQuery("INSERT INTO vehicle_loaners (vehicle_id, loaner_id) SELECT ?, id FROM vehicles WHERE slug = ? ON CONFLICT DO NOTHING")
+	}
+
+	for _, slug := range loanerSlugs {
+		if _, err := db.conn.ExecContext(ctx, insQuery, vehicleID, slug); err != nil {
+			return fmt.Errorf("inserting loaner %s: %w", slug, err)
+		}
+	}
+	return nil
 }
 
 // --- Component Operations ---
@@ -683,8 +736,8 @@ func (db *DB) UpsertPort(ctx context.Context, p *models.Port) error {
 
 func (db *DB) GetDefaultUser(ctx context.Context) (*models.User, error) {
 	var u models.User
-	err := db.conn.QueryRowContext(ctx, "SELECT id, username, handle, email, fleetyards_username FROM users WHERE username = 'default'").Scan(
-		&u.ID, &u.Username, &u.Handle, &u.Email, &u.FleetYardsUsername)
+	err := db.conn.QueryRowContext(ctx, "SELECT id, username, handle, email FROM users WHERE username = 'default'").Scan(
+		&u.ID, &u.Username, &u.Handle, &u.Email)
 	if err == sql.ErrNoRows {
 		return nil, nil
 	}
@@ -695,12 +748,6 @@ func (db *DB) GetDefaultUserID(ctx context.Context) int {
 	var id int
 	db.conn.QueryRowContext(ctx, "SELECT id FROM users WHERE username = 'default'").Scan(&id)
 	return id
-}
-
-func (db *DB) UpdateUserFleetYardsUsername(ctx context.Context, userID int, username string) error {
-	query := db.prepareQuery("UPDATE users SET fleetyards_username = ?, updated_at = " + db.now() + " WHERE id = ?")
-	_, err := db.conn.ExecContext(ctx, query, username, userID)
-	return err
 }
 
 // --- User Fleet Operations ---
@@ -838,7 +885,7 @@ func (db *DB) GetUserFleet(ctx context.Context, userID int) ([]models.UserFleetE
 
 		entries = append(entries, e)
 	}
-	return entries, nil
+	return entries, rows.Err()
 }
 
 // --- Insurance Type Operations ---
@@ -910,7 +957,7 @@ func (db *DB) GetLatestSyncHistory(ctx context.Context) ([]models.SyncHistory, e
 		s.SourceLabel = sourceLabel.String
 		statuses = append(statuses, s)
 	}
-	return statuses, nil
+	return statuses, rows.Err()
 }
 
 // --- User LLM Config Operations ---
@@ -954,6 +1001,14 @@ func (db *DB) ClearUserLLMConfigs(ctx context.Context, userID int) error {
 
 func (db *DB) SaveAIAnalysis(ctx context.Context, userID int, provider, model string, vehicleCount int, analysis string) (int64, error) {
 	query := db.prepareQuery(`INSERT INTO ai_analyses (user_id, provider, model, vehicle_count, analysis) VALUES (?, ?, ?, ?, ?)`)
+
+	if db.driver == "postgres" {
+		query += " RETURNING id"
+		var id int64
+		err := db.conn.QueryRowContext(ctx, query, userID, provider, model, vehicleCount, analysis).Scan(&id)
+		return id, err
+	}
+
 	result, err := db.conn.ExecContext(ctx, query, userID, provider, model, vehicleCount, analysis)
 	if err != nil {
 		return 0, err
@@ -1006,10 +1061,10 @@ func (db *DB) GetAppSetting(ctx context.Context, key string) (string, error) {
 	query := db.prepareQuery("SELECT value FROM app_settings WHERE key = ?")
 	var value string
 	err := db.conn.QueryRowContext(ctx, query, key).Scan(&value)
-	if err != nil {
+	if err == sql.ErrNoRows {
 		return "", nil
 	}
-	return value, nil
+	return value, err
 }
 
 func (db *DB) SetAppSetting(ctx context.Context, key, value string) error {

@@ -64,8 +64,14 @@ func NewClient(rateLimit float64, burst int) *Client {
 	}
 }
 
-// Get performs a rate-limited GET request
+// Get performs a rate-limited GET request with bounded retry on 429
 func (c *Client) Get(ctx context.Context, path string) ([]byte, error) {
+	return c.getWithRetry(ctx, path, 0)
+}
+
+const maxRetries = 3
+
+func (c *Client) getWithRetry(ctx context.Context, path string, attempt int) ([]byte, error) {
 	// Wait for rate limiter
 	if err := c.rateLimiter.Wait(ctx); err != nil {
 		return nil, fmt.Errorf("rate limiter: %w", err)
@@ -91,15 +97,20 @@ func (c *Client) Get(ctx context.Context, path string) ([]byte, error) {
 		return nil, err
 	}
 
-	// Handle rate limiting (429 Too Many Requests)
+	// Handle rate limiting (429 Too Many Requests) with bounded retry
 	if resp.StatusCode == http.StatusTooManyRequests {
-		// Check for Retry-After header
+		if attempt >= maxRetries {
+			return nil, fmt.Errorf("rate limited (429) after %d retries", maxRetries)
+		}
 		retryAfter := resp.Header.Get("Retry-After")
 		if retryAfter != "" {
 			if seconds, err := strconv.Atoi(retryAfter); err == nil {
-				time.Sleep(time.Duration(seconds) * time.Second)
-				// Retry once
-				return c.Get(ctx, path)
+				select {
+				case <-time.After(time.Duration(seconds) * time.Second):
+				case <-ctx.Done():
+					return nil, ctx.Err()
+				}
+				return c.getWithRetry(ctx, path, attempt+1)
 			}
 		}
 		return nil, fmt.Errorf("rate limited (429)")

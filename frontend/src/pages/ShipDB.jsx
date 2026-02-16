@@ -97,7 +97,7 @@ export default function ShipDB() {
         <div>
           <h2 className="font-display font-bold text-2xl tracking-wider text-white">SHIP DATABASE</h2>
           <p className="text-xs font-mono text-gray-500 mt-1">
-            {ships?.length || 0} ships synced from FleetYards
+            {ships?.length || 0} ships synced from SC Wiki
           </p>
         </div>
         <Database className="w-5 h-5 text-gray-600" />
@@ -217,7 +217,7 @@ export default function ShipDB() {
               </div>
               <div className="flex items-center justify-between mt-3 pt-2 border-t border-sc-border/30">
                 <span className="text-xs font-mono text-gray-500">
-                  {ship.production_status === 'flight-ready' ? '✅ Flight Ready' : '🔧 ' + ship.production_status}
+                  {ship.production_status === 'flight_ready' ? '✅ Flight Ready' : '🔧 ' + (ship.production_status || 'Unknown')}
                 </span>
                 {ship.pledge_price > 0 && (
                   <span className="text-xs font-mono text-sc-warn">${ship.pledge_price}</span>

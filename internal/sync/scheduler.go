@@ -43,21 +43,7 @@ func NewScheduler(db *database.DB, client *fleetyards.Client, cfg *config.Config
 
 // Start begins the scheduled sync jobs
 func (s *Scheduler) Start() error {
-	// Schedule nightly FleetYards reference sync (images, specs)
-	_, err := s.cron.AddFunc(s.cfg.SyncSchedule, func() {
-		ctx, cancel := context.WithTimeout(context.Background(), 10*time.Minute)
-		defer cancel()
-
-		log.Info().Msg("scheduled FleetYards reference sync starting")
-		if err := s.SyncShips(ctx); err != nil {
-			log.Error().Err(err).Msg("scheduled FleetYards reference sync failed")
-		}
-	})
-	if err != nil {
-		return fmt.Errorf("adding cron job: %w", err)
-	}
-
-	// Schedule nightly SC Wiki sync if enabled
+	// Schedule nightly SC Wiki sync (primary data source)
 	if s.scwiki != nil {
 		_, err := s.cron.AddFunc(s.cfg.SyncSchedule, func() {
 			ctx, cancel := context.WithTimeout(context.Background(), 30*time.Minute)
@@ -66,6 +52,12 @@ func (s *Scheduler) Start() error {
 			log.Info().Msg("scheduled SC Wiki sync starting")
 			if err := s.SyncSCWiki(ctx); err != nil {
 				log.Error().Err(err).Msg("scheduled SC Wiki sync failed")
+			}
+
+			// Run image sync after SC Wiki sync so vehicles exist
+			log.Info().Msg("scheduled FleetYards image sync starting")
+			if err := s.SyncImages(ctx); err != nil {
+				log.Error().Err(err).Msg("scheduled FleetYards image sync failed")
 			}
 		})
 		if err != nil {
@@ -76,23 +68,13 @@ func (s *Scheduler) Start() error {
 	s.cron.Start()
 	log.Info().Str("schedule", s.cfg.SyncSchedule).Msg("sync scheduler started")
 
-	// Run reference sync on startup if configured
+	// Run startup sync if configured
 	if s.cfg.SyncOnStartup {
 		go func() {
 			ctx, cancel := context.WithTimeout(context.Background(), 30*time.Minute)
 			defer cancel()
 
-			count, _ := s.db.GetVehicleCount(ctx)
-			if count == 0 {
-				log.Info().Msg("no vehicles in database, running startup sync")
-				if err := s.SyncShips(ctx); err != nil {
-					log.Error().Err(err).Msg("startup FleetYards sync failed")
-				}
-			} else {
-				log.Info().Int("count", count).Msg("vehicles already in database, skipping FleetYards startup sync")
-			}
-
-			// Also run SC Wiki sync on startup to populate manufacturers, components, ports
+			// SC Wiki sync is the primary data source — run first
 			if s.scwiki != nil {
 				mfgCount, _ := s.db.GetManufacturerCount(ctx)
 				if mfgCount == 0 {
@@ -103,6 +85,17 @@ func (s *Scheduler) Start() error {
 				} else {
 					log.Info().Int("count", mfgCount).Msg("manufacturers already in database, skipping SC Wiki startup sync")
 				}
+			}
+
+			// FleetYards image sync — runs after SC Wiki so vehicles exist to attach images to
+			count, _ := s.db.GetVehicleCount(ctx)
+			if count > 0 {
+				log.Info().Msg("running startup FleetYards image sync")
+				if err := s.SyncImages(ctx); err != nil {
+					log.Error().Err(err).Msg("startup FleetYards image sync failed")
+				}
+			} else {
+				log.Warn().Msg("no vehicles in database after SC Wiki sync, skipping image sync")
 			}
 		}()
 	}
@@ -117,49 +110,28 @@ func (s *Scheduler) Stop() {
 	log.Info().Msg("sync scheduler stopped")
 }
 
-// SyncShips fetches all ships from FleetYards and upserts them into the unified vehicles table.
-// FleetYards provides images, pledge pricing, focus, specs, and production status.
-// The COALESCE-based upsert preserves any SC Wiki data already present on the same slug.
-func (s *Scheduler) SyncShips(ctx context.Context) error {
-	syncID, _ := s.db.InsertSyncHistory(ctx, 2, "ships", "running") // 2 = fleetyards
+// SyncImages fetches store images from FleetYards and updates the image columns on existing vehicles.
+// This is an image-only sync — all other ship data comes from SC Wiki.
+func (s *Scheduler) SyncImages(ctx context.Context) error {
+	syncID, _ := s.db.InsertSyncHistory(ctx, 2, "images", "running") // 2 = fleetyards
 
-	vehicles, err := s.client.FetchAllShips(ctx)
+	images, err := s.client.FetchAllShipImages(ctx)
 	if err != nil {
 		s.db.UpdateSyncHistory(ctx, syncID, "error", 0, err.Error())
-		return fmt.Errorf("fetching ships: %w", err)
+		return fmt.Errorf("fetching images: %w", err)
 	}
 
 	count := 0
-	for i := range vehicles {
-		v := &vehicles[i]
-
-		// Resolve manufacturer_id from name/code (FleetYards provides name/code, not DB id)
-		if (v.ManufacturerName != "" || v.ManufacturerCode != "") && v.ManufacturerID == nil {
-			if id, err := s.db.ResolveManufacturerID(ctx, v.ManufacturerName, v.ManufacturerCode); err == nil {
-				v.ManufacturerID = &id
-				// Backfill manufacturer code if FleetYards provides it
-				if v.ManufacturerCode != "" {
-					s.db.UpdateManufacturerCode(ctx, id, v.ManufacturerCode)
-				}
-			}
-		}
-
-		// Resolve production_status_id from string key
-		if v.ProductionStatus != "" && v.ProductionStatusID == nil {
-			if id, err := s.db.GetProductionStatusIDByKey(ctx, v.ProductionStatus); err == nil {
-				v.ProductionStatusID = &id
-			}
-		}
-
-		if _, err := s.db.UpsertVehicle(ctx, v); err != nil {
-			log.Warn().Err(err).Str("slug", v.Slug).Msg("failed to upsert vehicle")
+	for _, img := range images {
+		if err := s.db.UpdateVehicleImages(ctx, img.Slug, img.ImageURL, img.ImageURLSmall, img.ImageURLMedium, img.ImageURLLarge); err != nil {
+			log.Warn().Err(err).Str("slug", img.Slug).Msg("failed to update vehicle images")
 			continue
 		}
 		count++
 	}
 
 	s.db.UpdateSyncHistory(ctx, syncID, "success", count, "")
-	log.Info().Int("synced", count).Int("total", len(vehicles)).Msg("FleetYards reference sync complete")
+	log.Info().Int("updated", count).Int("total", len(images)).Msg("FleetYards image sync complete")
 	return nil
 }
 

@@ -4,12 +4,55 @@ This file maintains running context across compactions.
 
 ## Current Focus
 
-**Database Schema Redesign** - Major refactor planned and approved in plan file `zazzy-bubbling-hammock.md`. Ready to implement.
+**FleetYards → SC Wiki migration — COMPLETE.** FleetYards gutted to image-only sync. Code review findings all fixed.
 
 ## Recent Changes
 
-- Fixed Insurance.jsx: Added missing `useState`/`useMemo` imports, moved hooks above early returns to fix React error #310 (infinite re-render)
-- Frontend rebuilt after Insurance fix
+### FleetYards → SC Wiki Migration + Code Review (2026-02-17)
+
+**Migration (Plan Phases 2-4):**
+- Extended SC Wiki models with dimensions, MSRP, production status, description, foci, loaners, SKUs
+- Updated SC Wiki sync to populate all fields FY used to provide (except images)
+- Renamed `FleetYardsURL` → `PledgeURL` in models, DB queries, and migrations
+- Gutted FleetYards client to image-only (`ShipImages` struct, stripped `apiShip`)
+- Renamed `SyncShips()` → `SyncImages()` in scheduler
+- Added `UpdateVehicleImages()` DB function
+- Removed FY settings routes, handlers, config (`FleetYardsUser`), frontend panels
+- Updated CLAUDE.md, .env.example, docker-compose.yml, Makefile, helmrelease.yaml
+
+**Code Review Fixes (11 findings):**
+1. Removed committed binaries from git tracking (fleet-manager binary, DB file, frontend/dist)
+2. PostgreSQL seed compatibility — `insertIgnore()` + `placeholders()` helpers for dialect-aware INSERT
+3. Added `rows.Err()` checks after iteration in `GetAllVehicles`, `GetUserFleet`, `GetLatestSyncHistory`
+4. CORS restricted from wildcard `*` to `s.cfg.BaseURL`
+5. `GetAppSetting` now only suppresses `sql.ErrNoRows`, surfaces real DB errors
+6. `ResolveManufacturerID` — deterministic `ORDER BY name`, `defer rows.Close()`, scan error logging
+7. `writeJSON` — encoder errors now logged via `log.Warn()`
+8. Insurance type resolution — per-key warning logging for missing seed data
+9. `frontend/dist/` added to .gitignore and untracked
+10. `SaveAIAnalysis` — PostgreSQL `RETURNING id` path added
+11. SC Wiki client — bounded retry (max 3) with context-aware sleep on 429
+12. **Bonus:** ShipDB.jsx production status comparison fixed (`flight-ready` → `flight_ready`)
+
+### Schema Redesign Implementation (2026-02-15)
+- **Phase 1:** Schema + Migration Infrastructure — 24 tables, 4 lookup tables seeded
+- **Phase 2:** SC Wiki Sync refactored to target new tables, V2 dead code removed
+- **Phase 3:** FleetYards Reference Sync — images overlay onto unified vehicles table
+- **Phase 4:** User Data Layer — users, user_fleet, user_llm_configs CRUD
+- **Phase 5:** Import Pipeline — HangarXplor writes to user_fleet, auto-enrichment via FK JOINs
+- **Phase 6:** API Endpoints — all handlers query new schema
+- **Phase 7:** Frontend Updates — useAPI.js, Dashboard, FleetTable, Insurance, Import pages updated for new flat data shapes
+- **Phase 8:** Cleanup — deleted V2 files, unused functions, fixed PostgreSQL bug in migrations
+- **Phase 9:** Build and Verify — end-to-end testing complete
+
+### Bugs Fixed During Verification
+- NULL column scan crash: `v.Size`, `v.Length`, `v.Cargo`, etc. scanned into Go `int`/`float64` from nullable DB columns. Fixed with `sql.NullInt64`/`sql.NullFloat64` in `GetAllVehicles()` and `GetVehicleBySlug()`
+- Empty fleet returns `null` instead of `[]`: Fixed `listUserFleet` handler
+- Insurance type parsing: Added `Insurance` field to `HangarXplorEntry` model, import now resolves "120-Month Insurance", "6-Month Insurance" etc. to typed insurance_type_id
+- PostgreSQL compatibility: Fixed `migrationAIAnalyses` hardcoded AUTOINCREMENT
+
+### Previous Changes
+- Fixed Insurance.jsx infinite re-render (React error #310)
 - Comprehensive schema redesign plan written
 
 ## Key Decisions
@@ -27,8 +70,13 @@ This file maintains running context across compactions.
 10. **Paints table** — all paints in game, linked to vehicle_id. `user_paints` tracks ownership. `user_fleet.equipped_paint_id` tracks equipped.
 11. **Migration strategy** — rename old tables to `old_*`, create new schema, migrate data, drop old tables
 
+### FleetYards → SC Wiki Migration (2026-02-17)
+1. **SC Wiki is now the sole data source** for ship specs, dimensions, pricing, production status, descriptions
+2. **FleetYards retained for images only** — minimal client, `SyncImages()` overlays image URLs onto vehicles table
+3. **No more FleetYards user settings** — removed from config, API, frontend, deployment manifests
+4. **Bounded retry on API rate limits** — SC Wiki client retries max 3 times with context-aware sleep
+
 ### Previous Decisions
-- FleetYards only works with public hangars (warnings added to Import page)
 - LLM integration complete: AES-256-GCM encrypted keys, Claude/ChatGPT/Gemini, Settings page, AI insights on Analysis page
 - SC Wiki API sync complete: manufacturers, vehicles, items, ports, game versions
 
@@ -42,21 +90,5 @@ This file maintains running context across compactions.
 
 
 ---
-**Session compacted at:** 2026-02-13 16:29:26
-
-
----
-**Session compacted at:** 2026-02-13 18:45:50
-
-
----
-**Session compacted at:** 2026-02-14 07:07:32
-
-
----
-**Session compacted at:** 2026-02-14 08:18:19
-
-
----
-**Session compacted at:** 2026-02-15 15:17:00
+**Last compacted:** 2026-02-17 07:58:37
 

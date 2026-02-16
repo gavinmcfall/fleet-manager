@@ -8,13 +8,13 @@ import (
 
 // GameVersion represents a Star Citizen game version
 type GameVersion struct {
-	UUID        string    `json:"uuid"`
-	Code        string    `json:"code"`
-	Channel     string    `json:"channel"`
-	IsDefault   bool      `json:"is_default"`
-	ReleasedAt  time.Time `json:"released_at"`
-	CreatedAt   time.Time `json:"created_at"`
-	UpdatedAt   time.Time `json:"updated_at"`
+	UUID       string    `json:"uuid"`
+	Code       string    `json:"code"`
+	Channel    string    `json:"channel"`
+	IsDefault  bool      `json:"is_default"`
+	ReleasedAt time.Time `json:"released_at"`
+	CreatedAt  time.Time `json:"created_at"`
+	UpdatedAt  time.Time `json:"updated_at"`
 }
 
 // Manufacturer represents a ship/item manufacturer
@@ -51,6 +51,32 @@ func (f *FlexString) UnmarshalJSON(data []byte) error {
 	return nil
 }
 
+// LocalizedString handles localized API fields like {"en_EN": "flight-ready", "de_DE": "..."}
+type LocalizedString struct {
+	EnEN string `json:"en_EN"`
+}
+
+// VehicleSizes represents dimensions from the API sizes object
+type VehicleSizes struct {
+	Length float64 `json:"length"`
+	Beam   float64 `json:"beam"`
+	Height float64 `json:"height"`
+}
+
+// VehicleLoaner represents a loaner ship entry
+type VehicleLoaner struct {
+	UUID string `json:"uuid"`
+	Name string `json:"name"`
+	Slug string `json:"slug"`
+}
+
+// VehicleSKU represents a purchasable SKU for a vehicle
+type VehicleSKU struct {
+	Title     string  `json:"title"`
+	Price     float64 `json:"price"`
+	Available bool    `json:"available"`
+}
+
 // Item represents an in-game item (component, weapon, etc.)
 type Item struct {
 	UUID         string                 `json:"uuid"`
@@ -79,30 +105,55 @@ type Port struct {
 	EquippedItem  *Item  `json:"equipped_item,omitempty"`
 }
 
-// Vehicle represents an in-game vehicle/ship
+// Vehicle represents an in-game vehicle/ship from the SC Wiki API
 type Vehicle struct {
-	UUID               string                 `json:"uuid"`
-	ClassName          string                 `json:"class_name"`
-	Name               string                 `json:"name"`
-	Slug               string                 `json:"slug"`
-	Manufacturer       *Manufacturer          `json:"manufacturer"`
-	Size               int                    `json:"-"` // Ignored during unmarshal - API now returns localized object
-	SizeClass          int                    `json:"size_class"`
-	Career             string                 `json:"career"`
-	Role               string                 `json:"role"`
-	IsVehicle          bool                   `json:"is_vehicle"`
-	IsGravlev          bool                   `json:"is_gravlev"`
-	IsSpaceship        bool                   `json:"is_spaceship"`
-	MassTotal          float64                `json:"mass_total"`
-	CargoCapacity      float64                `json:"cargo_capacity"`
-	VehicleInventory   float64                `json:"vehicle_inventory"`
-	Crew               *VehicleCrew           `json:"crew"`
-	Speed              *VehicleSpeed          `json:"speed"`
-	Ports              *[]Port                `json:"ports,omitempty"` // Included when ?include=ports
-	GameVersion        *GameVersion           `json:"game_version"`
-	RawData            map[string]interface{} `json:"-"` // Store full API response
-	CreatedAt          time.Time              `json:"created_at"`
-	UpdatedAt          time.Time              `json:"updated_at"`
+	UUID             string                 `json:"uuid"`
+	ClassName        string                 `json:"class_name"`
+	Name             string                 `json:"name"`
+	Slug             string                 `json:"slug"`
+	Manufacturer     *Manufacturer          `json:"manufacturer"`
+	Size             int                    `json:"-"` // Ignored during unmarshal - API returns localized object
+	SizeClass        int                    `json:"size_class"`
+	Career           string                 `json:"career"`
+	Role             string                 `json:"role"`
+	IsVehicle        bool                   `json:"is_vehicle"`
+	IsGravlev        bool                   `json:"is_gravlev"`
+	IsSpaceship      bool                   `json:"is_spaceship"`
+	MassTotal        float64                `json:"mass_total"`
+	CargoCapacity    float64                `json:"cargo_capacity"`
+	VehicleInventory float64                `json:"vehicle_inventory"`
+	Crew             *VehicleCrew           `json:"crew"`
+	Speed            *VehicleSpeed          `json:"speed"`
+	Ports            *[]Port                `json:"ports,omitempty"`
+	GameVersion      *GameVersion           `json:"game_version"`
+	RawData          map[string]interface{} `json:"-"`
+	CreatedAt        time.Time              `json:"created_at"`
+	UpdatedAt        time.Time              `json:"updated_at"`
+
+	// Dimensions
+	Sizes *VehicleSizes `json:"sizes"`
+
+	// Pricing & store
+	MSRP      float64 `json:"msrp"`
+	PledgeURL string  `json:"pledge_url"`
+
+	// Status (localized objects)
+	ProductionStatus *LocalizedString `json:"production_status"`
+	Description      *LocalizedString `json:"description"`
+	SizeLabel        *LocalizedString `json:"size"`
+
+	// Combat
+	Health   float64 `json:"health"`
+	ShieldHP float64 `json:"shield_hp"`
+
+	// Focus (localized array)
+	Foci []LocalizedString `json:"foci"`
+
+	// Loaners (included when ?include=loaner)
+	Loaners []VehicleLoaner `json:"loaner"`
+
+	// SKUs
+	SKUs []VehicleSKU `json:"skus"`
 }
 
 // VehicleCrew represents crew requirements
@@ -116,4 +167,3 @@ type VehicleSpeed struct {
 	SCM float64 `json:"scm"`
 	Max float64 `json:"max"`
 }
-

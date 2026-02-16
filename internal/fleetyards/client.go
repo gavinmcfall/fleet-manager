@@ -8,10 +8,12 @@ import (
 	"net/http"
 	"time"
 
-	"github.com/nzvengeance/fleet-manager/internal/models"
 	"github.com/rs/zerolog/log"
 )
 
+// Client provides image-only access to the FleetYards API.
+// All ship data (specs, dimensions, pricing, status) now comes from SC Wiki API.
+// FleetYards is retained solely for store images.
 type Client struct {
 	baseURL    string
 	httpClient *http.Client
@@ -26,39 +28,20 @@ func NewClient(baseURL string) *Client {
 	}
 }
 
-// --- Raw API response types ---
+// ShipImages holds the slug and image URLs for a single ship
+type ShipImages struct {
+	Slug           string
+	ImageURL       string
+	ImageURLSmall  string
+	ImageURLMedium string
+	ImageURLLarge  string
+}
+
+// --- Raw API response types (image fields only) ---
 
 type apiShip struct {
-	Slug             string    `json:"slug"`
-	Name             string    `json:"name"`
-	SCIdentifier     string    `json:"scIdentifier"`
-	Focus            string    `json:"focus"`
-	SizeLabel        string    `json:"sizeLabel"`
-	Length           float64   `json:"length"`
-	Beam             float64   `json:"beam"`
-	Height           float64   `json:"height"`
-	Mass             float64   `json:"mass"`
-	Cargo            float64   `json:"cargo"`
-	MinCrew          int       `json:"minCrew"`
-	MaxCrew          int       `json:"maxCrew"`
-	PledgePrice      float64   `json:"pledgePrice"`
-	OnSale           bool      `json:"onSale"`
-	ProductionStatus string    `json:"productionStatus"`
-	Description      string    `json:"description"`
-	Classification   string    `json:"classification"`
-	Links            *apiLinks `json:"links"`
-	Manufacturer     *apiMfr   `json:"manufacturer"`
-	Media            *apiMedia `json:"media"`
-	Speeds           *apiSpeeds `json:"speeds"`
-}
-
-type apiLinks struct {
-	FleetYardsURL string `json:"self"`
-}
-
-type apiMfr struct {
-	Name string `json:"name"`
-	Code string `json:"code"`
+	Slug  string    `json:"slug"`
+	Media *apiMedia `json:"media"`
 }
 
 type apiMedia struct {
@@ -72,31 +55,24 @@ type apiImage struct {
 	Large  string `json:"large"`
 }
 
-type apiSpeeds struct {
-	SCMSpeed float64 `json:"scmSpeed"`
-}
-
-// --- Fetch methods ---
-
-// FetchAllShips retrieves the full ship database from FleetYards API with pagination.
-// Returns Vehicle references (slug, name, images, specs) for merging into the unified vehicles table.
-func (c *Client) FetchAllShips(ctx context.Context) ([]models.Vehicle, error) {
-	var allVehicles []models.Vehicle
+// FetchAllShipImages retrieves slug + store images from the FleetYards API.
+func (c *Client) FetchAllShipImages(ctx context.Context) ([]ShipImages, error) {
+	var allImages []ShipImages
 	page := 1
 	perPage := 50
 
 	for {
 		url := fmt.Sprintf("%s/v1/models?page=%d&perPage=%d", c.baseURL, page, perPage)
-		log.Debug().Str("url", url).Int("page", page).Msg("fetching ships page")
+		log.Debug().Str("url", url).Int("page", page).Msg("fetching ship images page")
 
 		body, err := c.doGet(ctx, url)
 		if err != nil {
-			return allVehicles, fmt.Errorf("fetching page %d: %w", page, err)
+			return allImages, fmt.Errorf("fetching page %d: %w", page, err)
 		}
 
 		var apiShips []apiShip
 		if err := json.Unmarshal(body, &apiShips); err != nil {
-			return allVehicles, fmt.Errorf("parsing page %d: %w", page, err)
+			return allImages, fmt.Errorf("parsing page %d: %w", page, err)
 		}
 
 		if len(apiShips) == 0 {
@@ -104,11 +80,23 @@ func (c *Client) FetchAllShips(ctx context.Context) ([]models.Vehicle, error) {
 		}
 
 		for _, as := range apiShips {
-			v := convertAPIShipToVehicle(as)
-			allVehicles = append(allVehicles, v)
+			if as.Media == nil || as.Media.StoreImage == nil {
+				continue
+			}
+			img := as.Media.StoreImage
+			if img.Source == "" && img.Small == "" && img.Medium == "" && img.Large == "" {
+				continue
+			}
+			allImages = append(allImages, ShipImages{
+				Slug:           as.Slug,
+				ImageURL:       img.Source,
+				ImageURLSmall:  img.Small,
+				ImageURLMedium: img.Medium,
+				ImageURLLarge:  img.Large,
+			})
 		}
 
-		log.Info().Int("page", page).Int("count", len(apiShips)).Int("total", len(allVehicles)).Msg("fetched ships page")
+		log.Info().Int("page", page).Int("count", len(apiShips)).Int("images_total", len(allImages)).Msg("fetched ship images page")
 
 		if len(apiShips) < perPage {
 			break
@@ -118,24 +106,7 @@ func (c *Client) FetchAllShips(ctx context.Context) ([]models.Vehicle, error) {
 		time.Sleep(500 * time.Millisecond)
 	}
 
-	return allVehicles, nil
-}
-
-// FetchShipDetail fetches detailed info for a single ship
-func (c *Client) FetchShipDetail(ctx context.Context, slug string) (*models.Vehicle, error) {
-	url := fmt.Sprintf("%s/v1/models/%s", c.baseURL, slug)
-	body, err := c.doGet(ctx, url)
-	if err != nil {
-		return nil, err
-	}
-
-	var as apiShip
-	if err := json.Unmarshal(body, &as); err != nil {
-		return nil, err
-	}
-
-	v := convertAPIShipToVehicle(as)
-	return &v, nil
+	return allImages, nil
 }
 
 // --- HTTP helpers ---
@@ -164,61 +135,4 @@ func (c *Client) doGet(ctx context.Context, url string) ([]byte, error) {
 	}
 
 	return io.ReadAll(resp.Body)
-}
-
-// convertAPIShipToVehicle maps FleetYards API response to the unified Vehicle model.
-// FleetYards provides images, pledge pricing, focus, specs, and the canonical slug.
-func convertAPIShipToVehicle(as apiShip) models.Vehicle {
-	v := models.Vehicle{
-		Slug:           as.Slug,
-		Name:           as.Name,
-		ClassName:      as.SCIdentifier,
-		Focus:          as.Focus,
-		SizeLabel:      as.SizeLabel,
-		Length:         as.Length,
-		Beam:           as.Beam,
-		Height:         as.Height,
-		Mass:           as.Mass,
-		Cargo:          as.Cargo,
-		CrewMin:        as.MinCrew,
-		CrewMax:        as.MaxCrew,
-		PledgePrice:    as.PledgePrice,
-		OnSale:         as.OnSale,
-		Description:    as.Description,
-		Classification: as.Classification,
-	}
-
-	// Map production status string to key
-	switch as.ProductionStatus {
-	case "flight-ready":
-		v.ProductionStatus = "flight_ready"
-	case "in-production":
-		v.ProductionStatus = "in_production"
-	case "in-concept":
-		v.ProductionStatus = "in_concept"
-	default:
-		v.ProductionStatus = as.ProductionStatus
-	}
-
-	if as.Manufacturer != nil {
-		v.ManufacturerName = as.Manufacturer.Name
-		v.ManufacturerCode = as.Manufacturer.Code
-	}
-
-	if as.Media != nil && as.Media.StoreImage != nil {
-		v.ImageURL = as.Media.StoreImage.Source
-		v.ImageURLSmall = as.Media.StoreImage.Small
-		v.ImageURLMedium = as.Media.StoreImage.Medium
-		v.ImageURLLarge = as.Media.StoreImage.Large
-	}
-
-	if as.Links != nil {
-		v.FleetYardsURL = as.Links.FleetYardsURL
-	}
-
-	if as.Speeds != nil {
-		v.SpeedSCM = as.Speeds.SCMSpeed
-	}
-
-	return v
 }

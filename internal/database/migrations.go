@@ -222,7 +222,7 @@ func (db *DB) migrationVehicles() string {
 		image_url_small TEXT,
 		image_url_medium TEXT,
 		image_url_large TEXT,
-		fleetyards_url TEXT,
+		pledge_url TEXT,
 		game_version_id INTEGER REFERENCES game_versions(id),
 		raw_data TEXT,
 		created_at %s DEFAULT CURRENT_TIMESTAMP,
@@ -398,7 +398,6 @@ func (db *DB) migrationUsers() string {
 		username TEXT UNIQUE NOT NULL,
 		handle TEXT,
 		email TEXT,
-		fleetyards_username TEXT,
 		created_at %s DEFAULT CURRENT_TIMESTAMP,
 		updated_at %s DEFAULT CURRENT_TIMESTAMP
 	)`, db.autoIncrement(), ts, ts)
@@ -505,8 +504,9 @@ func (db *DB) seedLookupTables() {
 		{2, "ground_vehicle", "Ground Vehicle"},
 		{3, "gravlev", "Gravlev"},
 	}
+	vtQuery := db.prepareQuery(db.insertIgnore("vehicle_types", "id, key, label", "id", 3))
 	for _, vt := range vehicleTypes {
-		db.conn.Exec("INSERT OR IGNORE INTO vehicle_types (id, key, label) VALUES (?, ?, ?)", vt.id, vt.key, vt.label)
+		db.conn.Exec(vtQuery, vt.id, vt.key, vt.label)
 	}
 
 	// Insurance types
@@ -525,9 +525,9 @@ func (db *DB) seedLookupTables() {
 		{6, "standard", "Standard Insurance", nil, false},
 		{7, "unknown", "Unknown Insurance", nil, false},
 	}
+	itQuery := db.prepareQuery(db.insertIgnore("insurance_types", "id, key, label, duration_months, is_lifetime", "id", 5))
 	for _, it := range insuranceTypes {
-		db.conn.Exec("INSERT OR IGNORE INTO insurance_types (id, key, label, duration_months, is_lifetime) VALUES (?, ?, ?, ?, ?)",
-			it.id, it.key, it.label, it.durationMonths, it.isLifetime)
+		db.conn.Exec(itQuery, it.id, it.key, it.label, it.durationMonths, it.isLifetime)
 	}
 
 	// Sync sources
@@ -537,11 +537,12 @@ func (db *DB) seedLookupTables() {
 		label string
 	}{
 		{1, "scwiki", "SC Wiki API"},
-		{2, "fleetyards", "FleetYards (Reference Only)"},
+		{2, "fleetyards", "FleetYards (Images Only)"},
 		{3, "hangarxplor", "HangarXplor"},
 	}
+	ssQuery := db.prepareQuery(db.insertIgnore("sync_sources", "id, key, label", "id", 3))
 	for _, ss := range syncSources {
-		db.conn.Exec("INSERT OR IGNORE INTO sync_sources (id, key, label) VALUES (?, ?, ?)", ss.id, ss.key, ss.label)
+		db.conn.Exec(ssQuery, ss.id, ss.key, ss.label)
 	}
 
 	// Production statuses
@@ -555,8 +556,9 @@ func (db *DB) seedLookupTables() {
 		{3, "in_concept", "In Concept"},
 		{4, "unknown", "Unknown"},
 	}
+	psQuery := db.prepareQuery(db.insertIgnore("production_statuses", "id, key, label", "id", 3))
 	for _, ps := range productionStatuses {
-		db.conn.Exec("INSERT OR IGNORE INTO production_statuses (id, key, label) VALUES (?, ?, ?)", ps.id, ps.key, ps.label)
+		db.conn.Exec(psQuery, ps.id, ps.key, ps.label)
 	}
 }
 
@@ -564,15 +566,11 @@ func (db *DB) ensureDefaultUser() {
 	var count int
 	db.conn.QueryRow("SELECT COUNT(*) FROM users").Scan(&count)
 	if count == 0 {
-		// Try to pull FleetYards username from old settings
-		fyUser := ""
-		db.conn.QueryRow("SELECT value FROM old_settings WHERE key = 'fleetyards_user'").Scan(&fyUser)
-
 		db.conn.Exec(
-			"INSERT INTO users (username, handle, fleetyards_username) VALUES (?, ?, ?)",
-			"default", "", fyUser,
+			"INSERT INTO users (username, handle) VALUES (?, ?)",
+			"default", "",
 		)
-		log.Info().Str("fleetyards_username", fyUser).Msg("created default user")
+		log.Info().Msg("created default user")
 	}
 }
 
