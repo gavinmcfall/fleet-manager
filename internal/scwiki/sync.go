@@ -141,7 +141,7 @@ func (s *Syncer) SyncManufacturers(ctx context.Context) error {
 func (s *Syncer) SyncVehicles(ctx context.Context) error {
 	syncID, _ := s.db.InsertSyncHistory(ctx, 1, "vehicles", "running") // 1 = scwiki
 
-	data, err := s.client.GetPaginated(ctx, "/api/vehicles?include=manufacturer,game_version,ports")
+	data, err := s.client.GetPaginated(ctx, "/api/vehicles?include=manufacturer,game_version,ports,loaner")
 	if err != nil {
 		s.db.UpdateSyncHistory(ctx, syncID, "error", 0, err.Error())
 		return err
@@ -205,24 +205,87 @@ func (s *Syncer) SyncVehicles(ctx context.Context) error {
 			vehicleTypeID = &id
 		}
 
+		// Extract dimensions
+		var length, beam, height float64
+		if v.Sizes != nil {
+			length = v.Sizes.Length
+			beam = v.Sizes.Beam
+			height = v.Sizes.Height
+		}
+
+		// Extract focus from foci array (prefer over role if present)
+		focus := v.Role
+		if len(v.Foci) > 0 && v.Foci[0].EnEN != "" {
+			focus = v.Foci[0].EnEN
+		}
+
+		// Extract description
+		var description string
+		if v.Description != nil {
+			description = v.Description.EnEN
+		}
+
+		// Extract size label from localized size field
+		var sizeLabel string
+		if v.SizeLabel != nil && v.SizeLabel.EnEN != "" {
+			sizeLabel = v.SizeLabel.EnEN
+		}
+
+		// Resolve production_status_id from localized string
+		var productionStatusID *int
+		if v.ProductionStatus != nil && v.ProductionStatus.EnEN != "" {
+			// Map API values to our DB keys
+			psKey := v.ProductionStatus.EnEN
+			switch psKey {
+			case "flight-ready":
+				psKey = "flight_ready"
+			case "in-production":
+				psKey = "in_production"
+			case "in-concept":
+				psKey = "in_concept"
+			}
+			if id, err := s.db.GetProductionStatusIDByKey(ctx, psKey); err == nil {
+				productionStatusID = &id
+			}
+		}
+
+		// Derive on_sale from SKUs
+		onSale := false
+		for _, sku := range v.SKUs {
+			if sku.Available {
+				onSale = true
+				break
+			}
+		}
+
 		model := &models.Vehicle{
-			UUID:             v.UUID,
-			Slug:             v.Slug,
-			Name:             v.Name,
-			ClassName:        v.ClassName,
-			ManufacturerID:   manufacturerID,
-			VehicleTypeID:    vehicleTypeID,
-			Focus:            v.Role,
-			Classification:   v.Career,
-			Mass:             v.MassTotal,
-			Cargo:            v.CargoCapacity,
-			VehicleInventory: v.VehicleInventory,
-			CrewMin:          crewMin,
-			CrewMax:          crewMax,
-			SpeedSCM:         speedSCM,
-			SpeedMax:         speedMax,
-			GameVersionID:    gameVersionID,
-			RawData:          string(raw),
+			UUID:               v.UUID,
+			Slug:               v.Slug,
+			Name:               v.Name,
+			ClassName:          v.ClassName,
+			ManufacturerID:     manufacturerID,
+			VehicleTypeID:      vehicleTypeID,
+			ProductionStatusID: productionStatusID,
+			SizeLabel:          sizeLabel,
+			Focus:              focus,
+			Classification:     v.Career,
+			Description:        description,
+			Length:              length,
+			Beam:               beam,
+			Height:             height,
+			Mass:               v.MassTotal,
+			Cargo:              v.CargoCapacity,
+			VehicleInventory:   v.VehicleInventory,
+			CrewMin:            crewMin,
+			CrewMax:            crewMax,
+			SpeedSCM:           speedSCM,
+			SpeedMax:           speedMax,
+			Health:             v.Health,
+			PledgePrice:        v.MSRP,
+			OnSale:             onSale,
+			PledgeURL:          v.PledgeURL,
+			GameVersionID:      gameVersionID,
+			RawData:            string(raw),
 		}
 
 		vehicleID, err := s.db.UpsertVehicle(ctx, model)
@@ -251,6 +314,21 @@ func (s *Syncer) SyncVehicles(ctx context.Context) error {
 				}
 				if err := s.db.UpsertPort(ctx, portModel); err != nil {
 					log.Warn().Err(err).Str("vehicle", v.Name).Str("port", port.Name).Msg("upsert port failed")
+				}
+			}
+		}
+
+		// Sync loaners if present
+		if len(v.Loaners) > 0 {
+			var loanerSlugs []string
+			for _, l := range v.Loaners {
+				if l.Slug != "" {
+					loanerSlugs = append(loanerSlugs, l.Slug)
+				}
+			}
+			if len(loanerSlugs) > 0 {
+				if err := s.db.SyncVehicleLoaners(ctx, vehicleID, loanerSlugs); err != nil {
+					log.Warn().Err(err).Str("vehicle", v.Name).Int("loaners", len(loanerSlugs)).Msg("sync loaners failed")
 				}
 			}
 		}

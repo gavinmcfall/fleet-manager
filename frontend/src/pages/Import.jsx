@@ -1,6 +1,6 @@
-import React, { useState, useRef, useEffect } from 'react'
-import { useStatus, importHangarXplor, setFleetYardsUser } from '../hooks/useAPI'
-import { Upload, FileJson, CheckCircle, XCircle, AlertTriangle, Save, Settings } from 'lucide-react'
+import React, { useState, useRef } from 'react'
+import { useStatus, importHangarXplor } from '../hooks/useAPI'
+import { Upload, FileJson, CheckCircle, XCircle, AlertTriangle } from 'lucide-react'
 
 export default function Import() {
   const { data: appStatus, refetch: refetchStatus } = useStatus()
@@ -8,33 +8,9 @@ export default function Import() {
   const [result, setResult] = useState(null)
   const [preview, setPreview] = useState(null)
   const [error, setError] = useState(null)
-  const [usernameInput, setUsernameInput] = useState('')
-  const [usernameSaved, setUsernameSaved] = useState(false)
   const fileRef = useRef(null)
 
   const vehicleCount = appStatus?.vehicles || 0
-  const fleetyardsUser = appStatus?.config?.fleetyards_user || ''
-
-  // Sync input with saved value
-  useEffect(() => {
-    if (fleetyardsUser && !usernameInput) {
-      setUsernameInput(fleetyardsUser)
-    }
-  }, [fleetyardsUser])
-
-  // --- FleetYards Username ---
-  const handleSaveUsername = async () => {
-    const trimmed = usernameInput.trim()
-    if (!trimmed) return
-    try {
-      await setFleetYardsUser(trimmed)
-      setUsernameSaved(true)
-      setTimeout(() => setUsernameSaved(false), 2000)
-      refetchStatus()
-    } catch (err) {
-      setError(err.message)
-    }
-  }
 
   // --- HangarXplor Import ---
   const handleFile = async (e) => {
@@ -101,38 +77,6 @@ export default function Import() {
       </div>
 
       <div className="glow-line" />
-
-      {/* FleetYards Username Setting */}
-      <div className="panel">
-        <div className="panel-header flex items-center gap-2">
-          <Settings className="w-3.5 h-3.5" />
-          FleetYards Username
-        </div>
-        <div className="p-4">
-          <p className="text-xs text-gray-500 mb-3">
-            Your username on <span className="font-mono text-gray-400">fleetyards.net</span> — used for
-            reference data sync (ship images, specs). Not required for HangarXplor import.
-          </p>
-          <div className="flex gap-2">
-            <input
-              type="text"
-              value={usernameInput}
-              onChange={(e) => { setUsernameInput(e.target.value); setUsernameSaved(false) }}
-              onKeyDown={(e) => e.key === 'Enter' && handleSaveUsername()}
-              placeholder="e.g. NZVengeance"
-              className="flex-1 bg-sc-darker border border-sc-border rounded px-3 py-2 text-sm font-mono text-gray-300 placeholder:text-gray-600 focus:outline-none focus:border-sc-accent/50"
-            />
-            <button
-              onClick={handleSaveUsername}
-              disabled={!usernameInput.trim() || usernameInput.trim() === fleetyardsUser}
-              className="btn-primary flex items-center gap-2 disabled:opacity-30"
-            >
-              {usernameSaved ? <CheckCircle className="w-3.5 h-3.5" /> : <Save className="w-3.5 h-3.5" />}
-              {usernameSaved ? 'Saved' : 'Save'}
-            </button>
-          </div>
-        </div>
-      </div>
 
       {/* Current Fleet Indicator */}
       {vehicleCount > 0 && (

@@ -91,7 +91,7 @@ type Vehicle struct {
 	ImageURLSmall      string    `json:"image_url_small,omitempty"`
 	ImageURLMedium     string    `json:"image_url_medium,omitempty"`
 	ImageURLLarge      string    `json:"image_url_large,omitempty"`
-	FleetYardsURL      string    `json:"fleetyards_url,omitempty"`
+	PledgeURL          string    `json:"pledge_url,omitempty"`
 	GameVersionID      *int      `json:"game_version_id,omitempty"`
 	RawData            string    `json:"-"`
 	CreatedAt          time.Time `json:"created_at"`
@@ -238,13 +238,12 @@ type VehicleLoaner struct {
 // --- User Data ---
 
 type User struct {
-	ID                 int       `json:"id"`
-	Username           string    `json:"username"`
-	Handle             string    `json:"handle,omitempty"`
-	Email              string    `json:"email,omitempty"`
-	FleetYardsUsername string    `json:"fleetyards_username,omitempty"`
-	CreatedAt          time.Time `json:"created_at"`
-	UpdatedAt          time.Time `json:"updated_at"`
+	ID        int       `json:"id"`
+	Username  string    `json:"username"`
+	Handle    string    `json:"handle,omitempty"`
+	Email     string    `json:"email,omitempty"`
+	CreatedAt time.Time `json:"created_at"`
+	UpdatedAt time.Time `json:"updated_at"`
 }
 
 // UserFleetEntry represents a ship in the user's fleet.

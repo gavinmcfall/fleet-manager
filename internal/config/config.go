@@ -16,9 +16,8 @@ type Config struct {
 	DBPath   string // SQLite file path
 	DBURL    string // PostgreSQL connection string
 
-	// FleetYards
+	// FleetYards (images only)
 	FleetYardsBaseURL string
-	FleetYardsUser    string
 
 	// SC Wiki API sync
 	SCWikiEnabled   bool
@@ -41,7 +40,6 @@ func Load() *Config {
 		DBPath:            getEnv("DB_PATH", "./data/fleet-manager.db"),
 		DBURL:             getEnv("DATABASE_URL", ""),
 		FleetYardsBaseURL: getEnv("FLEETYARDS_BASE_URL", "https://api.fleetyards.net"),
-		FleetYardsUser:    getEnv("FLEETYARDS_USER", ""),
 		SCWikiEnabled:     getEnvBool("SC_WIKI_ENABLED", true),
 		SCWikiRateLimit:   getEnvFloat("SC_WIKI_RATE_LIMIT", 1.0),
 		SCWikiBurst:       getEnvInt("SC_WIKI_BURST", 5),

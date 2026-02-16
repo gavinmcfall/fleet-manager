@@ -29,7 +29,6 @@ docker:
 # Docker run
 docker-run: docker
 	docker run -p 8080:8080 -v fleet-data:/app/data \
-		-e FLEETYARDS_USER=NZVengeance \
 		fleet-manager:latest
 
 # Clean build artifacts

@@ -1,5 +1,5 @@
 import React from 'react'
-import { useStatus, useAnalysis, triggerShipSync } from '../hooks/useAPI'
+import { useStatus, useAnalysis, triggerImageSync } from '../hooks/useAPI'
 import { RefreshCw, Rocket, Package, Users, Shield, AlertTriangle } from 'lucide-react'
 import { PieChart, Pie, Cell, ResponsiveContainer, Tooltip, BarChart, Bar, XAxis, YAxis } from 'recharts'
 
@@ -9,8 +9,8 @@ export default function Dashboard() {
   const { data: status, loading: statusLoading, refetch: refetchStatus } = useStatus()
   const { data: analysis, loading: analysisLoading } = useAnalysis()
 
-  const handleSyncShips = async () => {
-    await triggerShipSync()
+  const handleSyncImages = async () => {
+    await triggerImageSync()
     setTimeout(refetchStatus, 2000)
   }
 
@@ -36,7 +36,7 @@ export default function Dashboard() {
           </p>
         </div>
         <div className="flex gap-2">
-          <button onClick={handleSyncShips} className="btn-primary flex items-center gap-2">
+          <button onClick={handleSyncImages} className="btn-primary flex items-center gap-2">
             <RefreshCw className="w-3.5 h-3.5" /> Sync Ship DB
           </button>
         </div>

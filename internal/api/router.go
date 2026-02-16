@@ -50,7 +50,7 @@ func (s *Server) Router() http.Handler {
 	r.Use(middleware.Recoverer)
 	r.Use(middleware.Timeout(5 * time.Minute))
 	r.Use(cors.Handler(cors.Options{
-		AllowedOrigins:   []string{"*"},
+		AllowedOrigins:   []string{s.cfg.BaseURL},
 		AllowedMethods:   []string{"GET", "POST", "PUT", "DELETE", "OPTIONS"},
 		AllowedHeaders:   []string{"Accept", "Content-Type"},
 		AllowCredentials: false,
@@ -81,9 +81,6 @@ func (s *Server) Router() http.Handler {
 
 		// Settings
 		r.Route("/settings", func(r chi.Router) {
-			r.Get("/fleetyards-user", s.getFleetYardsUserSetting)
-			r.Put("/fleetyards-user", s.setFleetYardsUserSetting)
-
 			// LLM configuration
 			r.Get("/llm-config", s.getLLMConfig)
 			r.Put("/llm-config", s.setLLMConfig)
@@ -105,7 +102,7 @@ func (s *Server) Router() http.Handler {
 		// Sync management
 		r.Route("/sync", func(r chi.Router) {
 			r.Get("/status", s.getSyncStatus)
-			r.Post("/ships", s.triggerShipSync)
+			r.Post("/images", s.triggerImageSync)
 			r.Post("/scwiki", s.triggerSCWikiSync)
 		})
 
@@ -137,31 +134,20 @@ func (s *Server) healthCheck(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusOK, map[string]string{"status": "ok"})
 }
 
-// getFleetYardsUser returns the effective FleetYards username (user record first, env var fallback)
-func (s *Server) getFleetYardsUser(ctx context.Context) string {
-	user, _ := s.db.GetDefaultUser(ctx)
-	if user != nil && user.FleetYardsUsername != "" {
-		return user.FleetYardsUsername
-	}
-	return s.cfg.FleetYardsUser
-}
-
 func (s *Server) getStatus(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
 	vehicleCount, _ := s.db.GetVehicleCount(ctx)
 	userID := s.db.GetDefaultUserID(ctx)
 	fleetCount, _ := s.db.GetUserFleetCount(ctx, userID)
 	syncHistory, _ := s.db.GetLatestSyncHistory(ctx)
-	fleetYardsUser := s.getFleetYardsUser(ctx)
 
 	writeJSON(w, http.StatusOK, map[string]interface{}{
 		"ships":       vehicleCount,
 		"vehicles":    fleetCount,
 		"sync_status": syncHistory,
 		"config": map[string]interface{}{
-			"fleetyards_user": fleetYardsUser,
-			"sync_schedule":   s.cfg.SyncSchedule,
-			"db_driver":       s.cfg.DBDriver,
+			"sync_schedule": s.cfg.SyncSchedule,
+			"db_driver":     s.cfg.DBDriver,
 		},
 	})
 }
@@ -226,13 +212,34 @@ func (s *Server) importHangarXplor(w http.ResponseWriter, r *http.Request) {
 	userID := s.db.GetDefaultUserID(ctx)
 
 	// Resolve insurance type IDs once before loop
-	ltiID, _ := s.db.GetInsuranceTypeIDByKey(ctx, "lti")
-	unknownInsID, _ := s.db.GetInsuranceTypeIDByKey(ctx, "unknown")
-	ins120ID, _ := s.db.GetInsuranceTypeIDByKey(ctx, "120_month")
-	ins72ID, _ := s.db.GetInsuranceTypeIDByKey(ctx, "72_month")
-	ins6ID, _ := s.db.GetInsuranceTypeIDByKey(ctx, "6_month")
-	ins3ID, _ := s.db.GetInsuranceTypeIDByKey(ctx, "3_month")
-	standardID, _ := s.db.GetInsuranceTypeIDByKey(ctx, "standard")
+	ltiID, err := s.db.GetInsuranceTypeIDByKey(ctx, "lti")
+	if err != nil {
+		log.Warn().Err(err).Msg("missing insurance_types seed: lti")
+	}
+	unknownInsID, err := s.db.GetInsuranceTypeIDByKey(ctx, "unknown")
+	if err != nil {
+		log.Warn().Err(err).Msg("missing insurance_types seed: unknown")
+	}
+	ins120ID, err := s.db.GetInsuranceTypeIDByKey(ctx, "120_month")
+	if err != nil {
+		log.Warn().Err(err).Msg("missing insurance_types seed: 120_month")
+	}
+	ins72ID, err := s.db.GetInsuranceTypeIDByKey(ctx, "72_month")
+	if err != nil {
+		log.Warn().Err(err).Msg("missing insurance_types seed: 72_month")
+	}
+	ins6ID, err := s.db.GetInsuranceTypeIDByKey(ctx, "6_month")
+	if err != nil {
+		log.Warn().Err(err).Msg("missing insurance_types seed: 6_month")
+	}
+	ins3ID, err := s.db.GetInsuranceTypeIDByKey(ctx, "3_month")
+	if err != nil {
+		log.Warn().Err(err).Msg("missing insurance_types seed: 3_month")
+	}
+	standardID, err := s.db.GetInsuranceTypeIDByKey(ctx, "standard")
+	if err != nil {
+		log.Warn().Err(err).Msg("missing insurance_types seed: standard")
+	}
 
 	// Clean slate — clear existing fleet for this user
 	if err := s.db.ClearUserFleet(ctx, userID); err != nil {
@@ -387,17 +394,17 @@ func (s *Server) getSyncStatus(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusOK, statuses)
 }
 
-func (s *Server) triggerShipSync(w http.ResponseWriter, r *http.Request) {
+func (s *Server) triggerImageSync(w http.ResponseWriter, r *http.Request) {
 	go func() {
 		ctx, cancel := context.WithTimeout(context.Background(), 10*time.Minute)
 		defer cancel()
-		if err := s.scheduler.SyncShips(ctx); err != nil {
-			log.Error().Err(err).Msg("manual ship sync failed")
+		if err := s.scheduler.SyncImages(ctx); err != nil {
+			log.Error().Err(err).Msg("manual image sync failed")
 		}
 	}()
 
 	writeJSON(w, http.StatusAccepted, map[string]string{
-		"message": "Ship sync started",
+		"message": "Image sync started",
 	})
 }
 
@@ -418,33 +425,6 @@ func (s *Server) triggerSCWikiSync(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusAccepted, map[string]string{
 		"message": "SC Wiki sync started",
 	})
-}
-
-// --- Settings ---
-
-func (s *Server) getFleetYardsUserSetting(w http.ResponseWriter, r *http.Request) {
-	user := s.getFleetYardsUser(r.Context())
-	writeJSON(w, http.StatusOK, map[string]string{"fleetyards_user": user})
-}
-
-func (s *Server) setFleetYardsUserSetting(w http.ResponseWriter, r *http.Request) {
-	var req struct {
-		Username string `json:"username"`
-	}
-	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-		writeError(w, http.StatusBadRequest, "Invalid JSON")
-		return
-	}
-
-	ctx := r.Context()
-	userID := s.db.GetDefaultUserID(ctx)
-	if err := s.db.UpdateUserFleetYardsUsername(ctx, userID, req.Username); err != nil {
-		writeError(w, http.StatusInternalServerError, "Failed to save setting")
-		return
-	}
-
-	log.Info().Str("username", req.Username).Msg("fleetyards username updated")
-	writeJSON(w, http.StatusOK, map[string]string{"fleetyards_user": req.Username})
 }
 
 // --- LLM Configuration ---
@@ -783,7 +763,9 @@ func (s *Server) serveFrontend(r chi.Router) {
 func writeJSON(w http.ResponseWriter, status int, data interface{}) {
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(status)
-	json.NewEncoder(w).Encode(data)
+	if err := json.NewEncoder(w).Encode(data); err != nil {
+		log.Warn().Err(err).Msg("failed to write JSON response")
+	}
 }
 
 func writeError(w http.ResponseWriter, status int, message string) {
