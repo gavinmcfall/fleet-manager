@@ -99,11 +99,18 @@ func (s *Server) Router() http.Handler {
 		// Fleet analysis
 		r.Get("/analysis", s.getAnalysis)
 
+		// Paints
+		r.Route("/paints", func(r chi.Router) {
+			r.Get("/", s.listPaints)
+			r.Get("/ship/{slug}", s.getPaintsForShip)
+		})
+
 		// Sync management
 		r.Route("/sync", func(r chi.Router) {
 			r.Get("/status", s.getSyncStatus)
 			r.Post("/images", s.triggerImageSync)
 			r.Post("/scwiki", s.triggerSCWikiSync)
+			r.Post("/paints", s.triggerPaintSync)
 		})
 
 		// Debug
@@ -137,12 +144,14 @@ func (s *Server) healthCheck(w http.ResponseWriter, r *http.Request) {
 func (s *Server) getStatus(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
 	vehicleCount, _ := s.db.GetVehicleCount(ctx)
+	paintCount, _ := s.db.GetPaintCount(ctx)
 	userID := s.db.GetDefaultUserID(ctx)
 	fleetCount, _ := s.db.GetUserFleetCount(ctx, userID)
 	syncHistory, _ := s.db.GetLatestSyncHistory(ctx)
 
 	writeJSON(w, http.StatusOK, map[string]interface{}{
 		"ships":       vehicleCount,
+		"paints":      paintCount,
 		"vehicles":    fleetCount,
 		"sync_status": syncHistory,
 		"config": map[string]interface{}{
@@ -361,6 +370,33 @@ func (s *Server) importHangarXplor(w http.ResponseWriter, r *http.Request) {
 	})
 }
 
+// --- Paints ---
+
+func (s *Server) listPaints(w http.ResponseWriter, r *http.Request) {
+	paints, err := s.db.GetAllPaints(r.Context())
+	if err != nil {
+		writeError(w, http.StatusInternalServerError, "Failed to fetch paints: "+err.Error())
+		return
+	}
+	if paints == nil {
+		paints = []models.Paint{}
+	}
+	writeJSON(w, http.StatusOK, paints)
+}
+
+func (s *Server) getPaintsForShip(w http.ResponseWriter, r *http.Request) {
+	slug := chi.URLParam(r, "slug")
+	paints, err := s.db.GetPaintsForVehicle(r.Context(), slug)
+	if err != nil {
+		writeError(w, http.StatusInternalServerError, "Failed to fetch paints: "+err.Error())
+		return
+	}
+	if paints == nil {
+		paints = []models.Paint{}
+	}
+	writeJSON(w, http.StatusOK, paints)
+}
+
 // --- Analysis ---
 
 func (s *Server) getAnalysis(w http.ResponseWriter, r *http.Request) {
@@ -405,6 +441,20 @@ func (s *Server) triggerImageSync(w http.ResponseWriter, r *http.Request) {
 
 	writeJSON(w, http.StatusAccepted, map[string]string{
 		"message": "Image sync started",
+	})
+}
+
+func (s *Server) triggerPaintSync(w http.ResponseWriter, r *http.Request) {
+	go func() {
+		ctx, cancel := context.WithTimeout(context.Background(), 15*time.Minute)
+		defer cancel()
+		if err := s.scheduler.SyncPaints(ctx); err != nil {
+			log.Error().Err(err).Msg("manual paint sync failed")
+		}
+	}()
+
+	writeJSON(w, http.StatusAccepted, map[string]string{
+		"message": "Paint sync started",
 	})
 }
 

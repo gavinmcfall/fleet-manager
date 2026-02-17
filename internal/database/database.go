@@ -732,6 +732,205 @@ func (db *DB) UpsertPort(ctx context.Context, p *models.Port) error {
 	return err
 }
 
+// --- Paint Operations ---
+
+// UpsertPaint inserts or updates a paint by class_name.
+// Uses COALESCE so scunpacked metadata and FleetYards images don't overwrite each other.
+func (db *DB) UpsertPaint(ctx context.Context, p *models.Paint) (int, error) {
+	query := fmt.Sprintf(`
+		INSERT INTO paints (uuid, name, slug, class_name, vehicle_id, description,
+			image_url, image_url_small, image_url_medium, image_url_large, raw_data, updated_at)
+		VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, %s)
+		%s`,
+		db.now(),
+		db.onConflictUpdate("class_name", `
+			name=excluded.name,
+			slug=COALESCE(excluded.slug, paints.slug),
+			vehicle_id=COALESCE(excluded.vehicle_id, paints.vehicle_id),
+			description=COALESCE(excluded.description, paints.description),
+			image_url=COALESCE(excluded.image_url, paints.image_url),
+			image_url_small=COALESCE(excluded.image_url_small, paints.image_url_small),
+			image_url_medium=COALESCE(excluded.image_url_medium, paints.image_url_medium),
+			image_url_large=COALESCE(excluded.image_url_large, paints.image_url_large),
+			raw_data=COALESCE(excluded.raw_data, paints.raw_data),
+			updated_at=excluded.updated_at`),
+	)
+	query = db.prepareQuery(query)
+
+	args := []interface{}{
+		nullableStr(p.UUID), p.Name, nullableStr(p.Slug), nullableStr(p.ClassName),
+		p.VehicleID, nullableStr(p.Description),
+		nullableStr(p.ImageURL), nullableStr(p.ImageURLSmall),
+		nullableStr(p.ImageURLMedium), nullableStr(p.ImageURLLarge),
+		nullableStr(p.RawData),
+	}
+
+	if db.driver == "postgres" {
+		query += " RETURNING id"
+		var id int
+		err := db.conn.QueryRowContext(ctx, query, args...).Scan(&id)
+		return id, err
+	}
+
+	res, err := db.conn.ExecContext(ctx, query, args...)
+	if err != nil {
+		return 0, err
+	}
+	id, _ := res.LastInsertId()
+	return int(id), nil
+}
+
+// UpdatePaintImages updates only image columns for a paint by class_name.
+func (db *DB) UpdatePaintImages(ctx context.Context, className, imageURL, small, medium, large string) error {
+	query := db.prepareQuery(`UPDATE paints SET
+		image_url = ?, image_url_small = ?, image_url_medium = ?, image_url_large = ?,
+		updated_at = ` + db.now() + `
+		WHERE class_name = ?`)
+	_, err := db.conn.ExecContext(ctx, query, imageURL, small, medium, large, className)
+	return err
+}
+
+// GetAllPaints returns all paints with joined vehicle info.
+func (db *DB) GetAllPaints(ctx context.Context) ([]models.Paint, error) {
+	rows, err := db.conn.QueryContext(ctx, `
+		SELECT p.id, p.uuid, p.name, p.slug, p.class_name, p.vehicle_id,
+			p.description, p.image_url, p.image_url_small, p.image_url_medium, p.image_url_large,
+			p.created_at, p.updated_at,
+			v.name, v.slug
+		FROM paints p
+		LEFT JOIN vehicles v ON v.id = p.vehicle_id
+		ORDER BY p.name`)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	var paints []models.Paint
+	for rows.Next() {
+		var p models.Paint
+		var uuid, slug, className, description sql.NullString
+		var imageURL, imageURLSmall, imageURLMedium, imageURLLarge sql.NullString
+		var vehicleID sql.NullInt64
+		var vName, vSlug sql.NullString
+
+		err := rows.Scan(&p.ID, &uuid, &p.Name, &slug, &className, &vehicleID,
+			&description, &imageURL, &imageURLSmall, &imageURLMedium, &imageURLLarge,
+			&p.CreatedAt, &p.UpdatedAt,
+			&vName, &vSlug)
+		if err != nil {
+			return nil, err
+		}
+
+		p.UUID = uuid.String
+		p.Slug = slug.String
+		p.ClassName = className.String
+		p.Description = description.String
+		p.ImageURL = imageURL.String
+		p.ImageURLSmall = imageURLSmall.String
+		p.ImageURLMedium = imageURLMedium.String
+		p.ImageURLLarge = imageURLLarge.String
+		if vehicleID.Valid {
+			id := int(vehicleID.Int64)
+			p.VehicleID = &id
+		}
+		p.VehicleName = vName.String
+		p.VehicleSlug = vSlug.String
+
+		paints = append(paints, p)
+	}
+	return paints, rows.Err()
+}
+
+// GetPaintsForVehicle returns paints for a specific vehicle by slug.
+func (db *DB) GetPaintsForVehicle(ctx context.Context, vehicleSlug string) ([]models.Paint, error) {
+	query := db.prepareQuery(`
+		SELECT p.id, p.uuid, p.name, p.slug, p.class_name, p.vehicle_id,
+			p.description, p.image_url, p.image_url_small, p.image_url_medium, p.image_url_large,
+			p.created_at, p.updated_at,
+			v.name, v.slug
+		FROM paints p
+		JOIN vehicles v ON v.id = p.vehicle_id
+		WHERE v.slug = ?
+		ORDER BY p.name`)
+
+	rows, err := db.conn.QueryContext(ctx, query, vehicleSlug)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	var paints []models.Paint
+	for rows.Next() {
+		var p models.Paint
+		var uuid, slug, className, description sql.NullString
+		var imageURL, imageURLSmall, imageURLMedium, imageURLLarge sql.NullString
+		var vehicleID sql.NullInt64
+		var vName, vSlug sql.NullString
+
+		err := rows.Scan(&p.ID, &uuid, &p.Name, &slug, &className, &vehicleID,
+			&description, &imageURL, &imageURLSmall, &imageURLMedium, &imageURLLarge,
+			&p.CreatedAt, &p.UpdatedAt,
+			&vName, &vSlug)
+		if err != nil {
+			return nil, err
+		}
+
+		p.UUID = uuid.String
+		p.Slug = slug.String
+		p.ClassName = className.String
+		p.Description = description.String
+		p.ImageURL = imageURL.String
+		p.ImageURLSmall = imageURLSmall.String
+		p.ImageURLMedium = imageURLMedium.String
+		p.ImageURLLarge = imageURLLarge.String
+		if vehicleID.Valid {
+			id := int(vehicleID.Int64)
+			p.VehicleID = &id
+		}
+		p.VehicleName = vName.String
+		p.VehicleSlug = vSlug.String
+
+		paints = append(paints, p)
+	}
+	return paints, rows.Err()
+}
+
+// GetPaintCount returns the total number of paints.
+func (db *DB) GetPaintCount(ctx context.Context) (int, error) {
+	var count int
+	err := db.conn.QueryRowContext(ctx, "SELECT COUNT(*) FROM paints").Scan(&count)
+	return count, err
+}
+
+// GetVehicleSlugsWithPaints returns vehicle slugs that have associated paints.
+func (db *DB) GetVehicleSlugsWithPaints(ctx context.Context) ([]string, error) {
+	rows, err := db.conn.QueryContext(ctx, `
+		SELECT DISTINCT v.slug
+		FROM paints p
+		JOIN vehicles v ON v.id = p.vehicle_id
+		WHERE p.vehicle_id IS NOT NULL
+		ORDER BY v.slug`)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	var slugs []string
+	for rows.Next() {
+		var slug string
+		if err := rows.Scan(&slug); err != nil {
+			return nil, err
+		}
+		slugs = append(slugs, slug)
+	}
+	return slugs, rows.Err()
+}
+
+// GetPaintsByVehicleSlug returns paints for a vehicle, used for FY image name matching.
+func (db *DB) GetPaintsByVehicleSlug(ctx context.Context, vehicleSlug string) ([]models.Paint, error) {
+	return db.GetPaintsForVehicle(ctx, vehicleSlug)
+}
+
 // --- User Operations ---
 
 func (db *DB) GetDefaultUser(ctx context.Context) (*models.User, error) {
