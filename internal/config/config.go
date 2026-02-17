@@ -31,6 +31,9 @@ type Config struct {
 	// scunpacked-data (paint metadata)
 	ScunpackedDataPath string
 
+	// RSI extract images (one-time seed from pledge store/ship matrix extracts)
+	RSIExtractPath string
+
 	// Frontend
 	StaticDir string
 }
@@ -49,6 +52,7 @@ func Load() *Config {
 		SyncSchedule:      getEnv("SYNC_SCHEDULE", "0 3 * * *"), // 3am daily
 		SyncOnStartup:     getEnvBool("SYNC_ON_STARTUP", true),
 		ScunpackedDataPath: getEnv("SCUNPACKED_DATA_PATH", ""),
+		RSIExtractPath:     getEnv("RSI_EXTRACT_PATH", ""),
 		StaticDir:          getEnv("STATIC_DIR", "./frontend/dist"),
 	}
 }

@@ -10,6 +10,7 @@ import (
 	"github.com/nzvengeance/fleet-manager/internal/database"
 	"github.com/nzvengeance/fleet-manager/internal/fleetyards"
 	"github.com/nzvengeance/fleet-manager/internal/models"
+	"github.com/nzvengeance/fleet-manager/internal/rsi"
 	"github.com/nzvengeance/fleet-manager/internal/scunpacked"
 	"github.com/nzvengeance/fleet-manager/internal/scwiki"
 	"github.com/robfig/cron/v3"
@@ -116,6 +117,14 @@ func (s *Scheduler) Start() error {
 				log.Info().Msg("running startup paint sync")
 				if err := s.SyncPaints(ctx); err != nil {
 					log.Error().Err(err).Msg("startup paint sync failed")
+				}
+
+				// RSI extract image import — runs last, overwrites FleetYards images with RSI CDN
+				if s.cfg.RSIExtractPath != "" {
+					log.Info().Str("path", s.cfg.RSIExtractPath).Msg("running RSI extract image import")
+					if err := rsi.ImportImages(ctx, s.db, s.cfg.RSIExtractPath); err != nil {
+						log.Error().Err(err).Msg("RSI extract image import failed")
+					}
 				}
 			} else {
 				log.Warn().Msg("no vehicles in database after SC Wiki sync, skipping image and paint sync")
