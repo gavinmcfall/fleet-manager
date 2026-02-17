@@ -18,6 +18,7 @@ A Star Citizen fleet management app that tracks ships, insurance, pledge data, a
 - `fleetyards/client.go` — FleetYards API client. Image-only — fetches store images for ships and paints by slug.
 - `scunpacked/reader.go` — Parses paint_*.json files from scunpacked-data repo.
 - `scunpacked/sync.go` — Matches paints to vehicles by tag (many-to-many via `paint_vehicles`), tag alias map for unresolvable abbreviations.
+- `rsi/import.go` — One-time RSI extract image importer. Reads ship matrix + paint catalog JSON extracts, matches to DB vehicles/paints by name, updates image URLs with RSI CDN links.
 - `scwiki/client.go` — SC Wiki API client with rate limiting.
 - `scwiki/sync.go` — SC Wiki sync logic: manufacturers, vehicles (specs, dimensions, pricing, status), loaners.
 - `scwiki/models.go` — SC Wiki API response types.
@@ -40,7 +41,8 @@ A Star Citizen fleet management app that tracks ships, insurance, pledge data, a
 1. **SC Wiki API** (primary) — All ship data: specs, dimensions, pricing, production status, descriptions, manufacturers, loaners. Synced nightly and on startup.
 2. **FleetYards API** (images only) — Store images for ships and paints. Synced after SC Wiki so vehicles exist first.
 3. **scunpacked-data** (paint metadata) — Local JSON files from `scunpacked-data` repo. Paint names, descriptions, ship compatibility tags. Synced after images.
-4. **HangarXplor JSON** (user fleet) — Browser extension export. Insurance/pledge data (LTI, warbond, pledge cost/date). Only source for user fleet data.
+4. **RSI extract images** (one-time seed) — JSON extracts from RSI pledge store/ship matrix. Provides RSI CDN ship images (media.robertsspaceindustries.com) with multiple size variants. Runs after FleetYards sync, overwrites with higher-quality RSI CDN URLs. Also supplements paint images for paints without FleetYards coverage.
+5. **HangarXplor JSON** (user fleet) — Browser extension export. Insurance/pledge data (LTI, warbond, pledge cost/date). Only source for user fleet data.
 
 ### Ship Matching (slug generation)
 HangarXplor ship_codes like `MISC_Hull_D` get converted to slugs for matching against the vehicle reference DB:
@@ -80,6 +82,7 @@ go mod tidy && CGO_ENABLED=1 go build -o fleet-manager ./cmd/server
 - `SCUNPACKED_DATA_PATH` (default: "" — disabled when empty, set to path of scunpacked-data repo)
 - `SYNC_SCHEDULE` (default: "0 3 * * *")
 - `SYNC_ON_STARTUP` (default: true)
+- `RSI_EXTRACT_PATH` (default: "" — disabled when empty, set to directory containing ships.json and paints.json RSI extracts)
 - `STATIC_DIR` (default: ./frontend/dist)
 
 ## Debug Endpoint

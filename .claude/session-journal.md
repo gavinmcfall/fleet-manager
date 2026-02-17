@@ -4,9 +4,30 @@ This file maintains running context across compactions.
 
 ## Current Focus
 
-**Many-to-many paints + tag alias map — COMPLETE.** Replaced single `vehicle_id` FK on paints with `paint_vehicles` junction table. All 796 paints now matched (was 753/43 unmatched).
+**RSI extract image import — COMPLETE.** Ships: 256/267 (95.9%, up from 184). Paints: 612/796 (76.9%, up from 554). Ready to commit.
 
 ## Recent Changes
+
+### RSI Extract Image Import (2026-02-17)
+
+**New files:**
+- `internal/rsi/import.go` — Reads RSI extract JSON files (ships.json, paints.json), matches to DB by name, updates image URLs
+- Ship matching: direct name → fuzzy name map (30+ entries) → manufacturer prefix strip → variant inheritance
+- Paint matching: combine ship+paint name → normalize → exact match → prefix match
+- Ship CDN URLs: old format `media.robertsspaceindustries.com/{id}/store_{size}.jpg` (4 sizes), new format stored as-is
+
+**Modified files:**
+- `internal/config/config.go` — Added `RSI_EXTRACT_PATH` env var
+- `internal/sync/scheduler.go` — RSI import runs last in startup chain (after FY images + paints)
+- `internal/database/database.go` — Added `GetAllVehicleNameSlugs()`, `GetAllPaintNameClasses()` queries
+- `CLAUDE.md` — Documented RSI extract as data source #4
+
+**Results (fresh DB):**
+- Vehicles with images: **256/267 (95.9%)** — up from 184 (68.9%)
+- RSI CDN ship images: 249 (208 direct + 47 inherited)
+- Paints with images: **612/796 (76.9%)** — up from 554 (69.6%), +20 from RSI + 38 from improved FY matching
+- 11 vehicles without images: Wikelo/PYAM specials, F8A Lightning, Power Suit, CSV-SM\n, Mustang CitCon 2948
+- 163 RSI paints unmatched: paint packs, new ships (MOTH/Salvation/Fortune), ship name prefix differences
 
 ### Many-to-Many Paints Refactor (2026-02-17)
 
@@ -125,22 +146,20 @@ This file maintains running context across compactions.
 ## Sync Chain Order (startup)
 1. SC Wiki: manufacturers → game_versions → vehicles (288) → items (2818)
 2. FleetYards: vehicle images (232 updated)
-3. scunpacked: paint metadata (796 paints, 753 matched)
-4. FleetYards: paint images (561 synced, 89 vehicles queried)
+3. scunpacked: paint metadata (796 paints, 0 unmatched)
+4. FleetYards: paint images (903 synced, 157 vehicles queried)
+5. RSI extract: ship images (255 updated) + paint images (20 new)
 
 ## Current DB State (2026-02-17)
 | Table | Count |
 |-------|-------|
 | Manufacturers | 124 |
 | Vehicles | 267 |
-| Components | 1,354 |
-| FPS Weapons | 394 |
-| Game Versions | 1 |
-| Paints (total) | 796 |
-| Paints (matched) | 796 (100%) |
+| Vehicles (with images) | 256 (95.9%) |
+| RSI CDN ship images | 249 |
+| Total paints | 796 |
+| Paints (with images) | 612 (76.9%) |
 | Paint-Vehicle links | 1,586 |
-| Paints (with images) | 554 (69.6%) |
-| Vehicles (with images) | 184 (68.9%) |
 
 ---
 **Last compacted:** 2026-02-17 07:58:37
@@ -154,4 +173,12 @@ This file maintains running context across compactions.
 
 ---
 **Session compacted at:** 2026-02-17 14:29:15
+
+
+---
+**Session compacted at:** 2026-02-17 16:17:03
+
+
+---
+**Session compacted at:** 2026-02-17 21:00:36
 

@@ -599,6 +599,61 @@ func (db *DB) FindVehicleSlug(ctx context.Context, candidateSlugs []string, disp
 	return ""
 }
 
+// VehicleNameSlug is a lightweight name+slug pair for matching.
+type VehicleNameSlug struct {
+	Name string
+	Slug string
+}
+
+// GetAllVehicleNameSlugs returns all vehicle name/slug pairs for efficient matching.
+func (db *DB) GetAllVehicleNameSlugs(ctx context.Context) ([]VehicleNameSlug, error) {
+	rows, err := db.conn.QueryContext(ctx, "SELECT name, slug FROM vehicles ORDER BY name")
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	var result []VehicleNameSlug
+	for rows.Next() {
+		var v VehicleNameSlug
+		if err := rows.Scan(&v.Name, &v.Slug); err != nil {
+			return nil, err
+		}
+		result = append(result, v)
+	}
+	return result, rows.Err()
+}
+
+// PaintNameClass is a lightweight name+class_name pair for matching.
+type PaintNameClass struct {
+	Name      string
+	ClassName string
+	HasImage  bool
+}
+
+// GetAllPaintNameClasses returns all paint name/class_name pairs with image status.
+func (db *DB) GetAllPaintNameClasses(ctx context.Context) ([]PaintNameClass, error) {
+	rows, err := db.conn.QueryContext(ctx, `
+		SELECT name, class_name, (image_url IS NOT NULL AND image_url != '') as has_image
+		FROM paints ORDER BY name`)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	var result []PaintNameClass
+	for rows.Next() {
+		var p PaintNameClass
+		var className sql.NullString
+		if err := rows.Scan(&p.Name, &className, &p.HasImage); err != nil {
+			return nil, err
+		}
+		p.ClassName = className.String
+		result = append(result, p)
+	}
+	return result, rows.Err()
+}
+
 // UpdateVehicleImages updates only image columns for a vehicle by slug.
 // Used by the FleetYards image-only sync.
 func (db *DB) UpdateVehicleImages(ctx context.Context, slug, imageURL, small, medium, large string) error {
