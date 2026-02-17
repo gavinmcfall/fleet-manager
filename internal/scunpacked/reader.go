@@ -97,9 +97,14 @@ func ReadPaints(dataPath string) ([]ParsedPaint, error) {
 		}
 
 		// Filter out paints without a vehicle tag
+		// RequiredTags can be space-separated (e.g. "Paint_Hornet_F7_Mk2 ANVL_Hornet_F7A_Mk2")
+		// — take only the first Paint_ tag for vehicle matching.
 		vehicleTag := item.RequiredTags
 		if vehicleTag == "" && item.StdItem != nil && len(item.StdItem.RequiredTags) > 0 {
 			vehicleTag = item.StdItem.RequiredTags[0]
+		}
+		if strings.Contains(vehicleTag, " ") {
+			vehicleTag = strings.Fields(vehicleTag)[0]
 		}
 		if vehicleTag == "" || !strings.HasPrefix(vehicleTag, "Paint_") {
 			skipped++

@@ -9,6 +9,20 @@ import (
 	"github.com/rs/zerolog/log"
 )
 
+// tagAliases maps normalized paint tags to vehicle slugs or LIKE patterns.
+// Needed when the tag abbreviation doesn't match any vehicle slug directly.
+// Values containing '%' are used as LIKE patterns; others are used as exact slugs.
+var tagAliases = map[string]string{
+	"890j":           "890-jump",
+	"star-runner":    "mercury-star-runner",
+	"starfighter":    "ares-star-fighter",
+	"hornet-f7-mk2":  "%hornet%mk-ii",
+	"hornet-f7c-mk2": "%hornet%mk-ii",
+	"hornet":         "%hornet%",
+	"herald":         "herald",
+	"msr":            "mercury-star-runner",
+}
+
 // Syncer handles syncing scunpacked-data paint metadata to the database.
 type Syncer struct {
 	db       *database.DB
@@ -34,8 +48,8 @@ func (s *Syncer) SyncPaints(ctx context.Context) (int, error) {
 	unmatched := 0
 
 	for _, pp := range paints {
-		// Resolve vehicle_id from the tag
-		vehicleID := s.resolveVehicleID(ctx, pp.VehicleTag)
+		// Resolve vehicle IDs from the tag (may return multiple)
+		vehicleIDs := s.resolveVehicleIDs(ctx, pp.VehicleTag)
 
 		// Generate slug from class_name: Paint_Carrack_BIS2950 → carrack-bis2950
 		slug := slugFromClassName(pp.ClassName)
@@ -44,16 +58,20 @@ func (s *Syncer) SyncPaints(ctx context.Context) (int, error) {
 			Name:        pp.Name,
 			Slug:        slug,
 			ClassName:   pp.ClassName,
-			VehicleID:   vehicleID,
 			Description: pp.Description,
 		}
 
-		if _, err := s.db.UpsertPaint(ctx, paint); err != nil {
+		paintID, err := s.db.UpsertPaint(ctx, paint)
+		if err != nil {
 			log.Warn().Err(err).Str("class_name", pp.ClassName).Msg("failed to upsert paint")
 			continue
 		}
 
-		if vehicleID == nil {
+		if len(vehicleIDs) > 0 {
+			if err := s.db.SetPaintVehicles(ctx, paintID, vehicleIDs); err != nil {
+				log.Warn().Err(err).Str("class_name", pp.ClassName).Msg("failed to set paint vehicles")
+			}
+		} else {
 			unmatched++
 		}
 		count++
@@ -69,9 +87,10 @@ func (s *Syncer) SyncPaints(ctx context.Context) (int, error) {
 	return count, nil
 }
 
-// resolveVehicleID tries to match a paint tag (e.g. "Paint_Carrack") to a vehicle in the DB.
-func (s *Syncer) resolveVehicleID(ctx context.Context, tag string) *int {
-	// Normalize: strip Paint_ prefix, replace _ with -, lowercase
+// resolveVehicleIDs tries to match a paint tag (e.g. "Paint_Carrack") to vehicles in the DB.
+// Returns all matching vehicle IDs (empty slice if no match).
+func (s *Syncer) resolveVehicleIDs(ctx context.Context, tag string) []int {
+	// Normalize: strip Paint_ prefix / _Paint suffix, replace _ with -, lowercase
 	normalized := tag
 	normalized = strings.TrimPrefix(normalized, "Paint_")
 	normalized = strings.TrimSuffix(normalized, "_Paint")
@@ -82,48 +101,41 @@ func (s *Syncer) resolveVehicleID(ctx context.Context, tag string) *int {
 		return nil
 	}
 
+	// Check alias map
+	if alias, ok := tagAliases[normalized]; ok {
+		if strings.Contains(alias, "%") {
+			// LIKE pattern
+			ids, err := s.db.FindVehicleIDsBySlugLike(ctx, alias)
+			if err == nil && len(ids) > 0 {
+				return ids
+			}
+		} else {
+			// Use alias as the new normalized term
+			normalized = alias
+		}
+	}
+
 	// Try exact slug match
 	id, err := s.db.GetVehicleIDBySlug(ctx, normalized)
 	if err == nil {
-		return &id
+		return []int{id}
 	}
 
-	// Try LIKE prefix match
-	query := normalized + "%"
-	id, err = s.findVehicleBySlugPrefix(ctx, query)
-	if err == nil {
-		return &id
+	// Try prefix match (all vehicles whose slug starts with normalized)
+	ids, err := s.db.FindVehicleIDsBySlugPrefix(ctx, normalized)
+	if err == nil && len(ids) > 0 {
+		return ids
 	}
 
-	// Try name contains match
-	id, err = s.findVehicleByNameContains(ctx, normalized)
-	if err == nil {
-		return &id
+	// Try name-contains match (replace hyphens with spaces for name search)
+	nameTerm := strings.ReplaceAll(normalized, "-", " ")
+	ids, err = s.db.FindVehicleIDsByNameContains(ctx, nameTerm)
+	if err == nil && len(ids) > 0 {
+		return ids
 	}
 
 	log.Debug().Str("tag", tag).Str("normalized", normalized).Msg("no vehicle match for paint tag")
 	return nil
-}
-
-func (s *Syncer) findVehicleBySlugPrefix(ctx context.Context, pattern string) (int, error) {
-	query := "SELECT id FROM vehicles WHERE slug LIKE ? LIMIT 1"
-	if s.db.Driver() == "postgres" {
-		query = "SELECT id FROM vehicles WHERE slug LIKE $1 LIMIT 1"
-	}
-	var id int
-	err := s.db.RawConn().QueryRowContext(ctx, query, pattern).Scan(&id)
-	return id, err
-}
-
-func (s *Syncer) findVehicleByNameContains(ctx context.Context, term string) (int, error) {
-	query := "SELECT id FROM vehicles WHERE LOWER(name) LIKE ? LIMIT 1"
-	if s.db.Driver() == "postgres" {
-		query = "SELECT id FROM vehicles WHERE LOWER(name) LIKE $1 LIMIT 1"
-	}
-	pattern := "%" + term + "%"
-	var id int
-	err := s.db.RawConn().QueryRowContext(ctx, query, pattern).Scan(&id)
-	return id, err
 }
 
 // slugFromClassName converts a paint class_name to a URL-friendly slug.

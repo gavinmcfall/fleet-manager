@@ -13,11 +13,11 @@ A Star Citizen fleet management app that tracks ships, insurance, pledge data, a
 ### Backend (`/internal/`)
 - `api/router.go` — All HTTP handlers and routes. Import logic, settings, debug endpoints.
 - `database/database.go` — SQLite/PostgreSQL data layer. Vehicles, user_fleet, manufacturers, sync_history tables.
-- `database/migrations.go` — Schema definitions. 24 tables including lookup tables.
+- `database/migrations.go` — Schema definitions. 25 tables including lookup tables and `paint_vehicles` junction.
 - `sync/scheduler.go` — Cron-based sync: SC Wiki (primary data), FleetYards (images only).
 - `fleetyards/client.go` — FleetYards API client. Image-only — fetches store images for ships and paints by slug.
 - `scunpacked/reader.go` — Parses paint_*.json files from scunpacked-data repo.
-- `scunpacked/sync.go` — Matches paints to vehicles by tag, UPSERTs to DB.
+- `scunpacked/sync.go` — Matches paints to vehicles by tag (many-to-many via `paint_vehicles`), tag alias map for unresolvable abbreviations.
 - `scwiki/client.go` — SC Wiki API client with rate limiting.
 - `scwiki/sync.go` — SC Wiki sync logic: manufacturers, vehicles (specs, dimensions, pricing, status), loaners.
 - `scwiki/models.go` — SC Wiki API response types.
@@ -55,6 +55,7 @@ HangarXplor ship_codes like `MISC_Hull_D` get converted to slugs for matching ag
 - **SC Wiki is primary data source**: All ship specs, dimensions, pricing, status, descriptions come from SC Wiki API.
 - **FleetYards is images only**: Retained solely for store images (ships + paints). All non-image FleetYards code removed.
 - **Paint sync pipeline**: scunpacked-data provides metadata (names, descriptions, ship tags), FleetYards provides paint images. UPSERT uses COALESCE so neither source overwrites the other.
+- **Paints are many-to-many**: `paint_vehicles` junction table links paints to ALL compatible vehicles (e.g., Aurora paints → 5 variants). Tag alias map resolves abbreviations (890j→890-jump, star-runner→mercury-star-runner).
 - **Insurance is typed**: `insurance_types` lookup table with duration_months (LTI, 120-month, 6-month, etc.)
 - **user_fleet join table**: Links users to vehicle reference data. Insurance, pledge data, custom names live here.
 - **Gap analysis uses contains matching**: Focus strings like "Prospecting / Mining" match gap terms like "mining" via `strings.Contains`.

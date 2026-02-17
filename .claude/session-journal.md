@@ -4,35 +4,26 @@ This file maintains running context across compactions.
 
 ## Current Focus
 
-**Paint sync pipeline — COMPLETE.** scunpacked-data paint metadata + FleetYards paint images fully implemented and synced.
+**Many-to-many paints + tag alias map — COMPLETE.** Replaced single `vehicle_id` FK on paints with `paint_vehicles` junction table. All 796 paints now matched (was 753/43 unmatched).
 
 ## Recent Changes
 
-### Paint Sync Pipeline (2026-02-17)
+### Many-to-Many Paints Refactor (2026-02-17)
 
 **Implementation:**
-- Created `internal/scunpacked/reader.go` — parses 988 paint JSON files from scunpacked-data, filters placeholders/non-ship paints, generates readable names from className when empty
-- Created `internal/scunpacked/sync.go` — resolves vehicle_id from paint tags (exact slug → prefix LIKE → name CONTAINS), UPSERT with COALESCE to preserve images
-- Extended `internal/fleetyards/client.go` — `FetchPaintImages()` for `/v1/models/{slug}/paints` endpoint
-- Extended `internal/database/database.go` — 7 paint CRUD operations (UpsertPaint, UpdatePaintImages, GetAllPaints, GetPaintsForVehicle, GetPaintCount, GetVehicleSlugsWithPaints, GetPaintsByVehicleSlug)
-- Extended `internal/database/migrations.go` — paints table columns (class_name UNIQUE, description, image_url_small/medium/large), scunpacked sync source seed
-- Extended `internal/models/models.go` — Paint struct with ClassName, Description, 3 image size variants, joined vehicle fields
-- Extended `internal/sync/scheduler.go` — `SyncPaints()` method: scunpacked metadata → FY paint images, name matching with normalization
-- Extended `internal/api/router.go` — `GET /api/paints`, `GET /api/paints/ship/{slug}`, `POST /api/sync/paints`, paint count in status
-- Extended `internal/config/config.go` — `SCUNPACKED_DATA_PATH` env var
-- Updated `CLAUDE.md` — documented scunpacked package, paint sync pipeline, new env var
+- `internal/models/models.go` — Added `PaintVehicle` struct, replaced `VehicleID`/`VehicleName`/`VehicleSlug` with `Vehicles []PaintVehicle`
+- `internal/database/migrations.go` — Removed `vehicle_id` from paints table, added `paint_vehicles` junction table, no-op'd `migratePaintsAddColumns`
+- `internal/database/database.go` — Rewrote `UpsertPaint` (no vehicle_id, SQLite LastInsertId fallback), added `SetPaintVehicles`, `FindVehicleIDsBySlugLike/Prefix/NameContains`, rewrote `GetAllPaints`/`GetPaintsForVehicle`/`GetVehicleSlugsWithPaints` with two-query + index-map pattern
+- `internal/scunpacked/sync.go` — Added `tagAliases` map (890j→890-jump, star-runner→mercury-star-runner, etc.), `resolveVehicleIDs()` returns `[]int`, deleted old helpers
+- `internal/scunpacked/reader.go` — Fixed space-separated RequiredTags (take first Paint_ tag)
 
 **Sync Results (fresh DB):**
-- 796 paints parsed from 988 files (192 filtered: placeholders + non-ship)
-- 753 matched to vehicles (94.6%) — 43 unmatched due to tag/slug mismatches
-- 554 with images from FleetYards (69.6%) — FY doesn't have all paints
-- 184/267 vehicles with images (68.9%) — same FY coverage limitation
-- 561 paint images synced from FleetYards paint endpoints
+- 796 paints, **0 unmatched** (was 43)
+- 1586 paint_vehicles rows (many-to-many working)
+- Aurora paints → 5 vehicles each, Hornet paints → 15 vehicles, 890 Jump → resolved via alias
 
-**Gaps documented in review files:**
-- `data/review-unmatched-paints.txt` — 43 paints: 890 Jump (3), Hornet Mk II variants (13), Mercury Star Runner (11), Ares Star Fighter (15)
-- `data/review-paints-no-images.txt` — 242 paints without FY images
-- `data/review-vehicles-no-images.txt` — 83 vehicles without FY images (mostly Wikelo specials, PYAM Execs, slug mismatches)
+**API response shape change:**
+- `"vehicle_id": 5, "vehicle_name": "Aurora CL"` → `"vehicles": [{id, name, slug}, ...]`
 
 ### FleetYards → SC Wiki Migration + Code Review (2026-02-17)
 
@@ -96,6 +87,19 @@ This file maintains running context across compactions.
 10. **Paints table** — all paints in game, linked to vehicle_id. `user_paints` tracks ownership. `user_fleet.equipped_paint_id` tracks equipped.
 11. **Migration strategy** — rename old tables to `old_*`, create new schema, migrate data, drop old tables
 
+### Paint Sync Design Decisions (2026-02-17)
+1. **Three-source pipeline:** scunpacked-data (metadata) → DB UPSERT → FleetYards (images overlay)
+2. **COALESCE-based UPSERT on class_name** — scunpacked metadata and FY images never overwrite each other
+3. **Tag-to-vehicle matching strategy:** normalize tag (strip `Paint_` prefix/`_Paint` suffix, `_` → `-`, lowercase) → exact slug → LIKE prefix → name CONTAINS
+4. **Paint name matching for FY images:** normalize both names (lowercase, strip "livery"/"paint"/"skin" suffixes), try exact then substring match
+5. **`data/p4k/` deleted** — 2.7GB unused game dump, replaced by targeted scunpacked-data reads
+6. **scunpacked-data lives externally** at `/home/gavin/cloned-repos/StarCitizenWiki/scunpacked-data/` — configured via `SCUNPACKED_DATA_PATH` env var, disabled when empty
+
+### Known Paint Sync Gaps (for future improvement)
+- **All 43 previously unmatched paints now resolved** via tag aliases + many-to-many
+- **9 FY 404s on paint fetch** — slug mismatches: 600i, a2-hercules-starlifter, csv-smn, dragonfly, esperia-stinger, f8a-lightning, hornet-f7a-mk-ii-pyam-exec, m50-interceptor, santokyai
+- **Broken localisation strings** — some paints have `@item_Name...` prefixes instead of readable names (game data issue)
+
 ### FleetYards → SC Wiki Migration (2026-02-17)
 1. **SC Wiki is now the sole data source** for ship specs, dimensions, pricing, production status, descriptions
 2. **FleetYards retained for images only** — minimal client, `SyncImages()` overlays image URLs onto vehicles table
@@ -108,17 +112,46 @@ This file maintains running context across compactions.
 
 ## Important Context
 
-- **Plan file:** `/home/gavin/.claude/plans/zazzy-bubbling-hammock.md` — full schema DDL, migration strategy, implementation phases 1-8
-- **All SC Wiki sync phases were completed** before this redesign (but will need refactoring to target new tables)
-- **All LLM integration was completed** (but settings/keys will move to user_llm_configs)
+- **Plan file:** `/home/gavin/.claude/plans/zazzy-bubbling-hammock.md` — paint sync plan (COMPLETED), schema redesign plan
+- **scunpacked-data repo:** `/home/gavin/cloned-repos/StarCitizenWiki/scunpacked-data/` — 988 paint files at `items/paint_*.json`
+- **Database is fresh and fully populated** — deleted corrupt DB and ran full sync chain on 2026-02-17
+- **DB location:** `data/fleet-manager.db` (17MB, SQLite)
+- **Binary built:** `fleet-manager` in project root (CGO_ENABLED=1 required for SQLite)
+- **Review files in `data/`** — 3 gap analysis files (not tracked in git) for Gavin to review
 - **Owner:** Gavin, Senior QA at Pushpay, not a developer. FleetYards username: NZVengeance. 38 ships.
-- **Tech:** Go 1.22, Chi router, SQLite/PostgreSQL, React SPA (Vite), Tailwind CSS
+- **Tech:** Go 1.24, Chi router, SQLite/PostgreSQL, React SPA (Vite), Tailwind CSS
+- **Module path:** `github.com/nzvengeance/fleet-manager`
 
+## Sync Chain Order (startup)
+1. SC Wiki: manufacturers → game_versions → vehicles (288) → items (2818)
+2. FleetYards: vehicle images (232 updated)
+3. scunpacked: paint metadata (796 paints, 753 matched)
+4. FleetYards: paint images (561 synced, 89 vehicles queried)
+
+## Current DB State (2026-02-17)
+| Table | Count |
+|-------|-------|
+| Manufacturers | 124 |
+| Vehicles | 267 |
+| Components | 1,354 |
+| FPS Weapons | 394 |
+| Game Versions | 1 |
+| Paints (total) | 796 |
+| Paints (matched) | 796 (100%) |
+| Paint-Vehicle links | 1,586 |
+| Paints (with images) | 554 (69.6%) |
+| Vehicles (with images) | 184 (68.9%) |
 
 ---
 **Last compacted:** 2026-02-17 07:58:37
 
-
 ---
 **Session compacted at:** 2026-02-17 11:51:50
+
+---
+**Session compacted at:** 2026-02-17 14:11:24
+
+
+---
+**Session compacted at:** 2026-02-17 14:29:15
 
