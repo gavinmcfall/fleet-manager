@@ -3,22 +3,26 @@ package sync
 import (
 	"context"
 	"fmt"
+	"strings"
 	"time"
 
 	"github.com/nzvengeance/fleet-manager/internal/config"
 	"github.com/nzvengeance/fleet-manager/internal/database"
 	"github.com/nzvengeance/fleet-manager/internal/fleetyards"
+	"github.com/nzvengeance/fleet-manager/internal/models"
+	"github.com/nzvengeance/fleet-manager/internal/scunpacked"
 	"github.com/nzvengeance/fleet-manager/internal/scwiki"
 	"github.com/robfig/cron/v3"
 	"github.com/rs/zerolog/log"
 )
 
 type Scheduler struct {
-	db     *database.DB
-	client *fleetyards.Client
-	scwiki *scwiki.Syncer
-	cfg    *config.Config
-	cron   *cron.Cron
+	db         *database.DB
+	client     *fleetyards.Client
+	scwiki     *scwiki.Syncer
+	scunpacked *scunpacked.Syncer
+	cfg        *config.Config
+	cron       *cron.Cron
 }
 
 func NewScheduler(db *database.DB, client *fleetyards.Client, cfg *config.Config) *Scheduler {
@@ -32,12 +36,19 @@ func NewScheduler(db *database.DB, client *fleetyards.Client, cfg *config.Config
 			Msg("SC Wiki API sync enabled")
 	}
 
+	var scunpackedSyncer *scunpacked.Syncer
+	if cfg.ScunpackedDataPath != "" {
+		scunpackedSyncer = scunpacked.NewSyncer(db, cfg.ScunpackedDataPath)
+		log.Info().Str("path", cfg.ScunpackedDataPath).Msg("scunpacked paint sync enabled")
+	}
+
 	return &Scheduler{
-		db:     db,
-		client: client,
-		scwiki: scwikiSyncer,
-		cfg:    cfg,
-		cron:   cron.New(),
+		db:         db,
+		client:     client,
+		scwiki:     scwikiSyncer,
+		scunpacked: scunpackedSyncer,
+		cfg:        cfg,
+		cron:       cron.New(),
 	}
 }
 
@@ -58,6 +69,12 @@ func (s *Scheduler) Start() error {
 			log.Info().Msg("scheduled FleetYards image sync starting")
 			if err := s.SyncImages(ctx); err != nil {
 				log.Error().Err(err).Msg("scheduled FleetYards image sync failed")
+			}
+
+			// Run paint sync after images
+			log.Info().Msg("scheduled paint sync starting")
+			if err := s.SyncPaints(ctx); err != nil {
+				log.Error().Err(err).Msg("scheduled paint sync failed")
 			}
 		})
 		if err != nil {
@@ -94,8 +111,14 @@ func (s *Scheduler) Start() error {
 				if err := s.SyncImages(ctx); err != nil {
 					log.Error().Err(err).Msg("startup FleetYards image sync failed")
 				}
+
+				// Paint sync — runs after images so vehicles exist
+				log.Info().Msg("running startup paint sync")
+				if err := s.SyncPaints(ctx); err != nil {
+					log.Error().Err(err).Msg("startup paint sync failed")
+				}
 			} else {
-				log.Warn().Msg("no vehicles in database after SC Wiki sync, skipping image sync")
+				log.Warn().Msg("no vehicles in database after SC Wiki sync, skipping image and paint sync")
 			}
 		}()
 	}
@@ -133,6 +156,109 @@ func (s *Scheduler) SyncImages(ctx context.Context) error {
 	s.db.UpdateSyncHistory(ctx, syncID, "success", count, "")
 	log.Info().Int("updated", count).Int("total", len(images)).Msg("FleetYards image sync complete")
 	return nil
+}
+
+// SyncPaints runs the full paint sync pipeline:
+// 1. Sync paint metadata from scunpacked-data (if configured)
+// 2. Fetch paint images from FleetYards for vehicles that have paints
+func (s *Scheduler) SyncPaints(ctx context.Context) error {
+	// Step 1: scunpacked metadata sync
+	if s.scunpacked != nil {
+		log.Info().Msg("scunpacked paint metadata sync starting")
+		count, err := s.scunpacked.SyncPaints(ctx)
+		if err != nil {
+			log.Error().Err(err).Msg("scunpacked paint sync failed")
+		} else {
+			log.Info().Int("count", count).Msg("scunpacked paint metadata sync complete")
+		}
+	}
+
+	// Step 2: Fetch paint images from FleetYards
+	slugs, err := s.db.GetVehicleSlugsWithPaints(ctx)
+	if err != nil {
+		log.Warn().Err(err).Msg("failed to get vehicle slugs with paints")
+		return nil
+	}
+
+	if len(slugs) == 0 {
+		log.Info().Msg("no vehicles with paints to fetch images for")
+		return nil
+	}
+
+	log.Info().Int("vehicles", len(slugs)).Msg("fetching paint images from FleetYards")
+	imagesSynced := 0
+
+	for _, vehicleSlug := range slugs {
+		fyPaints, err := s.client.FetchPaintImages(ctx, vehicleSlug)
+		if err != nil {
+			log.Debug().Err(err).Str("vehicle", vehicleSlug).Msg("no FleetYards paints for vehicle")
+			continue
+		}
+
+		if len(fyPaints) == 0 {
+			continue
+		}
+
+		// Get DB paints for this vehicle to match by name
+		dbPaints, err := s.db.GetPaintsByVehicleSlug(ctx, vehicleSlug)
+		if err != nil {
+			log.Warn().Err(err).Str("vehicle", vehicleSlug).Msg("failed to get DB paints for matching")
+			continue
+		}
+
+		for _, fyPaint := range fyPaints {
+			matched := matchPaintByName(fyPaint, dbPaints)
+			if matched == nil {
+				continue
+			}
+
+			if err := s.db.UpdatePaintImages(ctx, matched.ClassName,
+				fyPaint.ImageURL, fyPaint.ImageURLSmall,
+				fyPaint.ImageURLMedium, fyPaint.ImageURLLarge); err != nil {
+				log.Warn().Err(err).Str("paint", matched.ClassName).Msg("failed to update paint images")
+				continue
+			}
+			imagesSynced++
+		}
+
+		// Rate limit FleetYards requests
+		time.Sleep(500 * time.Millisecond)
+	}
+
+	log.Info().Int("images_synced", imagesSynced).Msg("FleetYards paint image sync complete")
+	return nil
+}
+
+// matchPaintByName tries to match a FleetYards paint to a DB paint by normalizing names.
+func matchPaintByName(fyPaint fleetyards.PaintImages, dbPaints []models.Paint) *models.Paint {
+	fyNorm := normalizePaintName(fyPaint.Name)
+
+	for i := range dbPaints {
+		dbNorm := normalizePaintName(dbPaints[i].Name)
+
+		// Try exact normalized match
+		if fyNorm == dbNorm {
+			return &dbPaints[i]
+		}
+
+		// Try substring match (FY name in DB name or vice versa)
+		if strings.Contains(dbNorm, fyNorm) || strings.Contains(fyNorm, dbNorm) {
+			return &dbPaints[i]
+		}
+	}
+
+	return nil
+}
+
+// normalizePaintName strips common prefixes/suffixes and lowercases for comparison.
+func normalizePaintName(name string) string {
+	n := strings.ToLower(name)
+	n = strings.TrimSpace(n)
+	// Remove common suffixes like "livery", "paint", "skin"
+	n = strings.TrimSuffix(n, " livery")
+	n = strings.TrimSuffix(n, " paint")
+	n = strings.TrimSuffix(n, " skin")
+	return n
 }
 
 // SyncSCWiki syncs Star Citizen data from SC Wiki API

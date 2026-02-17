@@ -15,7 +15,9 @@ A Star Citizen fleet management app that tracks ships, insurance, pledge data, a
 - `database/database.go` — SQLite/PostgreSQL data layer. Vehicles, user_fleet, manufacturers, sync_history tables.
 - `database/migrations.go` — Schema definitions. 24 tables including lookup tables.
 - `sync/scheduler.go` — Cron-based sync: SC Wiki (primary data), FleetYards (images only).
-- `fleetyards/client.go` — FleetYards API client. Image-only — fetches store images by slug.
+- `fleetyards/client.go` — FleetYards API client. Image-only — fetches store images for ships and paints by slug.
+- `scunpacked/reader.go` — Parses paint_*.json files from scunpacked-data repo.
+- `scunpacked/sync.go` — Matches paints to vehicles by tag, UPSERTs to DB.
 - `scwiki/client.go` — SC Wiki API client with rate limiting.
 - `scwiki/sync.go` — SC Wiki sync logic: manufacturers, vehicles (specs, dimensions, pricing, status), loaners.
 - `scwiki/models.go` — SC Wiki API response types.
@@ -36,8 +38,9 @@ A Star Citizen fleet management app that tracks ships, insurance, pledge data, a
 
 ### Data Sources
 1. **SC Wiki API** (primary) — All ship data: specs, dimensions, pricing, production status, descriptions, manufacturers, loaners. Synced nightly and on startup.
-2. **FleetYards API** (images only) — Store images for ships. Synced after SC Wiki so vehicles exist first.
-3. **HangarXplor JSON** (user fleet) — Browser extension export. Insurance/pledge data (LTI, warbond, pledge cost/date). Only source for user fleet data.
+2. **FleetYards API** (images only) — Store images for ships and paints. Synced after SC Wiki so vehicles exist first.
+3. **scunpacked-data** (paint metadata) — Local JSON files from `scunpacked-data` repo. Paint names, descriptions, ship compatibility tags. Synced after images.
+4. **HangarXplor JSON** (user fleet) — Browser extension export. Insurance/pledge data (LTI, warbond, pledge cost/date). Only source for user fleet data.
 
 ### Ship Matching (slug generation)
 HangarXplor ship_codes like `MISC_Hull_D` get converted to slugs for matching against the vehicle reference DB:
@@ -50,7 +53,8 @@ HangarXplor ship_codes like `MISC_Hull_D` get converted to slugs for matching ag
 - **Clean slate import**: HangarXplor import does DELETE all user_fleet + INSERT. No merging.
 - **No UNIQUE constraint on user_fleet**: Users can own multiples of the same ship (e.g., two PTVs).
 - **SC Wiki is primary data source**: All ship specs, dimensions, pricing, status, descriptions come from SC Wiki API.
-- **FleetYards is images only**: Retained solely for store images. All non-image FleetYards code removed.
+- **FleetYards is images only**: Retained solely for store images (ships + paints). All non-image FleetYards code removed.
+- **Paint sync pipeline**: scunpacked-data provides metadata (names, descriptions, ship tags), FleetYards provides paint images. UPSERT uses COALESCE so neither source overwrites the other.
 - **Insurance is typed**: `insurance_types` lookup table with duration_months (LTI, 120-month, 6-month, etc.)
 - **user_fleet join table**: Links users to vehicle reference data. Insurance, pledge data, custom names live here.
 - **Gap analysis uses contains matching**: Focus strings like "Prospecting / Mining" match gap terms like "mining" via `strings.Contains`.
@@ -72,6 +76,7 @@ go mod tidy && CGO_ENABLED=1 go build -o fleet-manager ./cmd/server
 - `SC_WIKI_ENABLED` (default: true)
 - `SC_WIKI_RATE_LIMIT` (default: 1.0 req/s)
 - `SC_WIKI_BURST` (default: 5)
+- `SCUNPACKED_DATA_PATH` (default: "" — disabled when empty, set to path of scunpacked-data repo)
 - `SYNC_SCHEDULE` (default: "0 3 * * *")
 - `SYNC_ON_STARTUP` (default: true)
 - `STATIC_DIR` (default: ./frontend/dist)

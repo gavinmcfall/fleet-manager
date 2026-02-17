@@ -28,6 +28,9 @@ type Config struct {
 	SyncSchedule  string // cron expression
 	SyncOnStartup bool
 
+	// scunpacked-data (paint metadata)
+	ScunpackedDataPath string
+
 	// Frontend
 	StaticDir string
 }
@@ -45,7 +48,8 @@ func Load() *Config {
 		SCWikiBurst:       getEnvInt("SC_WIKI_BURST", 5),
 		SyncSchedule:      getEnv("SYNC_SCHEDULE", "0 3 * * *"), // 3am daily
 		SyncOnStartup:     getEnvBool("SYNC_ON_STARTUP", true),
-		StaticDir:         getEnv("STATIC_DIR", "./frontend/dist"),
+		ScunpackedDataPath: getEnv("SCUNPACKED_DATA_PATH", ""),
+		StaticDir:          getEnv("STATIC_DIR", "./frontend/dist"),
 	}
 }
 

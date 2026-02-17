@@ -50,13 +50,16 @@ func (db *DB) migrate() error {
 		}
 	}
 
-	// Step 3: Seed lookup tables
+	// Step 3: Add columns to existing tables (idempotent)
+	db.migratePaintsAddColumns()
+
+	// Step 4: Seed lookup tables
 	db.seedLookupTables()
 
-	// Step 4: Create default user if none exists
+	// Step 5: Create default user if none exists
 	db.ensureDefaultUser()
 
-	// Step 5: Drop legacy tables (data has been migrated to default user)
+	// Step 6: Drop legacy tables (data has been migrated to default user)
 	db.dropOldTables()
 
 	log.Info().Msg("migrations complete")
@@ -373,8 +376,13 @@ func (db *DB) migrationPaints() string {
 		uuid TEXT UNIQUE,
 		name TEXT NOT NULL,
 		slug TEXT,
+		class_name TEXT UNIQUE,
 		vehicle_id INTEGER REFERENCES vehicles(id),
+		description TEXT,
 		image_url TEXT,
+		image_url_small TEXT,
+		image_url_medium TEXT,
+		image_url_large TEXT,
 		raw_data TEXT,
 		created_at %s DEFAULT CURRENT_TIMESTAMP,
 		updated_at %s DEFAULT CURRENT_TIMESTAMP
@@ -491,6 +499,21 @@ func (db *DB) migrationAppSettings() string {
 	)`
 }
 
+// migratePaintsAddColumns adds new columns to the paints table for existing databases.
+// Safe to re-run — silently ignores errors if columns already exist.
+func (db *DB) migratePaintsAddColumns() {
+	alters := []string{
+		"ALTER TABLE paints ADD COLUMN class_name TEXT UNIQUE",
+		"ALTER TABLE paints ADD COLUMN description TEXT",
+		"ALTER TABLE paints ADD COLUMN image_url_small TEXT",
+		"ALTER TABLE paints ADD COLUMN image_url_medium TEXT",
+		"ALTER TABLE paints ADD COLUMN image_url_large TEXT",
+	}
+	for _, q := range alters {
+		db.conn.Exec(q)
+	}
+}
+
 // --- Seed Data ---
 
 func (db *DB) seedLookupTables() {
@@ -539,6 +562,7 @@ func (db *DB) seedLookupTables() {
 		{1, "scwiki", "SC Wiki API"},
 		{2, "fleetyards", "FleetYards (Images Only)"},
 		{3, "hangarxplor", "HangarXplor"},
+		{4, "scunpacked", "scunpacked-data (Paints)"},
 	}
 	ssQuery := db.prepareQuery(db.insertIgnore("sync_sources", "id, key, label", "id", 3))
 	for _, ss := range syncSources {

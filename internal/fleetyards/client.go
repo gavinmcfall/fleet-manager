@@ -109,6 +109,60 @@ func (c *Client) FetchAllShipImages(ctx context.Context) ([]ShipImages, error) {
 	return allImages, nil
 }
 
+// PaintImages holds the name, slug, and image URLs for a single paint
+type PaintImages struct {
+	Name           string
+	Slug           string
+	ImageURL       string
+	ImageURLSmall  string
+	ImageURLMedium string
+	ImageURLLarge  string
+}
+
+type apiPaint struct {
+	Name  string    `json:"name"`
+	Slug  string    `json:"slug"`
+	Media *apiMedia `json:"media"`
+}
+
+// FetchPaintImages retrieves paint images for a specific vehicle from FleetYards.
+func (c *Client) FetchPaintImages(ctx context.Context, vehicleSlug string) ([]PaintImages, error) {
+	url := fmt.Sprintf("%s/v1/models/%s/paints", c.baseURL, vehicleSlug)
+	log.Debug().Str("url", url).Str("vehicle", vehicleSlug).Msg("fetching paint images")
+
+	body, err := c.doGet(ctx, url)
+	if err != nil {
+		return nil, fmt.Errorf("fetching paints for %s: %w", vehicleSlug, err)
+	}
+
+	var apiPaints []apiPaint
+	if err := json.Unmarshal(body, &apiPaints); err != nil {
+		return nil, fmt.Errorf("parsing paints for %s: %w", vehicleSlug, err)
+	}
+
+	var paints []PaintImages
+	for _, ap := range apiPaints {
+		if ap.Media == nil || ap.Media.StoreImage == nil {
+			continue
+		}
+		img := ap.Media.StoreImage
+		if img.Source == "" && img.Small == "" && img.Medium == "" && img.Large == "" {
+			continue
+		}
+		paints = append(paints, PaintImages{
+			Name:           ap.Name,
+			Slug:           ap.Slug,
+			ImageURL:       img.Source,
+			ImageURLSmall:  img.Small,
+			ImageURLMedium: img.Medium,
+			ImageURLLarge:  img.Large,
+		})
+	}
+
+	log.Debug().Str("vehicle", vehicleSlug).Int("paints", len(paints)).Msg("fetched paint images")
+	return paints, nil
+}
+
 // --- HTTP helpers ---
 
 func (c *Client) doGet(ctx context.Context, url string) ([]byte, error) {

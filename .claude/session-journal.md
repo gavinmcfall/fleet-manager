@@ -4,9 +4,35 @@ This file maintains running context across compactions.
 
 ## Current Focus
 
-**FleetYards → SC Wiki migration — COMPLETE.** FleetYards gutted to image-only sync. Code review findings all fixed.
+**Paint sync pipeline — COMPLETE.** scunpacked-data paint metadata + FleetYards paint images fully implemented and synced.
 
 ## Recent Changes
+
+### Paint Sync Pipeline (2026-02-17)
+
+**Implementation:**
+- Created `internal/scunpacked/reader.go` — parses 988 paint JSON files from scunpacked-data, filters placeholders/non-ship paints, generates readable names from className when empty
+- Created `internal/scunpacked/sync.go` — resolves vehicle_id from paint tags (exact slug → prefix LIKE → name CONTAINS), UPSERT with COALESCE to preserve images
+- Extended `internal/fleetyards/client.go` — `FetchPaintImages()` for `/v1/models/{slug}/paints` endpoint
+- Extended `internal/database/database.go` — 7 paint CRUD operations (UpsertPaint, UpdatePaintImages, GetAllPaints, GetPaintsForVehicle, GetPaintCount, GetVehicleSlugsWithPaints, GetPaintsByVehicleSlug)
+- Extended `internal/database/migrations.go` — paints table columns (class_name UNIQUE, description, image_url_small/medium/large), scunpacked sync source seed
+- Extended `internal/models/models.go` — Paint struct with ClassName, Description, 3 image size variants, joined vehicle fields
+- Extended `internal/sync/scheduler.go` — `SyncPaints()` method: scunpacked metadata → FY paint images, name matching with normalization
+- Extended `internal/api/router.go` — `GET /api/paints`, `GET /api/paints/ship/{slug}`, `POST /api/sync/paints`, paint count in status
+- Extended `internal/config/config.go` — `SCUNPACKED_DATA_PATH` env var
+- Updated `CLAUDE.md` — documented scunpacked package, paint sync pipeline, new env var
+
+**Sync Results (fresh DB):**
+- 796 paints parsed from 988 files (192 filtered: placeholders + non-ship)
+- 753 matched to vehicles (94.6%) — 43 unmatched due to tag/slug mismatches
+- 554 with images from FleetYards (69.6%) — FY doesn't have all paints
+- 184/267 vehicles with images (68.9%) — same FY coverage limitation
+- 561 paint images synced from FleetYards paint endpoints
+
+**Gaps documented in review files:**
+- `data/review-unmatched-paints.txt` — 43 paints: 890 Jump (3), Hornet Mk II variants (13), Mercury Star Runner (11), Ares Star Fighter (15)
+- `data/review-paints-no-images.txt` — 242 paints without FY images
+- `data/review-vehicles-no-images.txt` — 83 vehicles without FY images (mostly Wikelo specials, PYAM Execs, slug mismatches)
 
 ### FleetYards → SC Wiki Migration + Code Review (2026-02-17)
 
@@ -91,4 +117,8 @@ This file maintains running context across compactions.
 
 ---
 **Last compacted:** 2026-02-17 07:58:37
+
+
+---
+**Session compacted at:** 2026-02-17 11:51:50
 
