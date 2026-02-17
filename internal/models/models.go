@@ -218,25 +218,27 @@ type FPSUtility struct {
 	UpdatedAt      time.Time `json:"updated_at"`
 }
 
-type Paint struct {
-	ID             int       `json:"id"`
-	UUID           string    `json:"uuid,omitempty"`
-	Name           string    `json:"name"`
-	Slug           string    `json:"slug,omitempty"`
-	ClassName      string    `json:"class_name,omitempty"`
-	VehicleID      *int      `json:"vehicle_id,omitempty"`
-	Description    string    `json:"description,omitempty"`
-	ImageURL       string    `json:"image_url,omitempty"`
-	ImageURLSmall  string    `json:"image_url_small,omitempty"`
-	ImageURLMedium string    `json:"image_url_medium,omitempty"`
-	ImageURLLarge  string    `json:"image_url_large,omitempty"`
-	RawData        string    `json:"-"`
-	CreatedAt      time.Time `json:"created_at"`
-	UpdatedAt      time.Time `json:"updated_at"`
+type PaintVehicle struct {
+	ID   int    `json:"id"`
+	Name string `json:"name"`
+	Slug string `json:"slug"`
+}
 
-	// Joined fields (not stored, populated via query)
-	VehicleName string `json:"vehicle_name,omitempty"`
-	VehicleSlug string `json:"vehicle_slug,omitempty"`
+type Paint struct {
+	ID             int            `json:"id"`
+	UUID           string         `json:"uuid,omitempty"`
+	Name           string         `json:"name"`
+	Slug           string         `json:"slug,omitempty"`
+	ClassName      string         `json:"class_name,omitempty"`
+	Description    string         `json:"description,omitempty"`
+	ImageURL       string         `json:"image_url,omitempty"`
+	ImageURLSmall  string         `json:"image_url_small,omitempty"`
+	ImageURLMedium string         `json:"image_url_medium,omitempty"`
+	ImageURLLarge  string         `json:"image_url_large,omitempty"`
+	RawData        string         `json:"-"`
+	CreatedAt      time.Time      `json:"created_at"`
+	UpdatedAt      time.Time      `json:"updated_at"`
+	Vehicles       []PaintVehicle `json:"vehicles"`
 }
 
 type VehicleLoaner struct {

@@ -736,17 +736,17 @@ func (db *DB) UpsertPort(ctx context.Context, p *models.Port) error {
 
 // UpsertPaint inserts or updates a paint by class_name.
 // Uses COALESCE so scunpacked metadata and FleetYards images don't overwrite each other.
+// Returns the paint ID (handles SQLite's LastInsertId returning 0 on conflict-update).
 func (db *DB) UpsertPaint(ctx context.Context, p *models.Paint) (int, error) {
 	query := fmt.Sprintf(`
-		INSERT INTO paints (uuid, name, slug, class_name, vehicle_id, description,
+		INSERT INTO paints (uuid, name, slug, class_name, description,
 			image_url, image_url_small, image_url_medium, image_url_large, raw_data, updated_at)
-		VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, %s)
+		VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, %s)
 		%s`,
 		db.now(),
 		db.onConflictUpdate("class_name", `
 			name=excluded.name,
 			slug=COALESCE(excluded.slug, paints.slug),
-			vehicle_id=COALESCE(excluded.vehicle_id, paints.vehicle_id),
 			description=COALESCE(excluded.description, paints.description),
 			image_url=COALESCE(excluded.image_url, paints.image_url),
 			image_url_small=COALESCE(excluded.image_url_small, paints.image_url_small),
@@ -759,7 +759,7 @@ func (db *DB) UpsertPaint(ctx context.Context, p *models.Paint) (int, error) {
 
 	args := []interface{}{
 		nullableStr(p.UUID), p.Name, nullableStr(p.Slug), nullableStr(p.ClassName),
-		p.VehicleID, nullableStr(p.Description),
+		nullableStr(p.Description),
 		nullableStr(p.ImageURL), nullableStr(p.ImageURLSmall),
 		nullableStr(p.ImageURLMedium), nullableStr(p.ImageURLLarge),
 		nullableStr(p.RawData),
@@ -777,7 +777,76 @@ func (db *DB) UpsertPaint(ctx context.Context, p *models.Paint) (int, error) {
 		return 0, err
 	}
 	id, _ := res.LastInsertId()
+	if id == 0 && p.ClassName != "" {
+		// SQLite returns 0 on upsert-that-updates; fall back to SELECT
+		fallback := db.prepareQuery("SELECT id FROM paints WHERE class_name = ?")
+		db.conn.QueryRowContext(ctx, fallback, p.ClassName).Scan(&id)
+	}
 	return int(id), nil
+}
+
+// SetPaintVehicles replaces the vehicle associations for a paint.
+func (db *DB) SetPaintVehicles(ctx context.Context, paintID int, vehicleIDs []int) error {
+	delQuery := db.prepareQuery("DELETE FROM paint_vehicles WHERE paint_id = ?")
+	if _, err := db.conn.ExecContext(ctx, delQuery, paintID); err != nil {
+		return fmt.Errorf("deleting old paint vehicles: %w", err)
+	}
+
+	insQuery := "INSERT OR IGNORE INTO paint_vehicles (paint_id, vehicle_id) VALUES (?, ?)"
+	if db.driver == "postgres" {
+		insQuery = "INSERT INTO paint_vehicles (paint_id, vehicle_id) VALUES ($1, $2) ON CONFLICT DO NOTHING"
+	}
+
+	for _, vid := range vehicleIDs {
+		if _, err := db.conn.ExecContext(ctx, insQuery, paintID, vid); err != nil {
+			return fmt.Errorf("inserting paint_vehicle (%d, %d): %w", paintID, vid, err)
+		}
+	}
+	return nil
+}
+
+// FindVehicleIDsBySlugLike returns all vehicle IDs matching a LIKE pattern.
+func (db *DB) FindVehicleIDsBySlugLike(ctx context.Context, pattern string) ([]int, error) {
+	query := db.prepareQuery("SELECT id FROM vehicles WHERE slug LIKE ?")
+	rows, err := db.conn.QueryContext(ctx, query, pattern)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var ids []int
+	for rows.Next() {
+		var id int
+		if err := rows.Scan(&id); err != nil {
+			return nil, err
+		}
+		ids = append(ids, id)
+	}
+	return ids, rows.Err()
+}
+
+// FindVehicleIDsBySlugPrefix returns all vehicle IDs where slug starts with prefix.
+func (db *DB) FindVehicleIDsBySlugPrefix(ctx context.Context, prefix string) ([]int, error) {
+	return db.FindVehicleIDsBySlugLike(ctx, prefix+"%")
+}
+
+// FindVehicleIDsByNameContains returns all vehicle IDs where name contains the term (case-insensitive).
+func (db *DB) FindVehicleIDsByNameContains(ctx context.Context, term string) ([]int, error) {
+	query := db.prepareQuery("SELECT id FROM vehicles WHERE LOWER(name) LIKE ?")
+	pattern := "%" + strings.ToLower(term) + "%"
+	rows, err := db.conn.QueryContext(ctx, query, pattern)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var ids []int
+	for rows.Next() {
+		var id int
+		if err := rows.Scan(&id); err != nil {
+			return nil, err
+		}
+		ids = append(ids, id)
+	}
+	return ids, rows.Err()
 }
 
 // UpdatePaintImages updates only image columns for a paint by class_name.
@@ -790,15 +859,14 @@ func (db *DB) UpdatePaintImages(ctx context.Context, className, imageURL, small,
 	return err
 }
 
-// GetAllPaints returns all paints with joined vehicle info.
+// GetAllPaints returns all paints with associated vehicles via paint_vehicles junction table.
 func (db *DB) GetAllPaints(ctx context.Context) ([]models.Paint, error) {
+	// Query 1: all paints
 	rows, err := db.conn.QueryContext(ctx, `
-		SELECT p.id, p.uuid, p.name, p.slug, p.class_name, p.vehicle_id,
+		SELECT p.id, p.uuid, p.name, p.slug, p.class_name,
 			p.description, p.image_url, p.image_url_small, p.image_url_medium, p.image_url_large,
-			p.created_at, p.updated_at,
-			v.name, v.slug
+			p.created_at, p.updated_at
 		FROM paints p
-		LEFT JOIN vehicles v ON v.id = p.vehicle_id
 		ORDER BY p.name`)
 	if err != nil {
 		return nil, err
@@ -810,13 +878,10 @@ func (db *DB) GetAllPaints(ctx context.Context) ([]models.Paint, error) {
 		var p models.Paint
 		var uuid, slug, className, description sql.NullString
 		var imageURL, imageURLSmall, imageURLMedium, imageURLLarge sql.NullString
-		var vehicleID sql.NullInt64
-		var vName, vSlug sql.NullString
 
-		err := rows.Scan(&p.ID, &uuid, &p.Name, &slug, &className, &vehicleID,
+		err := rows.Scan(&p.ID, &uuid, &p.Name, &slug, &className,
 			&description, &imageURL, &imageURLSmall, &imageURLMedium, &imageURLLarge,
-			&p.CreatedAt, &p.UpdatedAt,
-			&vName, &vSlug)
+			&p.CreatedAt, &p.UpdatedAt)
 		if err != nil {
 			return nil, err
 		}
@@ -829,28 +894,58 @@ func (db *DB) GetAllPaints(ctx context.Context) ([]models.Paint, error) {
 		p.ImageURLSmall = imageURLSmall.String
 		p.ImageURLMedium = imageURLMedium.String
 		p.ImageURLLarge = imageURLLarge.String
-		if vehicleID.Valid {
-			id := int(vehicleID.Int64)
-			p.VehicleID = &id
-		}
-		p.VehicleName = vName.String
-		p.VehicleSlug = vSlug.String
+		p.Vehicles = []models.PaintVehicle{}
 
 		paints = append(paints, p)
 	}
-	return paints, rows.Err()
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+
+	// Build index map after slice is fully built (pointers are stable now)
+	paintIdx := make(map[int]int, len(paints))
+	for i := range paints {
+		paintIdx[paints[i].ID] = i
+	}
+
+	// Query 2: all paint-vehicle associations
+	vRows, err := db.conn.QueryContext(ctx, `
+		SELECT pv.paint_id, v.id, v.name, v.slug
+		FROM paint_vehicles pv
+		JOIN vehicles v ON v.id = pv.vehicle_id
+		ORDER BY pv.paint_id, v.name`)
+	if err != nil {
+		return nil, err
+	}
+	defer vRows.Close()
+
+	for vRows.Next() {
+		var paintID, vID int
+		var vName, vSlug string
+		if err := vRows.Scan(&paintID, &vID, &vName, &vSlug); err != nil {
+			return nil, err
+		}
+		if idx, ok := paintIdx[paintID]; ok {
+			paints[idx].Vehicles = append(paints[idx].Vehicles, models.PaintVehicle{ID: vID, Name: vName, Slug: vSlug})
+		}
+	}
+	return paints, vRows.Err()
 }
 
-// GetPaintsForVehicle returns paints for a specific vehicle by slug.
+// GetPaintsForVehicle returns paints associated with a vehicle by slug.
+// Each paint includes ALL its vehicle associations (not just the queried one).
 func (db *DB) GetPaintsForVehicle(ctx context.Context, vehicleSlug string) ([]models.Paint, error) {
+	// Query 1: paints that have an association with the target vehicle
 	query := db.prepareQuery(`
-		SELECT p.id, p.uuid, p.name, p.slug, p.class_name, p.vehicle_id,
+		SELECT p.id, p.uuid, p.name, p.slug, p.class_name,
 			p.description, p.image_url, p.image_url_small, p.image_url_medium, p.image_url_large,
-			p.created_at, p.updated_at,
-			v.name, v.slug
+			p.created_at, p.updated_at
 		FROM paints p
-		JOIN vehicles v ON v.id = p.vehicle_id
-		WHERE v.slug = ?
+		WHERE p.id IN (
+			SELECT pv.paint_id FROM paint_vehicles pv
+			JOIN vehicles v ON v.id = pv.vehicle_id
+			WHERE v.slug = ?
+		)
 		ORDER BY p.name`)
 
 	rows, err := db.conn.QueryContext(ctx, query, vehicleSlug)
@@ -860,17 +955,15 @@ func (db *DB) GetPaintsForVehicle(ctx context.Context, vehicleSlug string) ([]mo
 	defer rows.Close()
 
 	var paints []models.Paint
+	var paintIDs []int
 	for rows.Next() {
 		var p models.Paint
 		var uuid, slug, className, description sql.NullString
 		var imageURL, imageURLSmall, imageURLMedium, imageURLLarge sql.NullString
-		var vehicleID sql.NullInt64
-		var vName, vSlug sql.NullString
 
-		err := rows.Scan(&p.ID, &uuid, &p.Name, &slug, &className, &vehicleID,
+		err := rows.Scan(&p.ID, &uuid, &p.Name, &slug, &className,
 			&description, &imageURL, &imageURLSmall, &imageURLMedium, &imageURLLarge,
-			&p.CreatedAt, &p.UpdatedAt,
-			&vName, &vSlug)
+			&p.CreatedAt, &p.UpdatedAt)
 		if err != nil {
 			return nil, err
 		}
@@ -883,16 +976,57 @@ func (db *DB) GetPaintsForVehicle(ctx context.Context, vehicleSlug string) ([]mo
 		p.ImageURLSmall = imageURLSmall.String
 		p.ImageURLMedium = imageURLMedium.String
 		p.ImageURLLarge = imageURLLarge.String
-		if vehicleID.Valid {
-			id := int(vehicleID.Int64)
-			p.VehicleID = &id
-		}
-		p.VehicleName = vName.String
-		p.VehicleSlug = vSlug.String
+		p.Vehicles = []models.PaintVehicle{}
 
 		paints = append(paints, p)
+		paintIDs = append(paintIDs, p.ID)
 	}
-	return paints, rows.Err()
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+
+	if len(paintIDs) == 0 {
+		return paints, nil
+	}
+
+	// Build index map after slice is fully built
+	paintIdx := make(map[int]int, len(paints))
+	for i := range paints {
+		paintIdx[paints[i].ID] = i
+	}
+
+	// Query 2: ALL vehicle associations for these paint IDs
+	placeholders := make([]string, len(paintIDs))
+	args := make([]interface{}, len(paintIDs))
+	for i, id := range paintIDs {
+		placeholders[i] = "?"
+		args[i] = id
+	}
+	vQuery := fmt.Sprintf(`
+		SELECT pv.paint_id, v.id, v.name, v.slug
+		FROM paint_vehicles pv
+		JOIN vehicles v ON v.id = pv.vehicle_id
+		WHERE pv.paint_id IN (%s)
+		ORDER BY pv.paint_id, v.name`, strings.Join(placeholders, ","))
+	vQuery = db.prepareQuery(vQuery)
+
+	vRows, err := db.conn.QueryContext(ctx, vQuery, args...)
+	if err != nil {
+		return nil, err
+	}
+	defer vRows.Close()
+
+	for vRows.Next() {
+		var paintID, vID int
+		var vName, vSlug string
+		if err := vRows.Scan(&paintID, &vID, &vName, &vSlug); err != nil {
+			return nil, err
+		}
+		if idx, ok := paintIdx[paintID]; ok {
+			paints[idx].Vehicles = append(paints[idx].Vehicles, models.PaintVehicle{ID: vID, Name: vName, Slug: vSlug})
+		}
+	}
+	return paints, vRows.Err()
 }
 
 // GetPaintCount returns the total number of paints.
@@ -906,9 +1040,8 @@ func (db *DB) GetPaintCount(ctx context.Context) (int, error) {
 func (db *DB) GetVehicleSlugsWithPaints(ctx context.Context) ([]string, error) {
 	rows, err := db.conn.QueryContext(ctx, `
 		SELECT DISTINCT v.slug
-		FROM paints p
-		JOIN vehicles v ON v.id = p.vehicle_id
-		WHERE p.vehicle_id IS NOT NULL
+		FROM paint_vehicles pv
+		JOIN vehicles v ON v.id = pv.vehicle_id
 		ORDER BY v.slug`)
 	if err != nil {
 		return nil, err

@@ -31,6 +31,7 @@ func (db *DB) migrate() error {
 		db.migrationFPSAmmo(),
 		db.migrationFPSUtilities(),
 		db.migrationPaints(),
+		db.migrationPaintVehicles(),
 		db.migrationVehicleLoaners(),
 		// User data
 		db.migrationUsers(),
@@ -377,7 +378,6 @@ func (db *DB) migrationPaints() string {
 		name TEXT NOT NULL,
 		slug TEXT,
 		class_name TEXT UNIQUE,
-		vehicle_id INTEGER REFERENCES vehicles(id),
 		description TEXT,
 		image_url TEXT,
 		image_url_small TEXT,
@@ -387,6 +387,14 @@ func (db *DB) migrationPaints() string {
 		created_at %s DEFAULT CURRENT_TIMESTAMP,
 		updated_at %s DEFAULT CURRENT_TIMESTAMP
 	)`, db.autoIncrement(), ts, ts)
+}
+
+func (db *DB) migrationPaintVehicles() string {
+	return `CREATE TABLE IF NOT EXISTS paint_vehicles (
+		paint_id INTEGER NOT NULL REFERENCES paints(id),
+		vehicle_id INTEGER NOT NULL REFERENCES vehicles(id),
+		PRIMARY KEY (paint_id, vehicle_id)
+	)`
 }
 
 func (db *DB) migrationVehicleLoaners() string {
@@ -499,20 +507,9 @@ func (db *DB) migrationAppSettings() string {
 	)`
 }
 
-// migratePaintsAddColumns adds new columns to the paints table for existing databases.
-// Safe to re-run — silently ignores errors if columns already exist.
-func (db *DB) migratePaintsAddColumns() {
-	alters := []string{
-		"ALTER TABLE paints ADD COLUMN class_name TEXT UNIQUE",
-		"ALTER TABLE paints ADD COLUMN description TEXT",
-		"ALTER TABLE paints ADD COLUMN image_url_small TEXT",
-		"ALTER TABLE paints ADD COLUMN image_url_medium TEXT",
-		"ALTER TABLE paints ADD COLUMN image_url_large TEXT",
-	}
-	for _, q := range alters {
-		db.conn.Exec(q)
-	}
-}
+// migratePaintsAddColumns is a no-op — all columns are now in the base CREATE TABLE.
+// Retained for call-site compatibility.
+func (db *DB) migratePaintsAddColumns() {}
 
 // --- Seed Data ---
 
