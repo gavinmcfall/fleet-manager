@@ -22,6 +22,7 @@ type Scheduler struct {
 	client     *fleetyards.Client
 	scwiki     *scwiki.Syncer
 	scunpacked *scunpacked.Syncer
+	rsiAPI     *rsi.Syncer
 	cfg        *config.Config
 	cron       *cron.Cron
 }
@@ -43,11 +44,19 @@ func NewScheduler(db *database.DB, client *fleetyards.Client, cfg *config.Config
 		log.Info().Str("path", cfg.ScunpackedDataPath).Msg("scunpacked paint sync enabled")
 	}
 
+	var rsiAPISyncer *rsi.Syncer
+	if cfg.RSIAPIEnabled {
+		rsiClient := rsi.NewClient(cfg.RSIRateLimit, cfg.RSIBaseURL)
+		rsiAPISyncer = rsi.NewSyncer(rsiClient, db)
+		log.Info().Msg("RSI API image sync enabled")
+	}
+
 	return &Scheduler{
 		db:         db,
 		client:     client,
 		scwiki:     scwikiSyncer,
 		scunpacked: scunpackedSyncer,
+		rsiAPI:     rsiAPISyncer,
 		cfg:        cfg,
 		cron:       cron.New(),
 	}
@@ -76,6 +85,14 @@ func (s *Scheduler) Start() error {
 			log.Info().Msg("scheduled paint sync starting")
 			if err := s.SyncPaints(ctx); err != nil {
 				log.Error().Err(err).Msg("scheduled paint sync failed")
+			}
+
+			// RSI API sync — overwrites FleetYards with RSI CDN URLs
+			if s.rsiAPI != nil {
+				log.Info().Msg("scheduled RSI API image sync starting")
+				if err := s.SyncRSIAPI(ctx); err != nil {
+					log.Error().Err(err).Msg("scheduled RSI API image sync failed")
+				}
 			}
 		})
 		if err != nil {
@@ -119,9 +136,17 @@ func (s *Scheduler) Start() error {
 					log.Error().Err(err).Msg("startup paint sync failed")
 				}
 
-				// RSI extract image import — runs last, overwrites FleetYards images with RSI CDN
-				if s.cfg.RSIExtractPath != "" {
-					log.Info().Str("path", s.cfg.RSIExtractPath).Msg("running RSI extract image import")
+				// RSI API sync — overwrites FleetYards with RSI CDN URLs
+				if s.rsiAPI != nil {
+					log.Info().Msg("running startup RSI API image sync")
+					if err := s.SyncRSIAPI(ctx); err != nil {
+						log.Error().Err(err).Msg("startup RSI API image sync failed")
+					}
+				}
+
+				// RSI extract image import — static fallback when API not enabled
+				if s.rsiAPI == nil && s.cfg.RSIExtractPath != "" {
+					log.Info().Str("path", s.cfg.RSIExtractPath).Msg("running RSI extract image import (API not enabled, using static fallback)")
 					if err := rsi.ImportImages(ctx, s.db, s.cfg.RSIExtractPath); err != nil {
 						log.Error().Err(err).Msg("RSI extract image import failed")
 					}
@@ -268,6 +293,21 @@ func normalizePaintName(name string) string {
 	n = strings.TrimSuffix(n, " paint")
 	n = strings.TrimSuffix(n, " skin")
 	return n
+}
+
+// SyncRSIAPI fetches ship and paint images from the RSI API.
+func (s *Scheduler) SyncRSIAPI(ctx context.Context) error {
+	if s.rsiAPI == nil {
+		return fmt.Errorf("RSI API sync not enabled (set RSI_API_ENABLED=true)")
+	}
+
+	log.Info().Msg("RSI API image sync starting")
+	if err := s.rsiAPI.SyncAll(ctx); err != nil {
+		return fmt.Errorf("RSI API sync failed: %w", err)
+	}
+
+	log.Info().Msg("RSI API image sync complete")
+	return nil
 }
 
 // SyncSCWiki syncs Star Citizen data from SC Wiki API

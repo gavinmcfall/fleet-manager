@@ -34,6 +34,11 @@ type Config struct {
 	// RSI extract images (one-time seed from pledge store/ship matrix extracts)
 	RSIExtractPath string
 
+	// RSI API (live ship + paint images from RSI CDN)
+	RSIAPIEnabled bool
+	RSIBaseURL    string
+	RSIRateLimit  float64
+
 	// Frontend
 	StaticDir string
 }
@@ -53,6 +58,9 @@ func Load() *Config {
 		SyncOnStartup:     getEnvBool("SYNC_ON_STARTUP", true),
 		ScunpackedDataPath: getEnv("SCUNPACKED_DATA_PATH", ""),
 		RSIExtractPath:     getEnv("RSI_EXTRACT_PATH", ""),
+		RSIAPIEnabled:      getEnvBool("RSI_API_ENABLED", false),
+		RSIBaseURL:         getEnv("RSI_BASE_URL", "https://robertsspaceindustries.com"),
+		RSIRateLimit:       getEnvFloat("RSI_RATE_LIMIT", 1.0),
 		StaticDir:          getEnv("STATIC_DIR", "./frontend/dist"),
 	}
 }

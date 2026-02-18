@@ -14,11 +14,14 @@ A Star Citizen fleet management app that tracks ships, insurance, pledge data, a
 - `api/router.go` — All HTTP handlers and routes. Import logic, settings, debug endpoints.
 - `database/database.go` — SQLite/PostgreSQL data layer. Vehicles, user_fleet, manufacturers, sync_history tables.
 - `database/migrations.go` — Schema definitions. 25 tables including lookup tables and `paint_vehicles` junction.
-- `sync/scheduler.go` — Cron-based sync: SC Wiki (primary data), FleetYards (images only).
+- `sync/scheduler.go` — Cron-based sync: SC Wiki (primary data), FleetYards (images only), RSI API (images).
 - `fleetyards/client.go` — FleetYards API client. Image-only — fetches store images for ships and paints by slug.
 - `scunpacked/reader.go` — Parses paint_*.json files from scunpacked-data repo.
 - `scunpacked/sync.go` — Matches paints to vehicles by tag (many-to-many via `paint_vehicles`), tag alias map for unresolvable abbreviations.
 - `rsi/import.go` — One-time RSI extract image importer. Reads ship matrix + paint catalog JSON extracts, matches to DB vehicles/paints by name, updates image URLs with RSI CDN links.
+- `rsi/client.go` — RSI GraphQL client with rate limiting and 429 retry. No auth needed.
+- `rsi/sync.go` — RSI API syncer: ships and paints from public GraphQL API with pagination.
+- `rsi/parser.go` — Parses RSI GraphQL browse response (shared shape for ships and paints).
 - `scwiki/client.go` — SC Wiki API client with rate limiting.
 - `scwiki/sync.go` — SC Wiki sync logic: manufacturers, vehicles (specs, dimensions, pricing, status), loaners.
 - `scwiki/models.go` — SC Wiki API response types.
@@ -41,8 +44,9 @@ A Star Citizen fleet management app that tracks ships, insurance, pledge data, a
 1. **SC Wiki API** (primary) — All ship data: specs, dimensions, pricing, production status, descriptions, manufacturers, loaners. Synced nightly and on startup.
 2. **FleetYards API** (images only) — Store images for ships and paints. Synced after SC Wiki so vehicles exist first.
 3. **scunpacked-data** (paint metadata) — Local JSON files from `scunpacked-data` repo. Paint names, descriptions, ship compatibility tags. Synced after images.
-4. **RSI extract images** (one-time seed) — JSON extracts from RSI pledge store/ship matrix. Provides RSI CDN ship images (media.robertsspaceindustries.com) with multiple size variants. Runs after FleetYards sync, overwrites with higher-quality RSI CDN URLs. Also supplements paint images for paints without FleetYards coverage.
-5. **HangarXplor JSON** (user fleet) — Browser extension export. Insurance/pledge data (LTI, warbond, pledge cost/date). Only source for user fleet data.
+4. **RSI API** (live images) — Ship and paint images from public GraphQL API at `/graphql` (no auth needed). Synced after paint sync, overwrites FleetYards with RSI CDN URLs. Opt-in via `RSI_API_ENABLED=true`.
+5. **RSI extract images** (static fallback) — JSON extracts from RSI pledge store/ship matrix. Only runs when RSI API is not enabled. Provides RSI CDN ship images with multiple size variants.
+6. **HangarXplor JSON** (user fleet) — Browser extension export. Insurance/pledge data (LTI, warbond, pledge cost/date). Only source for user fleet data.
 
 ### Ship Matching (slug generation)
 HangarXplor ship_codes like `MISC_Hull_D` get converted to slugs for matching against the vehicle reference DB:
@@ -83,6 +87,9 @@ go mod tidy && CGO_ENABLED=1 go build -o fleet-manager ./cmd/server
 - `SYNC_SCHEDULE` (default: "0 3 * * *")
 - `SYNC_ON_STARTUP` (default: true)
 - `RSI_EXTRACT_PATH` (default: "" — disabled when empty, set to directory containing ships.json and paints.json RSI extracts)
+- `RSI_API_ENABLED` (default: false — opt-in, enable to fetch live images from RSI GraphQL API)
+- `RSI_BASE_URL` (default: https://robertsspaceindustries.com)
+- `RSI_RATE_LIMIT` (default: 1.0 req/s)
 - `STATIC_DIR` (default: ./frontend/dist)
 
 ## Debug Endpoint

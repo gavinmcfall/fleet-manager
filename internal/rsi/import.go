@@ -379,21 +379,36 @@ func importPaintImages(ctx context.Context, db *database.DB, filePath string) (i
 }
 
 // findPaintMatch finds a DB paint matching the RSI normalized name.
-// Tries exact match first, then substring (RSI name contained in DB name).
+// Tries exact match, then prefix match, then year-stripped match.
 func findPaintMatch(norm string, exact map[string]*paintInfo, all []*paintInfo) *paintInfo {
 	// 1. Exact match
 	if info, ok := exact[norm]; ok {
 		return info
 	}
 
-	// 2. Substring: RSI name is prefix of DB name (e.g., "eclipse ambush" in "eclipse ambush camo")
+	// 2. Prefix: RSI name is prefix of DB name (e.g., "eclipse ambush" in "eclipse ambush camo")
 	for _, info := range all {
 		if strings.HasPrefix(info.norm, norm) {
 			return info
 		}
 	}
 
+	// 3. Year-stripped match: DB names include years (e.g., "400i 2954 auspicious red dog")
+	// that the RSI API omits (e.g., "400i auspicious red dog")
+	normNoYear := stripYears(norm)
+	for _, info := range all {
+		if stripYears(info.norm) == normNoYear {
+			return info
+		}
+	}
+
 	return nil
+}
+
+// stripYears removes 4-digit year numbers from a paint name and collapses spaces.
+func stripYears(s string) string {
+	result := yearRegex.ReplaceAllString(s, "")
+	return strings.Join(strings.Fields(result), " ")
 }
 
 // buildPaintFullName converts an RSI item_name to the DB paint name format.
@@ -409,11 +424,33 @@ func buildPaintFullName(itemName string) string {
 	return ship + " " + paint
 }
 
-// normalizePaintName strips common suffixes and lowercases for comparison.
+// yearRegex matches 4-digit years (e.g., "2949", "2954") in paint names.
+var yearRegex = regexp.MustCompile(`\b\d{4}\b`)
+
+// paintNameFixes maps common RSI misspellings to DB spellings.
+var paintNameFixes = strings.NewReplacer(
+	"bushwacker", "bushwhacker",
+)
+
+// normalizePaintName strips common suffixes, lowercases, and normalizes unicode for comparison.
 func normalizePaintName(name string) string {
 	n := strings.ToLower(strings.TrimSpace(name))
 	n = strings.TrimSuffix(n, " paint")
 	n = strings.TrimSuffix(n, " livery")
 	n = strings.TrimSuffix(n, " skin")
+	// Normalize unicode diacritics (RSI uses ā/ē but DB uses plain ASCII)
+	// and curly apostrophes (RSI uses ' U+2019 but DB uses ' U+0027)
+	n = strings.NewReplacer(
+		"\u0101", "a", // ā → a
+		"\u0113", "e", // ē → e
+		"\u012b", "i", // ī → i
+		"\u014d", "o", // ō → o
+		"\u016b", "u", // ū → u
+		"\u2019", "'", // ' (right single quote) → '
+		"\u2018", "'", // ' (left single quote) → '
+		"\u02bc", "'", // ʼ (modifier letter apostrophe) → '
+	).Replace(n)
+	// Fix known misspellings
+	n = paintNameFixes.Replace(n)
 	return n
 }
