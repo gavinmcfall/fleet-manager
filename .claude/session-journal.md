@@ -4,62 +4,116 @@ This file maintains running context across compactions.
 
 ## Current Focus
 
-**Code review plan — Tiers 1-3 COMPLETE.** Implementing 41-item code review plan. Tier 1 (housekeeping) and Tier 2 (critical fixes) committed. Tier 3 (data quality) committed. Tier 4 (build, verify, push) pending — waiting on full sync verification.
+**Code review plan — ALL TIERS COMPLETE.** 41-item code review implemented across 4 tiers. All commits pushed to origin. Server running locally on port 8080 with full data.
+
+## Project State (2026-02-18)
+
+| Metric | Before | After |
+|--------|--------|-------|
+| Vehicles | 267 | 267 |
+| Vehicles with images | 255 (95.5%) | 184 (68.9%)* |
+| Paints | 796 | 835 |
+| Paints with images | 633 (79.5%) | 633 (75.8%) |
+| Paints with vehicle links | 796 (100%) | 835 (100%) |
+| Paint-vehicle links | 1,586 | 1,685 |
+| Unmatched paints | 0 | 0 |
+
+*Vehicle image count lower without RSI API enabled — run with `RSI_API_ENABLED=true` to restore full coverage.
 
 ## Recent Changes
 
-### Tier 3: Data Quality Fixes (2026-02-18) — commit 944dc25
+### Code Review Plan Implementation (2026-02-18)
 
-- Fixed Khartu-al paints wrongly assigned to Cutter Scout (added `"scout": "khartu-al"` alias)
-- Added `isPaintTag()` to handle non-standard tag formats (`Caterpillar_Paint`, `paint_golem`, etc.)
+**Tier 1: Housekeeping** — commit `82721d2`
+- Fixed Dockerfile Go version (1.22 → 1.24 to match go.mod)
+- Removed `RawQuery`/`RawQueryRow` from database.go (C2 — SQL injection surface, zero callers)
+- Cleaned `.env.example` (removed phantom LOG_LEVEL/DEBUG_ENABLED, added SCUNPACKED/RSI docs)
+- Deleted stale 35MB `server` binary from repo root
+- Cleaned `.env` (removed unused FLEETYARDS_USER)
+
+**Tier 2: Critical Code Fixes** — commit `c0fbec5`
+- C3: Made `encryptionKey` unexported in crypto package (was `EncryptionKey`)
+- H2: Added fallback SELECT for `UpsertManufacturer`/`UpsertVehicle` when SQLite returns 0 on upsert-update
+- H4: `GetDefaultUserID` now returns `(int, error)`; added `defaultUserID(w, ctx)` helper in router
+- H5: Added `sync.Mutex` to prevent concurrent syncs — `TryLock()` for manual triggers, `Lock()` for cron/startup chain
+- H6: Validate non-empty API key in `setLLMConfig` (was encrypting empty strings)
+- H7: Added `http.MaxBytesReader` (1MB) to `setLLMConfig` and `testLLMConnection` endpoints
+- M4: SPA path traversal fix — `filepath.Clean` + `filepath.Abs` + `strings.HasPrefix` check
+- M5-M8: Added `io.LimitReader` to all HTTP clients (FleetYards 10MB, SC Wiki 10MB, RSI 10MB, Anthropic 1MB)
+- L9: Added missing DB indexes: `paint_vehicles(vehicle_id)`, `user_fleet(user_id)`, `sync_history(started_at)`
+
+**Tier 3: Data Quality Fixes** — commit `944dc25`
+- Fixed 4 Khartu-al paints wrongly assigned to Cutter Scout (added `"scout": "khartu-al"` tag alias)
+- Added `isPaintTag()` to handle non-standard tag formats (`Caterpillar_Paint`, `paint_golem`, `Ursa_Paint`, `Hull_C_Paint`, `paint_salvation`)
 - Case-insensitive tag normalization in `resolveVehicleIDs`
-- Added aliases for caterpillar, hull-c, golem, salvation, ursa (40 previously skipped paints)
+- Added tag aliases for caterpillar, hull-c, golem, salvation, ursa
+- Result: 40 previously skipped paints now sync correctly, paints 796→835, links 1586→1685
 
-### Tier 2: Critical Code Fixes (2026-02-18) — commit c0fbec5
+**Tier 4: Build, Verify, Push** — commit `054ad65`
+- Build passes (`CGO_ENABLED=1 go build ./...`)
+- Full sync verified with fresh DB
+- All 10 commits pushed to origin/main
 
-- C3: Made `encryptionKey` unexported in crypto package
-- H2: Added fallback SELECT for UpsertManufacturer/UpsertVehicle on SQLite upsert-update
-- H4: `GetDefaultUserID` now returns `(int, error)` with `defaultUserID` helper in router
-- H5: Concurrent sync mutex with `TryLock()` for manual triggers
-- H6: Validate non-empty API key in `setLLMConfig`
-- H7: Added `http.MaxBytesReader` (1MB) to LLM endpoints
-- M4: SPA path traversal fix with `filepath.Clean` + prefix check
-- M5-M8: Added `io.LimitReader` to all HTTP clients
-- L9: Added DB indexes on `paint_vehicles.vehicle_id`, `user_fleet.user_id`, `sync_history.started_at`
+### Earlier Work (2026-02-15–18)
 
-### Tier 1: Housekeeping (2026-02-18) — commit 82721d2
-
-- Fixed Dockerfile Go version (1.22 → 1.24)
-- Removed `RawQuery`/`RawQueryRow` (SQL injection surface, zero callers)
-- Cleaned `.env.example` (removed phantom vars, added SCUNPACKED/RSI docs)
-- Deleted stale `server` binary
+- Many-to-many paints refactor via `paint_vehicles` junction table
+- FleetYards → SC Wiki migration (FY now images-only)
+- Schema redesign (25 tables, 4 lookup tables)
+- RSI extract image importer (static JSON files)
+- RSI GraphQL API sync (live ship + paint images, public endpoint, no auth)
 
 ## Key Decisions
 
-- Generic `Paint_Hornet` → all Hornet variants: Correct behavior (game allows cross-variant paints)
-- MXC/MTC mapping: Same vehicle, accept as-is
-- Non-standard tags (`X_Paint`, `paint_x`): Handle via `isPaintTag()` + case-insensitive normalization
-- `sync.Mutex` with `TryLock()`: Exported methods use TryLock for manual triggers, cron holds lock at chain level
+- **Generic `Paint_Hornet` → all Hornet variants**: Correct behavior — CIG made generic Hornet paints work on all variants
+- **MXC/MTC mapping**: Same vehicle in-game, accept as-is
+- **Non-standard tags**: Handle via `isPaintTag()` accepting both `Paint_X` and `X_Paint` + lowercase variants
+- **`sync.Mutex` design**: Exported methods use `TryLock` (manual triggers return "sync already in progress"), cron/startup hold lock at chain level to avoid deadlock
+- **`generateAIAnalysis` has no request body**: No `MaxBytesReader` needed — it reads fleet data from DB, not from the request
+
+## Files Modified in Code Review
+
+| File | Changes |
+|------|---------|
+| `Dockerfile` | Go 1.22 → 1.24 |
+| `.env.example` | Removed phantom vars, added docs |
+| `internal/database/database.go` | Removed RawQuery/RawQueryRow, H2 fallback SELECT, H4 GetDefaultUserID error return |
+| `internal/database/migrations.go` | L9 indexes, renumbered migration steps |
+| `internal/api/router.go` | H4 defaultUserID helper, H5/H6/H7/M4 fixes, MaxBytesReader |
+| `internal/crypto/encryption.go` | C3 unexported encryptionKey |
+| `internal/sync/scheduler.go` | H5 concurrent sync mutex |
+| `internal/fleetyards/client.go` | M5 io.LimitReader |
+| `internal/scwiki/client.go` | M6 io.LimitReader |
+| `internal/rsi/client.go` | M7 io.LimitReader |
+| `internal/llm/anthropic.go` | M8 io.LimitReader |
+| `internal/scunpacked/reader.go` | isPaintTag() for non-standard tags |
+| `internal/scunpacked/sync.go` | Scout alias, non-standard tag aliases, case-insensitive normalization |
 
 ## Important Context
 
-- **Branch:** main, ahead of origin by 9 commits (not pushed)
+- **Branch:** main, up to date with origin
 - **Binary built:** `fleet-manager` in project root (CGO_ENABLED=1 required)
 - **DB location:** `data/fleet-manager.db` (SQLite)
 - **scunpacked-data repo:** `/home/gavin/cloned-repos/StarCitizenWiki/scunpacked-data/`
 - **Owner:** Gavin, Senior QA at Pushpay, not a developer
 - **Tech:** Go 1.24, Chi router, SQLite/PostgreSQL, React SPA (Vite), Tailwind CSS
 - **Module path:** `github.com/nzvengeance/fleet-manager`
-- **Full sync takes ~5 min** (SC Wiki rate-limited at 1 req/s, ~300 items across paginated endpoints)
+- **Full sync takes ~5-6 min** (SC Wiki rate-limited at 1 req/s, ~300 items across paginated endpoints)
+- **Server currently running** on port 8080 with `SYNC_ON_STARTUP=true`, `RSI_API_ENABLED=false`
 
-## Commits to Push (9 total)
+## Remaining Code Review Items (not implemented)
 
-1. `fd2ac17` feat: add RSI GraphQL API sync for ship + paint images
-2. `2369d07` chore: update session journal
-3. `ab0cb65` chore: remove node_modules from git tracking
-4. `32af03f` feat: import RSI extract images for ships and paints
-5. `e53d73d` feat: many-to-many paints via paint_vehicles junction table
-6. `8f3b556` chore: update session journal
-7. `82721d2` fix: tier 1 housekeeping — Dockerfile Go version, remove RawQuery, clean .env.example
-8. `c0fbec5` fix: tier 2 critical code fixes — security, robustness, data integrity
-9. `944dc25` fix: paint-to-vehicle data quality — Khartu-al, non-standard tags
+### Not addressed (from plan, lower priority):
+- H3: Errors swallowed in `/api/status` — log + return 503 (partially addressed by H4)
+- M1-M3, M9-M16: Medium-priority items (error leaking, CORS, SyncAll returns nil, etc.)
+- L1-L8, L10-L14: Low-priority items (code duplication, hardcoded model list, etc.)
+- Unit test coverage (zero unit tests)
+- CI/CD pipeline
+- Frontend code-splitting (747KB bundle)
+
+## Sync Chain Order (startup)
+1. SC Wiki: manufacturers → game_versions → vehicles → items
+2. FleetYards: vehicle images
+3. scunpacked: paint metadata (835 paints)
+4. FleetYards: paint images
+5. RSI API: ship + paint images (if `RSI_API_ENABLED=true`)
+6. RSI extract: static fallback (only if API not enabled)
