@@ -121,7 +121,8 @@ export function analysisRoutes<E extends { Bindings: Env }>() {
     const body = await c.req
       .json<{ model?: string }>()
       .catch(() => ({ model: undefined }));
-    const model = body.model || config.model || "claude-sonnet-4-5-20250929";
+    const defaultModel = c.env.LLM_DEFAULT_MODEL || "claude-sonnet-4-5-20250929";
+    const model = body.model || config.model || defaultModel;
 
     // Get fleet data
     const fleetResult = await db
@@ -150,7 +151,29 @@ export function analysisRoutes<E extends { Bindings: Env }>() {
     }
 
     try {
-      const userPrompt = `Fleet data:\n\n${JSON.stringify(fleet, null, 2)}\n\nProvide a comprehensive fleet analysis.`;
+      // Strip financial/personal data before sending to LLM — only ship characteristics needed
+      const sanitizedFleet = fleet.map((entry) => {
+        const e = entry as Record<string, unknown>;
+        return {
+          vehicle_name: e.vehicle_name,
+          vehicle_slug: e.vehicle_slug,
+          focus: e.focus,
+          size_label: e.size_label,
+          classification: e.classification,
+          cargo: e.cargo,
+          crew_min: e.crew_min,
+          crew_max: e.crew_max,
+          speed_scm: e.speed_scm,
+          pledge_price: e.pledge_price,
+          manufacturer_name: e.manufacturer_name,
+          insurance_label: e.insurance_label,
+          is_lifetime: e.is_lifetime,
+          production_status: e.production_status,
+          warbond: e.warbond,
+          custom_name: e.custom_name,
+        };
+      });
+      const userPrompt = `Fleet data:\n\n${JSON.stringify(sanitizedFleet)}\n\nProvide a comprehensive fleet analysis.`;
 
       const resp = await callAnthropic(apiKey, {
         model,
@@ -280,7 +303,8 @@ async function decryptAPIKey(
   encryptionKey?: string,
 ): Promise<string | null> {
   if (!encryptionKey) {
-    // No encryption key configured — stored in plaintext
+    // No encryption key — key was stored in plaintext (dev mode only; production blocks this at write time)
+    console.warn("[analysis] ENCRYPTION_KEY not set — reading API key as plaintext (dev mode)");
     return encryptedKey;
   }
   try {

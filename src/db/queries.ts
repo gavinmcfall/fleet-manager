@@ -26,7 +26,7 @@ import type {
 // --- Nullable helpers (mirror Go's nullableStr/nullableFloat/nullableInt) ---
 
 function n(val: string | undefined | null): string | null {
-  return val || null;
+  return val ?? null;
 }
 
 function nNum(val: number | undefined | null): number | null {
@@ -41,7 +41,7 @@ export async function upsertManufacturer(
   db: D1Database,
   m: Partial<Manufacturer> & { uuid: string; name: string; slug: string },
 ): Promise<number> {
-  const result = await db
+  await db
     .prepare(
       `INSERT INTO manufacturers (uuid, name, slug, code, known_for, description, logo_url, raw_data, updated_at)
       VALUES (?, ?, ?, ?, ?, ?, ?, ?, datetime('now'))
@@ -54,9 +54,7 @@ export async function upsertManufacturer(
     .bind(m.uuid, m.name, m.slug, n(m.code), n(m.known_for), n(m.description), n(m.logo_url), null)
     .run();
 
-  if (result.meta.last_row_id) return result.meta.last_row_id;
-
-  // Fallback: SELECT on upsert-that-updates
+  // Always SELECT — D1's last_row_id is unreliable on upsert UPDATE path
   const row = await db
     .prepare("SELECT id FROM manufacturers WHERE uuid = ?")
     .bind(m.uuid)
@@ -171,7 +169,7 @@ export async function upsertGameVersion(
   db: D1Database,
   gv: Partial<GameVersion> & { uuid: string; code: string },
 ): Promise<number> {
-  const result = await db
+  await db
     .prepare(
       `INSERT INTO game_versions (uuid, code, channel, is_default, released_at, updated_at)
       VALUES (?, ?, ?, ?, ?, datetime('now'))
@@ -183,8 +181,7 @@ export async function upsertGameVersion(
     .bind(gv.uuid, gv.code, n(gv.channel), gv.is_default ? 1 : 0, n(gv.released_at))
     .run();
 
-  if (result.meta.last_row_id) return result.meta.last_row_id;
-
+  // Always SELECT — D1's last_row_id is unreliable on upsert UPDATE path
   const row = await db
     .prepare("SELECT id FROM game_versions WHERE uuid = ?")
     .bind(gv.uuid)
@@ -208,7 +205,7 @@ export async function upsertVehicle(
   db: D1Database,
   v: Partial<Vehicle> & { slug: string; name: string },
 ): Promise<number> {
-  const result = await db
+  await db
     .prepare(
       `INSERT INTO vehicles (uuid, slug, name, class_name, manufacturer_id, vehicle_type_id,
         production_status_id, size, size_label, focus, classification, description,
@@ -252,23 +249,43 @@ export async function upsertVehicle(
         updated_at=excluded.updated_at`,
     )
     .bind(
-      n(v.uuid), v.slug, v.name, n(v.class_name),
-      nNum(v.manufacturer_id), nNum(v.vehicle_type_id), nNum(v.production_status_id),
-      nNum(v.size), n(v.size_label), n(v.focus),
-      n(v.classification), n(v.description),
-      nNum(v.length), nNum(v.beam), nNum(v.height),
-      nNum(v.mass), nNum(v.cargo), nNum(v.vehicle_inventory),
-      nNum(v.crew_min), nNum(v.crew_max),
-      nNum(v.speed_scm), nNum(v.speed_max), nNum(v.health),
-      nNum(v.pledge_price), nNum(v.price_auec), v.on_sale ? 1 : 0,
-      n(v.image_url), n(v.image_url_small),
-      n(v.image_url_medium), n(v.image_url_large),
-      n(v.pledge_url), nNum(v.game_version_id), null,
+      n(v.uuid),                                 //  1: uuid
+      v.slug,                                    //  2: slug
+      v.name,                                    //  3: name
+      n(v.class_name),                           //  4: class_name
+      nNum(v.manufacturer_id),                   //  5: manufacturer_id
+      nNum(v.vehicle_type_id),                   //  6: vehicle_type_id
+      nNum(v.production_status_id),              //  7: production_status_id
+      nNum(v.size),                              //  8: size
+      n(v.size_label),                           //  9: size_label
+      n(v.focus),                                // 10: focus
+      n(v.classification),                       // 11: classification
+      n(v.description),                          // 12: description
+      nNum(v.length),                            // 13: length
+      nNum(v.beam),                              // 14: beam
+      nNum(v.height),                            // 15: height
+      nNum(v.mass),                              // 16: mass
+      nNum(v.cargo),                             // 17: cargo
+      nNum(v.vehicle_inventory),                 // 18: vehicle_inventory
+      nNum(v.crew_min),                          // 19: crew_min
+      nNum(v.crew_max),                          // 20: crew_max
+      nNum(v.speed_scm),                         // 21: speed_scm
+      nNum(v.speed_max),                         // 22: speed_max
+      nNum(v.health),                            // 23: health
+      nNum(v.pledge_price),                      // 24: pledge_price
+      nNum(v.price_auec),                        // 25: price_auec
+      v.on_sale ? 1 : 0,                         // 26: on_sale
+      n(v.image_url),                            // 27: image_url
+      n(v.image_url_small),                      // 28: image_url_small
+      n(v.image_url_medium),                     // 29: image_url_medium
+      n(v.image_url_large),                      // 30: image_url_large
+      n(v.pledge_url),                           // 31: pledge_url
+      nNum(v.game_version_id),                   // 32: game_version_id
+      null,                                      // 33: raw_data
     )
     .run();
 
-  if (result.meta.last_row_id) return result.meta.last_row_id;
-
+  // Always SELECT — D1's last_row_id is unreliable on upsert UPDATE path
   const row = await db
     .prepare("SELECT id FROM vehicles WHERE slug = ?")
     .bind(v.slug)
@@ -555,7 +572,7 @@ export async function upsertPaint(
   db: D1Database,
   p: Partial<Paint> & { name: string },
 ): Promise<number> {
-  const result = await db
+  await db
     .prepare(
       `INSERT INTO paints (uuid, name, slug, class_name, description,
         image_url, image_url_small, image_url_medium, image_url_large, raw_data, updated_at)
@@ -578,8 +595,7 @@ export async function upsertPaint(
     )
     .run();
 
-  if (result.meta.last_row_id) return result.meta.last_row_id;
-
+  // Always SELECT — D1's last_row_id is unreliable on upsert UPDATE path
   const row = await db
     .prepare("SELECT id FROM paints WHERE class_name = ?")
     .bind(p.class_name)

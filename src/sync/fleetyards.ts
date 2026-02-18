@@ -15,6 +15,7 @@ import {
   updateSyncHistory,
 } from "../db/queries";
 import { delay } from "../lib/utils";
+import { SYNC_SOURCE } from "../lib/constants";
 
 // --- Types ---
 
@@ -118,7 +119,7 @@ async function fetchAllShipImages(baseURL: string): Promise<ShipImages[]> {
 }
 
 export async function syncShipImages(db: D1Database, baseURL: string): Promise<void> {
-  const syncID = await insertSyncHistory(db, 2, "images", "running"); // 2 = fleetyards
+  const syncID = await insertSyncHistory(db, SYNC_SOURCE.FLEETYARDS, "images", "running");
 
   try {
     const images = await fetchAllShipImages(baseURL);
@@ -197,8 +198,12 @@ export async function syncPaintImages(db: D1Database, baseURL: string): Promise<
         );
         imagesSynced++;
       }
-    } catch {
-      // Many vehicles won't have paints on FleetYards — this is expected
+    } catch (err) {
+      // 404 is expected — many vehicles don't have paints on FleetYards
+      const msg = err instanceof Error ? err.message : String(err);
+      if (!msg.includes("404")) {
+        console.warn(`[fleetyards] Paint image fetch failed for ${vehicleSlug}:`, msg);
+      }
     }
 
     await delay(RATE_LIMIT_MS);

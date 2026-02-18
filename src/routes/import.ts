@@ -136,26 +136,15 @@ export function importRoutes<E extends { Bindings: Env }>() {
       console.log(`[import] Created ${stubStmts.length} stub vehicles: ${stubSlugs.join(", ")}`);
     }
 
-    // Batch delete + all inserts (transactional via db.batch)
+    // Atomic delete + insert via db.batch() (all-or-nothing within a single batch)
+    // D1 supports up to 1000 statements per batch — sufficient for any fleet size
     const deleteStmt = db
       .prepare("DELETE FROM user_fleet WHERE user_id = ?")
       .bind(userID);
 
-    // D1 batch limit — chunk inserts if needed
-    const BATCH_SIZE = 90; // Leave room for the delete statement
-    let imported = 0;
-
-    for (let i = 0; i < insertStmts.length; i += BATCH_SIZE) {
-      const chunk = insertStmts.slice(i, i + BATCH_SIZE);
-      const batch = i === 0 ? [deleteStmt, ...chunk] : chunk;
-      await db.batch(batch);
-      imported += chunk.length;
-    }
-
-    // Handle edge case: entries array was empty, still delete old fleet
-    if (insertStmts.length === 0) {
-      await deleteStmt.run();
-    }
+    const batch = [deleteStmt, ...insertStmts];
+    await db.batch(batch);
+    const imported = insertStmts.length;
 
     console.log(`[import] HangarXplor import complete: ${imported}/${entries.length}`);
     return c.json({

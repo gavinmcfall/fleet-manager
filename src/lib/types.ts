@@ -15,6 +15,7 @@ export interface Env {
   ENCRYPTION_KEY?: string;
   API_TOKEN?: string;
   GITHUB_TOKEN?: string;
+  LLM_DEFAULT_MODEL?: string;
 }
 
 // --- Lookup Types ---
