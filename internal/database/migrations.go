@@ -560,6 +560,7 @@ func (db *DB) seedLookupTables() {
 		{2, "fleetyards", "FleetYards (Images Only)"},
 		{3, "hangarxplor", "HangarXplor"},
 		{4, "scunpacked", "scunpacked-data (Paints)"},
+		{5, "rsi_api", "RSI API (Images)"},
 	}
 	ssQuery := db.prepareQuery(db.insertIgnore("sync_sources", "id, key, label", "id", 3))
 	for _, ss := range syncSources {
