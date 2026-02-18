@@ -8,10 +8,7 @@ export default defineConfig({
     cloudflare(),
   ],
   build: {
-    outDir: "frontend/dist",
-    sourcemap: false,
     rollupOptions: {
-      input: "frontend/index.html",
       output: {
         manualChunks: {
           "vendor-react": ["react", "react-dom", "react-router-dom"],
@@ -20,6 +17,4 @@ export default defineConfig({
       },
     },
   },
-  root: ".",
-  publicDir: "frontend/public",
 });

@@ -2,6 +2,7 @@
 
 export interface Env {
   DB: D1Database;
+  ASSETS: Fetcher;
   FLEETYARDS_BASE_URL: string;
   SC_WIKI_ENABLED: string;
   SC_WIKI_RATE_LIMIT: string;
