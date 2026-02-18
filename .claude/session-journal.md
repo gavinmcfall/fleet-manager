@@ -4,88 +4,62 @@ This file maintains running context across compactions.
 
 ## Current Focus
 
-**RSI GraphQL API — COMMITTED.** All RSI API work committed in `fd2ac17`. Ship + paint images from public GraphQL, paint name matching with aliases/unicode/year-stripped fallback. 249 ship images, 321 paint images matched. Remaining 42 unmatched paints are ships not yet in DB (MOTH, Golem, MXC, etc.).
+**Code review plan — Tiers 1-3 COMPLETE.** Implementing 41-item code review plan. Tier 1 (housekeeping) and Tier 2 (critical fixes) committed. Tier 3 (data quality) committed. Tier 4 (build, verify, push) pending — waiting on full sync verification.
 
 ## Recent Changes
 
-### RSI GraphQL API + Paint Matching (2026-02-18) — commit fd2ac17
+### Tier 3: Data Quality Fixes (2026-02-18) — commit 944dc25
 
-**New files:**
-- `internal/rsi/client.go` — Pure GraphQL client, no auth. `QueryGraphQL(ctx, query, vars)` with batched requests, 429 retry, rate limiting.
-- `internal/rsi/parser.go` — `browseResource`/`browseResponse` types matching GraphQL shape.
-- `internal/rsi/sync.go` — `SyncShipImages` + `SyncPaintImages` with pagination. `paintShipAliases` map expands RSI abbreviated ship names. `expandRSIPaintName()` applied before matching.
+- Fixed Khartu-al paints wrongly assigned to Cutter Scout (added `"scout": "khartu-al"` alias)
+- Added `isPaintTag()` to handle non-standard tag formats (`Caterpillar_Paint`, `paint_golem`, etc.)
+- Case-insensitive tag normalization in `resolveVehicleIDs`
+- Added aliases for caterpillar, hull-c, golem, salvation, ursa (40 previously skipped paints)
 
-**Modified files:**
-- `internal/rsi/import.go` — `normalizePaintName` now handles unicode diacritics (ā→a), curly apostrophes ('→'), spelling fixes (bushwacker→bushwhacker). `findPaintMatch` adds year-stripped fallback. New `stripYears()` and `yearRegex`.
-- `internal/config/config.go` — Added `RSI_API_ENABLED`, `RSI_BASE_URL`, `RSI_RATE_LIMIT`
-- `internal/sync/scheduler.go` — RSI API syncer integrated, runs after paints. Static extract is fallback only when API disabled.
-- `internal/database/migrations.go` — Added sync_source `{5, "rsi_api", "RSI API (Images)"}`
-- `CLAUDE.md`, `.env.example` — Updated docs and config
+### Tier 2: Critical Code Fixes (2026-02-18) — commit c0fbec5
 
-**Bugs fixed this session:**
-- RSI API pagination: ships now return 30/page (ignoring `limit=100`). Changed break condition from `count < pageLimit` to `count == 0 || len >= totalCount`.
-- Removed bad aliases ("100 series"→"100i", "c8 pisces"→"Pisces") that converted correct names into wrong ones.
-- Added apostrophe normalization (U+2019→U+0027) for San'tok.yai Xua'cha match.
+- C3: Made `encryptionKey` unexported in crypto package
+- H2: Added fallback SELECT for UpsertManufacturer/UpsertVehicle on SQLite upsert-update
+- H4: `GetDefaultUserID` now returns `(int, error)` with `defaultUserID` helper in router
+- H5: Concurrent sync mutex with `TryLock()` for manual triggers
+- H6: Validate non-empty API key in `setLLMConfig`
+- H7: Added `http.MaxBytesReader` (1MB) to LLM endpoints
+- M4: SPA path traversal fix with `filepath.Clean` + prefix check
+- M5-M8: Added `io.LimitReader` to all HTTP clients
+- L9: Added DB indexes on `paint_vehicles.vehicle_id`, `user_fleet.user_id`, `sync_history.started_at`
 
-**Results:**
-- Ships: 247 fetched, 202 matched, 47 inherited (249 total)
-- Paints: 321 matched out of 363 individual (42 unmatched — ships not in DB)
-- DB: 633/796 paints with images (79.5%), 255/267 vehicles with images
+### Tier 1: Housekeeping (2026-02-18) — commit 82721d2
 
-### RSI Extract Image Import (2026-02-17)
-
-- `internal/rsi/import.go` — Reads RSI extract JSON files, matches to DB, updates image URLs
-- Ship matching: direct name → fuzzy name map → manufacturer prefix strip → variant inheritance
-- Paint matching: combine ship+paint name → normalize → exact/prefix/year-stripped match
-
-### Earlier Changes (2026-02-15–17)
-
-- Many-to-many paints refactor (paint_vehicles junction table)
-- FleetYards → SC Wiki migration (FY now images-only)
-- Schema redesign (25 tables, 4 lookup tables)
-- Code review fixes (11 findings)
+- Fixed Dockerfile Go version (1.22 → 1.24)
+- Removed `RawQuery`/`RawQueryRow` (SQL injection surface, zero callers)
+- Cleaned `.env.example` (removed phantom vars, added SCUNPACKED/RSI docs)
+- Deleted stale `server` binary
 
 ## Key Decisions
 
-### RSI API Design (2026-02-18)
-1. **Public GraphQL, no auth** — both ships and paints accessible without credentials
-2. **Paint ship aliases** — RSI abbreviates ship names ("Ares" not "Ares Star Fighter"), alias map expands before matching
-3. **RSI API overwrites FleetYards** — higher quality RSI CDN URLs take priority
-4. **Static extract is fallback** — only runs when `RSI_API_ENABLED=false`
-
-### Remaining 42 Unmatched Paints
-- 28 ships not in scunpacked-data/DB: MOTH, Golem, MXC, Hull C, Lynx, Salvation, Caterpillar paints, Ursa, Archimedes
-- ~14 edge cases: Auspicious Red year mismatches, Mk II discrepancies, MPUV-1T, CSV, Razor Mirai
-
-### Previous Key Decisions
-- SC Wiki is sole data source for ship specs
-- FleetYards retained for images only
-- Many-to-many paints via junction table
-- HangarXplor is only user fleet source
-- Insurance is typed (duration_months)
+- Generic `Paint_Hornet` → all Hornet variants: Correct behavior (game allows cross-variant paints)
+- MXC/MTC mapping: Same vehicle, accept as-is
+- Non-standard tags (`X_Paint`, `paint_x`): Handle via `isPaintTag()` + case-insensitive normalization
+- `sync.Mutex` with `TryLock()`: Exported methods use TryLock for manual triggers, cron holds lock at chain level
 
 ## Important Context
 
+- **Branch:** main, ahead of origin by 9 commits (not pushed)
 - **Binary built:** `fleet-manager` in project root (CGO_ENABLED=1 required)
 - **DB location:** `data/fleet-manager.db` (SQLite)
 - **scunpacked-data repo:** `/home/gavin/cloned-repos/StarCitizenWiki/scunpacked-data/`
 - **Owner:** Gavin, Senior QA at Pushpay, not a developer
 - **Tech:** Go 1.24, Chi router, SQLite/PostgreSQL, React SPA (Vite), Tailwind CSS
 - **Module path:** `github.com/nzvengeance/fleet-manager`
-- **Branch:** main, ahead of origin by 5 commits (not pushed)
+- **Full sync takes ~5 min** (SC Wiki rate-limited at 1 req/s, ~300 items across paginated endpoints)
 
-## Sync Chain Order (startup)
-1. SC Wiki: manufacturers → game_versions → vehicles → items
-2. FleetYards: vehicle images
-3. scunpacked: paint metadata (796 paints)
-4. FleetYards: paint images
-5. **RSI API: ship + paint images** — if `RSI_API_ENABLED=true`
-6. RSI extract: static fallback — only if API not enabled
+## Commits to Push (9 total)
 
----
-**Session compacted at:** 2026-02-18 17:01:54
-
-
----
-**Session compacted at:** 2026-02-18 17:07:42
-
+1. `fd2ac17` feat: add RSI GraphQL API sync for ship + paint images
+2. `2369d07` chore: update session journal
+3. `ab0cb65` chore: remove node_modules from git tracking
+4. `32af03f` feat: import RSI extract images for ships and paints
+5. `e53d73d` feat: many-to-many paints via paint_vehicles junction table
+6. `8f3b556` chore: update session journal
+7. `82721d2` fix: tier 1 housekeeping — Dockerfile Go version, remove RawQuery, clean .env.example
+8. `c0fbec5` fix: tier 2 critical code fixes — security, robustness, data integrity
+9. `944dc25` fix: paint-to-vehicle data quality — Khartu-al, non-standard tags
