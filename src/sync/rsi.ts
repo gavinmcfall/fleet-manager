@@ -21,14 +21,12 @@ import {
   updateSyncHistory,
 } from "../db/queries";
 import { delay } from "../lib/utils";
+import { SYNC_SOURCE } from "../lib/constants";
 
 // --- Constants ---
-
-const SYNC_SOURCE_RSI = 5;
 const PAGE_LIMIT = 100;
 const MAX_RETRIES = 3;
-const USER_AGENT =
-  "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36";
+const USER_AGENT = "Fleet-Manager/1.0 (Star Citizen fleet tracker)";
 const GRAPHQL_PATH = "/graphql";
 
 // --- GraphQL Types ---
@@ -367,7 +365,7 @@ export async function syncShipImages(
   baseURL: string,
   rateLimitMs: number,
 ): Promise<void> {
-  const syncID = await insertSyncHistory(db, SYNC_SOURCE_RSI, "ships", "running");
+  const syncID = await insertSyncHistory(db, SYNC_SOURCE.RSI_API, "ships", "running");
 
   try {
     console.log("[rsi] Ship image sync starting");
@@ -476,7 +474,7 @@ export async function syncPaintImages(
   baseURL: string,
   rateLimitMs: number,
 ): Promise<void> {
-  const syncID = await insertSyncHistory(db, SYNC_SOURCE_RSI, "paints", "running");
+  const syncID = await insertSyncHistory(db, SYNC_SOURCE.RSI_API, "paints", "running");
 
   try {
     console.log("[rsi] Paint image sync starting");

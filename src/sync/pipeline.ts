@@ -65,11 +65,14 @@ export async function triggerRSISync(env: Env): Promise<string> {
   return "RSI API sync complete";
 }
 
-// --- Full sync pipeline (cron trigger) ---
+// --- Full sync pipeline ---
+// WARNING: runs all sync steps in one Worker invocation. Use staggered cron
+// triggers in production. This function is for local dev / manual trigger only
+// and may exceed Workers CPU limits with large datasets.
 
 export async function runFullSync(env: Env): Promise<void> {
   const start = Date.now();
-  console.log("[pipeline] Full sync pipeline starting");
+  console.log("[pipeline] Full sync pipeline starting (dev/manual — use cron triggers in production)");
 
   const db = env.DB;
   const scwikiEnabled = env.SC_WIKI_ENABLED !== "false";

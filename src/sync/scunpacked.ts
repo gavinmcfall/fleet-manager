@@ -18,6 +18,8 @@ import {
   insertSyncHistory,
   updateSyncHistory,
 } from "../db/queries";
+import { delay } from "../lib/utils";
+import { SYNC_SOURCE } from "../lib/constants";
 
 // --- Tag alias map (matches Go version) ---
 
@@ -108,6 +110,7 @@ async function fetchPaintFiles(repo: string, branch: string, githubToken?: strin
 
   for (const file of paintFiles) {
     try {
+      await delay(100); // Rate limit: 10 req/s to avoid GitHub abuse detection
       const rawURL = `https://raw.githubusercontent.com/${repo}/${branch}/${file.path}`;
       const rawHeaders: Record<string, string> = { "User-Agent": "Fleet-Manager/1.0" };
       if (githubToken) {
@@ -225,15 +228,13 @@ async function resolveVehicleIDs(db: D1Database, tag: string): Promise<number[]>
 
 // --- Sync ---
 
-const SYNC_SOURCE_SCUNPACKED = 4;
-
 export async function syncPaints(
   db: D1Database,
   repo: string,
   branch: string,
   githubToken?: string,
 ): Promise<number> {
-  const syncID = await insertSyncHistory(db, SYNC_SOURCE_SCUNPACKED, "paints", "running");
+  const syncID = await insertSyncHistory(db, SYNC_SOURCE.SCUNPACKED, "paints", "running");
 
   try {
     const paints = await fetchPaintFiles(repo, branch, githubToken);

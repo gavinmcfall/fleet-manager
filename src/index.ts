@@ -9,21 +9,41 @@ import { settingsRoutes } from "./routes/settings";
 import { syncRoutes } from "./routes/sync";
 import { analysisRoutes } from "./routes/analysis";
 import { debugRoutes } from "./routes/debug";
+import { validateEncryptionKey } from "./lib/crypto";
 
 type HonoEnv = { Bindings: Env };
 
 const app = new Hono<HonoEnv>();
 
-// CORS — only allow same-origin in production, permissive in dev
+// Validate ENCRYPTION_KEY on first request (fail fast)
+let encryptionKeyValidated = false;
+app.use("*", async (c, next) => {
+  if (!encryptionKeyValidated) {
+    encryptionKeyValidated = true;
+    if (c.env.ENCRYPTION_KEY) {
+      const err = validateEncryptionKey(c.env.ENCRYPTION_KEY);
+      if (err) console.error(`[startup] ${err}`);
+    }
+  }
+  return next();
+});
+
+// CORS — strict same-origin in production, localhost in dev
 app.use("/api/*", async (c, next) => {
   const origin = c.req.header("Origin") || "";
   const host = c.req.header("Host") || "";
-  // Allow same-origin requests and localhost dev
-  const allowed = !origin || origin.includes(host) || origin.includes("localhost");
-  if (allowed) {
-    return cors({ origin })(c, next);
+  if (!origin) return cors({ origin: `https://${host}` })(c, next);
+  try {
+    const originHost = new URL(origin).hostname;
+    const isSameOrigin = originHost === host || originHost === host.split(":")[0];
+    const isLocalDev = originHost === "localhost" || originHost === "127.0.0.1";
+    if (isSameOrigin || isLocalDev) {
+      return cors({ origin })(c, next);
+    }
+  } catch {
+    // Malformed origin — reject
   }
-  return cors({ origin: `https://${host}` })(c, next);
+  return next();
 });
 
 // Auth middleware — protect mutating endpoints with API_TOKEN
@@ -139,8 +159,12 @@ async function authMiddleware(c: Context<HonoEnv>, next: Next): Promise<Response
     // No API_TOKEN configured — allow all requests (dev mode)
     return next();
   }
-  const provided = c.req.header("X-API-Key") || c.req.query("token");
-  if (provided !== token) {
+  const provided = c.req.header("X-API-Key") || c.req.query("token") || "";
+  const encoder = new TextEncoder();
+  const a = encoder.encode(provided);
+  const b = encoder.encode(token);
+  // Constant-time comparison — prevent timing side-channel attacks
+  if (a.byteLength !== b.byteLength || !crypto.subtle.timingSafeEqual(a, b)) {
     return c.json({ error: "Unauthorized" }, 401);
   }
   return next();

@@ -4,6 +4,29 @@
  * Port of internal/crypto/encryption.go
  */
 
+function uint8ArrayToBase64(bytes: Uint8Array): string {
+  let binary = "";
+  for (let i = 0; i < bytes.length; i++) {
+    binary += String.fromCharCode(bytes[i]);
+  }
+  return btoa(binary);
+}
+
+/**
+ * Validate ENCRYPTION_KEY format. Call at startup to fail fast.
+ */
+export function validateEncryptionKey(keyBase64: string): string | null {
+  try {
+    const keyBytes = Uint8Array.from(atob(keyBase64), (c) => c.charCodeAt(0));
+    if (keyBytes.length !== 32) {
+      return `ENCRYPTION_KEY must be 32 bytes, got ${keyBytes.length}`;
+    }
+    return null;
+  } catch {
+    return "ENCRYPTION_KEY is not valid base64";
+  }
+}
+
 /**
  * Import a base64-encoded 32-byte key as a CryptoKey for AES-GCM.
  */
@@ -44,7 +67,7 @@ export async function encrypt(
   combined.set(nonce, 0);
   combined.set(new Uint8Array(ciphertext), nonce.length);
 
-  return btoa(String.fromCharCode(...combined));
+  return uint8ArrayToBase64(combined);
 }
 
 /**

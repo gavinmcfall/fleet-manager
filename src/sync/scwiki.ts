@@ -171,8 +171,7 @@ async function fetchPaginated(path: string, rateLimitMs: number): Promise<unknow
   return allData;
 }
 
-// --- Sync Source ID ---
-const SYNC_SOURCE_SCWIKI = 1;
+import { SYNC_SOURCE } from "../lib/constants";
 
 // --- Sync Functions ---
 
@@ -196,7 +195,7 @@ export async function syncAll(db: D1Database, rateLimitMs = 1000): Promise<void>
 }
 
 async function syncManufacturers(db: D1Database, rateLimitMs: number): Promise<void> {
-  const syncID = await insertSyncHistory(db, SYNC_SOURCE_SCWIKI, "manufacturers", "running");
+  const syncID = await insertSyncHistory(db, SYNC_SOURCE.SCWIKI, "manufacturers", "running");
 
   try {
     const data = await fetchPaginated("/api/manufacturers", rateLimitMs);
@@ -229,7 +228,7 @@ async function syncManufacturers(db: D1Database, rateLimitMs: number): Promise<v
 }
 
 async function syncGameVersions(db: D1Database, rateLimitMs: number): Promise<void> {
-  const syncID = await insertSyncHistory(db, SYNC_SOURCE_SCWIKI, "game_versions", "running");
+  const syncID = await insertSyncHistory(db, SYNC_SOURCE.SCWIKI, "game_versions", "running");
 
   try {
     const data = await fetchPaginated("/api/game-versions", rateLimitMs);
@@ -260,7 +259,7 @@ async function syncGameVersions(db: D1Database, rateLimitMs: number): Promise<vo
 }
 
 async function syncVehicles(db: D1Database, rateLimitMs: number): Promise<void> {
-  const syncID = await insertSyncHistory(db, SYNC_SOURCE_SCWIKI, "vehicles", "running");
+  const syncID = await insertSyncHistory(db, SYNC_SOURCE.SCWIKI, "vehicles", "running");
 
   try {
     const data = await fetchPaginated(
@@ -397,7 +396,7 @@ async function syncVehicles(db: D1Database, rateLimitMs: number): Promise<void> 
 }
 
 async function syncItems(db: D1Database, rateLimitMs: number): Promise<void> {
-  const syncID = await insertSyncHistory(db, SYNC_SOURCE_SCWIKI, "items", "running");
+  const syncID = await insertSyncHistory(db, SYNC_SOURCE.SCWIKI, "items", "running");
 
   try {
     const data = await fetchPaginated(
