@@ -1,0 +1,29 @@
+name = "fleet-manager"
+main = "src/index.ts"
+compatibility_date = "2025-02-18"
+
+# Workers Assets — serves the React SPA from frontend/dist
+assets = { directory = "./frontend/dist" }
+
+# D1 Database binding
+[[d1_databases]]
+binding = "DB"
+database_name = "fleet-manager"
+database_id = "placeholder-create-with-wrangler-d1-create"
+migrations_dir = "src/db/migrations"
+
+# Cron Triggers — nightly sync at 3am UTC
+[triggers]
+crons = ["0 3 * * *"]
+
+# Environment variables (non-secret defaults)
+[vars]
+FLEETYARDS_BASE_URL = "https://api.fleetyards.net"
+SC_WIKI_ENABLED = "true"
+SC_WIKI_RATE_LIMIT = "1.0"
+SC_WIKI_BURST = "5"
+RSI_API_ENABLED = "false"
+RSI_BASE_URL = "https://robertsspaceindustries.com"
+RSI_RATE_LIMIT = "1.0"
+SCUNPACKED_REPO = "StarCitizenWiki/scunpacked-data"
+SCUNPACKED_BRANCH = "main"
