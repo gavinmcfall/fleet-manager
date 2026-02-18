@@ -95,7 +95,7 @@ func (c *Client) queryWithRetry(ctx context.Context, query string, variables any
 	}
 	defer resp.Body.Close()
 
-	body, err := io.ReadAll(resp.Body)
+	body, err := io.ReadAll(io.LimitReader(resp.Body, 10<<20)) // 10MB limit
 	if err != nil {
 		return nil, err
 	}

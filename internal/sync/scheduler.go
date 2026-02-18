@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"strings"
+	gosync "sync"
 	"time"
 
 	"github.com/nzvengeance/fleet-manager/internal/config"
@@ -25,6 +26,7 @@ type Scheduler struct {
 	rsiAPI     *rsi.Syncer
 	cfg        *config.Config
 	cron       *cron.Cron
+	syncMu     gosync.Mutex // prevents concurrent sync operations
 }
 
 func NewScheduler(db *database.DB, client *fleetyards.Client, cfg *config.Config) *Scheduler {
@@ -67,30 +69,33 @@ func (s *Scheduler) Start() error {
 	// Schedule nightly SC Wiki sync (primary data source)
 	if s.scwiki != nil {
 		_, err := s.cron.AddFunc(s.cfg.SyncSchedule, func() {
+			s.syncMu.Lock()
+			defer s.syncMu.Unlock()
+
 			ctx, cancel := context.WithTimeout(context.Background(), 30*time.Minute)
 			defer cancel()
 
 			log.Info().Msg("scheduled SC Wiki sync starting")
-			if err := s.SyncSCWiki(ctx); err != nil {
+			if err := s.syncSCWiki(ctx); err != nil {
 				log.Error().Err(err).Msg("scheduled SC Wiki sync failed")
 			}
 
 			// Run image sync after SC Wiki sync so vehicles exist
 			log.Info().Msg("scheduled FleetYards image sync starting")
-			if err := s.SyncImages(ctx); err != nil {
+			if err := s.syncImages(ctx); err != nil {
 				log.Error().Err(err).Msg("scheduled FleetYards image sync failed")
 			}
 
 			// Run paint sync after images
 			log.Info().Msg("scheduled paint sync starting")
-			if err := s.SyncPaints(ctx); err != nil {
+			if err := s.syncPaints(ctx); err != nil {
 				log.Error().Err(err).Msg("scheduled paint sync failed")
 			}
 
 			// RSI API sync — overwrites FleetYards with RSI CDN URLs
 			if s.rsiAPI != nil {
 				log.Info().Msg("scheduled RSI API image sync starting")
-				if err := s.SyncRSIAPI(ctx); err != nil {
+				if err := s.syncRSIAPI(ctx); err != nil {
 					log.Error().Err(err).Msg("scheduled RSI API image sync failed")
 				}
 			}
@@ -106,6 +111,9 @@ func (s *Scheduler) Start() error {
 	// Run startup sync if configured
 	if s.cfg.SyncOnStartup {
 		go func() {
+			s.syncMu.Lock()
+			defer s.syncMu.Unlock()
+
 			ctx, cancel := context.WithTimeout(context.Background(), 30*time.Minute)
 			defer cancel()
 
@@ -114,7 +122,7 @@ func (s *Scheduler) Start() error {
 				mfgCount, _ := s.db.GetManufacturerCount(ctx)
 				if mfgCount == 0 {
 					log.Info().Msg("no manufacturers in database, running SC Wiki startup sync")
-					if err := s.SyncSCWiki(ctx); err != nil {
+					if err := s.syncSCWiki(ctx); err != nil {
 						log.Error().Err(err).Msg("startup SC Wiki sync failed")
 					}
 				} else {
@@ -126,20 +134,20 @@ func (s *Scheduler) Start() error {
 			count, _ := s.db.GetVehicleCount(ctx)
 			if count > 0 {
 				log.Info().Msg("running startup FleetYards image sync")
-				if err := s.SyncImages(ctx); err != nil {
+				if err := s.syncImages(ctx); err != nil {
 					log.Error().Err(err).Msg("startup FleetYards image sync failed")
 				}
 
 				// Paint sync — runs after images so vehicles exist
 				log.Info().Msg("running startup paint sync")
-				if err := s.SyncPaints(ctx); err != nil {
+				if err := s.syncPaints(ctx); err != nil {
 					log.Error().Err(err).Msg("startup paint sync failed")
 				}
 
 				// RSI API sync — overwrites FleetYards with RSI CDN URLs
 				if s.rsiAPI != nil {
 					log.Info().Msg("running startup RSI API image sync")
-					if err := s.SyncRSIAPI(ctx); err != nil {
+					if err := s.syncRSIAPI(ctx); err != nil {
 						log.Error().Err(err).Msg("startup RSI API image sync failed")
 					}
 				}
@@ -167,9 +175,48 @@ func (s *Scheduler) Stop() {
 	log.Info().Msg("sync scheduler stopped")
 }
 
+// --- Exported methods for manual triggers (acquire lock, skip if busy) ---
+
 // SyncImages fetches store images from FleetYards and updates the image columns on existing vehicles.
 // This is an image-only sync — all other ship data comes from SC Wiki.
 func (s *Scheduler) SyncImages(ctx context.Context) error {
+	if !s.syncMu.TryLock() {
+		return fmt.Errorf("sync already in progress")
+	}
+	defer s.syncMu.Unlock()
+	return s.syncImages(ctx)
+}
+
+// SyncPaints runs the full paint sync pipeline.
+func (s *Scheduler) SyncPaints(ctx context.Context) error {
+	if !s.syncMu.TryLock() {
+		return fmt.Errorf("sync already in progress")
+	}
+	defer s.syncMu.Unlock()
+	return s.syncPaints(ctx)
+}
+
+// SyncRSIAPI fetches ship and paint images from the RSI API.
+func (s *Scheduler) SyncRSIAPI(ctx context.Context) error {
+	if !s.syncMu.TryLock() {
+		return fmt.Errorf("sync already in progress")
+	}
+	defer s.syncMu.Unlock()
+	return s.syncRSIAPI(ctx)
+}
+
+// SyncSCWiki syncs Star Citizen data from SC Wiki API.
+func (s *Scheduler) SyncSCWiki(ctx context.Context) error {
+	if !s.syncMu.TryLock() {
+		return fmt.Errorf("sync already in progress")
+	}
+	defer s.syncMu.Unlock()
+	return s.syncSCWiki(ctx)
+}
+
+// --- Internal methods (caller must hold syncMu) ---
+
+func (s *Scheduler) syncImages(ctx context.Context) error {
 	syncID, _ := s.db.InsertSyncHistory(ctx, 2, "images", "running") // 2 = fleetyards
 
 	images, err := s.client.FetchAllShipImages(ctx)
@@ -192,10 +239,7 @@ func (s *Scheduler) SyncImages(ctx context.Context) error {
 	return nil
 }
 
-// SyncPaints runs the full paint sync pipeline:
-// 1. Sync paint metadata from scunpacked-data (if configured)
-// 2. Fetch paint images from FleetYards for vehicles that have paints
-func (s *Scheduler) SyncPaints(ctx context.Context) error {
+func (s *Scheduler) syncPaints(ctx context.Context) error {
 	// Step 1: scunpacked metadata sync
 	if s.scunpacked != nil {
 		log.Info().Msg("scunpacked paint metadata sync starting")
@@ -295,8 +339,7 @@ func normalizePaintName(name string) string {
 	return n
 }
 
-// SyncRSIAPI fetches ship and paint images from the RSI API.
-func (s *Scheduler) SyncRSIAPI(ctx context.Context) error {
+func (s *Scheduler) syncRSIAPI(ctx context.Context) error {
 	if s.rsiAPI == nil {
 		return fmt.Errorf("RSI API sync not enabled (set RSI_API_ENABLED=true)")
 	}
@@ -310,8 +353,7 @@ func (s *Scheduler) SyncRSIAPI(ctx context.Context) error {
 	return nil
 }
 
-// SyncSCWiki syncs Star Citizen data from SC Wiki API
-func (s *Scheduler) SyncSCWiki(ctx context.Context) error {
+func (s *Scheduler) syncSCWiki(ctx context.Context) error {
 	if s.scwiki == nil {
 		return fmt.Errorf("SC Wiki API sync not enabled (set SC_WIKI_ENABLED=true)")
 	}

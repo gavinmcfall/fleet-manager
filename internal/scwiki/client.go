@@ -92,7 +92,7 @@ func (c *Client) getWithRetry(ctx context.Context, path string, attempt int) ([]
 	}
 	defer resp.Body.Close()
 
-	body, err := io.ReadAll(resp.Body)
+	body, err := io.ReadAll(io.LimitReader(resp.Body, 10<<20)) // 10MB limit
 	if err != nil {
 		return nil, err
 	}
