@@ -4,124 +4,105 @@ This file maintains running context across compactions.
 
 ## Current Focus
 
-**Code review plan — ALL TIERS COMPLETE.** 41-item code review implemented across 4 tiers. All commits pushed to origin. Server running locally on port 8080 with full data.
+**Cloudflare Workers migration — Phase 5 COMPLETE + code review fixes applied.** Phases 1-5 done on `cf-rewrite` branch, plus a comprehensive code review fix pass. Ready for Phase 6 (deployment + access control). Old Go code has NOT been removed yet — stays for reference until CF version is deployed and verified in production.
 
-## Project State (2026-02-18)
+## Why Cloudflare Workers
 
-| Metric | Before | After |
-|--------|--------|-------|
-| Vehicles | 267 | 267 |
-| Vehicles with images | 255 (95.5%) | 184 (68.9%)* |
-| Paints | 796 | 835 |
-| Paints with images | 633 (79.5%) | 633 (75.8%) |
-| Paints with vehicle links | 796 (100%) | 835 (100%) |
-| Paint-vehicle links | 1,586 | 1,685 |
-| Unmatched paints | 0 | 0 |
+Gavin already uses Cloudflare for DNS/CDN. Moving Fleet Manager to Workers eliminates self-hosting overhead (Docker, Helm, Flux GitOps, Talos node maintenance) and consolidates everything onto a platform he already pays for ($5/month Workers plan). The Go backend itself was fine — it's the deployment pipeline that was too heavy for a personal fleet tracker.
 
-*Vehicle image count lower without RSI API enabled — run with `RSI_API_ENABLED=true` to restore full coverage.
+## CF Migration Progress
 
-## Recent Changes
+| Phase | Status | Commit | What it did |
+|-------|--------|--------|-------------|
+| 1. Project Scaffold + Database | DONE | `bcd3632` | Wrangler project, D1 schema (25 tables), TypeScript types, slug utilities |
+| 2. Core Database Layer + API Routes | DONE | `3d1c3bd` | All D1 query functions (queries.ts), Hono API routes matching Go URL structure |
+| 3. Frontend Integration | DONE | `ec86cab` | React SPA on Workers Assets, Cloudflare Vite plugin, SPA routing |
+| 4. Sync Pipeline | DONE | `52ab50f` | SC Wiki, FleetYards, scunpacked (via GitHub API), RSI GraphQL sync |
+| 5. Advanced Features | DONE | `24d51db` | AES-256-GCM encryption (Web Crypto), Anthropic LLM integration |
+| Code Review Fixes | DONE | `2738509` | Auth, CORS, sync safety, import transactional, deduplication |
+| 6. Deployment + Access Control | TODO | | Custom domain, WAF, secrets, CI/CD, go-live |
 
-### Code Review Plan Implementation (2026-02-18)
+## Code Review Fixes Applied (commit `2738509`)
 
-**Tier 1: Housekeeping** — commit `82721d2`
-- Fixed Dockerfile Go version (1.22 → 1.24 to match go.mod)
-- Removed `RawQuery`/`RawQueryRow` from database.go (C2 — SQL injection surface, zero callers)
-- Cleaned `.env.example` (removed phantom LOG_LEVEL/DEBUG_ENABLED, added SCUNPACKED/RSI docs)
-- Deleted stale 35MB `server` binary from repo root
-- Cleaned `.env` (removed unused FLEETYARDS_USER)
+Consolidated findings from 3 independent AI reviewers (Opus, Codex, Gemini):
 
-**Tier 2: Critical Code Fixes** — commit `c0fbec5`
-- C3: Made `encryptionKey` unexported in crypto package (was `EncryptionKey`)
-- H2: Added fallback SELECT for `UpsertManufacturer`/`UpsertVehicle` when SQLite returns 0 on upsert-update
-- H4: `GetDefaultUserID` now returns `(int, error)`; added `defaultUserID(w, ctx)` helper in router
-- H5: Added `sync.Mutex` to prevent concurrent syncs — `TryLock()` for manual triggers, `Lock()` for cron/startup chain
-- H6: Validate non-empty API key in `setLLMConfig` (was encrypting empty strings)
-- H7: Added `http.MaxBytesReader` (1MB) to `setLLMConfig` and `testLLMConnection` endpoints
-- M4: SPA path traversal fix — `filepath.Clean` + `filepath.Abs` + `strings.HasPrefix` check
-- M5-M8: Added `io.LimitReader` to all HTTP clients (FleetYards 10MB, SC Wiki 10MB, RSI 10MB, Anthropic 1MB)
-- L9: Added missing DB indexes: `paint_vehicles(vehicle_id)`, `user_fleet(user_id)`, `sync_history(started_at)`
+### Security
+- Auth middleware with `X-API-Key` header / `token` query param on mutating endpoints
+- CORS restricted to same-origin/localhost (was wildcard `*`)
+- Analysis DELETE scoped to `user_id` (was unscoped)
+- ENCRYPTION_KEY enforced in production for LLM API key storage
 
-**Tier 3: Data Quality Fixes** — commit `944dc25`
-- Fixed 4 Khartu-al paints wrongly assigned to Cutter Scout (added `"scout": "khartu-al"` tag alias)
-- Added `isPaintTag()` to handle non-standard tag formats (`Caterpillar_Paint`, `paint_golem`, `Ursa_Paint`, `Hull_C_Paint`, `paint_salvation`)
-- Case-insensitive tag normalization in `resolveVehicleIDs`
-- Added tag aliases for caterpillar, hull-c, golem, salvation, ursa
-- Result: 40 previously skipped paints now sync correctly, paints 796→835, links 1586→1685
+### Sync Safety
+- 4 staggered cron triggers (3:00-3:45 UTC) instead of 1 monolithic sync
+- `executionCtx.waitUntil()` on all sync POST handlers
+- MAX_RETRIES=3 on scwiki 429 retry (was infinite recursion)
+- GITHUB_TOKEN threaded to scunpacked GitHub API calls
 
-**Tier 4: Build, Verify, Push** — commit `054ad65`
-- Build passes (`CGO_ENABLED=1 go build ./...`)
-- Full sync verified with fresh DB
-- All 10 commits pushed to origin/main
+### Import Safety
+- Vehicle slugs preloaded into memory map (no per-entry DB queries)
+- Transactional delete+insert via `db.batch()`
+- Batch chunking at 90 statements for D1 limits
 
-### Earlier Work (2026-02-15–18)
+### Deduplication
+- Shared `delay()` in `src/lib/utils.ts` (removed from 3 sync files)
+- `getDefaultUserID` imported from queries.ts (removed from 4 route files)
+- `getAllPaints`/`getPaintsForVehicle` imported from queries.ts (removed from paints.ts)
+- Collapsed identical if/else in pipeline.ts
+- Deduplicated `/with-insurance` handler in fleet.ts
 
-- Many-to-many paints refactor via `paint_vehicles` junction table
-- FleetYards → SC Wiki migration (FY now images-only)
-- Schema redesign (25 tables, 4 lookup tables)
-- RSI extract image importer (static JSON files)
-- RSI GraphQL API sync (live ship + paint images, public endpoint, no auth)
+## What Exists on `cf-rewrite` Branch
+
+### New Workers code (`src/`)
+- `src/index.ts` — Hono app entry + auth middleware + staggered cron handler
+- `src/db/queries.ts` — All D1 query functions (~1000 lines)
+- `src/routes/` — fleet, vehicles, paints, import, settings, sync, analysis, debug
+- `src/sync/` — scwiki, fleetyards, scunpacked, rsi, pipeline
+- `src/lib/types.ts` — All TypeScript interfaces (Env includes API_TOKEN, GITHUB_TOKEN)
+- `src/lib/slug.ts` — Slug generation (port from Go)
+- `src/lib/crypto.ts` — AES-256-GCM encryption (Web Crypto API)
+- `src/lib/utils.ts` — Shared utilities (delay)
+- `wrangler.toml` — D1 binding, 4 staggered cron triggers, Workers Assets
+- `vite.config.ts` — Cloudflare Vite plugin
+
+### Old Go code (NOT yet removed)
+- `internal/` — All Go packages (api, database, sync, crypto, llm, analysis, etc.)
+- `cmd/` — Go entrypoint
+- `go.mod` / `go.sum` — Go dependencies
+- `Dockerfile` — Docker build
+- `helm/` — Helm chart for k8s deployment
+- `frontend/` — Original React SPA (same code, now also served by Workers Assets)
 
 ## Key Decisions
 
-- **Generic `Paint_Hornet` → all Hornet variants**: Correct behavior — CIG made generic Hornet paints work on all variants
-- **MXC/MTC mapping**: Same vehicle in-game, accept as-is
-- **Non-standard tags**: Handle via `isPaintTag()` accepting both `Paint_X` and `X_Paint` + lowercase variants
-- **`sync.Mutex` design**: Exported methods use `TryLock` (manual triggers return "sync already in progress"), cron/startup hold lock at chain level to avoid deadlock
-- **`generateAIAnalysis` has no request body**: No `MaxBytesReader` needed — it reads fleet data from DB, not from the request
-
-## Files Modified in Code Review
-
-| File | Changes |
-|------|---------|
-| `Dockerfile` | Go 1.22 → 1.24 |
-| `.env.example` | Removed phantom vars, added docs |
-| `internal/database/database.go` | Removed RawQuery/RawQueryRow, H2 fallback SELECT, H4 GetDefaultUserID error return |
-| `internal/database/migrations.go` | L9 indexes, renumbered migration steps |
-| `internal/api/router.go` | H4 defaultUserID helper, H5/H6/H7/M4 fixes, MaxBytesReader |
-| `internal/crypto/encryption.go` | C3 unexported encryptionKey |
-| `internal/sync/scheduler.go` | H5 concurrent sync mutex |
-| `internal/fleetyards/client.go` | M5 io.LimitReader |
-| `internal/scwiki/client.go` | M6 io.LimitReader |
-| `internal/rsi/client.go` | M7 io.LimitReader |
-| `internal/llm/anthropic.go` | M8 io.LimitReader |
-| `internal/scunpacked/reader.go` | isPaintTag() for non-standard tags |
-| `internal/scunpacked/sync.go` | Scout alias, non-standard tag aliases, case-insensitive normalization |
+- **Auth middleware**: `X-API-Key` header or `token` query param; no API_TOKEN = dev mode (allow all)
+- **Encryption enforcement**: Production (API_TOKEN set) refuses plaintext LLM key storage; dev mode allows it
+- **Staggered cron**: Each sync step is a separate cron invocation with its own 30s CPU budget
+- **Embedded analysis prompt**: Workers have no filesystem — content embedded as const in analysis.ts
+- **scunpacked via GitHub API**: Workers have no filesystem — fetch paint files via Git Trees API
+- **Go code stays until Phase 6 verified**: Don't delete the working backend until replacement is proven
 
 ## Important Context
 
-- **Branch:** main, up to date with origin
-- **Binary built:** `fleet-manager` in project root (CGO_ENABLED=1 required)
-- **DB location:** `data/fleet-manager.db` (SQLite)
-- **scunpacked-data repo:** `/home/gavin/cloned-repos/StarCitizenWiki/scunpacked-data/`
-- **Owner:** Gavin, Senior QA at Pushpay, not a developer
-- **Tech:** Go 1.24, Chi router, SQLite/PostgreSQL, React SPA (Vite), Tailwind CSS
-- **Module path:** `github.com/nzvengeance/fleet-manager`
-- **Full sync takes ~5-6 min** (SC Wiki rate-limited at 1 req/s, ~300 items across paginated endpoints)
-- **Server currently running** on port 8080 with `SYNC_ON_STARTUP=true`, `RSI_API_ENABLED=false`
+- **Branch:** `cf-rewrite` (7 commits ahead of main)
+- **Plan file:** `/home/gavin/.claude/plans/proud-chasing-harbor.md`
+- **Dev server:** `npx vite dev --port 5200`
+- **D1 migrations:** Applied locally via `npx wrangler d1 migrations apply fleet-manager --local`
+- **TypeScript:** Compiles clean (`npx tsc --noEmit`)
+- **All API endpoints tested:** health, status, ships, vehicles, sync, settings, LLM routes all working
 
-## Remaining Code Review Items (not implemented)
+## What's Next — Phase 6
 
-### Not addressed (from plan, lower priority):
-- H3: Errors swallowed in `/api/status` — log + return 503 (partially addressed by H4)
-- M1-M3, M9-M16: Medium-priority items (error leaking, CORS, SyncAll returns nil, etc.)
-- L1-L8, L10-L14: Low-priority items (code duplication, hardcoded model list, etc.)
-- Unit test coverage (zero unit tests)
-- CI/CD pipeline
-- Frontend code-splitting (747KB bundle)
-
-## Sync Chain Order (startup)
-1. SC Wiki: manufacturers → game_versions → vehicles → items
-2. FleetYards: vehicle images
-3. scunpacked: paint metadata (835 paints)
-4. FleetYards: paint images
-5. RSI API: ship + paint images (if `RSI_API_ENABLED=true`)
-6. RSI extract: static fallback (only if API not enabled)
+Deployment + Access Control:
+- Custom domain: `fleet.nerdz.cloud` in wrangler.toml
+- WAF IP restriction via Cloudflare Dashboard (hostname + IP allowlist)
+- `wrangler secret put ENCRYPTION_KEY` (generate 32-byte base64 key)
+- `wrangler secret put API_TOKEN` (generate strong token)
+- GitHub Actions CI/CD with `cloudflare/wrangler-action@v3`
+- Production deployment: `wrangler deploy`
+- Run initial sync to populate D1
+- Import HangarXplor data via the UI
+- Verify everything works, then clean out old Go code
 
 ---
-**Session compacted at:** 2026-02-18 19:19:53
-
-
----
-**Session compacted at:** 2026-02-18 19:31:57
+**Session compacted at:** 2026-02-18 20:27:04
 
