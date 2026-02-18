@@ -1,4 +1,4 @@
-import { Hono } from "hono";
+import { Hono, type Context, type Next } from "hono";
 import { cors } from "hono/cors";
 import type { Env } from "./lib/types";
 import { fleetRoutes } from "./routes/fleet";
@@ -14,8 +14,24 @@ type HonoEnv = { Bindings: Env };
 
 const app = new Hono<HonoEnv>();
 
-// Middleware
-app.use("/api/*", cors());
+// CORS — only allow same-origin in production, permissive in dev
+app.use("/api/*", async (c, next) => {
+  const origin = c.req.header("Origin") || "";
+  const host = c.req.header("Host") || "";
+  // Allow same-origin requests and localhost dev
+  const allowed = !origin || origin.includes(host) || origin.includes("localhost");
+  if (allowed) {
+    return cors({ origin })(c, next);
+  }
+  return cors({ origin: `https://${host}` })(c, next);
+});
+
+// Auth middleware — protect mutating endpoints with API_TOKEN
+app.use("/api/sync/*", authMiddleware);
+app.use("/api/import/*", authMiddleware);
+app.use("/api/settings/*", authMiddleware);
+app.use("/api/llm/*", authMiddleware);
+app.use("/api/debug/*", authMiddleware);
 
 // Health check
 app.get("/api/health", (c) => c.json({ status: "ok" }));
@@ -77,17 +93,55 @@ app.get("*", async (c) => {
 export default {
   fetch: app.fetch,
 
-  // Cron Trigger handler — nightly sync
+  // Cron Trigger handler — staggered sync steps
   async scheduled(
-    _event: ScheduledEvent,
+    event: ScheduledEvent,
     env: Env,
     ctx: ExecutionContext,
   ): Promise<void> {
-    ctx.waitUntil(runScheduledSync(env));
+    ctx.waitUntil(runScheduledSync(event.cron, env));
   },
 };
 
-async function runScheduledSync(env: Env): Promise<void> {
-  const { runFullSync } = await import("./sync/pipeline");
-  await runFullSync(env);
+async function runScheduledSync(cron: string, env: Env): Promise<void> {
+  const {
+    triggerSCWikiSync,
+    triggerImageSync,
+    triggerPaintSync,
+    triggerRSISync,
+  } = await import("./sync/pipeline");
+
+  switch (cron) {
+    case "0 3 * * *":
+      console.log("[cron] SC Wiki sync");
+      await triggerSCWikiSync(env);
+      break;
+    case "15 3 * * *":
+      console.log("[cron] FleetYards ship images");
+      await triggerImageSync(env);
+      break;
+    case "30 3 * * *":
+      console.log("[cron] Paint sync (scunpacked + FleetYards paint images)");
+      await triggerPaintSync(env);
+      break;
+    case "45 3 * * *":
+      console.log("[cron] RSI API images");
+      await triggerRSISync(env);
+      break;
+    default:
+      console.warn(`[cron] Unknown schedule: ${cron}`);
+  }
+}
+
+async function authMiddleware(c: Context<HonoEnv>, next: Next): Promise<Response | void> {
+  const token = c.env.API_TOKEN;
+  if (!token) {
+    // No API_TOKEN configured — allow all requests (dev mode)
+    return next();
+  }
+  const provided = c.req.header("X-API-Key") || c.req.query("token");
+  if (provided !== token) {
+    return c.json({ error: "Unauthorized" }, 401);
+  }
+  return next();
 }

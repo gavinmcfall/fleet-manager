@@ -14,6 +14,7 @@ import {
   insertSyncHistory,
   updateSyncHistory,
 } from "../db/queries";
+import { delay } from "../lib/utils";
 
 // --- Types ---
 
@@ -77,10 +78,6 @@ async function fyFetch(url: string): Promise<unknown> {
   }
 
   return resp.json();
-}
-
-function delay(ms: number): Promise<void> {
-  return new Promise((resolve) => setTimeout(resolve, ms));
 }
 
 // --- Ship image sync ---

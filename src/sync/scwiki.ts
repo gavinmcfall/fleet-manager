@@ -23,6 +23,7 @@ import {
   getGameVersionIDByUUID,
   getProductionStatusIDByKey,
 } from "../db/queries";
+import { delay } from "../lib/utils";
 
 // --- SC Wiki API Types ---
 
@@ -120,7 +121,9 @@ interface SCWikiItem {
 const SC_WIKI_BASE_URL = "https://api.star-citizen.wiki";
 const USER_AGENT = "Fleet-Manager/1.0";
 
-async function scwikiFetch(path: string, rateLimitMs: number): Promise<unknown> {
+const MAX_RETRIES = 3;
+
+async function scwikiFetch(path: string, rateLimitMs: number, attempt = 0): Promise<unknown> {
   await delay(rateLimitMs);
 
   const url = SC_WIKI_BASE_URL + path;
@@ -132,9 +135,12 @@ async function scwikiFetch(path: string, rateLimitMs: number): Promise<unknown> 
   });
 
   if (resp.status === 429) {
+    if (attempt >= MAX_RETRIES) {
+      throw new Error(`SC Wiki rate limited (429) after ${MAX_RETRIES} retries on ${path}`);
+    }
     const retryAfter = parseInt(resp.headers.get("Retry-After") ?? "5", 10);
     await delay(retryAfter * 1000);
-    return scwikiFetch(path, rateLimitMs);
+    return scwikiFetch(path, rateLimitMs, attempt + 1);
   }
 
   if (!resp.ok) {
@@ -163,10 +169,6 @@ async function fetchPaginated(path: string, rateLimitMs: number): Promise<unknow
   }
 
   return allData;
-}
-
-function delay(ms: number): Promise<void> {
-  return new Promise((resolve) => setTimeout(resolve, ms));
 }
 
 // --- Sync Source ID ---

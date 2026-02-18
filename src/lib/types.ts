@@ -13,6 +13,8 @@ export interface Env {
   SCUNPACKED_REPO: string;
   SCUNPACKED_BRANCH: string;
   ENCRYPTION_KEY?: string;
+  API_TOKEN?: string;
+  GITHUB_TOKEN?: string;
 }
 
 // --- Lookup Types ---

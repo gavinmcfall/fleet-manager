@@ -1,6 +1,7 @@
 import { Hono } from "hono";
 import type { Env, UserFleetEntry, Vehicle, FleetAnalysis } from "../lib/types";
 import { decrypt } from "../lib/crypto";
+import { getDefaultUserID } from "../db/queries";
 
 /**
  * /api/analysis/* — Fleet analysis, LLM analysis
@@ -242,18 +243,16 @@ export function analysisRoutes<E extends { Bindings: Env }>() {
     }
 
     const db = c.env.DB;
-    await db.prepare("DELETE FROM ai_analyses WHERE id = ?").bind(id).run();
+    const userID = await getDefaultUserID(db);
+    if (userID === null) {
+      return c.json({ error: "Default user not found" }, 500);
+    }
+
+    await db.prepare("DELETE FROM ai_analyses WHERE id = ? AND user_id = ?").bind(id, userID).run();
     return c.json({ success: true });
   });
 
   return routes;
-}
-
-async function getDefaultUserID(db: D1Database): Promise<number | null> {
-  const row = await db
-    .prepare("SELECT id FROM users WHERE username = 'default'")
-    .first<{ id: number }>();
-  return row?.id ?? null;
 }
 
 // --- LLM Helpers ---
