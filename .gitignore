@@ -37,12 +37,17 @@ data/
 *~
 .DS_Store
 
-# Node modules (frontend)
+# Node modules
+node_modules/
 frontend/node_modules/
 frontend/.pnpm-store/
 
-# Frontend build artifacts (built in CI/Docker)
+# Frontend build artifacts
 frontend/dist/
+
+# Cloudflare Workers
+.wrangler/
+.dev.vars
 
 # Logs
 *.log
