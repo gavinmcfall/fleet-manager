@@ -98,7 +98,7 @@ func ReadPaints(dataPath string) ([]ParsedPaint, error) {
 
 		// Filter out paints without a vehicle tag
 		// RequiredTags can be space-separated (e.g. "Paint_Hornet_F7_Mk2 ANVL_Hornet_F7A_Mk2")
-		// — take only the first Paint_ tag for vehicle matching.
+		// — take only the first paint-related tag for vehicle matching.
 		vehicleTag := item.RequiredTags
 		if vehicleTag == "" && item.StdItem != nil && len(item.StdItem.RequiredTags) > 0 {
 			vehicleTag = item.StdItem.RequiredTags[0]
@@ -106,7 +106,7 @@ func ReadPaints(dataPath string) ([]ParsedPaint, error) {
 		if strings.Contains(vehicleTag, " ") {
 			vehicleTag = strings.Fields(vehicleTag)[0]
 		}
-		if vehicleTag == "" || !strings.HasPrefix(vehicleTag, "Paint_") {
+		if vehicleTag == "" || !isPaintTag(vehicleTag) {
 			skipped++
 			continue
 		}
@@ -126,6 +126,13 @@ func ReadPaints(dataPath string) ([]ParsedPaint, error) {
 		Msg("finished reading scunpacked paint files")
 
 	return paints, nil
+}
+
+// isPaintTag returns true if the tag is a paint vehicle tag in any known format:
+// "Paint_Carrack", "Caterpillar_Paint", "paint_golem"
+func isPaintTag(tag string) bool {
+	lower := strings.ToLower(tag)
+	return strings.HasPrefix(lower, "paint_") || strings.HasSuffix(lower, "_paint")
 }
 
 // nameFromClassName generates a readable name from a paint className.
