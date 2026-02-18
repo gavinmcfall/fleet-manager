@@ -1,5 +1,6 @@
 import { Hono } from "hono";
 import type { Env } from "../lib/types";
+import { encrypt, decrypt, maskAPIKey } from "../lib/crypto";
 
 /**
  * /api/settings/* — User settings and LLM configuration
@@ -37,8 +38,19 @@ export function settingsRoutes<E extends { Bindings: Env }>() {
       model = config.model ?? "";
       if (config.encrypted_api_key) {
         apiKeySet = true;
-        // TODO: Phase 5 — decrypt and mask the key
-        maskedKey = "sk-...configured";
+        if (c.env.ENCRYPTION_KEY) {
+          try {
+            const decrypted = await decrypt(
+              config.encrypted_api_key,
+              c.env.ENCRYPTION_KEY,
+            );
+            maskedKey = maskAPIKey(decrypted);
+          } catch {
+            maskedKey = "***error***";
+          }
+        } else {
+          maskedKey = maskAPIKey(config.encrypted_api_key);
+        }
       }
     }
 
@@ -80,8 +92,10 @@ export function settingsRoutes<E extends { Bindings: Env }>() {
       return c.json({ error: "API key is required when provider is set" }, 400);
     }
 
-    // TODO: Phase 5 — encrypt the API key with Web Crypto API
-    const encryptedKey = body.api_key; // Placeholder — will encrypt in Phase 5
+    let encryptedKey = body.api_key;
+    if (c.env.ENCRYPTION_KEY) {
+      encryptedKey = await encrypt(body.api_key, c.env.ENCRYPTION_KEY);
+    }
 
     await db
       .prepare(
