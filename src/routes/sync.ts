@@ -1,5 +1,12 @@
 import { Hono } from "hono";
 import type { Env } from "../lib/types";
+import {
+  triggerSCWikiSync,
+  triggerImageSync,
+  triggerPaintSync,
+  triggerRSISync,
+  runFullSync,
+} from "../sync/pipeline";
 
 /**
  * /api/sync/* — Sync management
@@ -25,20 +32,62 @@ export function syncRoutes<E extends { Bindings: Env }>() {
 
   // POST /api/sync/scwiki — trigger SC Wiki sync
   routes.post("/scwiki", async (c) => {
-    // TODO: Phase 4 — implement SC Wiki sync
-    return c.json({ message: "SC Wiki sync started" }, 202);
+    const env = c.env;
+    try {
+      const msg = await triggerSCWikiSync(env);
+      return c.json({ message: msg });
+    } catch (err) {
+      console.error("[sync] SC Wiki sync failed:", err);
+      return c.json({ error: String(err) }, 500);
+    }
   });
 
-  // POST /api/sync/images — trigger image sync
+  // POST /api/sync/images — trigger FleetYards image sync
   routes.post("/images", async (c) => {
-    // TODO: Phase 4 — implement FleetYards image sync
-    return c.json({ message: "Image sync started" }, 202);
+    const env = c.env;
+    try {
+      const msg = await triggerImageSync(env);
+      return c.json({ message: msg });
+    } catch (err) {
+      console.error("[sync] Image sync failed:", err);
+      return c.json({ error: String(err) }, 500);
+    }
   });
 
-  // POST /api/sync/paints — trigger paint sync
+  // POST /api/sync/paints — trigger paint sync pipeline
   routes.post("/paints", async (c) => {
-    // TODO: Phase 4 — implement paint sync pipeline
-    return c.json({ message: "Paint sync started" }, 202);
+    const env = c.env;
+    try {
+      const msg = await triggerPaintSync(env);
+      return c.json({ message: msg });
+    } catch (err) {
+      console.error("[sync] Paint sync failed:", err);
+      return c.json({ error: String(err) }, 500);
+    }
+  });
+
+  // POST /api/sync/rsi — trigger RSI API image sync
+  routes.post("/rsi", async (c) => {
+    const env = c.env;
+    try {
+      const msg = await triggerRSISync(env);
+      return c.json({ message: msg });
+    } catch (err) {
+      console.error("[sync] RSI sync failed:", err);
+      return c.json({ error: String(err) }, 500);
+    }
+  });
+
+  // POST /api/sync/all — trigger full sync pipeline
+  routes.post("/all", async (c) => {
+    const env = c.env;
+    try {
+      await runFullSync(env);
+      return c.json({ message: "Full sync pipeline complete" });
+    } catch (err) {
+      console.error("[sync] Full sync failed:", err);
+      return c.json({ error: String(err) }, 500);
+    }
   });
 
   return routes;
