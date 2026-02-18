@@ -12,16 +12,17 @@ import (
 	"io"
 )
 
-// EncryptionKey should be set from environment variable ENCRYPTION_KEY (32 bytes for AES-256)
-var EncryptionKey []byte
+// encryptionKey is the AES-256 key used for encrypting/decrypting sensitive data.
+// Set via InitEncryption; unexported to prevent direct access.
+var encryptionKey []byte
 
-// InitEncryption initializes the encryption key from environment or generates one
+// InitEncryption initializes the encryption key from environment or generates one.
 func InitEncryption(keyString string) error {
 	if keyString == "" {
 		// Generate a random key if none provided (for development)
 		// In production, this should be set via environment variable
-		EncryptionKey = make([]byte, 32)
-		if _, err := io.ReadFull(rand.Reader, EncryptionKey); err != nil {
+		encryptionKey = make([]byte, 32)
+		if _, err := io.ReadFull(rand.Reader, encryptionKey); err != nil {
 			return err
 		}
 		return nil
@@ -37,17 +38,17 @@ func InitEncryption(keyString string) error {
 		return errors.New("encryption key must be 32 bytes for AES-256")
 	}
 
-	EncryptionKey = key
+	encryptionKey = key
 	return nil
 }
 
-// Encrypt encrypts plaintext using AES-256-GCM
+// Encrypt encrypts plaintext using AES-256-GCM.
 func Encrypt(plaintext string) (string, error) {
-	if len(EncryptionKey) == 0 {
+	if len(encryptionKey) == 0 {
 		return "", errors.New("encryption key not initialized")
 	}
 
-	block, err := aes.NewCipher(EncryptionKey)
+	block, err := aes.NewCipher(encryptionKey)
 	if err != nil {
 		return "", err
 	}
@@ -66,9 +67,9 @@ func Encrypt(plaintext string) (string, error) {
 	return base64.StdEncoding.EncodeToString(ciphertext), nil
 }
 
-// Decrypt decrypts ciphertext using AES-256-GCM
+// Decrypt decrypts ciphertext using AES-256-GCM.
 func Decrypt(ciphertext string) (string, error) {
-	if len(EncryptionKey) == 0 {
+	if len(encryptionKey) == 0 {
 		return "", errors.New("encryption key not initialized")
 	}
 
@@ -77,7 +78,7 @@ func Decrypt(ciphertext string) (string, error) {
 		return "", err
 	}
 
-	block, err := aes.NewCipher(EncryptionKey)
+	block, err := aes.NewCipher(encryptionKey)
 	if err != nil {
 		return "", err
 	}

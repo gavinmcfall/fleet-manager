@@ -180,7 +180,7 @@ func (c *Client) doGet(ctx context.Context, url string) ([]byte, error) {
 	defer resp.Body.Close()
 
 	if resp.StatusCode != http.StatusOK {
-		body, _ := io.ReadAll(resp.Body)
+		body, _ := io.ReadAll(io.LimitReader(resp.Body, 1<<10)) // 1KB for error messages
 		limit := len(body)
 		if limit > 200 {
 			limit = 200
@@ -188,5 +188,5 @@ func (c *Client) doGet(ctx context.Context, url string) ([]byte, error) {
 		return nil, fmt.Errorf("HTTP %d: %s", resp.StatusCode, string(body[:limit]))
 	}
 
-	return io.ReadAll(resp.Body)
+	return io.ReadAll(io.LimitReader(resp.Body, 10<<20)) // 10MB limit
 }

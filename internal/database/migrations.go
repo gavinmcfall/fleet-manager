@@ -51,16 +51,28 @@ func (db *DB) migrate() error {
 		}
 	}
 
-	// Step 3: Add columns to existing tables (idempotent)
+	// Step 3: Create indexes
+	indexes := []string{
+		"CREATE INDEX IF NOT EXISTS idx_paint_vehicles_vehicle_id ON paint_vehicles(vehicle_id)",
+		"CREATE INDEX IF NOT EXISTS idx_user_fleet_user_id ON user_fleet(user_id)",
+		"CREATE INDEX IF NOT EXISTS idx_sync_history_started_at ON sync_history(started_at)",
+	}
+	for _, idx := range indexes {
+		if _, err := db.conn.Exec(idx); err != nil {
+			return fmt.Errorf("index creation: %w", err)
+		}
+	}
+
+	// Step 4: Add columns to existing tables (idempotent)
 	db.migratePaintsAddColumns()
 
-	// Step 4: Seed lookup tables
+	// Step 5: Seed lookup tables
 	db.seedLookupTables()
 
-	// Step 5: Create default user if none exists
+	// Step 6: Create default user if none exists
 	db.ensureDefaultUser()
 
-	// Step 6: Drop legacy tables (data has been migrated to default user)
+	// Step 7: Drop legacy tables (data has been migrated to default user)
 	db.dropOldTables()
 
 	log.Info().Msg("migrations complete")

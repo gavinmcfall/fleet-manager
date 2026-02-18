@@ -8,6 +8,7 @@ import (
 	"os"
 	"path/filepath"
 	"strconv"
+	"strings"
 	"time"
 
 	"github.com/go-chi/chi/v5"
@@ -141,11 +142,33 @@ func (s *Server) healthCheck(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusOK, map[string]string{"status": "ok"})
 }
 
+// defaultUserID resolves the default user ID, writing an error response on failure.
+// Returns 0 and false if the user could not be resolved.
+func (s *Server) defaultUserID(w http.ResponseWriter, ctx context.Context) (int, bool) {
+	userID, err := s.db.GetDefaultUserID(ctx)
+	if err != nil {
+		log.Error().Err(err).Msg("default user not found")
+		writeError(w, http.StatusInternalServerError, "Default user not found")
+		return 0, false
+	}
+	return userID, true
+}
+
 func (s *Server) getStatus(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
-	vehicleCount, _ := s.db.GetVehicleCount(ctx)
+
+	vehicleCount, err := s.db.GetVehicleCount(ctx)
+	if err != nil {
+		log.Error().Err(err).Msg("failed to get vehicle count")
+		writeError(w, http.StatusServiceUnavailable, "Database unavailable")
+		return
+	}
+
 	paintCount, _ := s.db.GetPaintCount(ctx)
-	userID := s.db.GetDefaultUserID(ctx)
+	userID, ok := s.defaultUserID(w, ctx)
+	if !ok {
+		return
+	}
 	fleetCount, _ := s.db.GetUserFleetCount(ctx, userID)
 	syncHistory, _ := s.db.GetLatestSyncHistory(ctx)
 
@@ -190,7 +213,10 @@ func (s *Server) getShip(w http.ResponseWriter, r *http.Request) {
 
 func (s *Server) listUserFleet(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
-	userID := s.db.GetDefaultUserID(ctx)
+	userID, ok := s.defaultUserID(w, ctx)
+	if !ok {
+		return
+	}
 	fleet, err := s.db.GetUserFleet(ctx, userID)
 	if err != nil {
 		writeError(w, http.StatusInternalServerError, err.Error())
@@ -218,7 +244,10 @@ func (s *Server) importHangarXplor(w http.ResponseWriter, r *http.Request) {
 	}
 
 	ctx := r.Context()
-	userID := s.db.GetDefaultUserID(ctx)
+	userID, ok := s.defaultUserID(w, ctx)
+	if !ok {
+		return
+	}
 
 	// Resolve insurance type IDs once before loop
 	ltiID, err := s.db.GetInsuranceTypeIDByKey(ctx, "lti")
@@ -401,7 +430,10 @@ func (s *Server) getPaintsForShip(w http.ResponseWriter, r *http.Request) {
 
 func (s *Server) getAnalysis(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
-	userID := s.db.GetDefaultUserID(ctx)
+	userID, ok := s.defaultUserID(w, ctx)
+	if !ok {
+		return
+	}
 
 	fleet, err := s.db.GetUserFleet(ctx, userID)
 	if err != nil {
@@ -481,7 +513,10 @@ func (s *Server) triggerSCWikiSync(w http.ResponseWriter, r *http.Request) {
 
 func (s *Server) getLLMConfig(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
-	userID := s.db.GetDefaultUserID(ctx)
+	userID, ok := s.defaultUserID(w, ctx)
+	if !ok {
+		return
+	}
 
 	config, err := s.db.GetUserLLMConfig(ctx, userID)
 	if err != nil {
@@ -515,6 +550,7 @@ func (s *Server) getLLMConfig(w http.ResponseWriter, r *http.Request) {
 }
 
 func (s *Server) setLLMConfig(w http.ResponseWriter, r *http.Request) {
+	r.Body = http.MaxBytesReader(w, r.Body, 1<<20) // 1MB
 	var req struct {
 		Provider string `json:"provider"`
 		APIKey   string `json:"api_key"`
@@ -527,7 +563,10 @@ func (s *Server) setLLMConfig(w http.ResponseWriter, r *http.Request) {
 	}
 
 	ctx := r.Context()
-	userID := s.db.GetDefaultUserID(ctx)
+	userID, ok := s.defaultUserID(w, ctx)
+	if !ok {
+		return
+	}
 
 	// Check if this is a clear operation (all empty)
 	if req.Provider == "" && req.APIKey == "" && req.Model == "" {
@@ -551,6 +590,12 @@ func (s *Server) setLLMConfig(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	// Validate API key is not empty when a provider is set
+	if strings.TrimSpace(req.APIKey) == "" {
+		writeError(w, http.StatusBadRequest, "API key is required when provider is set")
+		return
+	}
+
 	// Encrypt API key
 	encryptedKey, err := crypto.Encrypt(req.APIKey)
 	if err != nil {
@@ -568,6 +613,7 @@ func (s *Server) setLLMConfig(w http.ResponseWriter, r *http.Request) {
 }
 
 func (s *Server) testLLMConnection(w http.ResponseWriter, r *http.Request) {
+	r.Body = http.MaxBytesReader(w, r.Body, 1<<20) // 1MB
 	var req struct {
 		Provider string `json:"provider"`
 		APIKey   string `json:"api_key"`
@@ -610,7 +656,10 @@ func (s *Server) testLLMConnection(w http.ResponseWriter, r *http.Request) {
 
 func (s *Server) generateAIAnalysis(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
-	userID := s.db.GetDefaultUserID(ctx)
+	userID, ok := s.defaultUserID(w, ctx)
+	if !ok {
+		return
+	}
 
 	log.Info().Msg("AI fleet analysis request received")
 
@@ -689,7 +738,10 @@ func (s *Server) generateAIAnalysis(w http.ResponseWriter, r *http.Request) {
 
 func (s *Server) getLatestAIAnalysis(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
-	userID := s.db.GetDefaultUserID(ctx)
+	userID, ok := s.defaultUserID(w, ctx)
+	if !ok {
+		return
+	}
 
 	a, err := s.db.GetLatestAIAnalysis(ctx, userID)
 	if err != nil {
@@ -708,7 +760,10 @@ func (s *Server) getLatestAIAnalysis(w http.ResponseWriter, r *http.Request) {
 
 func (s *Server) getAIAnalysisHistory(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
-	userID := s.db.GetDefaultUserID(ctx)
+	userID, ok := s.defaultUserID(w, ctx)
+	if !ok {
+		return
+	}
 
 	analyses, err := s.db.GetAIAnalysisHistory(ctx, userID, 50)
 	if err != nil {
@@ -744,7 +799,10 @@ func (s *Server) deleteAIAnalysis(w http.ResponseWriter, r *http.Request) {
 
 func (s *Server) debugImports(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
-	userID := s.db.GetDefaultUserID(ctx)
+	userID, ok := s.defaultUserID(w, ctx)
+	if !ok {
+		return
+	}
 
 	vehicleCount, _ := s.db.GetVehicleCount(ctx)
 	fleetCount, _ := s.db.GetUserFleetCount(ctx, userID)
@@ -797,9 +855,17 @@ func (s *Server) serveFrontend(r chi.Router) {
 	fs := http.FileServer(http.Dir(staticDir))
 
 	r.Get("/*", func(w http.ResponseWriter, r *http.Request) {
-		path := filepath.Join(staticDir, r.URL.Path)
+		// Clean the path and verify it stays within staticDir (prevent traversal)
+		cleanPath := filepath.Clean(r.URL.Path)
+		fullPath := filepath.Join(staticDir, cleanPath)
+		absStatic, _ := filepath.Abs(staticDir)
+		absPath, _ := filepath.Abs(fullPath)
+		if !strings.HasPrefix(absPath, absStatic) {
+			http.ServeFile(w, r, filepath.Join(staticDir, "index.html"))
+			return
+		}
 
-		if _, err := os.Stat(path); os.IsNotExist(err) {
+		if _, err := os.Stat(fullPath); os.IsNotExist(err) {
 			http.ServeFile(w, r, filepath.Join(staticDir, "index.html"))
 			return
 		}

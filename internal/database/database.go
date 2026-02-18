@@ -185,6 +185,11 @@ func (db *DB) UpsertManufacturer(ctx context.Context, m *models.Manufacturer) (i
 		return 0, err
 	}
 	id, _ := res.LastInsertId()
+	if id == 0 && m.UUID != "" {
+		// SQLite returns 0 on upsert-that-updates; fall back to SELECT
+		fallback := db.prepareQuery("SELECT id FROM manufacturers WHERE uuid = ?")
+		db.conn.QueryRowContext(ctx, fallback, m.UUID).Scan(&id)
+	}
 	return int(id), nil
 }
 
@@ -402,6 +407,11 @@ func (db *DB) UpsertVehicle(ctx context.Context, v *models.Vehicle) (int, error)
 		return 0, err
 	}
 	id, _ := res.LastInsertId()
+	if id == 0 && v.Slug != "" {
+		// SQLite returns 0 on upsert-that-updates; fall back to SELECT
+		fallback := db.prepareQuery("SELECT id FROM vehicles WHERE slug = ?")
+		db.conn.QueryRowContext(ctx, fallback, v.Slug).Scan(&id)
+	}
 	return int(id), nil
 }
 
@@ -1131,10 +1141,13 @@ func (db *DB) GetDefaultUser(ctx context.Context) (*models.User, error) {
 	return &u, err
 }
 
-func (db *DB) GetDefaultUserID(ctx context.Context) int {
+func (db *DB) GetDefaultUserID(ctx context.Context) (int, error) {
 	var id int
-	db.conn.QueryRowContext(ctx, "SELECT id FROM users WHERE username = 'default'").Scan(&id)
-	return id
+	err := db.conn.QueryRowContext(ctx, "SELECT id FROM users WHERE username = 'default'").Scan(&id)
+	if err != nil {
+		return 0, fmt.Errorf("default user not found: %w", err)
+	}
+	return id, nil
 }
 
 // --- User Fleet Operations ---
