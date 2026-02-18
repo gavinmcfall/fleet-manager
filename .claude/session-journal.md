@@ -117,3 +117,7 @@ This file maintains running context across compactions.
 4. FleetYards: paint images
 5. RSI API: ship + paint images (if `RSI_API_ENABLED=true`)
 6. RSI extract: static fallback (only if API not enabled)
+
+---
+**Session compacted at:** 2026-02-18 19:19:53
+

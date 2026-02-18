@@ -68,6 +68,11 @@ app.route("/api/sync", syncRoutes<HonoEnv>());
 app.route("/api", analysisRoutes<HonoEnv>());
 app.route("/api/debug", debugRoutes<HonoEnv>());
 
+// SPA catch-all — forward non-API requests to Workers Assets (serves index.html)
+app.get("*", async (c) => {
+  return c.env.ASSETS.fetch(c.req.raw);
+});
+
 // Export for Cloudflare Workers
 export default {
   fetch: app.fetch,
