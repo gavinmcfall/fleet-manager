@@ -407,6 +407,17 @@ export async function syncVehicleLoaners(
   }
 }
 
+export async function findVehicleIDsBySlugLike(
+  db: D1Database,
+  pattern: string,
+): Promise<number[]> {
+  const result = await db
+    .prepare("SELECT id FROM vehicles WHERE slug LIKE ?")
+    .bind(pattern)
+    .all();
+  return result.results.map((r) => (r as { id: number }).id);
+}
+
 export async function findVehicleIDsBySlugPrefix(
   db: D1Database,
   prefix: string,
@@ -712,6 +723,24 @@ export async function getAllPaintNameClasses(
     )
     .all();
   return result.results as Array<{ name: string; class_name: string; has_image: boolean }>;
+}
+
+export async function getPaintsByVehicleSlug(
+  db: D1Database,
+  vehicleSlug: string,
+): Promise<Array<{ name: string; class_name: string }>> {
+  const result = await db
+    .prepare(
+      `SELECT p.name, p.class_name
+      FROM paints p
+      JOIN paint_vehicles pv ON pv.paint_id = p.id
+      JOIN vehicles v ON v.id = pv.vehicle_id
+      WHERE v.slug = ?
+      ORDER BY p.name`,
+    )
+    .bind(vehicleSlug)
+    .all();
+  return result.results as Array<{ name: string; class_name: string }>;
 }
 
 export async function getVehicleSlugsWithPaints(db: D1Database): Promise<string[]> {

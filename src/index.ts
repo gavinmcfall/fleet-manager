@@ -87,15 +87,7 @@ export default {
   },
 };
 
-async function runScheduledSync(_env: Env): Promise<void> {
-  console.log("[cron] Scheduled sync started");
-
-  // TODO: Phase 4 — implement sync pipeline
-  // 1. SC Wiki sync (manufacturers, vehicles, loaners)
-  // 2. FleetYards image sync
-  // 3. scunpacked paint metadata (fetch from GitHub)
-  // 4. FleetYards paint image sync
-  // 5. RSI API image sync (if enabled)
-
-  console.log("[cron] Scheduled sync complete");
+async function runScheduledSync(env: Env): Promise<void> {
+  const { runFullSync } = await import("./sync/pipeline");
+  await runFullSync(env);
 }
