@@ -13,14 +13,20 @@ import (
 // Needed when the tag abbreviation doesn't match any vehicle slug directly.
 // Values containing '%' are used as LIKE patterns; others are used as exact slugs.
 var tagAliases = map[string]string{
-	"890j":           "890-jump",
-	"star-runner":    "mercury-star-runner",
-	"starfighter":    "ares-star-fighter",
+	"890j":        "890-jump",
+	"star-runner": "mercury-star-runner",
+	"starfighter": "ares-star-fighter",
+	"scout":       "khartu-al",
+	"hornet":      "%hornet%",
 	"hornet-f7-mk2":  "%hornet%mk-ii",
 	"hornet-f7c-mk2": "%hornet%mk-ii",
-	"hornet":         "%hornet%",
-	"herald":         "herald",
-	"msr":            "mercury-star-runner",
+	"herald":      "herald",
+	"msr":         "mercury-star-runner",
+	"hull-c":      "hull-c",
+	"caterpillar":  "caterpillar",
+	"golem":       "%golem%",
+	"salvation":   "salvation",
+	"ursa":        "%ursa%",
 }
 
 // Syncer handles syncing scunpacked-data paint metadata to the database.
@@ -89,13 +95,13 @@ func (s *Syncer) SyncPaints(ctx context.Context) (int, error) {
 
 // resolveVehicleIDs tries to match a paint tag (e.g. "Paint_Carrack") to vehicles in the DB.
 // Returns all matching vehicle IDs (empty slice if no match).
+// Handles multiple tag formats: "Paint_Carrack", "Caterpillar_Paint", "paint_golem"
 func (s *Syncer) resolveVehicleIDs(ctx context.Context, tag string) []int {
-	// Normalize: strip Paint_ prefix / _Paint suffix, replace _ with -, lowercase
-	normalized := tag
-	normalized = strings.TrimPrefix(normalized, "Paint_")
-	normalized = strings.TrimSuffix(normalized, "_Paint")
+	// Normalize: strip Paint_ prefix / _Paint suffix (case-insensitive), replace _ with -, lowercase
+	normalized := strings.ToLower(tag)
+	normalized = strings.TrimPrefix(normalized, "paint_")
+	normalized = strings.TrimSuffix(normalized, "_paint")
 	normalized = strings.ReplaceAll(normalized, "_", "-")
-	normalized = strings.ToLower(normalized)
 
 	if normalized == "" {
 		return nil
