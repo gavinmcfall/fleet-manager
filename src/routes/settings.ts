@@ -1,6 +1,7 @@
 import { Hono } from "hono";
 import type { Env } from "../lib/types";
 import { encrypt, decrypt, maskAPIKey } from "../lib/crypto";
+import { getDefaultUserID } from "../db/queries";
 
 /**
  * /api/settings/* — User settings and LLM configuration
@@ -95,6 +96,9 @@ export function settingsRoutes<E extends { Bindings: Env }>() {
     let encryptedKey = body.api_key;
     if (c.env.ENCRYPTION_KEY) {
       encryptedKey = await encrypt(body.api_key, c.env.ENCRYPTION_KEY);
+    } else if (c.env.API_TOKEN) {
+      // Production mode (API_TOKEN set) but no ENCRYPTION_KEY — refuse to store plaintext
+      return c.json({ error: "ENCRYPTION_KEY not configured — cannot store API key securely" }, 500);
     }
 
     await db
@@ -115,9 +119,3 @@ export function settingsRoutes<E extends { Bindings: Env }>() {
   return routes;
 }
 
-async function getDefaultUserID(db: D1Database): Promise<number | null> {
-  const row = await db
-    .prepare("SELECT id FROM users WHERE username = 'default'")
-    .first<{ id: number }>();
-  return row?.id ?? null;
-}

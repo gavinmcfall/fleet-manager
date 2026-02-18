@@ -77,15 +77,17 @@ interface GitHubTreeResponse {
  * Fetch paint file list from GitHub API, then fetch each paint file.
  * Uses the Git Trees API to list files matching paint_*.json in items/
  */
-async function fetchPaintFiles(repo: string, branch: string): Promise<ParsedPaint[]> {
+async function fetchPaintFiles(repo: string, branch: string, githubToken?: string): Promise<ParsedPaint[]> {
   // Use the Git Trees API to list items/ directory
   const treeURL = `https://api.github.com/repos/${repo}/git/trees/${branch}?recursive=1`;
-  const treeResp = await fetch(treeURL, {
-    headers: {
-      Accept: "application/vnd.github.v3+json",
-      "User-Agent": "Fleet-Manager/1.0",
-    },
-  });
+  const headers: Record<string, string> = {
+    Accept: "application/vnd.github.v3+json",
+    "User-Agent": "Fleet-Manager/1.0",
+  };
+  if (githubToken) {
+    headers["Authorization"] = `token ${githubToken}`;
+  }
+  const treeResp = await fetch(treeURL, { headers });
 
   if (!treeResp.ok) {
     throw new Error(`GitHub API error (${treeResp.status}): ${await treeResp.text()}`);
@@ -107,9 +109,11 @@ async function fetchPaintFiles(repo: string, branch: string): Promise<ParsedPain
   for (const file of paintFiles) {
     try {
       const rawURL = `https://raw.githubusercontent.com/${repo}/${branch}/${file.path}`;
-      const resp = await fetch(rawURL, {
-        headers: { "User-Agent": "Fleet-Manager/1.0" },
-      });
+      const rawHeaders: Record<string, string> = { "User-Agent": "Fleet-Manager/1.0" };
+      if (githubToken) {
+        rawHeaders["Authorization"] = `token ${githubToken}`;
+      }
+      const resp = await fetch(rawURL, { headers: rawHeaders });
       if (!resp.ok) continue;
 
       const pf = (await resp.json()) as PaintFile;
@@ -227,11 +231,12 @@ export async function syncPaints(
   db: D1Database,
   repo: string,
   branch: string,
+  githubToken?: string,
 ): Promise<number> {
   const syncID = await insertSyncHistory(db, SYNC_SOURCE_SCUNPACKED, "paints", "running");
 
   try {
-    const paints = await fetchPaintFiles(repo, branch);
+    const paints = await fetchPaintFiles(repo, branch, githubToken);
     let count = 0;
     let unmatched = 0;
 

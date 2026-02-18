@@ -20,6 +20,7 @@ import {
   insertSyncHistory,
   updateSyncHistory,
 } from "../db/queries";
+import { delay } from "../lib/utils";
 
 // --- Constants ---
 
@@ -216,10 +217,6 @@ async function queryGraphQL(
   }
 
   return responses[0].data;
-}
-
-function delay(ms: number): Promise<void> {
-  return new Promise((resolve) => setTimeout(resolve, ms));
 }
 
 // --- Image URL helpers ---

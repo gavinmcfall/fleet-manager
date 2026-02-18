@@ -10,6 +10,9 @@ import {
 
 /**
  * /api/sync/* — Sync management
+ *
+ * All sync POST handlers run in the background via executionCtx.waitUntil()
+ * and return immediately. This avoids Workers HTTP request timeout (30s CPU).
  */
 export function syncRoutes<E extends { Bindings: Env }>() {
   const routes = new Hono<E>();
@@ -30,64 +33,59 @@ export function syncRoutes<E extends { Bindings: Env }>() {
     return c.json(result.results);
   });
 
-  // POST /api/sync/scwiki — trigger SC Wiki sync
+  // POST /api/sync/scwiki — trigger SC Wiki sync (background)
   routes.post("/scwiki", async (c) => {
     const env = c.env;
-    try {
-      const msg = await triggerSCWikiSync(env);
-      return c.json({ message: msg });
-    } catch (err) {
-      console.error("[sync] SC Wiki sync failed:", err);
-      return c.json({ error: String(err) }, 500);
-    }
+    c.executionCtx.waitUntil(
+      triggerSCWikiSync(env).catch((err) =>
+        console.error("[sync] SC Wiki sync failed:", err),
+      ),
+    );
+    return c.json({ message: "SC Wiki sync triggered" });
   });
 
-  // POST /api/sync/images — trigger FleetYards image sync
+  // POST /api/sync/images — trigger FleetYards image sync (background)
   routes.post("/images", async (c) => {
     const env = c.env;
-    try {
-      const msg = await triggerImageSync(env);
-      return c.json({ message: msg });
-    } catch (err) {
-      console.error("[sync] Image sync failed:", err);
-      return c.json({ error: String(err) }, 500);
-    }
+    c.executionCtx.waitUntil(
+      triggerImageSync(env).catch((err) =>
+        console.error("[sync] Image sync failed:", err),
+      ),
+    );
+    return c.json({ message: "FleetYards image sync triggered" });
   });
 
-  // POST /api/sync/paints — trigger paint sync pipeline
+  // POST /api/sync/paints — trigger paint sync pipeline (background)
   routes.post("/paints", async (c) => {
     const env = c.env;
-    try {
-      const msg = await triggerPaintSync(env);
-      return c.json({ message: msg });
-    } catch (err) {
-      console.error("[sync] Paint sync failed:", err);
-      return c.json({ error: String(err) }, 500);
-    }
+    c.executionCtx.waitUntil(
+      triggerPaintSync(env).catch((err) =>
+        console.error("[sync] Paint sync failed:", err),
+      ),
+    );
+    return c.json({ message: "Paint sync triggered" });
   });
 
-  // POST /api/sync/rsi — trigger RSI API image sync
+  // POST /api/sync/rsi — trigger RSI API image sync (background)
   routes.post("/rsi", async (c) => {
     const env = c.env;
-    try {
-      const msg = await triggerRSISync(env);
-      return c.json({ message: msg });
-    } catch (err) {
-      console.error("[sync] RSI sync failed:", err);
-      return c.json({ error: String(err) }, 500);
-    }
+    c.executionCtx.waitUntil(
+      triggerRSISync(env).catch((err) =>
+        console.error("[sync] RSI sync failed:", err),
+      ),
+    );
+    return c.json({ message: "RSI sync triggered" });
   });
 
-  // POST /api/sync/all — trigger full sync pipeline
+  // POST /api/sync/all — trigger full sync pipeline (background)
   routes.post("/all", async (c) => {
     const env = c.env;
-    try {
-      await runFullSync(env);
-      return c.json({ message: "Full sync pipeline complete" });
-    } catch (err) {
-      console.error("[sync] Full sync failed:", err);
-      return c.json({ error: String(err) }, 500);
-    }
+    c.executionCtx.waitUntil(
+      runFullSync(env).catch((err) =>
+        console.error("[sync] Full sync failed:", err),
+      ),
+    );
+    return c.json({ message: "Full sync pipeline triggered" });
   });
 
   return routes;

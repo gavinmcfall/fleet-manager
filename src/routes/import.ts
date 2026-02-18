@@ -1,9 +1,13 @@
 import { Hono } from "hono";
 import type { Env, HangarXplorEntry } from "../lib/types";
 import { slugFromShipCode, slugFromName, compactSlug } from "../lib/slug";
+import { getDefaultUserID, loadInsuranceTypes } from "../db/queries";
 
 /**
  * /api/import/* — HangarXplor import
+ *
+ * Preloads vehicle slug map to avoid per-entry DB queries.
+ * Uses db.batch() for transactional delete+insert (all-or-nothing).
  */
 export function importRoutes<E extends { Bindings: Env }>() {
   const routes = new Hono<E>();
@@ -17,22 +21,20 @@ export function importRoutes<E extends { Bindings: Env }>() {
       return c.json({ error: "Expected JSON array" }, 400);
     }
 
-    // Get default user ID
-    const userRow = await db
-      .prepare("SELECT id FROM users WHERE username = 'default'")
-      .first<{ id: number }>();
-    if (!userRow) {
+    const userID = await getDefaultUserID(db);
+    if (userID === null) {
       return c.json({ error: "Default user not found" }, 500);
     }
-    const userID = userRow.id;
 
-    // Resolve insurance type IDs
+    // Preload all vehicle slugs+names into memory (avoids per-entry queries)
+    const vehicleMap = await preloadVehicleMap(db);
     const insuranceMap = await loadInsuranceTypes(db);
 
-    // Clean slate — delete existing fleet
-    await db.prepare("DELETE FROM user_fleet WHERE user_id = ?").bind(userID).run();
+    // Build all insert statements first, then batch with the delete
+    const insertStmts: D1PreparedStatement[] = [];
+    let stubStmts: D1PreparedStatement[] = [];
+    const stubSlugs: string[] = [];
 
-    let imported = 0;
     for (const entry of entries) {
       const displayName = entry.name;
 
@@ -43,39 +45,22 @@ export function importRoutes<E extends { Bindings: Env }>() {
       const compactCode = compactSlug(codeSlug);
       const compactName = compactSlug(nameSlug);
 
-      // Find matching vehicle in reference table
+      // Find matching vehicle in preloaded map
       const candidates = [codeSlug, nameSlug, lookupSlug, compactCode, compactName];
-      let matchedSlug = await findVehicleSlug(db, candidates, displayName);
+      let matchedSlug = findVehicleSlugLocal(vehicleMap, candidates, displayName);
       if (!matchedSlug) {
         matchedSlug = codeSlug;
-      }
-
-      // Resolve vehicle ID from reference table
-      let vehicleID = await getVehicleIDBySlug(db, matchedSlug);
-      if (vehicleID === null) {
-        // Vehicle not in reference DB — create a stub entry
-        const result = await db
-          .prepare(
-            `INSERT INTO vehicles (slug, name, updated_at) VALUES (?, ?, datetime('now'))
-            ON CONFLICT(slug) DO UPDATE SET name=excluded.name, updated_at=excluded.updated_at`,
-          )
-          .bind(matchedSlug, displayName)
-          .run();
-
-        // Get the ID of the inserted/updated row
-        if (result.meta.last_row_id) {
-          vehicleID = result.meta.last_row_id;
-        } else {
-          const row = await db
-            .prepare("SELECT id FROM vehicles WHERE slug = ?")
-            .bind(matchedSlug)
-            .first<{ id: number }>();
-          vehicleID = row?.id ?? null;
-        }
-
-        if (vehicleID === null) {
-          console.warn(`[import] Failed to create stub vehicle: ${displayName} (${matchedSlug})`);
-          continue;
+        // Need to create a stub — queue for batch insert
+        if (!vehicleMap.slugToID.has(matchedSlug)) {
+          stubStmts.push(
+            db
+              .prepare(
+                `INSERT INTO vehicles (slug, name, updated_at) VALUES (?, ?, datetime('now'))
+                ON CONFLICT(slug) DO UPDATE SET name=excluded.name, updated_at=excluded.updated_at`,
+              )
+              .bind(matchedSlug, displayName),
+          );
+          stubSlugs.push(matchedSlug);
         }
       }
 
@@ -118,31 +103,58 @@ export function importRoutes<E extends { Bindings: Env }>() {
         }
       }
 
-      // Insert user fleet entry
-      try {
-        await db
+      // Queue insert (vehicleID resolved after stubs are created)
+      insertStmts.push(
+        db
           .prepare(
             `INSERT INTO user_fleet (user_id, vehicle_id, insurance_type_id, warbond, is_loaner,
               pledge_id, pledge_name, pledge_cost, pledge_date, custom_name, imported_at)
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, datetime('now'))`,
+            VALUES (?, (SELECT id FROM vehicles WHERE slug = ?), ?, ?, ?,
+              ?, ?, ?, ?, ?, datetime('now'))`,
           )
           .bind(
             userID,
-            vehicleID,
+            matchedSlug,
             insuranceTypeID,
             entry.warbond ? 1 : 0,
-            0, // is_loaner
+            0,
             entry.pledge_id || null,
             entry.pledge_name || null,
             entry.pledge_cost || null,
             entry.pledge_date || null,
             customName || null,
-          )
-          .run();
-        imported++;
-      } catch (err) {
-        console.warn(`[import] Failed to insert fleet entry: ${displayName}`, err);
+          ),
+      );
+    }
+
+    // Execute: stubs first (if any), then delete+insert as a batch
+    if (stubStmts.length > 0) {
+      // Batch stub vehicle creation (max 100 per batch for D1)
+      for (let i = 0; i < stubStmts.length; i += 100) {
+        await db.batch(stubStmts.slice(i, i + 100));
       }
+      console.log(`[import] Created ${stubStmts.length} stub vehicles: ${stubSlugs.join(", ")}`);
+    }
+
+    // Batch delete + all inserts (transactional via db.batch)
+    const deleteStmt = db
+      .prepare("DELETE FROM user_fleet WHERE user_id = ?")
+      .bind(userID);
+
+    // D1 batch limit — chunk inserts if needed
+    const BATCH_SIZE = 90; // Leave room for the delete statement
+    let imported = 0;
+
+    for (let i = 0; i < insertStmts.length; i += BATCH_SIZE) {
+      const chunk = insertStmts.slice(i, i + BATCH_SIZE);
+      const batch = i === 0 ? [deleteStmt, ...chunk] : chunk;
+      await db.batch(batch);
+      imported += chunk.length;
+    }
+
+    // Handle edge case: entries array was empty, still delete old fleet
+    if (insertStmts.length === 0) {
+      await deleteStmt.run();
     }
 
     console.log(`[import] HangarXplor import complete: ${imported}/${entries.length}`);
@@ -156,56 +168,64 @@ export function importRoutes<E extends { Bindings: Env }>() {
   return routes;
 }
 
-async function loadInsuranceTypes(db: D1Database): Promise<Map<string, number>> {
-  const result = await db.prepare("SELECT id, key FROM insurance_types").all();
-  const map = new Map<string, number>();
+// --- Preloaded vehicle map for in-memory slug matching ---
+
+interface VehicleMap {
+  slugToID: Map<string, number>;
+  nameToSlug: Map<string, string>;
+  compactToSlug: Map<string, string>;
+}
+
+async function preloadVehicleMap(db: D1Database): Promise<VehicleMap> {
+  const result = await db
+    .prepare("SELECT id, slug, name FROM vehicles")
+    .all();
+
+  const slugToID = new Map<string, number>();
+  const nameToSlug = new Map<string, string>();
+  const compactToSlug = new Map<string, string>();
+
   for (const row of result.results) {
-    const r = row as { id: number; key: string };
-    map.set(r.key, r.id);
+    const r = row as { id: number; slug: string; name: string };
+    slugToID.set(r.slug, r.id);
+    nameToSlug.set(r.name.toLowerCase(), r.slug);
+    compactToSlug.set(compactSlug(r.slug), r.slug);
   }
-  return map;
+
+  return { slugToID, nameToSlug, compactToSlug };
 }
 
-async function getVehicleIDBySlug(db: D1Database, slug: string): Promise<number | null> {
-  const row = await db
-    .prepare("SELECT id FROM vehicles WHERE slug = ? LIMIT 1")
-    .bind(slug)
-    .first<{ id: number }>();
-  return row?.id ?? null;
-}
-
-async function findVehicleSlug(
-  db: D1Database,
+function findVehicleSlugLocal(
+  map: VehicleMap,
   candidateSlugs: string[],
   displayName: string,
-): Promise<string | null> {
+): string | null {
   // Try exact slug matches
   for (const slug of candidateSlugs) {
     if (!slug) continue;
-    const row = await db
-      .prepare("SELECT slug FROM vehicles WHERE slug = ? LIMIT 1")
-      .bind(slug)
-      .first<{ slug: string }>();
-    if (row) return row.slug;
+    if (map.slugToID.has(slug)) return slug;
   }
 
   // Try name match
   if (displayName) {
-    const row = await db
-      .prepare("SELECT slug FROM vehicles WHERE LOWER(name) = LOWER(?) LIMIT 1")
-      .bind(displayName)
-      .first<{ slug: string }>();
-    if (row) return row.slug;
+    const found = map.nameToSlug.get(displayName.toLowerCase());
+    if (found) return found;
+  }
+
+  // Try compact match
+  for (const slug of candidateSlugs) {
+    if (!slug) continue;
+    const compact = compactSlug(slug);
+    const found = map.compactToSlug.get(compact);
+    if (found) return found;
   }
 
   // Try prefix match
   for (const slug of candidateSlugs) {
     if (!slug || slug.length < 3) continue;
-    const row = await db
-      .prepare("SELECT slug FROM vehicles WHERE slug LIKE ? LIMIT 1")
-      .bind(slug + "%")
-      .first<{ slug: string }>();
-    if (row) return row.slug;
+    for (const [existingSlug] of map.slugToID) {
+      if (existingSlug.startsWith(slug)) return existingSlug;
+    }
   }
 
   return null;

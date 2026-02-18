@@ -14,9 +14,15 @@ database_name = "fleet-manager"
 database_id = "placeholder-create-with-wrangler-d1-create"
 migrations_dir = "src/db/migrations"
 
-# Cron Triggers — nightly sync at 3am UTC
+# Cron Triggers — staggered nightly sync to stay within Workers CPU limits
+# Each step runs as a separate invocation with its own 30s CPU budget
 [triggers]
-crons = ["0 3 * * *"]
+crons = [
+  "0 3 * * *",   # SC Wiki sync
+  "15 3 * * *",  # FleetYards ship images
+  "30 3 * * *",  # scunpacked paints + FleetYards paint images
+  "45 3 * * *",  # RSI API images (if enabled)
+]
 
 # Environment variables (non-secret defaults)
 [vars]

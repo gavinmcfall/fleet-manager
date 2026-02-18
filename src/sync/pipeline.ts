@@ -44,7 +44,7 @@ export async function triggerPaintSync(env: Env): Promise<string> {
   console.log("[pipeline] Paint sync triggered");
 
   // Step 1: scunpacked metadata
-  await syncScunpackedPaints(env.DB, repo, branch);
+  await syncScunpackedPaints(env.DB, repo, branch, env.GITHUB_TOKEN);
 
   // Step 2: FleetYards paint images
   await syncFYPaintImages(env.DB, baseURL);
@@ -78,22 +78,12 @@ export async function runFullSync(env: Env): Promise<void> {
   // Step 1: SC Wiki — primary data source
   if (scwikiEnabled) {
     const mfgCount = await getManufacturerCount(db);
-    if (mfgCount === 0) {
-      console.log("[pipeline] No manufacturers in DB, running SC Wiki sync");
-      try {
-        const rateLimitMs = parseFloat(env.SC_WIKI_RATE_LIMIT || "1") * 1000;
-        await syncSCWiki(db, rateLimitMs);
-      } catch (err) {
-        console.error("[pipeline] SC Wiki sync failed:", err);
-      }
-    } else {
-      console.log(`[pipeline] ${mfgCount} manufacturers already in DB, running SC Wiki sync`);
-      try {
-        const rateLimitMs = parseFloat(env.SC_WIKI_RATE_LIMIT || "1") * 1000;
-        await syncSCWiki(db, rateLimitMs);
-      } catch (err) {
-        console.error("[pipeline] SC Wiki sync failed:", err);
-      }
+    console.log(`[pipeline] ${mfgCount} manufacturers in DB, running SC Wiki sync`);
+    try {
+      const rateLimitMs = parseFloat(env.SC_WIKI_RATE_LIMIT || "1") * 1000;
+      await syncSCWiki(db, rateLimitMs);
+    } catch (err) {
+      console.error("[pipeline] SC Wiki sync failed:", err);
     }
   }
 
@@ -118,7 +108,7 @@ export async function runFullSync(env: Env): Promise<void> {
     const repo = env.SCUNPACKED_REPO || "StarCitizenWiki/scunpacked-data";
     const branch = env.SCUNPACKED_BRANCH || "main";
     console.log("[pipeline] scunpacked paint sync starting");
-    await syncScunpackedPaints(db, repo, branch);
+    await syncScunpackedPaints(db, repo, branch, env.GITHUB_TOKEN);
   } catch (err) {
     console.error("[pipeline] scunpacked paint sync failed:", err);
   }
