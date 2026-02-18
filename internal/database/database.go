@@ -1460,16 +1460,6 @@ func (db *DB) SetAppSetting(ctx context.Context, key, value string) error {
 	return err
 }
 
-// --- Raw Query (diagnostics) ---
-
-func (db *DB) RawQuery(ctx context.Context, query string) (*sql.Rows, error) {
-	return db.conn.QueryContext(ctx, query)
-}
-
-func (db *DB) RawQueryRow(ctx context.Context, query string) *sql.Row {
-	return db.conn.QueryRowContext(ctx, query)
-}
-
 // --- Nullable helpers ---
 
 func nullableStr(s string) interface{} {
