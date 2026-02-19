@@ -45,15 +45,17 @@ export function syncRoutes<E extends { Bindings: Env }>() {
     return c.json({ message: "SC Wiki sync triggered" });
   });
 
-  // POST /api/sync/items — trigger SC Wiki item sync (background)
+  // POST /api/sync/items — trigger SC Wiki item sync (runs inline, not background)
+  // Items sync is fast enough (~10-15s) to complete within the HTTP handler timeout.
+  // Using waitUntil() was causing premature termination on production.
   routes.post("/items", async (c) => {
-    const env = c.env;
-    c.executionCtx.waitUntil(
-      triggerSCWikiItemSync(env).catch((err) =>
-        console.error("[sync] SC Wiki item sync failed:", err),
-      ),
-    );
-    return c.json({ message: "SC Wiki item sync triggered" });
+    try {
+      const result = await triggerSCWikiItemSync(c.env);
+      return c.json({ message: result });
+    } catch (err) {
+      console.error("[sync] SC Wiki item sync failed:", err);
+      return c.json({ error: String(err) }, 500);
+    }
   });
 
   // POST /api/sync/images — trigger FleetYards image sync (background)
