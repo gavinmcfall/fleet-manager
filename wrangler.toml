@@ -1,17 +1,19 @@
-name = "fleet-manager"
+name = "sc-companion"
 main = "src/index.ts"
 compatibility_date = "2025-02-18"
+account_id = "4214879ee537a4840de659aafb7bf201"
 
 # Workers Assets — SPA routing: unmatched paths serve index.html
 [assets]
 binding = "ASSETS"
+directory = "./frontend/dist"
 not_found_handling = "single-page-application"
 
 # D1 Database binding
 [[d1_databases]]
 binding = "DB"
-database_name = "fleet-manager"
-database_id = "placeholder-create-with-wrangler-d1-create"
+database_name = "sc-companion"
+database_id = "56875a7e-0ebd-4455-887d-5d1e1afdb416"
 migrations_dir = "src/db/migrations"
 
 # Cron Triggers — staggered nightly sync to stay within Workers CPU limits
@@ -34,4 +36,4 @@ RSI_API_ENABLED = "false"
 RSI_BASE_URL = "https://robertsspaceindustries.com"
 RSI_RATE_LIMIT = "1.0"
 SCUNPACKED_REPO = "StarCitizenWiki/scunpacked-data"
-SCUNPACKED_BRANCH = "main"
+SCUNPACKED_BRANCH = "master"
