@@ -198,7 +198,11 @@ export async function syncItemData(db: D1Database, rateLimitMs = 1000): Promise<
   console.log("[scwiki] Starting item data sync");
   const start = Date.now();
 
-  await syncItems(db, rateLimitMs);
+  // Items are simple paginated reads with batched writes — use a faster rate
+  // limit (200ms) since we're just fetching data, not hammering complex endpoints.
+  // Vehicle sync stays at the configured rate as it includes heavy includes.
+  const itemRateLimitMs = Math.min(rateLimitMs, 200);
+  await syncItems(db, itemRateLimitMs);
 
   const duration = ((Date.now() - start) / 1000).toFixed(1);
   console.log(`[scwiki] Item data sync complete in ${duration}s`);
