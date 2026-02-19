@@ -174,8 +174,9 @@ import { SYNC_SOURCE } from "../lib/constants";
 
 // --- Sync Functions ---
 
-export async function syncAll(db: D1Database, rateLimitMs = 1000): Promise<void> {
-  console.log("[scwiki] Starting full SC Wiki sync");
+/** Sync manufacturers, game versions, and vehicles (runs in ~15s on Workers). */
+export async function syncVehicleData(db: D1Database, rateLimitMs = 1000): Promise<void> {
+  console.log("[scwiki] Starting vehicle data sync");
   const start = Date.now();
 
   await syncManufacturers(db, rateLimitMs);
@@ -187,10 +188,26 @@ export async function syncAll(db: D1Database, rateLimitMs = 1000): Promise<void>
   }
 
   await syncVehicles(db, rateLimitMs);
+
+  const duration = ((Date.now() - start) / 1000).toFixed(1);
+  console.log(`[scwiki] Vehicle data sync complete in ${duration}s`);
+}
+
+/** Sync items (components, FPS weapons, armour, etc.) — separate invocation due to size. */
+export async function syncItemData(db: D1Database, rateLimitMs = 1000): Promise<void> {
+  console.log("[scwiki] Starting item data sync");
+  const start = Date.now();
+
   await syncItems(db, rateLimitMs);
 
   const duration = ((Date.now() - start) / 1000).toFixed(1);
-  console.log(`[scwiki] Full SC Wiki sync complete in ${duration}s`);
+  console.log(`[scwiki] Item data sync complete in ${duration}s`);
+}
+
+/** Full sync (dev/local only — may exceed Workers limits). */
+export async function syncAll(db: D1Database, rateLimitMs = 1000): Promise<void> {
+  await syncVehicleData(db, rateLimitMs);
+  await syncItemData(db, rateLimitMs);
 }
 
 async function syncManufacturers(db: D1Database, rateLimitMs: number): Promise<void> {

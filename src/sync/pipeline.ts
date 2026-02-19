@@ -11,7 +11,7 @@
  * Workers are single-threaded per invocation, so no sync mutex needed.
  */
 
-import { syncAll as syncSCWiki } from "./scwiki";
+import { syncVehicleData as syncSCWikiVehicles, syncItemData as syncSCWikiItems } from "./scwiki";
 import { syncShipImages as syncFYShipImages, syncPaintImages as syncFYPaintImages } from "./fleetyards";
 import { syncPaints as syncScunpackedPaints } from "./scunpacked";
 import { syncAll as syncRSI } from "./rsi";
@@ -23,9 +23,17 @@ import type { Env } from "../lib/types";
 export async function triggerSCWikiSync(env: Env): Promise<string> {
   const rateLimitMs = parseFloat(env.SC_WIKI_RATE_LIMIT || "1") * 1000;
 
-  console.log("[pipeline] SC Wiki sync triggered");
-  await syncSCWiki(env.DB, rateLimitMs);
-  return "SC Wiki sync complete";
+  console.log("[pipeline] SC Wiki vehicle sync triggered");
+  await syncSCWikiVehicles(env.DB, rateLimitMs);
+  return "SC Wiki vehicle sync complete";
+}
+
+export async function triggerSCWikiItemSync(env: Env): Promise<string> {
+  const rateLimitMs = parseFloat(env.SC_WIKI_RATE_LIMIT || "1") * 1000;
+
+  console.log("[pipeline] SC Wiki item sync triggered");
+  await syncSCWikiItems(env.DB, rateLimitMs);
+  return "SC Wiki item sync complete";
 }
 
 export async function triggerImageSync(env: Env): Promise<string> {
@@ -78,15 +86,20 @@ export async function runFullSync(env: Env): Promise<void> {
   const scwikiEnabled = env.SC_WIKI_ENABLED !== "false";
   const rsiEnabled = env.RSI_API_ENABLED === "true";
 
-  // Step 1: SC Wiki — primary data source
+  // Step 1: SC Wiki — primary data source (vehicles + items split)
   if (scwikiEnabled) {
     const mfgCount = await getManufacturerCount(db);
     console.log(`[pipeline] ${mfgCount} manufacturers in DB, running SC Wiki sync`);
+    const rateLimitMs = parseFloat(env.SC_WIKI_RATE_LIMIT || "1") * 1000;
     try {
-      const rateLimitMs = parseFloat(env.SC_WIKI_RATE_LIMIT || "1") * 1000;
-      await syncSCWiki(db, rateLimitMs);
+      await syncSCWikiVehicles(db, rateLimitMs);
     } catch (err) {
-      console.error("[pipeline] SC Wiki sync failed:", err);
+      console.error("[pipeline] SC Wiki vehicle sync failed:", err);
+    }
+    try {
+      await syncSCWikiItems(db, rateLimitMs);
+    } catch (err) {
+      console.error("[pipeline] SC Wiki item sync failed:", err);
     }
   }
 

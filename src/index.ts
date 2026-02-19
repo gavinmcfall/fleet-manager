@@ -128,6 +128,7 @@ export default {
 async function runScheduledSync(cron: string, env: Env): Promise<void> {
   const {
     triggerSCWikiSync,
+    triggerSCWikiItemSync,
     triggerImageSync,
     triggerPaintSync,
     triggerRSISync,
@@ -135,8 +136,12 @@ async function runScheduledSync(cron: string, env: Env): Promise<void> {
 
   switch (cron) {
     case "0 3 * * *":
-      console.log("[cron] SC Wiki sync");
+      console.log("[cron] SC Wiki vehicles");
       await triggerSCWikiSync(env);
+      break;
+    case "5 3 * * *":
+      console.log("[cron] SC Wiki items");
+      await triggerSCWikiItemSync(env);
       break;
     case "15 3 * * *":
       console.log("[cron] FleetYards ship images");
