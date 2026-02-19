@@ -8,9 +8,8 @@
 import {
   upsertManufacturer,
   upsertGameVersion,
-  upsertVehicle,
+  buildUpsertVehicleStatement,
   buildUpsertPortStatement,
-  syncVehicleLoanersBatch,
   upsertComponent,
   upsertFPSWeapon,
   upsertFPSArmour,
@@ -21,6 +20,7 @@ import {
   loadManufacturerMaps,
   loadGameVersionMap,
   loadProductionStatusMap,
+  loadVehicleMaps,
 } from "../db/queries";
 import { delay, chunkArray } from "../lib/utils";
 
@@ -276,13 +276,19 @@ async function syncVehicles(db: D1Database, rateLimitMs: number): Promise<void> 
       "/api/vehicles?include=manufacturer,game_version,ports,loaner",
       rateLimitMs,
     );
-    let count = 0;
-    const allPortStmts: D1PreparedStatement[] = [];
+
+    // --- Phase 1: Build all vehicle upsert statements (zero DB cost) ---
+    const vehicleStmts: D1PreparedStatement[] = [];
+    interface VehicleMeta {
+      slug: string;
+      loanerSlugs: string[];
+      ports: SCWikiPort[];
+    }
+    const vehicleMeta: VehicleMeta[] = [];
 
     for (const raw of data) {
       const v = raw as SCWikiVehicle;
       try {
-        // Resolve manufacturer ID from pre-loaded Maps (zero DB cost)
         let manufacturerID: number | null = null;
         if (v.manufacturer) {
           manufacturerID = mfgMaps.byUUID.get(v.manufacturer.uuid) ?? null;
@@ -291,42 +297,21 @@ async function syncVehicles(db: D1Database, rateLimitMs: number): Promise<void> 
           }
         }
 
-        // Resolve game version ID from pre-loaded Map (zero DB cost)
         let gameVersionID: number | null = null;
         if (v.game_version) {
           gameVersionID = gvMap.get(v.game_version.uuid) ?? null;
         }
 
-        // Extract crew
-        const crewMin = v.crew?.min ?? 0;
-        const crewMax = v.crew?.max ?? 0;
-
-        // Extract speed
-        const speedSCM = v.speed?.scm ?? 0;
-        const speedMax = v.speed?.max ?? 0;
-
-        // Determine vehicle type ID
         let vehicleTypeID: number | null = null;
         if (v.is_spaceship) vehicleTypeID = 1;
         else if (v.is_gravlev) vehicleTypeID = 3;
         else if (v.is_vehicle) vehicleTypeID = 2;
 
-        // Extract dimensions
-        const length = v.sizes?.length ?? 0;
-        const beam = v.sizes?.beam ?? 0;
-        const height = v.sizes?.height ?? 0;
-
-        // Extract focus
         let focus = v.role;
         if (v.foci && v.foci.length > 0 && v.foci[0].en_EN) {
           focus = v.foci[0].en_EN;
         }
 
-        // Extract description and size label
-        const description = v.description?.en_EN ?? "";
-        const sizeLabel = v.size?.en_EN ?? "";
-
-        // Resolve production_status_id from pre-loaded Map (zero DB cost)
         let productionStatusID: number | null = null;
         if (v.production_status?.en_EN) {
           let psKey = v.production_status.en_EN;
@@ -336,77 +321,110 @@ async function syncVehicles(db: D1Database, rateLimitMs: number): Promise<void> 
           productionStatusID = psMap.get(psKey) ?? null;
         }
 
-        // Derive on_sale from SKUs
-        const onSale = v.skus?.some((s) => s.available) ?? false;
+        vehicleStmts.push(
+          buildUpsertVehicleStatement(db, {
+            uuid: v.uuid,
+            slug: v.slug,
+            name: v.name,
+            class_name: v.class_name,
+            manufacturer_id: manufacturerID ?? undefined,
+            vehicle_type_id: vehicleTypeID ?? undefined,
+            production_status_id: productionStatusID ?? undefined,
+            size_label: v.size?.en_EN ?? "",
+            focus,
+            classification: v.career,
+            description: v.description?.en_EN ?? "",
+            length: v.sizes?.length ?? 0,
+            beam: v.sizes?.beam ?? 0,
+            height: v.sizes?.height ?? 0,
+            mass: v.mass_total,
+            cargo: v.cargo_capacity,
+            vehicle_inventory: v.vehicle_inventory,
+            crew_min: v.crew?.min ?? 0,
+            crew_max: v.crew?.max ?? 0,
+            speed_scm: v.speed?.scm ?? 0,
+            speed_max: v.speed?.max ?? 0,
+            health: v.health,
+            pledge_price: v.msrp,
+            on_sale: v.skus?.some((s) => s.available) ?? false,
+            pledge_url: v.pledge_url,
+            game_version_id: gameVersionID ?? undefined,
+          }),
+        );
 
-        const vehicleID = await upsertVehicle(db, {
-          uuid: v.uuid,
+        vehicleMeta.push({
           slug: v.slug,
-          name: v.name,
-          class_name: v.class_name,
-          manufacturer_id: manufacturerID ?? undefined,
-          vehicle_type_id: vehicleTypeID ?? undefined,
-          production_status_id: productionStatusID ?? undefined,
-          size_label: sizeLabel,
-          focus,
-          classification: v.career,
-          description,
-          length,
-          beam,
-          height,
-          mass: v.mass_total,
-          cargo: v.cargo_capacity,
-          vehicle_inventory: v.vehicle_inventory,
-          crew_min: crewMin,
-          crew_max: crewMax,
-          speed_scm: speedSCM,
-          speed_max: speedMax,
-          health: v.health,
-          pledge_price: v.msrp,
-          on_sale: onSale,
-          pledge_url: v.pledge_url,
-          game_version_id: gameVersionID ?? undefined,
+          loanerSlugs: v.loaner?.filter((l) => l.slug).map((l) => l.slug) ?? [],
+          ports: v.ports ?? [],
         });
-
-        // Collect port upsert statements for batching
-        if (v.ports) {
-          for (const port of v.ports) {
-            allPortStmts.push(
-              buildUpsertPortStatement(db, {
-                uuid: port.uuid,
-                vehicle_id: vehicleID,
-                name: port.name,
-                category_label: port.category_label,
-                size_min: port.size_min,
-                size_max: port.size_max,
-                port_type: port.port_type,
-                equipped_item_uuid: port.equipped_item?.uuid ?? "",
-              }),
-            );
-          }
-        }
-
-        // Sync loaners in a single batch
-        if (v.loaner && v.loaner.length > 0) {
-          const loanerSlugs = v.loaner.filter((l) => l.slug).map((l) => l.slug);
-          if (loanerSlugs.length > 0) {
-            await syncVehicleLoanersBatch(db, vehicleID, loanerSlugs);
-          }
-        }
-
-        count++;
       } catch (err) {
-        console.warn(`[scwiki] Failed to upsert vehicle ${v.name}:`, err);
+        console.warn(`[scwiki] Failed to build vehicle statement for ${v.name}:`, err);
       }
     }
 
-    // Batch all port upserts
+    // --- Phase 2: Batch execute all vehicle upserts (~4 batches instead of 576 queries) ---
+    for (const chunk of chunkArray(vehicleStmts, 90)) {
+      await db.batch(chunk);
+    }
+    console.log(`[scwiki] Vehicle upserts batched: ${vehicleStmts.length}`);
+
+    // --- Phase 3: Load all vehicle IDs at once (1 query) ---
+    const slugToID = (await loadVehicleMaps(db)).bySlug;
+
+    // --- Phase 4: Build and batch loaners + ports ---
+    const allLoanerStmts: D1PreparedStatement[] = [];
+    const allPortStmts: D1PreparedStatement[] = [];
+
+    for (const meta of vehicleMeta) {
+      const vehicleID = slugToID.get(meta.slug);
+      if (!vehicleID) continue;
+
+      // Collect loaner statements (DELETE + INSERTs per vehicle, batched together)
+      if (meta.loanerSlugs.length > 0) {
+        allLoanerStmts.push(
+          db.prepare("DELETE FROM vehicle_loaners WHERE vehicle_id = ?").bind(vehicleID),
+        );
+        for (const slug of meta.loanerSlugs) {
+          allLoanerStmts.push(
+            db.prepare(
+              "INSERT OR IGNORE INTO vehicle_loaners (vehicle_id, loaner_id) SELECT ?, id FROM vehicles WHERE slug = ?",
+            ).bind(vehicleID, slug),
+          );
+        }
+      }
+
+      // Collect port statements
+      for (const port of meta.ports) {
+        allPortStmts.push(
+          buildUpsertPortStatement(db, {
+            uuid: port.uuid,
+            vehicle_id: vehicleID,
+            name: port.name,
+            category_label: port.category_label,
+            size_min: port.size_min,
+            size_max: port.size_max,
+            port_type: port.port_type,
+            equipped_item_uuid: port.equipped_item?.uuid ?? "",
+          }),
+        );
+      }
+    }
+
+    // Batch loaners
+    for (const chunk of chunkArray(allLoanerStmts, 500)) {
+      await db.batch(chunk);
+    }
+
+    // Batch ports
     for (const chunk of chunkArray(allPortStmts, 500)) {
       await db.batch(chunk);
     }
 
+    const count = vehicleStmts.length;
     await updateSyncHistory(db, syncID, "success", count, "");
-    console.log(`[scwiki] Vehicles synced: ${count} (${allPortStmts.length} ports batched)`);
+    console.log(
+      `[scwiki] Vehicles synced: ${count} (${allLoanerStmts.length} loaner stmts, ${allPortStmts.length} port stmts batched)`,
+    );
   } catch (err) {
     await updateSyncHistory(db, syncID, "error", 0, String(err));
     throw err;

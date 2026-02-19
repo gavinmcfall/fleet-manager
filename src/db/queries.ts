@@ -293,6 +293,91 @@ export async function upsertVehicle(
   return row?.id ?? 0;
 }
 
+/** Returns a prepared statement for vehicle upsert — caller batches via db.batch(). */
+export function buildUpsertVehicleStatement(
+  db: D1Database,
+  v: Partial<Vehicle> & { slug: string; name: string },
+): D1PreparedStatement {
+  return db
+    .prepare(
+      `INSERT INTO vehicles (uuid, slug, name, class_name, manufacturer_id, vehicle_type_id,
+        production_status_id, size, size_label, focus, classification, description,
+        length, beam, height, mass, cargo, vehicle_inventory, crew_min, crew_max,
+        speed_scm, speed_max, health, pledge_price, price_auec, on_sale,
+        image_url, image_url_small, image_url_medium, image_url_large,
+        pledge_url, game_version_id, raw_data, updated_at)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, datetime('now'))
+      ON CONFLICT(slug) DO UPDATE SET
+        uuid=COALESCE(excluded.uuid, vehicles.uuid),
+        name=excluded.name, class_name=COALESCE(excluded.class_name, vehicles.class_name),
+        manufacturer_id=COALESCE(excluded.manufacturer_id, vehicles.manufacturer_id),
+        vehicle_type_id=COALESCE(excluded.vehicle_type_id, vehicles.vehicle_type_id),
+        production_status_id=COALESCE(excluded.production_status_id, vehicles.production_status_id),
+        size=COALESCE(excluded.size, vehicles.size),
+        size_label=COALESCE(excluded.size_label, vehicles.size_label),
+        focus=COALESCE(excluded.focus, vehicles.focus),
+        classification=COALESCE(excluded.classification, vehicles.classification),
+        description=COALESCE(excluded.description, vehicles.description),
+        length=COALESCE(excluded.length, vehicles.length),
+        beam=COALESCE(excluded.beam, vehicles.beam),
+        height=COALESCE(excluded.height, vehicles.height),
+        mass=COALESCE(excluded.mass, vehicles.mass),
+        cargo=COALESCE(excluded.cargo, vehicles.cargo),
+        vehicle_inventory=COALESCE(excluded.vehicle_inventory, vehicles.vehicle_inventory),
+        crew_min=COALESCE(excluded.crew_min, vehicles.crew_min),
+        crew_max=COALESCE(excluded.crew_max, vehicles.crew_max),
+        speed_scm=COALESCE(excluded.speed_scm, vehicles.speed_scm),
+        speed_max=COALESCE(excluded.speed_max, vehicles.speed_max),
+        health=COALESCE(excluded.health, vehicles.health),
+        pledge_price=COALESCE(excluded.pledge_price, vehicles.pledge_price),
+        price_auec=COALESCE(excluded.price_auec, vehicles.price_auec),
+        on_sale=excluded.on_sale,
+        image_url=COALESCE(excluded.image_url, vehicles.image_url),
+        image_url_small=COALESCE(excluded.image_url_small, vehicles.image_url_small),
+        image_url_medium=COALESCE(excluded.image_url_medium, vehicles.image_url_medium),
+        image_url_large=COALESCE(excluded.image_url_large, vehicles.image_url_large),
+        pledge_url=COALESCE(excluded.pledge_url, vehicles.pledge_url),
+        game_version_id=COALESCE(excluded.game_version_id, vehicles.game_version_id),
+        raw_data=COALESCE(excluded.raw_data, vehicles.raw_data),
+        updated_at=excluded.updated_at`,
+    )
+    .bind(
+      n(v.uuid),                                 //  1: uuid
+      v.slug,                                    //  2: slug
+      v.name,                                    //  3: name
+      n(v.class_name),                           //  4: class_name
+      nNum(v.manufacturer_id),                   //  5: manufacturer_id
+      nNum(v.vehicle_type_id),                   //  6: vehicle_type_id
+      nNum(v.production_status_id),              //  7: production_status_id
+      nNum(v.size),                              //  8: size
+      n(v.size_label),                           //  9: size_label
+      n(v.focus),                                // 10: focus
+      n(v.classification),                       // 11: classification
+      n(v.description),                          // 12: description
+      nNum(v.length),                            // 13: length
+      nNum(v.beam),                              // 14: beam
+      nNum(v.height),                            // 15: height
+      nNum(v.mass),                              // 16: mass
+      nNum(v.cargo),                             // 17: cargo
+      nNum(v.vehicle_inventory),                 // 18: vehicle_inventory
+      nNum(v.crew_min),                          // 19: crew_min
+      nNum(v.crew_max),                          // 20: crew_max
+      nNum(v.speed_scm),                         // 21: speed_scm
+      nNum(v.speed_max),                         // 22: speed_max
+      nNum(v.health),                            // 23: health
+      nNum(v.pledge_price),                      // 24: pledge_price
+      nNum(v.price_auec),                        // 25: price_auec
+      v.on_sale ? 1 : 0,                         // 26: on_sale
+      n(v.image_url),                            // 27: image_url
+      n(v.image_url_small),                      // 28: image_url_small
+      n(v.image_url_medium),                     // 29: image_url_medium
+      n(v.image_url_large),                      // 30: image_url_large
+      n(v.pledge_url),                           // 31: pledge_url
+      nNum(v.game_version_id),                   // 32: game_version_id
+      null,                                      // 33: raw_data
+    );
+}
+
 export async function getAllVehicles(db: D1Database): Promise<Vehicle[]> {
   const result = await db
     .prepare(
