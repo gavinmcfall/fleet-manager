@@ -150,13 +150,13 @@ async function scwikiFetch(path: string, rateLimitMs: number, attempt = 0): Prom
   return resp.json();
 }
 
-async function fetchPaginated(path: string, rateLimitMs: number): Promise<unknown[]> {
+async function fetchPaginated(path: string, rateLimitMs: number, pageSize = 100): Promise<unknown[]> {
   const allData: unknown[] = [];
   let page = 1;
 
   for (;;) {
     const separator = path.includes("?") ? "&" : "?";
-    const pagePath = `${path}${separator}page[number]=${page}&page[size]=100`;
+    const pagePath = `${path}${separator}page[number]=${page}&page[size]=${pageSize}`;
 
     const response = (await scwikiFetch(pagePath, rateLimitMs)) as APIResponse;
     if (!response.data || response.data.length === 0) break;
@@ -462,9 +462,11 @@ async function syncItems(db: D1Database, rateLimitMs: number): Promise<void> {
       loadGameVersionMap(db),
     ]);
 
+    // Use 500 per page to reduce subrequest count (Workers limit: 50)
     const data = await fetchPaginated(
       "/api/items?include=manufacturer,game_version",
       rateLimitMs,
+      500,
     );
 
     // --- Build all item upsert statements (zero DB cost) ---
@@ -495,8 +497,8 @@ async function syncItems(db: D1Database, rateLimitMs: number): Promise<void> {
       }
     }
 
-    // --- Batch execute all item upserts ---
-    for (const chunk of chunkArray(allStmts, 90)) {
+    // --- Batch execute all item upserts (500 per chunk to minimize subrequests) ---
+    for (const chunk of chunkArray(allStmts, 500)) {
       await db.batch(chunk);
     }
 
