@@ -1,0 +1,10 @@
+{
+  "SocketPath": "/home/gavin/my_other_repos/fleet-manager/.repoql/repoql.sock",
+  "PathLength": 60,
+  "Platform": "linux",
+  "PlatformLimit": 108,
+  "SocketRedirected": false,
+  "MappingFilePath": null,
+  "BindSucceeded": true,
+  "BindError": null
+}

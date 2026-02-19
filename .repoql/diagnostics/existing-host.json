@@ -1,0 +1,18 @@
+{
+  "SocketPath": "/home/gavin/my_other_repos/fleet-manager/.repoql/repoql.sock",
+  "SocketExists": false,
+  "ProbeResult": "unknown",
+  "ShutdownAttempted": false,
+  "ShutdownSucceeded": false,
+  "ShutdownProcessId": null,
+  "ShutdownError": null,
+  "PidFileFound": false,
+  "PidFileValue": null,
+  "ProcessRunning": false,
+  "ProcessName": null,
+  "KillAttempted": false,
+  "KillSucceeded": false,
+  "SocketCleanupAttempted": false,
+  "SocketCleanupSucceeded": false,
+  "SocketCleanupError": null
+}
