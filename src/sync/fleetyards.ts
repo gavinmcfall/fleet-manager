@@ -7,14 +7,14 @@
  */
 
 import {
-  updateVehicleImages,
-  updatePaintImages,
+  buildUpdateVehicleImagesStatement,
+  buildUpdatePaintImagesStatement,
   getVehicleSlugsWithPaints,
   getPaintsByVehicleSlug,
   insertSyncHistory,
   updateSyncHistory,
 } from "../db/queries";
-import { delay } from "../lib/utils";
+import { delay, concurrentMap, chunkArray } from "../lib/utils";
 import { SYNC_SOURCE } from "../lib/constants";
 
 // --- Types ---
@@ -123,17 +123,17 @@ export async function syncShipImages(db: D1Database, baseURL: string): Promise<v
 
   try {
     const images = await fetchAllShipImages(baseURL);
-    let count = 0;
 
-    for (const img of images) {
-      try {
-        await updateVehicleImages(db, img.slug, img.imageURL, img.small, img.medium, img.large);
-        count++;
-      } catch (err) {
-        console.warn(`[fleetyards] Failed to update images for ${img.slug}:`, err);
-      }
+    // Batch all image update statements
+    const stmts = images.map((img) =>
+      buildUpdateVehicleImagesStatement(db, img.slug, img.imageURL, img.small, img.medium, img.large),
+    );
+
+    for (const chunk of chunkArray(stmts, 500)) {
+      await db.batch(chunk);
     }
 
+    const count = stmts.length;
     await updateSyncHistory(db, syncID, "success", count, "");
     console.log(`[fleetyards] Ship image sync complete: ${count}/${images.length} updated`);
   } catch (err) {
@@ -175,41 +175,52 @@ export async function syncPaintImages(db: D1Database, baseURL: string): Promise<
   }
 
   console.log(`[fleetyards] Fetching paint images for ${slugs.length} vehicles`);
-  let imagesSynced = 0;
 
-  for (const vehicleSlug of slugs) {
+  // Pre-load all DB paints per vehicle slug (one query per slug is unavoidable, but cheap)
+  // Fetch all paint images concurrently (5 at a time instead of sequential with 500ms delay)
+  interface PaintFetchResult {
+    vehicleSlug: string;
+    fyPaints: PaintImages[];
+  }
+
+  const fetchResults = await concurrentMap<string, PaintFetchResult | null>(slugs, 5, async (vehicleSlug) => {
     try {
       const fyPaints = await fetchPaintImages(baseURL, vehicleSlug);
-      if (fyPaints.length === 0) continue;
-
-      const dbPaints = await getPaintsByVehicleSlug(db, vehicleSlug);
-
-      for (const fyPaint of fyPaints) {
-        const matched = matchPaintByName(fyPaint.name, dbPaints);
-        if (!matched) continue;
-
-        await updatePaintImages(
-          db,
-          matched.class_name,
-          fyPaint.imageURL,
-          fyPaint.small,
-          fyPaint.medium,
-          fyPaint.large,
-        );
-        imagesSynced++;
-      }
+      if (fyPaints.length === 0) return null;
+      return { vehicleSlug, fyPaints };
     } catch (err) {
-      // 404 is expected — many vehicles don't have paints on FleetYards
       const msg = err instanceof Error ? err.message : String(err);
       if (!msg.includes("404")) {
         console.warn(`[fleetyards] Paint image fetch failed for ${vehicleSlug}:`, msg);
       }
+      return null;
     }
+  });
 
-    await delay(RATE_LIMIT_MS);
+  // Match and collect all image update statements
+  const stmts: D1PreparedStatement[] = [];
+
+  for (const result of fetchResults) {
+    if (!result) continue;
+
+    const dbPaints = await getPaintsByVehicleSlug(db, result.vehicleSlug);
+
+    for (const fyPaint of result.fyPaints) {
+      const matched = matchPaintByName(fyPaint.name, dbPaints);
+      if (!matched) continue;
+
+      stmts.push(
+        buildUpdatePaintImagesStatement(db, matched.class_name, fyPaint.imageURL, fyPaint.small, fyPaint.medium, fyPaint.large),
+      );
+    }
   }
 
-  console.log(`[fleetyards] Paint image sync complete: ${imagesSynced} images updated`);
+  // Batch all paint image updates
+  for (const chunk of chunkArray(stmts, 500)) {
+    await db.batch(chunk);
+  }
+
+  console.log(`[fleetyards] Paint image sync complete: ${stmts.length} images updated`);
 }
 
 // --- Paint name matching ---

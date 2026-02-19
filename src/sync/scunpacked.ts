@@ -10,15 +10,13 @@
 
 import {
   upsertPaint,
-  setPaintVehicles,
-  getVehicleIDBySlug,
-  findVehicleIDsBySlugLike,
-  findVehicleIDsBySlugPrefix,
-  findVehicleIDsByNameContains,
+  setPaintVehiclesBatch,
+  loadVehicleMaps,
   insertSyncHistory,
   updateSyncHistory,
 } from "../db/queries";
-import { delay } from "../lib/utils";
+import type { VehicleRow } from "../db/queries";
+import { concurrentMap } from "../lib/utils";
 import { SYNC_SOURCE } from "../lib/constants";
 
 // --- Tag alias map (matches Go version) ---
@@ -105,19 +103,17 @@ async function fetchPaintFiles(repo: string, branch: string, githubToken?: strin
 
   console.log(`[scunpacked] Found ${paintFiles.length} paint files in GitHub repo`);
 
-  const paints: ParsedPaint[] = [];
-  let skipped = 0;
+  // Fetch paint files concurrently (10 at a time instead of sequential with 100ms delay)
+  const rawHeaders: Record<string, string> = { "User-Agent": "Fleet-Manager/1.0" };
+  if (githubToken) {
+    rawHeaders["Authorization"] = `token ${githubToken}`;
+  }
 
-  for (const file of paintFiles) {
+  const results = await concurrentMap(paintFiles, 10, async (file): Promise<ParsedPaint | null> => {
     try {
-      await delay(100); // Rate limit: 10 req/s to avoid GitHub abuse detection
       const rawURL = `https://raw.githubusercontent.com/${repo}/${branch}/${file.path}`;
-      const rawHeaders: Record<string, string> = { "User-Agent": "Fleet-Manager/1.0" };
-      if (githubToken) {
-        rawHeaders["Authorization"] = `token ${githubToken}`;
-      }
       const resp = await fetch(rawURL, { headers: rawHeaders });
-      if (!resp.ok) continue;
+      if (!resp.ok) return null;
 
       const pf = (await resp.json()) as PaintFile;
       const item = pf.Item;
@@ -134,10 +130,7 @@ async function fetchPaintFiles(repo: string, branch: string, githubToken?: strin
       }
 
       // Filter out placeholders
-      if (name.includes("PLACEHOLDER")) {
-        skipped++;
-        continue;
-      }
+      if (name.includes("PLACEHOLDER")) return null;
 
       // Generate readable name from className if empty
       if (!name) {
@@ -152,17 +145,16 @@ async function fetchPaintFiles(repo: string, branch: string, githubToken?: strin
       if (vehicleTag.includes(" ")) {
         vehicleTag = vehicleTag.split(/\s+/)[0];
       }
-      if (!vehicleTag || !isPaintTag(vehicleTag)) {
-        skipped++;
-        continue;
-      }
+      if (!vehicleTag || !isPaintTag(vehicleTag)) return null;
 
-      paints.push({ className, name, description, vehicleTag });
+      return { className, name, description, vehicleTag };
     } catch {
-      // Skip files that fail to parse
-      skipped++;
+      return null;
     }
-  }
+  });
+
+  const paints = results.filter((p): p is ParsedPaint => p !== null);
+  const skipped = paintFiles.length - paints.length;
 
   console.log(`[scunpacked] Parsed ${paints.length} paints, skipped ${skipped}`);
   return paints;
@@ -187,9 +179,13 @@ function slugFromClassName(className: string): string {
   return s.toLowerCase();
 }
 
-// --- Vehicle ID resolution ---
+// --- Vehicle ID resolution (in-memory, zero DB cost) ---
 
-async function resolveVehicleIDs(db: D1Database, tag: string): Promise<number[]> {
+function resolveVehicleIDsFromMaps(
+  tag: string,
+  bySlug: Map<string, number>,
+  allRows: VehicleRow[],
+): number[] {
   // Normalize: strip Paint_ prefix / _Paint suffix, replace _ with -, lowercase
   let normalized = tag.toLowerCase();
   normalized = normalized.replace(/^paint_/, "");
@@ -202,7 +198,8 @@ async function resolveVehicleIDs(db: D1Database, tag: string): Promise<number[]>
   const alias = TAG_ALIASES[normalized];
   if (alias) {
     if (alias.includes("%")) {
-      const ids = await findVehicleIDsBySlugLike(db, alias);
+      // Convert SQL LIKE pattern to in-memory matching
+      const ids = matchSlugLike(alias, allRows);
       if (ids.length > 0) return ids;
     } else {
       normalized = alias;
@@ -210,20 +207,44 @@ async function resolveVehicleIDs(db: D1Database, tag: string): Promise<number[]>
   }
 
   // Try exact slug match
-  const exactID = await getVehicleIDBySlug(db, normalized);
-  if (exactID !== null) return [exactID];
+  const exactID = bySlug.get(normalized);
+  if (exactID !== undefined) return [exactID];
 
   // Try prefix match
-  const prefixIDs = await findVehicleIDsBySlugPrefix(db, normalized);
+  const prefixIDs: number[] = [];
+  for (const row of allRows) {
+    if (row.slug.startsWith(normalized)) {
+      prefixIDs.push(row.id);
+    }
+  }
   if (prefixIDs.length > 0) return prefixIDs;
 
   // Try name-contains match
-  const nameTerm = normalized.replace(/-/g, " ");
-  const nameIDs = await findVehicleIDsByNameContains(db, nameTerm);
+  const nameTerm = normalized.replace(/-/g, " ").toLowerCase();
+  const nameIDs: number[] = [];
+  for (const row of allRows) {
+    if (row.name.toLowerCase().includes(nameTerm)) {
+      nameIDs.push(row.id);
+    }
+  }
   if (nameIDs.length > 0) return nameIDs;
 
   console.debug(`[scunpacked] No vehicle match for tag "${tag}" (normalized: "${normalized}")`);
   return [];
+}
+
+/** Convert SQL LIKE patterns (with %) to in-memory matching */
+function matchSlugLike(pattern: string, allRows: VehicleRow[]): number[] {
+  // Convert SQL LIKE pattern to regex: % → .*, _ → .
+  const regexStr = "^" + pattern.replace(/%/g, ".*").replace(/_/g, ".") + "$";
+  const re = new RegExp(regexStr);
+  const ids: number[] = [];
+  for (const row of allRows) {
+    if (re.test(row.slug)) {
+      ids.push(row.id);
+    }
+  }
+  return ids;
 }
 
 // --- Sync ---
@@ -237,13 +258,21 @@ export async function syncPaints(
   const syncID = await insertSyncHistory(db, SYNC_SOURCE.SCUNPACKED, "paints", "running");
 
   try {
+    // Pre-load vehicle Maps for in-memory matching (1 query instead of 500+)
+    const vehicleMaps = await loadVehicleMaps(db);
+
     const paints = await fetchPaintFiles(repo, branch, githubToken);
     let count = 0;
     let unmatched = 0;
 
     for (const pp of paints) {
       try {
-        const vehicleIDs = await resolveVehicleIDs(db, pp.vehicleTag);
+        // In-memory vehicle resolution (zero DB cost)
+        const vehicleIDs = resolveVehicleIDsFromMaps(
+          pp.vehicleTag,
+          vehicleMaps.bySlug,
+          vehicleMaps.allRows,
+        );
         const slug = slugFromClassName(pp.className);
 
         const paintID = await upsertPaint(db, {
@@ -254,7 +283,7 @@ export async function syncPaints(
         });
 
         if (vehicleIDs.length > 0) {
-          await setPaintVehicles(db, paintID, vehicleIDs);
+          await setPaintVehiclesBatch(db, paintID, vehicleIDs);
         } else {
           unmatched++;
         }

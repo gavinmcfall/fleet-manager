@@ -15,12 +15,12 @@
 import {
   getAllVehicleNameSlugs,
   getAllPaintNameClasses,
-  updateVehicleImages,
-  updatePaintImages,
+  buildUpdateVehicleImagesStatement,
+  buildUpdatePaintImagesStatement,
   insertSyncHistory,
   updateSyncHistory,
 } from "../db/queries";
-import { delay } from "../lib/utils";
+import { delay, chunkArray } from "../lib/utils";
 import { SYNC_SOURCE } from "../lib/constants";
 
 // --- Constants ---
@@ -429,15 +429,13 @@ export async function syncShipImages(
       slugImages.set(slug, images);
     }
 
-    // Update all directly matched vehicles
+    // Collect all image update statements for batching
+    const stmts: D1PreparedStatement[] = [];
+
     let matched = 0;
     for (const [slug, img] of slugImages) {
-      try {
-        await updateVehicleImages(db, slug, img.imageURL, img.small, img.medium, img.large);
-        matched++;
-      } catch (err) {
-        console.warn(`[rsi] Failed to update vehicle images for ${slug}:`, err);
-      }
+      stmts.push(buildUpdateVehicleImagesStatement(db, slug, img.imageURL, img.small, img.medium, img.large));
+      matched++;
     }
 
     // Variant inheritance: for unmatched DB vehicles, try base vehicle image
@@ -447,13 +445,14 @@ export async function syncShipImages(
 
       const baseImg = findBaseVehicleImages(v.name, rsiNameImages);
       if (baseImg) {
-        try {
-          await updateVehicleImages(db, v.slug, baseImg.imageURL, baseImg.small, baseImg.medium, baseImg.large);
-          inherited++;
-        } catch (err) {
-          console.warn(`[rsi] Failed to update variant images for ${v.slug}:`, err);
-        }
+        stmts.push(buildUpdateVehicleImagesStatement(db, v.slug, baseImg.imageURL, baseImg.small, baseImg.medium, baseImg.large));
+        inherited++;
       }
+    }
+
+    // Execute all updates in batched chunks (D1 limit: 1000 statements per batch)
+    for (const chunk of chunkArray(stmts, 500)) {
+      await db.batch(chunk);
     }
 
     const total = matched + inherited;
@@ -529,6 +528,7 @@ export async function syncPaintImages(
     let skippedNoImage = 0;
     let skippedNoMatch = 0;
     let skippedPackage = 0;
+    const paintStmts: D1PreparedStatement[] = [];
 
     for (const paint of allPaints) {
       if (paint.isPackage) {
@@ -560,12 +560,13 @@ export async function syncPaintImages(
       }
 
       const images = buildImageURLs(imageURL);
-      try {
-        await updatePaintImages(db, info.className, images.imageURL, images.small, images.medium, images.large);
-        matched++;
-      } catch (err) {
-        console.warn(`[rsi] Failed to update paint images for ${info.className}:`, err);
-      }
+      paintStmts.push(buildUpdatePaintImagesStatement(db, info.className, images.imageURL, images.small, images.medium, images.large));
+      matched++;
+    }
+
+    // Execute all paint image updates in batched chunks
+    for (const chunk of chunkArray(paintStmts, 500)) {
+      await db.batch(chunk);
     }
 
     await updateSyncHistory(db, syncID, "success", matched, "");
