@@ -462,11 +462,19 @@ async function syncItems(db: D1Database, rateLimitMs: number): Promise<void> {
       loadGameVersionMap(db),
     ]);
 
-    // Use 500 per page to reduce subrequest count (Workers limit: 50)
+    // Filter to only relevant item types server-side (2,864 items vs 19,288 total)
+    // This reduces API pages from 97 to ~15, staying within Workers' 50 subrequest limit
+    const relevantTypes = [
+      ...SHIP_COMPONENTS,
+      "WeaponPersonal",
+      "Armor", "Helmet", "Undersuit",
+      "WeaponAttachment",
+      ...FPS_UTILITIES,
+    ].join(",");
     const data = await fetchPaginated(
-      "/api/items?include=manufacturer,game_version",
+      `/api/items?include=manufacturer,game_version&filter[type]=${relevantTypes}`,
       rateLimitMs,
-      500,
+      200,
     );
 
     // --- Build all item upsert statements (zero DB cost) ---
