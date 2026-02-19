@@ -1014,3 +1014,170 @@ export async function setAppSetting(db: D1Database, key: string, value: string):
     .bind(key, value)
     .run();
 }
+
+// ============================================================
+// Pre-load Functions (bulk-load lookup tables into Maps)
+// ============================================================
+
+export async function loadManufacturerMaps(
+  db: D1Database,
+): Promise<{ byUUID: Map<string, number>; byName: Map<string, number> }> {
+  const result = await db.prepare("SELECT id, uuid, name FROM manufacturers").all();
+  const byUUID = new Map<string, number>();
+  const byName = new Map<string, number>();
+  for (const row of result.results) {
+    const r = row as { id: number; uuid: string; name: string };
+    byUUID.set(r.uuid, r.id);
+    byName.set(r.name, r.id);
+  }
+  return { byUUID, byName };
+}
+
+export async function loadGameVersionMap(db: D1Database): Promise<Map<string, number>> {
+  const result = await db.prepare("SELECT id, uuid FROM game_versions").all();
+  const map = new Map<string, number>();
+  for (const row of result.results) {
+    const r = row as { id: number; uuid: string };
+    map.set(r.uuid, r.id);
+  }
+  return map;
+}
+
+export async function loadProductionStatusMap(db: D1Database): Promise<Map<string, number>> {
+  const result = await db.prepare("SELECT id, key FROM production_statuses").all();
+  const map = new Map<string, number>();
+  for (const row of result.results) {
+    const r = row as { id: number; key: string };
+    map.set(r.key, r.id);
+  }
+  return map;
+}
+
+export interface VehicleRow {
+  id: number;
+  slug: string;
+  name: string;
+}
+
+export async function loadVehicleMaps(
+  db: D1Database,
+): Promise<{
+  bySlug: Map<string, number>;
+  byNameLower: Map<string, number>;
+  allRows: VehicleRow[];
+}> {
+  const result = await db.prepare("SELECT id, slug, name FROM vehicles").all();
+  const bySlug = new Map<string, number>();
+  const byNameLower = new Map<string, number>();
+  const allRows: VehicleRow[] = [];
+  for (const row of result.results) {
+    const r = row as unknown as VehicleRow;
+    bySlug.set(r.slug, r.id);
+    byNameLower.set(r.name.toLowerCase(), r.id);
+    allRows.push(r);
+  }
+  return { bySlug, byNameLower, allRows };
+}
+
+// ============================================================
+// Statement Builders (return D1PreparedStatement for batching)
+// ============================================================
+
+export function buildUpsertPortStatement(
+  db: D1Database,
+  p: Partial<Port> & { uuid: string; vehicle_id: number; name: string },
+): D1PreparedStatement {
+  return db
+    .prepare(
+      `INSERT INTO ports (uuid, vehicle_id, parent_port_id, name, position, category_label,
+        size_min, size_max, port_type, port_subtype, equipped_item_uuid, editable, health)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+      ON CONFLICT(uuid) DO UPDATE SET
+        vehicle_id=excluded.vehicle_id, name=excluded.name, category_label=excluded.category_label,
+        size_min=excluded.size_min, size_max=excluded.size_max, port_type=excluded.port_type,
+        equipped_item_uuid=excluded.equipped_item_uuid`,
+    )
+    .bind(
+      p.uuid, p.vehicle_id, nNum(p.parent_port_id), p.name, n(p.position), n(p.category_label),
+      nNum(p.size_min), nNum(p.size_max), n(p.port_type), n(p.port_subtype),
+      n(p.equipped_item_uuid), p.editable ? 1 : 0, nNum(p.health),
+    );
+}
+
+export function buildUpdateVehicleImagesStatement(
+  db: D1Database,
+  slug: string,
+  imageURL: string,
+  small: string,
+  medium: string,
+  large: string,
+): D1PreparedStatement {
+  return db
+    .prepare(
+      `UPDATE vehicles SET
+        image_url = ?, image_url_small = ?, image_url_medium = ?, image_url_large = ?,
+        updated_at = datetime('now')
+      WHERE slug = ?`,
+    )
+    .bind(imageURL, small, medium, large, slug);
+}
+
+export function buildUpdatePaintImagesStatement(
+  db: D1Database,
+  className: string,
+  imageURL: string,
+  small: string,
+  medium: string,
+  large: string,
+): D1PreparedStatement {
+  return db
+    .prepare(
+      `UPDATE paints SET
+        image_url = ?, image_url_small = ?, image_url_medium = ?, image_url_large = ?,
+        updated_at = datetime('now')
+      WHERE class_name = ?`,
+    )
+    .bind(imageURL, small, medium, large, className);
+}
+
+// ============================================================
+// Batched Write Functions
+// ============================================================
+
+export async function setPaintVehiclesBatch(
+  db: D1Database,
+  paintID: number,
+  vehicleIDs: number[],
+): Promise<void> {
+  const stmts: D1PreparedStatement[] = [
+    db.prepare("DELETE FROM paint_vehicles WHERE paint_id = ?").bind(paintID),
+  ];
+  for (const vid of vehicleIDs) {
+    stmts.push(
+      db
+        .prepare("INSERT OR IGNORE INTO paint_vehicles (paint_id, vehicle_id) VALUES (?, ?)")
+        .bind(paintID, vid),
+    );
+  }
+  await db.batch(stmts);
+}
+
+export async function syncVehicleLoanersBatch(
+  db: D1Database,
+  vehicleID: number,
+  loanerSlugs: string[],
+): Promise<void> {
+  const stmts: D1PreparedStatement[] = [
+    db.prepare("DELETE FROM vehicle_loaners WHERE vehicle_id = ?").bind(vehicleID),
+  ];
+  for (const slug of loanerSlugs) {
+    stmts.push(
+      db
+        .prepare(
+          "INSERT OR IGNORE INTO vehicle_loaners (vehicle_id, loaner_id) SELECT ?, id FROM vehicles WHERE slug = ?",
+        )
+        .bind(vehicleID, slug),
+    );
+  }
+  await db.batch(stmts);
+}

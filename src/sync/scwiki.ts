@@ -9,8 +9,8 @@ import {
   upsertManufacturer,
   upsertGameVersion,
   upsertVehicle,
-  upsertPort,
-  syncVehicleLoaners,
+  buildUpsertPortStatement,
+  syncVehicleLoanersBatch,
   upsertComponent,
   upsertFPSWeapon,
   upsertFPSArmour,
@@ -18,12 +18,11 @@ import {
   upsertFPSUtility,
   insertSyncHistory,
   updateSyncHistory,
-  getManufacturerIDByUUID,
-  getManufacturerIDByName,
-  getGameVersionIDByUUID,
-  getProductionStatusIDByKey,
+  loadManufacturerMaps,
+  loadGameVersionMap,
+  loadProductionStatusMap,
 } from "../db/queries";
-import { delay } from "../lib/utils";
+import { delay, chunkArray } from "../lib/utils";
 
 // --- SC Wiki API Types ---
 
@@ -204,14 +203,16 @@ async function syncManufacturers(db: D1Database, rateLimitMs: number): Promise<v
     for (const raw of data) {
       const m = raw as SCWikiManufacturer;
       try {
+        // Derive slug from name if API doesn't provide it
+        const slug = m.slug || m.name.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/(^-|-$)/g, "");
         await upsertManufacturer(db, {
           uuid: m.uuid,
           name: m.name,
-          slug: m.slug,
-          code: m.code,
-          known_for: m.known_for,
-          description: m.description,
-          logo_url: m.logo_url,
+          slug,
+          code: m.code || "",
+          known_for: m.known_for || "",
+          description: m.description || "",
+          logo_url: m.logo_url || "",
         });
         count++;
       } catch (err) {
@@ -237,11 +238,13 @@ async function syncGameVersions(db: D1Database, rateLimitMs: number): Promise<vo
     for (const raw of data) {
       const gv = raw as SCWikiGameVersion;
       try {
+        // API may not return uuid — use code as fallback UUID
+        const uuid = gv.uuid || gv.code;
         await upsertGameVersion(db, {
-          uuid: gv.uuid,
+          uuid,
           code: gv.code,
-          channel: gv.channel,
-          is_default: gv.is_default,
+          channel: gv.channel || "",
+          is_default: gv.is_default ?? false,
           released_at: gv.released_at ?? undefined,
         });
         count++;
@@ -262,28 +265,36 @@ async function syncVehicles(db: D1Database, rateLimitMs: number): Promise<void> 
   const syncID = await insertSyncHistory(db, SYNC_SOURCE.SCWIKI, "vehicles", "running");
 
   try {
+    // Pre-load lookup tables (3 queries total instead of 200+ per-vehicle)
+    const [mfgMaps, gvMap, psMap] = await Promise.all([
+      loadManufacturerMaps(db),
+      loadGameVersionMap(db),
+      loadProductionStatusMap(db),
+    ]);
+
     const data = await fetchPaginated(
       "/api/vehicles?include=manufacturer,game_version,ports,loaner",
       rateLimitMs,
     );
     let count = 0;
+    const allPortStmts: D1PreparedStatement[] = [];
 
     for (const raw of data) {
       const v = raw as SCWikiVehicle;
       try {
-        // Resolve manufacturer ID
+        // Resolve manufacturer ID from pre-loaded Maps (zero DB cost)
         let manufacturerID: number | null = null;
         if (v.manufacturer) {
-          manufacturerID = await getManufacturerIDByUUID(db, v.manufacturer.uuid);
+          manufacturerID = mfgMaps.byUUID.get(v.manufacturer.uuid) ?? null;
           if (manufacturerID === null && v.manufacturer.name) {
-            manufacturerID = await getManufacturerIDByName(db, v.manufacturer.name);
+            manufacturerID = mfgMaps.byName.get(v.manufacturer.name) ?? null;
           }
         }
 
-        // Resolve game version ID
+        // Resolve game version ID from pre-loaded Map (zero DB cost)
         let gameVersionID: number | null = null;
         if (v.game_version) {
-          gameVersionID = await getGameVersionIDByUUID(db, v.game_version.uuid);
+          gameVersionID = gvMap.get(v.game_version.uuid) ?? null;
         }
 
         // Extract crew
@@ -315,14 +326,14 @@ async function syncVehicles(db: D1Database, rateLimitMs: number): Promise<void> 
         const description = v.description?.en_EN ?? "";
         const sizeLabel = v.size?.en_EN ?? "";
 
-        // Resolve production_status_id
+        // Resolve production_status_id from pre-loaded Map (zero DB cost)
         let productionStatusID: number | null = null;
         if (v.production_status?.en_EN) {
           let psKey = v.production_status.en_EN;
           if (psKey === "flight-ready") psKey = "flight_ready";
           else if (psKey === "in-production") psKey = "in_production";
           else if (psKey === "in-concept") psKey = "in_concept";
-          productionStatusID = await getProductionStatusIDByKey(db, psKey);
+          productionStatusID = psMap.get(psKey) ?? null;
         }
 
         // Derive on_sale from SKUs
@@ -357,27 +368,29 @@ async function syncVehicles(db: D1Database, rateLimitMs: number): Promise<void> 
           game_version_id: gameVersionID ?? undefined,
         });
 
-        // Upsert ports
+        // Collect port upsert statements for batching
         if (v.ports) {
           for (const port of v.ports) {
-            await upsertPort(db, {
-              uuid: port.uuid,
-              vehicle_id: vehicleID,
-              name: port.name,
-              category_label: port.category_label,
-              size_min: port.size_min,
-              size_max: port.size_max,
-              port_type: port.port_type,
-              equipped_item_uuid: port.equipped_item?.uuid ?? "",
-            });
+            allPortStmts.push(
+              buildUpsertPortStatement(db, {
+                uuid: port.uuid,
+                vehicle_id: vehicleID,
+                name: port.name,
+                category_label: port.category_label,
+                size_min: port.size_min,
+                size_max: port.size_max,
+                port_type: port.port_type,
+                equipped_item_uuid: port.equipped_item?.uuid ?? "",
+              }),
+            );
           }
         }
 
-        // Sync loaners
+        // Sync loaners in a single batch
         if (v.loaner && v.loaner.length > 0) {
           const loanerSlugs = v.loaner.filter((l) => l.slug).map((l) => l.slug);
           if (loanerSlugs.length > 0) {
-            await syncVehicleLoaners(db, vehicleID, loanerSlugs);
+            await syncVehicleLoanersBatch(db, vehicleID, loanerSlugs);
           }
         }
 
@@ -387,8 +400,13 @@ async function syncVehicles(db: D1Database, rateLimitMs: number): Promise<void> 
       }
     }
 
+    // Batch all port upserts
+    for (const chunk of chunkArray(allPortStmts, 500)) {
+      await db.batch(chunk);
+    }
+
     await updateSyncHistory(db, syncID, "success", count, "");
-    console.log(`[scwiki] Vehicles synced: ${count}`);
+    console.log(`[scwiki] Vehicles synced: ${count} (${allPortStmts.length} ports batched)`);
   } catch (err) {
     await updateSyncHistory(db, syncID, "error", 0, String(err));
     throw err;
@@ -399,6 +417,12 @@ async function syncItems(db: D1Database, rateLimitMs: number): Promise<void> {
   const syncID = await insertSyncHistory(db, SYNC_SOURCE.SCWIKI, "items", "running");
 
   try {
+    // Pre-load lookup tables for item sync (same pattern as vehicles)
+    const [mfgMaps, gvMap] = await Promise.all([
+      loadManufacturerMaps(db),
+      loadGameVersionMap(db),
+    ]);
+
     const data = await fetchPaginated(
       "/api/items?include=manufacturer,game_version",
       rateLimitMs,
@@ -410,19 +434,19 @@ async function syncItems(db: D1Database, rateLimitMs: number): Promise<void> {
       if (!isRelevantItemType(item.type)) continue;
 
       try {
-        // Resolve manufacturer ID
+        // Resolve manufacturer ID from pre-loaded Maps (zero DB cost)
         let manufacturerID: number | null = null;
         if (item.manufacturer) {
-          manufacturerID = await getManufacturerIDByUUID(db, item.manufacturer.uuid);
+          manufacturerID = mfgMaps.byUUID.get(item.manufacturer.uuid) ?? null;
           if (manufacturerID === null && item.manufacturer.name) {
-            manufacturerID = await getManufacturerIDByName(db, item.manufacturer.name);
+            manufacturerID = mfgMaps.byName.get(item.manufacturer.name) ?? null;
           }
         }
 
-        // Resolve game version ID
+        // Resolve game version ID from pre-loaded Map (zero DB cost)
         let gameVersionID: number | null = null;
         if (item.game_version) {
-          gameVersionID = await getGameVersionIDByUUID(db, item.game_version.uuid);
+          gameVersionID = gvMap.get(item.game_version.uuid) ?? null;
         }
 
         const rawData = JSON.stringify(raw);
