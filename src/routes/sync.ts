@@ -2,6 +2,7 @@ import { Hono } from "hono";
 import type { Env } from "../lib/types";
 import {
   triggerSCWikiSync,
+  triggerSCWikiItemSync,
   triggerImageSync,
   triggerPaintSync,
   triggerRSISync,
@@ -33,15 +34,26 @@ export function syncRoutes<E extends { Bindings: Env }>() {
     return c.json(result.results);
   });
 
-  // POST /api/sync/scwiki — trigger SC Wiki sync (background)
+  // POST /api/sync/scwiki — trigger SC Wiki vehicle sync (background)
   routes.post("/scwiki", async (c) => {
     const env = c.env;
     c.executionCtx.waitUntil(
       triggerSCWikiSync(env).catch((err) =>
-        console.error("[sync] SC Wiki sync failed:", err),
+        console.error("[sync] SC Wiki vehicle sync failed:", err),
       ),
     );
     return c.json({ message: "SC Wiki sync triggered" });
+  });
+
+  // POST /api/sync/items — trigger SC Wiki item sync (background)
+  routes.post("/items", async (c) => {
+    const env = c.env;
+    c.executionCtx.waitUntil(
+      triggerSCWikiItemSync(env).catch((err) =>
+        console.error("[sync] SC Wiki item sync failed:", err),
+      ),
+    );
+    return c.json({ message: "SC Wiki item sync triggered" });
   });
 
   // POST /api/sync/images — trigger FleetYards image sync (background)
