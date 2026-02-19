@@ -10,11 +10,11 @@ import {
   upsertGameVersion,
   buildUpsertVehicleStatement,
   buildUpsertPortStatement,
-  upsertComponent,
-  upsertFPSWeapon,
-  upsertFPSArmour,
-  upsertFPSAttachment,
-  upsertFPSUtility,
+  buildUpsertComponentStatement,
+  buildUpsertFPSWeaponStatement,
+  buildUpsertFPSArmourStatement,
+  buildUpsertFPSAttachmentStatement,
+  buildUpsertFPSUtilityStatement,
   insertSyncHistory,
   updateSyncHistory,
   loadManufacturerMaps,
@@ -445,14 +445,15 @@ async function syncItems(db: D1Database, rateLimitMs: number): Promise<void> {
       "/api/items?include=manufacturer,game_version",
       rateLimitMs,
     );
-    let count = 0;
+
+    // --- Build all item upsert statements (zero DB cost) ---
+    const allStmts: D1PreparedStatement[] = [];
 
     for (const raw of data) {
       const item = raw as SCWikiItem;
       if (!isRelevantItemType(item.type)) continue;
 
       try {
-        // Resolve manufacturer ID from pre-loaded Maps (zero DB cost)
         let manufacturerID: number | null = null;
         if (item.manufacturer) {
           manufacturerID = mfgMaps.byUUID.get(item.manufacturer.uuid) ?? null;
@@ -461,22 +462,26 @@ async function syncItems(db: D1Database, rateLimitMs: number): Promise<void> {
           }
         }
 
-        // Resolve game version ID from pre-loaded Map (zero DB cost)
         let gameVersionID: number | null = null;
         if (item.game_version) {
           gameVersionID = gvMap.get(item.game_version.uuid) ?? null;
         }
 
-        const rawData = JSON.stringify(raw);
-        await routeItem(db, item, manufacturerID, gameVersionID, rawData);
-        count++;
+        const stmt = buildItemStatement(db, item, manufacturerID, gameVersionID);
+        if (stmt) allStmts.push(stmt);
       } catch (err) {
-        console.warn(`[scwiki] Failed to upsert item ${item.name} (${item.type}):`, err);
+        console.warn(`[scwiki] Failed to build item statement for ${item.name} (${item.type}):`, err);
       }
     }
 
+    // --- Batch execute all item upserts ---
+    for (const chunk of chunkArray(allStmts, 90)) {
+      await db.batch(chunk);
+    }
+
+    const count = allStmts.length;
     await updateSyncHistory(db, syncID, "success", count, "");
-    console.log(`[scwiki] Items synced: ${count}`);
+    console.log(`[scwiki] Items synced: ${count} (batched in ${Math.ceil(count / 90)} chunks)`);
   } catch (err) {
     await updateSyncHistory(db, syncID, "error", 0, String(err));
     throw err;
@@ -485,19 +490,18 @@ async function syncItems(db: D1Database, rateLimitMs: number): Promise<void> {
 
 // --- Item routing ---
 
-async function routeItem(
+function buildItemStatement(
   db: D1Database,
   item: SCWikiItem,
   manufacturerID: number | null,
   gameVersionID: number | null,
-  _rawData: string,
-): Promise<void> {
+): D1PreparedStatement | null {
   const grade = String(item.grade ?? "");
   const mfgID = manufacturerID ?? undefined;
   const gvID = gameVersionID ?? undefined;
 
   if (isShipComponent(item.type)) {
-    await upsertComponent(db, {
+    return buildUpsertComponentStatement(db, {
       uuid: item.uuid,
       name: item.name,
       slug: item.slug,
@@ -510,7 +514,7 @@ async function routeItem(
       game_version_id: gvID,
     });
   } else if (item.type === "WeaponPersonal") {
-    await upsertFPSWeapon(db, {
+    return buildUpsertFPSWeaponStatement(db, {
       uuid: item.uuid,
       name: item.name,
       slug: item.slug,
@@ -521,7 +525,7 @@ async function routeItem(
       game_version_id: gvID,
     });
   } else if (isFPSArmour(item.type)) {
-    await upsertFPSArmour(db, {
+    return buildUpsertFPSArmourStatement(db, {
       uuid: item.uuid,
       name: item.name,
       slug: item.slug,
@@ -533,7 +537,7 @@ async function routeItem(
       game_version_id: gvID,
     });
   } else if (item.type === "WeaponAttachment") {
-    await upsertFPSAttachment(db, {
+    return buildUpsertFPSAttachmentStatement(db, {
       uuid: item.uuid,
       name: item.name,
       slug: item.slug,
@@ -544,7 +548,7 @@ async function routeItem(
       game_version_id: gvID,
     });
   } else if (isFPSUtility(item.type)) {
-    await upsertFPSUtility(db, {
+    return buildUpsertFPSUtilityStatement(db, {
       uuid: item.uuid,
       name: item.name,
       slug: item.slug,
@@ -554,6 +558,7 @@ async function routeItem(
       game_version_id: gvID,
     });
   }
+  return null;
 }
 
 const SHIP_COMPONENTS = new Set([

@@ -547,7 +547,11 @@ export async function findVehicleIDsByNameContains(
 // ============================================================
 
 export async function upsertComponent(db: D1Database, c: Partial<Component> & { uuid: string; name: string; type: string }): Promise<void> {
-  await db
+  await buildUpsertComponentStatement(db, c).run();
+}
+
+export function buildUpsertComponentStatement(db: D1Database, c: Partial<Component> & { uuid: string; name: string; type: string }): D1PreparedStatement {
+  return db
     .prepare(
       `INSERT INTO components (uuid, name, slug, class_name, manufacturer_id, type, sub_type,
         size, grade, description, game_version_id, raw_data, updated_at)
@@ -563,8 +567,7 @@ export async function upsertComponent(db: D1Database, c: Partial<Component> & { 
       c.uuid, c.name, n(c.slug), n(c.class_name), nNum(c.manufacturer_id),
       c.type, n(c.sub_type), nNum(c.size), n(c.grade), n(c.description),
       nNum(c.game_version_id), null,
-    )
-    .run();
+    );
 }
 
 // ============================================================
@@ -595,36 +598,45 @@ export async function upsertPort(db: D1Database, p: Partial<Port> & { uuid: stri
 // ============================================================
 
 export async function upsertFPSWeapon(db: D1Database, item: Partial<FPSWeapon> & { uuid: string; name: string }): Promise<void> {
-  await db
+  await buildUpsertFPSWeaponStatement(db, item).run();
+}
+
+export function buildUpsertFPSWeaponStatement(db: D1Database, item: Partial<FPSWeapon> & { uuid: string; name: string }): D1PreparedStatement {
+  return db
     .prepare(
       `INSERT INTO fps_weapons (uuid, name, slug, class_name, manufacturer_id, sub_type, size, description, game_version_id, raw_data, updated_at)
       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, datetime('now'))
       ON CONFLICT(uuid) DO UPDATE SET name=excluded.name, slug=excluded.slug, class_name=excluded.class_name, manufacturer_id=excluded.manufacturer_id, sub_type=excluded.sub_type, size=excluded.size, description=excluded.description, game_version_id=excluded.game_version_id, raw_data=excluded.raw_data, updated_at=excluded.updated_at`,
     )
-    .bind(item.uuid, item.name, n(item.slug), n(item.class_name), nNum(item.manufacturer_id), n(item.sub_type), nNum(item.size), n(item.description), nNum(item.game_version_id), null)
-    .run();
+    .bind(item.uuid, item.name, n(item.slug), n(item.class_name), nNum(item.manufacturer_id), n(item.sub_type), nNum(item.size), n(item.description), nNum(item.game_version_id), null);
 }
 
 export async function upsertFPSArmour(db: D1Database, item: Partial<FPSArmour> & { uuid: string; name: string }): Promise<void> {
-  await db
+  await buildUpsertFPSArmourStatement(db, item).run();
+}
+
+export function buildUpsertFPSArmourStatement(db: D1Database, item: Partial<FPSArmour> & { uuid: string; name: string }): D1PreparedStatement {
+  return db
     .prepare(
       `INSERT INTO fps_armour (uuid, name, slug, class_name, manufacturer_id, sub_type, size, grade, description, game_version_id, raw_data, updated_at)
       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, datetime('now'))
       ON CONFLICT(uuid) DO UPDATE SET name=excluded.name, slug=excluded.slug, class_name=excluded.class_name, manufacturer_id=excluded.manufacturer_id, sub_type=excluded.sub_type, size=excluded.size, grade=excluded.grade, description=excluded.description, game_version_id=excluded.game_version_id, raw_data=excluded.raw_data, updated_at=excluded.updated_at`,
     )
-    .bind(item.uuid, item.name, n(item.slug), n(item.class_name), nNum(item.manufacturer_id), n(item.sub_type), nNum(item.size), n(item.grade), n(item.description), nNum(item.game_version_id), null)
-    .run();
+    .bind(item.uuid, item.name, n(item.slug), n(item.class_name), nNum(item.manufacturer_id), n(item.sub_type), nNum(item.size), n(item.grade), n(item.description), nNum(item.game_version_id), null);
 }
 
 export async function upsertFPSAttachment(db: D1Database, item: Partial<FPSAttachment> & { uuid: string; name: string }): Promise<void> {
-  await db
+  await buildUpsertFPSAttachmentStatement(db, item).run();
+}
+
+export function buildUpsertFPSAttachmentStatement(db: D1Database, item: Partial<FPSAttachment> & { uuid: string; name: string }): D1PreparedStatement {
+  return db
     .prepare(
       `INSERT INTO fps_attachments (uuid, name, slug, class_name, manufacturer_id, sub_type, size, description, game_version_id, raw_data, updated_at)
       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, datetime('now'))
       ON CONFLICT(uuid) DO UPDATE SET name=excluded.name, slug=excluded.slug, class_name=excluded.class_name, manufacturer_id=excluded.manufacturer_id, sub_type=excluded.sub_type, size=excluded.size, description=excluded.description, game_version_id=excluded.game_version_id, raw_data=excluded.raw_data, updated_at=excluded.updated_at`,
     )
-    .bind(item.uuid, item.name, n(item.slug), n(item.class_name), nNum(item.manufacturer_id), n(item.sub_type), nNum(item.size), n(item.description), nNum(item.game_version_id), null)
-    .run();
+    .bind(item.uuid, item.name, n(item.slug), n(item.class_name), nNum(item.manufacturer_id), n(item.sub_type), nNum(item.size), n(item.description), nNum(item.game_version_id), null);
 }
 
 export async function upsertFPSAmmo(db: D1Database, item: Partial<FPSAmmo> & { uuid: string; name: string }): Promise<void> {
@@ -639,14 +651,17 @@ export async function upsertFPSAmmo(db: D1Database, item: Partial<FPSAmmo> & { u
 }
 
 export async function upsertFPSUtility(db: D1Database, item: Partial<FPSUtility> & { uuid: string; name: string }): Promise<void> {
-  await db
+  await buildUpsertFPSUtilityStatement(db, item).run();
+}
+
+export function buildUpsertFPSUtilityStatement(db: D1Database, item: Partial<FPSUtility> & { uuid: string; name: string }): D1PreparedStatement {
+  return db
     .prepare(
       `INSERT INTO fps_utilities (uuid, name, slug, class_name, manufacturer_id, sub_type, description, game_version_id, raw_data, updated_at)
       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, datetime('now'))
       ON CONFLICT(uuid) DO UPDATE SET name=excluded.name, slug=excluded.slug, class_name=excluded.class_name, manufacturer_id=excluded.manufacturer_id, sub_type=excluded.sub_type, description=excluded.description, game_version_id=excluded.game_version_id, raw_data=excluded.raw_data, updated_at=excluded.updated_at`,
     )
-    .bind(item.uuid, item.name, n(item.slug), n(item.class_name), nNum(item.manufacturer_id), n(item.sub_type), n(item.description), nNum(item.game_version_id), null)
-    .run();
+    .bind(item.uuid, item.name, n(item.slug), n(item.class_name), nNum(item.manufacturer_id), n(item.sub_type), n(item.description), nNum(item.game_version_id), null);
 }
 
 // ============================================================
