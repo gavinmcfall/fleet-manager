@@ -4,7 +4,7 @@ This file maintains running context across compactions.
 
 ## Current Focus
 
-**Second code review completed (post-merge to main).** Fresh-eyes review of the 5 commits (Phases 3-5 + tier 1 fixes) that were merged to main. Found 4 blocking issues and 8 suggestions. Review output in `.codereview/2026-02-18_20-33-00_fleet-manager_claude_Review.md`. Generated prompts for Claude/Gemini/Codex in `.codereview/prompts/`. Next step: invoke `review-responder` to address findings.
+**Frontend auth + error handling fixes.** Root cause of "import completed but nothing shows": `postJSON` didn't check `res.ok`, so 401 from auth middleware was silently treated as success. Fixed `postJSON`/`putJSON`/`deleteJSON` to throw on non-OK responses, added `X-API-Key` header injection from localStorage token, and added API Token settings UI. Also fixed LLM GET routes (analysis-history, latest-analysis) to not require auth. All changes uncommitted — need to commit sync optimizations + these fixes, then deploy.
 
 ## Why Cloudflare Workers
 
@@ -109,4 +109,12 @@ Deployment + Access Control:
 
 ---
 **Session compacted at:** 2026-02-19 07:59:36
+
+
+---
+**Session compacted at:** 2026-02-20 09:31:12
+
+
+---
+**Session compacted at:** 2026-02-20 11:37:45
 

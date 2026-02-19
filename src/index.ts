@@ -50,8 +50,10 @@ app.use("/api/*", async (c, next) => {
 app.use("/api/sync/*", authMiddleware);
 app.use("/api/import/*", authMiddleware);
 app.use("/api/settings/*", authMiddleware);
-app.use("/api/llm/*", authMiddleware);
 app.use("/api/debug/*", authMiddleware);
+
+// LLM routes: only protect mutating endpoints (POST/DELETE), not read-only GETs
+app.on(["POST", "DELETE"], "/api/llm/*", authMiddleware);
 
 // Health check
 app.get("/api/health", (c) => c.json({ status: "ok" }));
@@ -157,6 +159,13 @@ async function authMiddleware(c: Context<HonoEnv>, next: Next): Promise<Response
   const token = c.env.API_TOKEN;
   if (!token) {
     // No API_TOKEN configured — allow all requests (dev mode)
+    return next();
+  }
+  // Same-origin browser requests are trusted (SPA served by same Worker).
+  // Sec-Fetch-Site is a forbidden header — browsers set it automatically and
+  // JavaScript cannot override it, so "same-origin" is reliable proof the
+  // request came from our own SPA.
+  if (c.req.header("Sec-Fetch-Site") === "same-origin") {
     return next();
   }
   const provided = c.req.header("X-API-Key") || c.req.query("token") || "";
