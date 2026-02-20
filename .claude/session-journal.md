@@ -4,7 +4,7 @@ This file maintains running context across compactions.
 
 ## Current Focus
 
-**Frontend auth + error handling fixes.** Root cause of "import completed but nothing shows": `postJSON` didn't check `res.ok`, so 401 from auth middleware was silently treated as success. Fixed `postJSON`/`putJSON`/`deleteJSON` to throw on non-OK responses, added `X-API-Key` header injection from localStorage token, and added API Token settings UI. Also fixed LLM GET routes (analysis-history, latest-analysis) to not require auth. All changes uncommitted — need to commit sync optimizations + these fixes, then deploy.
+**Component library extracted, Figma design system rules created.** Extracted 10 shared React components from duplicated page markup (PageHeader, LoadingState, ErrorState, PanelSection, StatCard, FilterSelect, SearchInput, InsuranceBadge, EmptyState, AlertBanner). All 8 pages + App.jsx updated. Build verified clean. Figma design system rules saved to `.figma/design-system-rules.md`. Dashboard captured to Figma file `Tn6h1pV843SwtxVfpuGRVb`. Remaining page captures can be done via browser. Figma MCP is primarily Figma→Code; captures require browser rendering.
 
 ## Why Cloudflare Workers
 
@@ -121,4 +121,12 @@ Deployment + Access Control:
 
 ---
 **Session compacted at:** 2026-02-20 12:24:42
+
+
+---
+**Session compacted at:** 2026-02-20 12:55:59
+
+
+---
+**Session compacted at:** 2026-02-20 16:18:55
 
