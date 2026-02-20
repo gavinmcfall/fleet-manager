@@ -1,6 +1,12 @@
 import React, { useState, useMemo } from 'react'
 import { useAnalysis } from '../hooks/useAPI'
 import { Shield, ShieldAlert, ShieldQuestion, Calendar, DollarSign, Tag } from 'lucide-react'
+import PageHeader from '../components/PageHeader'
+import LoadingState from '../components/LoadingState'
+import ErrorState from '../components/ErrorState'
+import StatCard from '../components/StatCard'
+import FilterSelect from '../components/FilterSelect'
+import InsuranceBadge from '../components/InsuranceBadge'
 
 export default function Insurance() {
   const { data: analysis, loading, error } = useAnalysis()
@@ -34,40 +40,36 @@ export default function Insurance() {
     }
   }, [ins, filterLTI, filterWarbond])
 
-  if (loading) return <div className="text-gray-500 font-mono text-sm p-8">Loading insurance data...</div>
-  if (error) return <div className="text-sc-danger font-mono text-sm p-8">Error: {error}</div>
+  if (loading) return <LoadingState message="Loading insurance data..." />
+  if (error) return <ErrorState message={error} />
 
   return (
     <div className="space-y-6">
-      <div>
-        <h2 className="font-display font-bold text-2xl tracking-wider text-white">INSURANCE TRACKER</h2>
-        <p className="text-xs font-mono text-gray-500 mt-1">
-          Upload HangarXplor data to populate insurance info
-        </p>
-      </div>
-
-      <div className="glow-line" />
+      <PageHeader
+        title="INSURANCE TRACKER"
+        subtitle="Upload HangarXplor data to populate insurance info"
+      />
 
       {/* Filters */}
       <div className="flex gap-3 items-center">
-        <select
+        <FilterSelect
           value={filterLTI}
           onChange={(e) => setFilterLTI(e.target.value)}
-          className="bg-sc-panel border border-sc-border rounded px-3 py-2 text-sm font-mono text-gray-300 focus:outline-none focus:border-sc-accent/50"
-        >
-          <option value="all">All Insurance</option>
-          <option value="lti">LTI Only</option>
-          <option value="nonlti">Non-LTI Only</option>
-        </select>
-        <select
+          options={[
+            { value: 'all', label: 'All Insurance' },
+            { value: 'lti', label: 'LTI Only' },
+            { value: 'nonlti', label: 'Non-LTI Only' },
+          ]}
+        />
+        <FilterSelect
           value={filterWarbond}
           onChange={(e) => setFilterWarbond(e.target.value)}
-          className="bg-sc-panel border border-sc-border rounded px-3 py-2 text-sm font-mono text-gray-300 focus:outline-none focus:border-sc-accent/50"
-        >
-          <option value="all">All Purchases</option>
-          <option value="warbond">Warbond Only</option>
-          <option value="nonwarbond">Non-Warbond Only</option>
-        </select>
+          options={[
+            { value: 'all', label: 'All Purchases' },
+            { value: 'warbond', label: 'Warbond Only' },
+            { value: 'nonwarbond', label: 'Non-Warbond Only' },
+          ]}
+        />
         <span className="text-xs font-mono text-gray-500">
           {lti.length + nonLTI.length} ships
         </span>
@@ -75,27 +77,9 @@ export default function Insurance() {
 
       {/* Summary Cards */}
       <div className="grid grid-cols-3 gap-4">
-        <div className="stat-card border-l-2 border-l-sc-lti">
-          <div className="flex items-center gap-2">
-            <Shield className="w-4 h-4 text-sc-lti" />
-            <span className="stat-label">LTI Ships</span>
-          </div>
-          <span className="stat-value text-sc-lti">{lti.length}</span>
-        </div>
-        <div className="stat-card border-l-2 border-l-sc-warn">
-          <div className="flex items-center gap-2">
-            <ShieldAlert className="w-4 h-4 text-sc-warn" />
-            <span className="stat-label">Non-LTI Ships</span>
-          </div>
-          <span className="stat-value text-sc-warn">{nonLTI.length}</span>
-        </div>
-        <div className="stat-card border-l-2 border-l-gray-600">
-          <div className="flex items-center gap-2">
-            <ShieldQuestion className="w-4 h-4 text-gray-500" />
-            <span className="stat-label">Unknown</span>
-          </div>
-          <span className="stat-value text-gray-500">{unknown.length}</span>
-        </div>
+        <StatCard icon={Shield} label="LTI Ships" value={lti.length} color="text-sc-lti" accentBorder="border-l-sc-lti" />
+        <StatCard icon={ShieldAlert} label="Non-LTI Ships" value={nonLTI.length} color="text-sc-warn" accentBorder="border-l-sc-warn" />
+        <StatCard icon={ShieldQuestion} label="Unknown" value={unknown.length} color="text-gray-500" accentBorder="border-l-gray-600" />
       </div>
 
       {/* LTI Ships */}
@@ -184,13 +168,7 @@ function InsuranceRow({ ship }) {
             {ship.pledge_date}
           </span>
         )}
-        {ship.is_lifetime ? (
-          <span className="badge badge-lti">LTI</span>
-        ) : (
-          <span className="badge badge-nonlti">
-            {ship.insurance_label || 'Standard'}
-          </span>
-        )}
+        <InsuranceBadge isLifetime={ship.is_lifetime} label={ship.insurance_label || (ship.is_lifetime ? 'LTI' : 'Standard')} />
         {ship.warbond && <span className="badge badge-warbond">WB</span>}
       </div>
     </div>
