@@ -1,0 +1,46 @@
+name = "sc-companion"
+main = "src/index.ts"
+compatibility_date = "2025-02-18"
+account_id = "4214879ee537a4840de659aafb7bf201"
+
+# Workers Assets — SPA routing: unmatched paths serve index.html
+[assets]
+binding = "ASSETS"
+directory = "./frontend/dist"
+not_found_handling = "single-page-application"
+
+# D1 Database binding
+[[d1_databases]]
+binding = "DB"
+database_name = "sc-companion"
+database_id = "56875a7e-0ebd-4455-887d-5d1e1afdb416"
+migrations_dir = "src/db/migrations"
+
+# Cron Triggers — staggered nightly sync to stay within Workers CPU limits
+# Each step runs as a separate invocation with its own 30s CPU budget
+[triggers]
+crons = [
+  "0 3 * * *",   # SC Wiki vehicles (manufacturers, game versions, vehicles)
+  "5 3 * * *",   # SC Wiki items (components, FPS weapons, armour, etc.)
+  "15 3 * * *",  # FleetYards ship images
+  "30 3 * * *",  # scunpacked paints + FleetYards paint images
+  "45 3 * * *",  # RSI API images (if enabled)
+]
+
+# Environment variables (non-secret defaults)
+[vars]
+FLEETYARDS_BASE_URL = "https://api.fleetyards.net"
+SC_WIKI_ENABLED = "true"
+SC_WIKI_RATE_LIMIT = "1.0"
+SC_WIKI_BURST = "5"
+RSI_API_ENABLED = "false"
+RSI_BASE_URL = "https://robertsspaceindustries.com"
+RSI_RATE_LIMIT = "1.0"
+SCUNPACKED_REPO = "StarCitizenWiki/scunpacked-data"
+SCUNPACKED_BRANCH = "master"
+
+# Workers Observability — structured logs visible in CF dashboard
+[observability]
+[observability.logs]
+enabled = true
+invocation_logs = true

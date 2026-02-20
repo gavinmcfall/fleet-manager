@@ -1,6 +1,9 @@
 import React, { useState, useEffect } from 'react'
 import { useLLMConfig, setLLMConfig, testLLMConnection } from '../hooks/useAPI'
 import { Settings as SettingsIcon, Key, CheckCircle, XCircle, Loader, Trash2, Eye, EyeOff } from 'lucide-react'
+import PageHeader from '../components/PageHeader'
+import PanelSection from '../components/PanelSection'
+import FilterSelect from '../components/FilterSelect'
 
 export default function Settings() {
   const { data: config, refetch } = useLLMConfig()
@@ -84,21 +87,13 @@ export default function Settings() {
 
   return (
     <div className="space-y-6">
-      <div>
-        <h2 className="font-display font-bold text-2xl tracking-wider text-white">SETTINGS</h2>
-        <p className="text-xs font-mono text-gray-500 mt-1">
-          Configure LLM provider for AI fleet analysis
-        </p>
-      </div>
-
-      <div className="glow-line" />
+      <PageHeader
+        title="SETTINGS"
+        subtitle="Configure LLM provider for AI fleet analysis"
+      />
 
       {/* Provider Selection */}
-      <div className="panel">
-        <div className="panel-header flex items-center gap-2">
-          <SettingsIcon className="w-3.5 h-3.5" />
-          LLM Provider
-        </div>
+      <PanelSection title="LLM Provider" icon={SettingsIcon}>
         <div className="p-5 space-y-4">
           <p className="text-sm text-gray-400">
             Choose your AI provider. You'll need to provide your own API key.
@@ -132,15 +127,11 @@ export default function Settings() {
             ))}
           </div>
         </div>
-      </div>
+      </PanelSection>
 
       {/* API Key Input */}
       {provider && (
-        <div className="panel">
-          <div className="panel-header flex items-center gap-2">
-            <Key className="w-3.5 h-3.5" />
-            API Key
-          </div>
+        <PanelSection title="API Key" icon={Key}>
           <div className="p-5 space-y-4">
             <p className="text-sm text-gray-400">
               Your API key is encrypted and stored securely. It never leaves your server.
@@ -208,27 +199,21 @@ export default function Settings() {
               </div>
             )}
           </div>
-        </div>
+        </PanelSection>
       )}
 
       {/* Model Selection */}
       {models.length > 0 && (
-        <div className="panel">
-          <div className="panel-header">Select Model</div>
+        <PanelSection title="Select Model">
           <div className="p-5">
-            <select
+            <FilterSelect
               value={model}
               onChange={(e) => setModel(e.target.value)}
-              className="w-full bg-sc-darker border border-sc-border rounded px-3 py-2 text-sm text-gray-300 focus:outline-none focus:border-sc-accent/50"
-            >
-              {models.map((m) => (
-                <option key={m.id} value={m.id}>
-                  {m.name}
-                </option>
-              ))}
-            </select>
+              options={models.map((m) => ({ value: m.id, label: m.name }))}
+              className="w-full"
+            />
           </div>
-        </div>
+        </PanelSection>
       )}
 
       {/* Save Button */}

@@ -1,6 +1,9 @@
 import React, { useState, useRef } from 'react'
 import { useStatus, importHangarXplor } from '../hooks/useAPI'
 import { Upload, FileJson, CheckCircle, XCircle, AlertTriangle } from 'lucide-react'
+import PageHeader from '../components/PageHeader'
+import AlertBanner from '../components/AlertBanner'
+import PanelSection from '../components/PanelSection'
 
 export default function Import() {
   const { data: appStatus, refetch: refetchStatus } = useStatus()
@@ -69,42 +72,32 @@ export default function Import() {
 
   return (
     <div className="space-y-6">
-      <div>
-        <h2 className="font-display font-bold text-2xl tracking-wider text-white">IMPORT HANGAR</h2>
-        <p className="text-xs font-mono text-gray-500 mt-1">
-          Import your fleet from HangarXplor to populate ships, insurance, and pledge data
-        </p>
-      </div>
-
-      <div className="glow-line" />
+      <PageHeader
+        title="IMPORT HANGAR"
+        subtitle="Import your fleet from HangarXplor to populate ships, insurance, and pledge data"
+      />
 
       {/* Current Fleet Indicator */}
       {vehicleCount > 0 && (
-        <div className="panel p-4 flex items-center gap-3 border-l-2 border-l-sc-accent">
-          <CheckCircle className="w-4 h-4 text-sc-accent shrink-0" />
+        <AlertBanner variant="info" icon={CheckCircle}>
           <span className="text-sm text-gray-300">
             Currently loaded: <span className="text-white font-medium">{vehicleCount} ships</span>
           </span>
-        </div>
+        </AlertBanner>
       )}
 
       {/* Warning about replacing data */}
       {vehicleCount > 0 && (
-        <div className="panel p-3 flex items-start gap-2 border-l-2 border-l-sc-warn">
-          <AlertTriangle className="w-4 h-4 text-sc-warn shrink-0 mt-0.5" />
+        <AlertBanner variant="warning" icon={AlertTriangle}>
           <p className="text-xs text-gray-400">
             Importing will <span className="text-sc-warn font-medium">replace</span> your
             current fleet data with the new import.
           </p>
-        </div>
+        </AlertBanner>
       )}
 
       {/* HangarXplor Import */}
-      <div className="panel">
-        <div className="panel-header flex items-center gap-2">
-          <FileJson className="w-3.5 h-3.5" />
-          HangarXplor Import
-        </div>
+      <PanelSection title="HangarXplor Import" icon={FileJson}>
         <div className="p-5 space-y-4">
           <p className="text-sm text-gray-400">
             Upload a JSON export from the HangarXplor browser extension. Includes full
@@ -147,15 +140,11 @@ export default function Import() {
             </p>
           </div>
         </div>
-      </div>
+      </PanelSection>
 
       {/* HangarXplor Preview */}
       {preview && (
-        <div className="panel">
-          <div className="panel-header flex items-center gap-2">
-            <FileJson className="w-3.5 h-3.5" />
-            {preview.filename}
-          </div>
+        <PanelSection title={preview.filename} icon={FileJson}>
           <div className="p-5 space-y-4">
             <div className="grid grid-cols-4 gap-3">
               <div className="text-center">
@@ -179,7 +168,7 @@ export default function Import() {
               <Upload className="w-4 h-4" /> Import {preview.total} Ships
             </button>
           </div>
-        </div>
+        </PanelSection>
       )}
 
       {/* Status Messages */}
@@ -191,26 +180,20 @@ export default function Import() {
       )}
 
       {status === 'success' && result && (
-        <div className="panel border-l-2 border-l-sc-success">
-          <div className="p-5 flex items-center gap-3">
-            <CheckCircle className="w-5 h-5 text-sc-success" />
-            <div>
-              <span className="text-sm text-white font-medium">Import complete!</span>
-              {result.imported != null && (
-                <span className="text-sm text-gray-400 ml-2">
-                  {result.imported} of {result.total} entries imported
-                </span>
-              )}
-            </div>
-          </div>
-        </div>
+        <AlertBanner variant="success" icon={CheckCircle}>
+          <span className="text-sm text-white font-medium">Import complete!</span>
+          {result.imported != null && (
+            <span className="text-sm text-gray-400 ml-2">
+              {result.imported} of {result.total} entries imported
+            </span>
+          )}
+        </AlertBanner>
       )}
 
       {status === 'error' && (
-        <div className="panel p-5 flex items-center gap-3 border-l-2 border-l-sc-danger">
-          <XCircle className="w-5 h-5 text-sc-danger" />
+        <AlertBanner variant="error" icon={XCircle}>
           <span className="text-sm text-sc-danger">{error}</span>
-        </div>
+        </AlertBanner>
       )}
 
       {/* HangarXplor Instructions (collapsed) */}

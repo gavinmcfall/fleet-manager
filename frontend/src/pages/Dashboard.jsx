@@ -2,6 +2,10 @@ import React from 'react'
 import { useStatus, useAnalysis, triggerImageSync } from '../hooks/useAPI'
 import { RefreshCw, Rocket, Package, Users, Shield, AlertTriangle } from 'lucide-react'
 import { PieChart, Pie, Cell, ResponsiveContainer, Tooltip, BarChart, Bar, XAxis, YAxis } from 'recharts'
+import PageHeader from '../components/PageHeader'
+import LoadingState from '../components/LoadingState'
+import StatCard from '../components/StatCard'
+import PanelSection from '../components/PanelSection'
 
 const COLORS = ['#38bdf8', '#818cf8', '#a78bfa', '#f59e0b', '#22c55e', '#ef4444', '#ec4899', '#6366f1']
 
@@ -15,7 +19,7 @@ export default function Dashboard() {
   }
 
   if (statusLoading || analysisLoading) {
-    return <LoadingState />
+    return <LoadingState message="Loading fleet data..." />
   }
 
   const overview = analysis?.overview || {}
@@ -27,22 +31,17 @@ export default function Dashboard() {
 
   return (
     <div className="space-y-6">
-      {/* Header */}
-      <div className="flex items-center justify-between">
-        <div>
-          <h2 className="font-display font-bold text-2xl tracking-wider text-white">FLEET OVERVIEW</h2>
-          <p className="text-xs font-mono text-gray-500 mt-1">
-            {status?.ships || 0} ships in database &middot; {status?.vehicles || 0} in fleet
-          </p>
-        </div>
-        <div className="flex gap-2">
-          <button onClick={handleSyncImages} className="btn-primary flex items-center gap-2">
-            <RefreshCw className="w-3.5 h-3.5" /> Sync Ship DB
-          </button>
-        </div>
-      </div>
-
-      <div className="glow-line" />
+      <PageHeader
+        title="FLEET OVERVIEW"
+        subtitle={`${status?.ships || 0} ships in database \u00b7 ${status?.vehicles || 0} in fleet`}
+        actions={
+          <div className="flex gap-2">
+            <button onClick={handleSyncImages} className="btn-primary flex items-center gap-2">
+              <RefreshCw className="w-3.5 h-3.5" /> Sync Ship DB
+            </button>
+          </div>
+        }
+      />
 
       {/* Stats Grid */}
       <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-6 gap-3">
@@ -61,9 +60,7 @@ export default function Dashboard() {
 
       {/* Charts Row */}
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
-        {/* Size Distribution */}
-        <div className="panel">
-          <div className="panel-header">Size Distribution</div>
+        <PanelSection title="Size Distribution">
           <div className="p-4 h-64">
             <ResponsiveContainer width="100%" height="100%">
               <PieChart>
@@ -89,11 +86,9 @@ export default function Dashboard() {
               </PieChart>
             </ResponsiveContainer>
           </div>
-        </div>
+        </PanelSection>
 
-        {/* Role Categories */}
-        <div className="panel">
-          <div className="panel-header">Role Categories</div>
+        <PanelSection title="Role Categories">
           <div className="p-4 h-64">
             <ResponsiveContainer width="100%" height="100%">
               <BarChart data={roleData} layout="vertical" margin={{ left: 80 }}>
@@ -111,13 +106,12 @@ export default function Dashboard() {
               </BarChart>
             </ResponsiveContainer>
           </div>
-        </div>
+        </PanelSection>
       </div>
 
       {/* Sync Status */}
       {status?.sync_status && status.sync_status.length > 0 && (
-        <div className="panel overflow-hidden">
-          <div className="panel-header">Recent Syncs</div>
+        <PanelSection title="Recent Syncs" className="overflow-hidden">
           <div className="overflow-x-auto">
             <table className="w-full">
               <thead>
@@ -165,31 +159,8 @@ export default function Dashboard() {
               </tbody>
             </table>
           </div>
-        </div>
+        </PanelSection>
       )}
-    </div>
-  )
-}
-
-function StatCard({ icon: Icon, label, value, color = 'text-white' }) {
-  return (
-    <div className="stat-card">
-      <div className="flex items-center gap-2 mb-1">
-        <Icon className="w-3.5 h-3.5 text-gray-600" />
-        <span className="stat-label">{label}</span>
-      </div>
-      <span className={`stat-value ${color}`}>{value}</span>
-    </div>
-  )
-}
-
-function LoadingState() {
-  return (
-    <div className="flex items-center justify-center h-64">
-      <div className="text-center">
-        <RefreshCw className="w-8 h-8 text-sc-accent animate-spin mx-auto mb-3" />
-        <p className="text-sm font-mono text-gray-500">Loading fleet data...</p>
-      </div>
     </div>
   )
 }
