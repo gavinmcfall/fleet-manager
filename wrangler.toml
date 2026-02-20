@@ -39,8 +39,16 @@ RSI_RATE_LIMIT = "1.0"
 SCUNPACKED_REPO = "StarCitizenWiki/scunpacked-data"
 SCUNPACKED_BRANCH = "master"
 
-# Workers Observability — structured logs visible in CF dashboard
+# Workers Observability — structured logs + OTEL export to Grafana Cloud
 [observability]
+
 [observability.logs]
 enabled = true
 invocation_logs = true
+destinations = ["grafana-logs"]
+head_sampling_rate = 1.0
+
+[observability.traces]
+enabled = true
+destinations = ["grafana-traces"]
+head_sampling_rate = 1.0
