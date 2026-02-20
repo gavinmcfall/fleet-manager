@@ -2,6 +2,10 @@ import React, { useState, useEffect } from 'react'
 import ReactMarkdown from 'react-markdown'
 import { useAnalysis, useLLMConfig, generateAIAnalysis, useLatestAIAnalysis } from '../hooks/useAPI'
 import { AlertCircle, AlertTriangle, Info, Copy, ChevronRight, Sparkles, Loader } from 'lucide-react'
+import PageHeader from '../components/PageHeader'
+import LoadingState from '../components/LoadingState'
+import ErrorState from '../components/ErrorState'
+import EmptyState from '../components/EmptyState'
 
 const PRIORITY_CONFIG = {
   high: { icon: AlertCircle, color: 'text-sc-danger', bg: 'bg-sc-danger/10', border: 'border-sc-danger/20', label: 'HIGH' },
@@ -35,22 +39,18 @@ export default function Analysis() {
     }
   }
 
-  if (loading) return <div className="text-gray-500 font-mono text-sm p-8">Analysing fleet...</div>
-  if (error) return <div className="text-sc-danger font-mono text-sm p-8">Error: {error}</div>
+  if (loading) return <LoadingState message="Analysing fleet..." />
+  if (error) return <ErrorState message={error} />
 
   const gaps = analysis?.gap_analysis || []
   const redundancies = analysis?.redundancies || []
 
   return (
     <div className="space-y-6">
-      <div>
-        <h2 className="font-display font-bold text-2xl tracking-wider text-white">FLEET ANALYSIS</h2>
-        <p className="text-xs font-mono text-gray-500 mt-1">
-          Gap analysis and redundancy detection
-        </p>
-      </div>
-
-      <div className="glow-line" />
+      <PageHeader
+        title="FLEET ANALYSIS"
+        subtitle="Gap analysis and redundancy detection"
+      />
 
       {/* AI Insights Button (only if LLM configured) */}
       {llmConfig?.api_key_set && (
@@ -96,9 +96,7 @@ export default function Analysis() {
           Role Gaps
         </h3>
         {gaps.length === 0 ? (
-          <div className="panel p-6 text-center text-gray-500 text-sm">
-            No significant gaps detected. Your fleet covers all major roles!
-          </div>
+          <EmptyState message="No significant gaps detected. Your fleet covers all major roles!" />
         ) : (
           <div className="space-y-3">
             {gaps.map((gap, i) => {
@@ -146,9 +144,7 @@ export default function Analysis() {
           Redundancies
         </h3>
         {redundancies.length === 0 ? (
-          <div className="panel p-6 text-center text-gray-500 text-sm">
-            No role redundancies detected.
-          </div>
+          <EmptyState message="No role redundancies detected." />
         ) : (
           <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
             {redundancies.map((group, i) => (

@@ -1,6 +1,11 @@
 import React, { useState, useMemo } from 'react'
 import { useShips } from '../hooks/useAPI'
-import { Search, Database, ArrowUpDown } from 'lucide-react'
+import { Database, ArrowUpDown } from 'lucide-react'
+import PageHeader from '../components/PageHeader'
+import LoadingState from '../components/LoadingState'
+import ErrorState from '../components/ErrorState'
+import FilterSelect from '../components/FilterSelect'
+import SearchInput from '../components/SearchInput'
 
 export default function ShipDB() {
   const { data: ships, loading, error } = useShips()
@@ -88,82 +93,60 @@ export default function ShipDB() {
     return items
   }, [ships, filter, mfrFilter, sizeFilter, classFilter, statusFilter, sortBy, sortDir])
 
-  if (loading) return <div className="text-gray-500 font-mono text-sm p-8">Loading ship database...</div>
-  if (error) return <div className="text-sc-danger font-mono text-sm p-8">Error: {error}</div>
+  if (loading) return <LoadingState message="Loading ship database..." />
+  if (error) return <ErrorState message={error} />
 
   return (
     <div className="space-y-4">
-      <div className="flex items-center justify-between">
-        <div>
-          <h2 className="font-display font-bold text-2xl tracking-wider text-white">SHIP DATABASE</h2>
-          <p className="text-xs font-mono text-gray-500 mt-1">
-            {ships?.length || 0} ships synced from SC Wiki
-          </p>
-        </div>
-        <Database className="w-5 h-5 text-gray-600" />
-      </div>
-
-      <div className="glow-line" />
+      <PageHeader
+        title="SHIP DATABASE"
+        subtitle={`${ships?.length || 0} ships synced from SC Wiki`}
+        actions={<Database className="w-5 h-5 text-gray-600" />}
+      />
 
       {/* Search */}
-      <div className="relative max-w-md">
-        <Search className="w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2 text-gray-600" />
-        <input
-          type="text"
-          placeholder="Search ships..."
-          value={filter}
-          onChange={(e) => setFilter(e.target.value)}
-          className="w-full bg-sc-panel border border-sc-border rounded pl-10 pr-4 py-2 text-sm font-mono text-gray-300 placeholder:text-gray-600 focus:outline-none focus:border-sc-accent/50"
-        />
-      </div>
+      <SearchInput
+        value={filter}
+        onChange={(e) => setFilter(e.target.value)}
+        placeholder="Search ships..."
+        className="max-w-md"
+      />
 
       {/* Filters */}
       <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-3">
-        <select
+        <FilterSelect
           value={mfrFilter}
           onChange={(e) => setMfrFilter(e.target.value)}
-          className="bg-sc-panel border border-sc-border rounded px-3 py-2 text-sm font-mono text-gray-300 focus:outline-none focus:border-sc-accent/50"
-        >
-          {manufacturers.map((m) => (
-            <option key={m} value={m}>{m === 'all' ? 'All Manufacturers' : m}</option>
-          ))}
-        </select>
-        <select
+          options={manufacturers}
+          allLabel="All Manufacturers"
+        />
+        <FilterSelect
           value={classFilter}
           onChange={(e) => setClassFilter(e.target.value)}
-          className="bg-sc-panel border border-sc-border rounded px-3 py-2 text-sm font-mono text-gray-300 focus:outline-none focus:border-sc-accent/50"
-        >
-          {classifications.map((c) => (
-            <option key={c} value={c}>{c === 'all' ? 'All Classes' : c}</option>
-          ))}
-        </select>
-        <select
+          options={classifications}
+          allLabel="All Classes"
+        />
+        <FilterSelect
           value={sizeFilter}
           onChange={(e) => setSizeFilter(e.target.value)}
-          className="bg-sc-panel border border-sc-border rounded px-3 py-2 text-sm font-mono text-gray-300 focus:outline-none focus:border-sc-accent/50"
-        >
-          {sizes.map((s) => (
-            <option key={s} value={s}>{s === 'all' ? 'All Sizes' : s}</option>
-          ))}
-        </select>
-        <select
+          options={sizes}
+          allLabel="All Sizes"
+        />
+        <FilterSelect
           value={statusFilter}
           onChange={(e) => setStatusFilter(e.target.value)}
-          className="bg-sc-panel border border-sc-border rounded px-3 py-2 text-sm font-mono text-gray-300 focus:outline-none focus:border-sc-accent/50"
-        >
-          {statuses.map((s) => (
-            <option key={s} value={s}>{s === 'all' ? 'All Statuses' : s}</option>
-          ))}
-        </select>
-        <select
+          options={statuses}
+          allLabel="All Statuses"
+        />
+        <FilterSelect
           value={sortBy}
           onChange={(e) => setSortBy(e.target.value)}
-          className="bg-sc-panel border border-sc-border rounded px-3 py-2 text-sm font-mono text-gray-300 focus:outline-none focus:border-sc-accent/50"
-        >
-          <option value="name">Sort: Name</option>
-          <option value="price">Sort: Price</option>
-          <option value="cargo">Sort: Cargo</option>
-        </select>
+          options={[
+            { value: 'name', label: 'Sort: Name' },
+            { value: 'price', label: 'Sort: Price' },
+            { value: 'cargo', label: 'Sort: Cargo' },
+          ]}
+        />
       </div>
 
       {/* Sort Direction & Results */}

@@ -1,6 +1,12 @@
 import React, { useState, useMemo } from 'react'
 import { useFleet } from '../hooks/useAPI'
-import { ArrowUpDown, Search } from 'lucide-react'
+import { ArrowUpDown } from 'lucide-react'
+import PageHeader from '../components/PageHeader'
+import LoadingState from '../components/LoadingState'
+import ErrorState from '../components/ErrorState'
+import FilterSelect from '../components/FilterSelect'
+import SearchInput from '../components/SearchInput'
+import InsuranceBadge from '../components/InsuranceBadge'
 
 export default function FleetTable() {
   const { data: fleet, loading, error } = useFleet()
@@ -68,39 +74,30 @@ export default function FleetTable() {
     }
   }
 
-  if (loading) return <div className="text-gray-500 font-mono text-sm p-8">Loading fleet...</div>
-  if (error) return <div className="text-sc-danger font-mono text-sm p-8">Error: {error}</div>
+  if (loading) return <LoadingState message="Loading fleet..." />
+  if (error) return <ErrorState message={error} />
 
   return (
     <div className="space-y-4">
-      <div className="flex items-center justify-between">
-        <h2 className="font-display font-bold text-2xl tracking-wider text-white">MY FLEET</h2>
-        <span className="text-xs font-mono text-gray-500">{sorted.length} vehicles</span>
-      </div>
-
-      <div className="glow-line" />
+      <PageHeader
+        title="MY FLEET"
+        actions={<span className="text-xs font-mono text-gray-500">{sorted.length} vehicles</span>}
+      />
 
       {/* Filters */}
       <div className="flex gap-3 items-center">
-        <div className="relative flex-1 max-w-sm">
-          <Search className="w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2 text-gray-600" />
-          <input
-            type="text"
-            placeholder="Search ships..."
-            value={filter}
-            onChange={(e) => setFilter(e.target.value)}
-            className="w-full bg-sc-panel border border-sc-border rounded pl-10 pr-4 py-2 text-sm font-mono text-gray-300 placeholder:text-gray-600 focus:outline-none focus:border-sc-accent/50"
-          />
-        </div>
-        <select
+        <SearchInput
+          value={filter}
+          onChange={(e) => setFilter(e.target.value)}
+          placeholder="Search ships..."
+          className="flex-1 max-w-sm"
+        />
+        <FilterSelect
           value={sizeFilter}
           onChange={(e) => setSizeFilter(e.target.value)}
-          className="bg-sc-panel border border-sc-border rounded px-3 py-2 text-sm font-mono text-gray-300 focus:outline-none focus:border-sc-accent/50"
-        >
-          {sizes.map((s) => (
-            <option key={s} value={s}>{s === 'all' ? 'All Sizes' : s}</option>
-          ))}
-        </select>
+          options={sizes}
+          allLabel="All Sizes"
+        />
       </div>
 
       {/* Table */}
@@ -169,15 +166,7 @@ export default function FleetTable() {
                     {v.pledge_price ? `$${v.pledge_price}` : '-'}
                   </td>
                   <td className="table-cell">
-                    {v.insurance_label ? (
-                      v.is_lifetime ? (
-                        <span className="badge badge-lti">LTI</span>
-                      ) : (
-                        <span className="badge badge-nonlti">{v.insurance_label}</span>
-                      )
-                    ) : (
-                      <span className="text-xs text-gray-600">&mdash;</span>
-                    )}
+                    <InsuranceBadge isLifetime={v.is_lifetime} label={v.insurance_label} />
                   </td>
                 </tr>
               ))}

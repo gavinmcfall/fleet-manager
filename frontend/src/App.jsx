@@ -1,6 +1,7 @@
 import React, { useState, Suspense, lazy } from 'react'
 import { Routes, Route, NavLink, useLocation } from 'react-router-dom'
 import { Rocket, BarChart3, Shield, Upload, RefreshCw, Database, Settings as SettingsIcon, ChevronDown, ChevronRight, History } from 'lucide-react'
+import LoadingState from './components/LoadingState'
 
 // Eager load Dashboard (initial route)
 import Dashboard from './pages/Dashboard'
@@ -13,18 +14,6 @@ const AnalysisHistory = lazy(() => import('./pages/AnalysisHistory'))
 const Import = lazy(() => import('./pages/Import'))
 const ShipDB = lazy(() => import('./pages/ShipDB'))
 const Settings = lazy(() => import('./pages/Settings'))
-
-// Loading fallback component
-function PageLoader() {
-  return (
-    <div className="flex items-center justify-center min-h-screen">
-      <div className="text-center">
-        <div className="inline-block w-8 h-8 border-4 border-sc-accent border-t-transparent rounded-full animate-spin mb-4"></div>
-        <p className="text-sm font-mono text-gray-500">Loading...</p>
-      </div>
-    </div>
-  )
-}
 
 const navItems = [
   { to: '/', icon: BarChart3, label: 'Dashboard' },
@@ -140,7 +129,7 @@ export default function App() {
       {/* Main content */}
       <main className="flex-1 overflow-auto">
         <div className="max-w-7xl mx-auto p-6">
-          <Suspense fallback={<PageLoader />}>
+          <Suspense fallback={<LoadingState fullScreen />}>
             <Routes>
               <Route path="/" element={<Dashboard />} />
               <Route path="/fleet" element={<FleetTable />} />
