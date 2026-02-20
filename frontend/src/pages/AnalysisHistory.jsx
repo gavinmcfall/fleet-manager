@@ -2,6 +2,10 @@ import React, { useState } from 'react'
 import ReactMarkdown from 'react-markdown'
 import { useAIAnalysisHistory, deleteAIAnalysis } from '../hooks/useAPI'
 import { Clock, Sparkles, ChevronDown, ChevronRight, Trash2 } from 'lucide-react'
+import PageHeader from '../components/PageHeader'
+import LoadingState from '../components/LoadingState'
+import ErrorState from '../components/ErrorState'
+import EmptyState from '../components/EmptyState'
 
 export default function AnalysisHistory() {
   const { data, loading, error, refetch } = useAIAnalysisHistory()
@@ -29,41 +33,33 @@ export default function AnalysisHistory() {
     }
   }
 
-  if (loading) return <div className="text-gray-500 font-mono text-sm p-8">Loading history...</div>
-  if (error) return <div className="text-sc-danger font-mono text-sm p-8">Error: {error}</div>
+  if (loading) return <LoadingState message="Loading history..." />
+  if (error) return <ErrorState message={error} />
 
   const history = data?.history || []
 
   if (history.length === 0) {
     return (
       <div className="space-y-6">
-        <div>
-          <h2 className="font-display font-bold text-2xl tracking-wider text-white">ANALYSIS HISTORY</h2>
-          <p className="text-xs font-mono text-gray-500 mt-1">
-            Past AI fleet analyses
-          </p>
-        </div>
-
-        <div className="glow-line" />
-
-        <div className="panel p-12 text-center">
-          <Sparkles className="w-12 h-12 mx-auto mb-4 text-gray-600" />
-          <p className="text-gray-500 text-sm">No analyses yet. Generate your first AI fleet analysis!</p>
-        </div>
+        <PageHeader
+          title="ANALYSIS HISTORY"
+          subtitle="Past AI fleet analyses"
+        />
+        <EmptyState
+          icon={Sparkles}
+          message="No analyses yet. Generate your first AI fleet analysis!"
+          large
+        />
       </div>
     )
   }
 
   return (
     <div className="space-y-6">
-      <div>
-        <h2 className="font-display font-bold text-2xl tracking-wider text-white">ANALYSIS HISTORY</h2>
-        <p className="text-xs font-mono text-gray-500 mt-1">
-          Past AI fleet analyses ({history.length} total)
-        </p>
-      </div>
-
-      <div className="glow-line" />
+      <PageHeader
+        title="ANALYSIS HISTORY"
+        subtitle={`Past AI fleet analyses (${history.length} total)`}
+      />
 
       <div className="space-y-3">
         {history.map((item) => {
