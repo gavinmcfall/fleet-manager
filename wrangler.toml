@@ -38,3 +38,9 @@ RSI_BASE_URL = "https://robertsspaceindustries.com"
 RSI_RATE_LIMIT = "1.0"
 SCUNPACKED_REPO = "StarCitizenWiki/scunpacked-data"
 SCUNPACKED_BRANCH = "master"
+
+# Workers Observability — structured logs visible in CF dashboard
+[observability]
+[observability.logs]
+enabled = true
+invocation_logs = true
