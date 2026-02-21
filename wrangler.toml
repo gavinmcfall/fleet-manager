@@ -45,10 +45,10 @@ SCUNPACKED_BRANCH = "master"
 [observability.logs]
 enabled = true
 invocation_logs = true
-destinations = ["grafana-logs"]
+destinations = ["grafana-logs", "newrelic-logs"]
 head_sampling_rate = 1.0
 
 [observability.traces]
 enabled = true
-destinations = ["grafana-traces"]
+destinations = ["grafana-traces", "newrelic-traces"]
 head_sampling_rate = 1.0
