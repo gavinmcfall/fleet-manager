@@ -2,6 +2,7 @@ import { Hono } from "hono";
 import type { Env, HangarXplorEntry } from "../lib/types";
 import { slugFromShipCode, slugFromName, compactSlug } from "../lib/slug";
 import { getDefaultUserID, loadInsuranceTypes } from "../db/queries";
+import { logEvent } from "../lib/logger";
 
 /**
  * /api/import/* — HangarXplor import
@@ -147,6 +148,12 @@ export function importRoutes<E extends { Bindings: Env }>() {
     const imported = insertStmts.length;
 
     console.log(`[import] HangarXplor import complete: ${imported}/${entries.length}`);
+    logEvent("fleet_import", {
+      entries: entries.length,
+      imported,
+      stubs_created: stubStmts.length,
+      stub_slugs: stubSlugs,
+    });
     return c.json({
       imported,
       total: entries.length,

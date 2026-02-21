@@ -10,6 +10,7 @@ import { syncRoutes } from "./routes/sync";
 import { analysisRoutes } from "./routes/analysis";
 import { debugRoutes } from "./routes/debug";
 import { validateEncryptionKey } from "./lib/crypto";
+import { logEvent } from "./lib/logger";
 
 type HonoEnv = { Bindings: Env };
 
@@ -26,6 +27,25 @@ app.use("*", async (c, next) => {
     }
   }
   return next();
+});
+
+// Request logging — structured JSON for Workers Observability
+app.use("*", async (c, next) => {
+  const start = Date.now();
+  await next();
+  const cf = (c.req.raw as unknown as { cf?: Record<string, unknown> }).cf;
+  logEvent("request", {
+    method: c.req.method,
+    path: c.req.path,
+    status: c.res.status,
+    duration_ms: Date.now() - start,
+    ip: c.req.header("CF-Connecting-IP"),
+    country: cf?.country,
+    city: cf?.city,
+    colo: cf?.colo,
+    user_agent: c.req.header("User-Agent"),
+    ray: c.req.header("CF-Ray"),
+  });
 });
 
 // CORS — strict same-origin in production, localhost in dev
@@ -137,22 +157,27 @@ async function runScheduledSync(cron: string, env: Env): Promise<void> {
   switch (cron) {
     case "0 3 * * *":
       console.log("[cron] SC Wiki vehicles");
+      logEvent("cron_trigger", { schedule: cron, task: "scwiki_vehicles" });
       await triggerSCWikiSync(env);
       break;
     case "5 3 * * *":
       console.log("[cron] SC Wiki items");
+      logEvent("cron_trigger", { schedule: cron, task: "scwiki_items" });
       await triggerSCWikiItemSync(env);
       break;
     case "15 3 * * *":
       console.log("[cron] FleetYards ship images");
+      logEvent("cron_trigger", { schedule: cron, task: "fleetyards_images" });
       await triggerImageSync(env);
       break;
     case "30 3 * * *":
       console.log("[cron] Paint sync (scunpacked + FleetYards paint images)");
+      logEvent("cron_trigger", { schedule: cron, task: "paint_sync" });
       await triggerPaintSync(env);
       break;
     case "45 3 * * *":
       console.log("[cron] RSI API images");
+      logEvent("cron_trigger", { schedule: cron, task: "rsi_images" });
       await triggerRSISync(env);
       break;
     default:

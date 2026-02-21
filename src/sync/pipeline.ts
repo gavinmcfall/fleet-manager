@@ -17,6 +17,7 @@ import { syncPaints as syncScunpackedPaints } from "./scunpacked";
 import { syncAll as syncRSI } from "./rsi";
 import { getManufacturerCount, getVehicleCount } from "../db/queries";
 import type { Env } from "../lib/types";
+import { logEvent } from "../lib/logger";
 
 // --- Individual sync functions (for manual triggers) ---
 
@@ -24,7 +25,15 @@ export async function triggerSCWikiSync(env: Env): Promise<string> {
   const rateLimitMs = parseFloat(env.SC_WIKI_RATE_LIMIT || "1") * 1000;
 
   console.log("[pipeline] SC Wiki vehicle sync triggered");
-  await syncSCWikiVehicles(env.DB, rateLimitMs);
+  logEvent("sync_start", { source: "scwiki_vehicles" });
+  const start = Date.now();
+  try {
+    await syncSCWikiVehicles(env.DB, rateLimitMs);
+    logEvent("sync_complete", { source: "scwiki_vehicles", duration_s: (Date.now() - start) / 1000 });
+  } catch (err) {
+    logEvent("sync_error", { source: "scwiki_vehicles", error: String(err) });
+    throw err;
+  }
   return "SC Wiki vehicle sync complete";
 }
 
@@ -32,7 +41,15 @@ export async function triggerSCWikiItemSync(env: Env): Promise<string> {
   const rateLimitMs = parseFloat(env.SC_WIKI_RATE_LIMIT || "1") * 1000;
 
   console.log("[pipeline] SC Wiki item sync triggered");
-  await syncSCWikiItems(env.DB, rateLimitMs);
+  logEvent("sync_start", { source: "scwiki_items" });
+  const start = Date.now();
+  try {
+    await syncSCWikiItems(env.DB, rateLimitMs);
+    logEvent("sync_complete", { source: "scwiki_items", duration_s: (Date.now() - start) / 1000 });
+  } catch (err) {
+    logEvent("sync_error", { source: "scwiki_items", error: String(err) });
+    throw err;
+  }
   return "SC Wiki item sync complete";
 }
 
@@ -40,7 +57,15 @@ export async function triggerImageSync(env: Env): Promise<string> {
   const baseURL = env.FLEETYARDS_BASE_URL || "https://api.fleetyards.net";
 
   console.log("[pipeline] FleetYards image sync triggered");
-  await syncFYShipImages(env.DB, baseURL);
+  logEvent("sync_start", { source: "fleetyards_images" });
+  const start = Date.now();
+  try {
+    await syncFYShipImages(env.DB, baseURL);
+    logEvent("sync_complete", { source: "fleetyards_images", duration_s: (Date.now() - start) / 1000 });
+  } catch (err) {
+    logEvent("sync_error", { source: "fleetyards_images", error: String(err) });
+    throw err;
+  }
   return "FleetYards image sync complete";
 }
 
@@ -50,12 +75,19 @@ export async function triggerPaintSync(env: Env): Promise<string> {
   const baseURL = env.FLEETYARDS_BASE_URL || "https://api.fleetyards.net";
 
   console.log("[pipeline] Paint sync triggered");
+  logEvent("sync_start", { source: "paint_sync" });
+  const start = Date.now();
+  try {
+    // Step 1: scunpacked metadata
+    await syncScunpackedPaints(env.DB, repo, branch, env.GITHUB_TOKEN);
 
-  // Step 1: scunpacked metadata
-  await syncScunpackedPaints(env.DB, repo, branch, env.GITHUB_TOKEN);
-
-  // Step 2: FleetYards paint images
-  await syncFYPaintImages(env.DB, baseURL);
+    // Step 2: FleetYards paint images
+    await syncFYPaintImages(env.DB, baseURL);
+    logEvent("sync_complete", { source: "paint_sync", duration_s: (Date.now() - start) / 1000 });
+  } catch (err) {
+    logEvent("sync_error", { source: "paint_sync", error: String(err) });
+    throw err;
+  }
 
   return "Paint sync complete";
 }
@@ -69,7 +101,15 @@ export async function triggerRSISync(env: Env): Promise<string> {
   const rateLimitMs = parseFloat(env.RSI_RATE_LIMIT || "1") * 1000;
 
   console.log("[pipeline] RSI API image sync triggered");
-  await syncRSI(env.DB, baseURL, rateLimitMs);
+  logEvent("sync_start", { source: "rsi_images" });
+  const start = Date.now();
+  try {
+    await syncRSI(env.DB, baseURL, rateLimitMs);
+    logEvent("sync_complete", { source: "rsi_images", duration_s: (Date.now() - start) / 1000 });
+  } catch (err) {
+    logEvent("sync_error", { source: "rsi_images", error: String(err) });
+    throw err;
+  }
   return "RSI API sync complete";
 }
 
