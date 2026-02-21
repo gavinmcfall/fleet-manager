@@ -18,6 +18,7 @@ import {
 import type { VehicleRow } from "../db/queries";
 import { concurrentMap } from "../lib/utils";
 import { SYNC_SOURCE } from "../lib/constants";
+import { logEvent } from "../lib/logger";
 
 // --- Tag alias map (matches Go version) ---
 
@@ -295,6 +296,11 @@ export async function syncPaints(
 
     await updateSyncHistory(db, syncID, "success", count, "");
     console.log(`[scunpacked] Paint sync complete: ${count} synced, ${unmatched} unmatched`);
+    logEvent("sync_paints", {
+      parsed: paints.length,
+      synced: count,
+      unmatched,
+    });
     return count;
   } catch (err) {
     await updateSyncHistory(db, syncID, "error", 0, String(err));

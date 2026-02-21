@@ -22,6 +22,7 @@ import {
 } from "../db/queries";
 import { delay, chunkArray } from "../lib/utils";
 import { SYNC_SOURCE } from "../lib/constants";
+import { logEvent } from "../lib/logger";
 
 // --- Constants ---
 const PAGE_LIMIT = 100;
@@ -460,6 +461,12 @@ export async function syncShipImages(
     console.log(
       `[rsi] Ship image sync complete: ${matched} matched, ${inherited} inherited, ${skipped} skipped (${allShips.length} RSI ships)`,
     );
+    logEvent("sync_rsi_ships", {
+      fetched: allShips.length,
+      matched,
+      inherited,
+      skipped,
+    });
   } catch (err) {
     await updateSyncHistory(db, syncID, "error", 0, String(err));
     throw err;
@@ -573,6 +580,12 @@ export async function syncPaintImages(
     console.log(
       `[rsi] Paint image sync complete: ${matched} matched, ${skippedNoImage} no image, ${skippedNoMatch} no match, ${skippedPackage} packages (${allPaints.length} RSI paints)`,
     );
+    logEvent("sync_rsi_paints", {
+      fetched: allPaints.length,
+      matched,
+      no_image: skippedNoImage,
+      no_match: skippedNoMatch,
+    });
   } catch (err) {
     await updateSyncHistory(db, syncID, "error", 0, String(err));
     throw err;

@@ -16,6 +16,7 @@ import {
 } from "../db/queries";
 import { delay, concurrentMap, chunkArray } from "../lib/utils";
 import { SYNC_SOURCE } from "../lib/constants";
+import { logEvent } from "../lib/logger";
 
 // --- Types ---
 
@@ -136,6 +137,7 @@ export async function syncShipImages(db: D1Database, baseURL: string): Promise<v
     const count = stmts.length;
     await updateSyncHistory(db, syncID, "success", count, "");
     console.log(`[fleetyards] Ship image sync complete: ${count}/${images.length} updated`);
+    logEvent("sync_ship_images", { total: images.length, updated: count });
   } catch (err) {
     await updateSyncHistory(db, syncID, "error", 0, String(err));
     throw err;
@@ -221,6 +223,7 @@ export async function syncPaintImages(db: D1Database, baseURL: string): Promise<
   }
 
   console.log(`[fleetyards] Paint image sync complete: ${stmts.length} images updated`);
+  logEvent("sync_paint_images", { count: stmts.length });
 }
 
 // --- Paint name matching ---

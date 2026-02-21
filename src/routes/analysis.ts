@@ -2,6 +2,7 @@ import { Hono } from "hono";
 import type { Env, UserFleetEntry, Vehicle, FleetAnalysis } from "../lib/types";
 import { decrypt } from "../lib/crypto";
 import { getDefaultUserID } from "../db/queries";
+import { logEvent } from "../lib/logger";
 
 /**
  * /api/analysis/* — Fleet analysis, LLM analysis
@@ -74,6 +75,7 @@ export function analysisRoutes<E extends { Bindings: Env }>() {
         max_tokens: 10,
         messages: [{ role: "user", content: "test" }],
       });
+      logEvent("llm_test", { success: true });
       return c.json({ success: true, message: "Connection successful" });
     } catch (err) {
       return c.json(
@@ -203,6 +205,12 @@ export function analysisRoutes<E extends { Bindings: Env }>() {
           analysisText,
         )
         .run();
+
+      logEvent("llm_analysis", {
+        model,
+        vehicle_count: fleet.length,
+        provider: config.provider,
+      });
 
       return c.json({
         analysis: analysisText,

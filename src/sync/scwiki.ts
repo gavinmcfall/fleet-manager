@@ -23,6 +23,7 @@ import {
   loadVehicleMaps,
 } from "../db/queries";
 import { delay, chunkArray } from "../lib/utils";
+import { logEvent } from "../lib/logger";
 
 // --- SC Wiki API Types ---
 
@@ -189,8 +190,8 @@ export async function syncVehicleData(db: D1Database, rateLimitMs = 1000): Promi
 
   await syncVehicles(db, rateLimitMs);
 
-  const duration = ((Date.now() - start) / 1000).toFixed(1);
-  console.log(`[scwiki] Vehicle data sync complete in ${duration}s`);
+  const durationS = (Date.now() - start) / 1000;
+  console.log(`[scwiki] Vehicle data sync complete in ${durationS.toFixed(1)}s`);
 }
 
 /** Sync items (components, FPS weapons, armour, etc.) — separate invocation due to size. */
@@ -204,8 +205,8 @@ export async function syncItemData(db: D1Database, rateLimitMs = 1000): Promise<
   const itemRateLimitMs = Math.min(rateLimitMs, 200);
   await syncItems(db, itemRateLimitMs);
 
-  const duration = ((Date.now() - start) / 1000).toFixed(1);
-  console.log(`[scwiki] Item data sync complete in ${duration}s`);
+  const durationS = (Date.now() - start) / 1000;
+  console.log(`[scwiki] Item data sync complete in ${durationS.toFixed(1)}s`);
 }
 
 /** Full sync (dev/local only — may exceed Workers limits). */
@@ -446,6 +447,7 @@ async function syncVehicles(db: D1Database, rateLimitMs: number): Promise<void> 
     console.log(
       `[scwiki] Vehicles synced: ${count} (${allLoanerStmts.length} loaner stmts, ${allPortStmts.length} port stmts batched)`,
     );
+    logEvent("sync_vehicles", { count, loaners: allLoanerStmts.length, ports: allPortStmts.length });
   } catch (err) {
     await updateSyncHistory(db, syncID, "error", 0, String(err));
     throw err;
@@ -513,6 +515,7 @@ async function syncItems(db: D1Database, rateLimitMs: number): Promise<void> {
     const count = allStmts.length;
     await updateSyncHistory(db, syncID, "success", count, "");
     console.log(`[scwiki] Items synced: ${count} (batched in ${Math.ceil(count / 90)} chunks)`);
+    logEvent("sync_items", { count });
   } catch (err) {
     await updateSyncHistory(db, syncID, "error", 0, String(err));
     throw err;

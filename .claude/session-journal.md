@@ -4,129 +4,60 @@ This file maintains running context across compactions.
 
 ## Current Focus
 
-**Component library extracted, Figma design system rules created.** Extracted 10 shared React components from duplicated page markup (PageHeader, LoadingState, ErrorState, PanelSection, StatCard, FilterSelect, SearchInput, InsuranceBadge, EmptyState, AlertBanner). All 8 pages + App.jsx updated. Build verified clean. Figma design system rules saved to `.figma/design-system-rules.md`. Dashboard captured to Figma file `Tn6h1pV843SwtxVfpuGRVb`. Remaining page captures can be done via browser. Figma MCP is primarily Figma→Code; captures require browser rendering.
+**CF migration complete. All phases done. Testing & polish phase next.**
 
-## Why Cloudflare Workers
+## Migration Status — COMPLETE
 
-Gavin already uses Cloudflare for DNS/CDN. Moving Fleet Manager to Workers eliminates self-hosting overhead (Docker, Helm, Flux GitOps, Talos node maintenance) and consolidates everything onto a platform he already pays for ($5/month Workers plan). The Go backend itself was fine — it's the deployment pipeline that was too heavy for a personal fleet tracker.
+All 6 phases done. `cf-rewrite` merged to `main` via PR #1. Old Go code removed. CI/CD green.
 
-## CF Migration Progress
+| Item | Status |
+|------|--------|
+| Workers backend (Hono + D1) | Done — `src/` |
+| Frontend (React SPA on Workers Assets) | Done — `frontend/` |
+| Component library (10 shared components) | Done — `frontend/src/components/` |
+| Sync pipeline (SC Wiki, FleetYards, scunpacked, RSI) | Done — 5 staggered crons |
+| Encryption + LLM integration | Done |
+| Auth + CORS + security fixes | Done |
+| Custom domain (`fleet.nerdz.cloud`) | Done |
+| Cloudflare Zero Trust (Google OAuth) | Done — gavin + valkyrie |
+| Secrets (API_TOKEN, ENCRYPTION_KEY) | Done |
+| Workers Observability | Done — enabled in wrangler.toml |
+| GitHub Actions CI/CD | Done — `.github/workflows/deploy.yml` |
+| Old Go code removed | Done — `internal/`, `cmd/`, go.mod, Dockerfile, helm/ |
+| workers.dev subdomain disabled | Done |
+| PR #1 merged, PR #2 merged | Done |
 
-| Phase | Status | Commit | What it did |
-|-------|--------|--------|-------------|
-| 1. Project Scaffold + Database | DONE | `bcd3632` | Wrangler project, D1 schema (25 tables), TypeScript types, slug utilities |
-| 2. Core Database Layer + API Routes | DONE | `3d1c3bd` | All D1 query functions (queries.ts), Hono API routes matching Go URL structure |
-| 3. Frontend Integration | DONE | `ec86cab` | React SPA on Workers Assets, Cloudflare Vite plugin, SPA routing |
-| 4. Sync Pipeline | DONE | `52ab50f` | SC Wiki, FleetYards, scunpacked (via GitHub API), RSI GraphQL sync |
-| 5. Advanced Features | DONE | `24d51db` | AES-256-GCM encryption (Web Crypto), Anthropic LLM integration |
-| Code Review Fixes | DONE | `2738509` | Auth, CORS, sync safety, import transactional, deduplication |
-| 6. Deployment + Access Control | TODO | | Custom domain, WAF, secrets, CI/CD, go-live |
+## Production
 
-## Code Review Fixes Applied (commit `2738509`)
-
-Consolidated findings from 3 independent AI reviewers (Opus, Codex, Gemini):
-
-### Security
-- Auth middleware with `X-API-Key` header / `token` query param on mutating endpoints
-- CORS restricted to same-origin/localhost (was wildcard `*`)
-- Analysis DELETE scoped to `user_id` (was unscoped)
-- ENCRYPTION_KEY enforced in production for LLM API key storage
-
-### Sync Safety
-- 4 staggered cron triggers (3:00-3:45 UTC) instead of 1 monolithic sync
-- `executionCtx.waitUntil()` on all sync POST handlers
-- MAX_RETRIES=3 on scwiki 429 retry (was infinite recursion)
-- GITHUB_TOKEN threaded to scunpacked GitHub API calls
-
-### Import Safety
-- Vehicle slugs preloaded into memory map (no per-entry DB queries)
-- Transactional delete+insert via `db.batch()`
-- Batch chunking at 90 statements for D1 limits
-
-### Deduplication
-- Shared `delay()` in `src/lib/utils.ts` (removed from 3 sync files)
-- `getDefaultUserID` imported from queries.ts (removed from 4 route files)
-- `getAllPaints`/`getPaintsForVehicle` imported from queries.ts (removed from paints.ts)
-- Collapsed identical if/else in pipeline.ts
-- Deduplicated `/with-insurance` handler in fleet.ts
-
-## What Exists on `cf-rewrite` Branch
-
-### New Workers code (`src/`)
-- `src/index.ts` — Hono app entry + auth middleware + staggered cron handler
-- `src/db/queries.ts` — All D1 query functions (~1000 lines)
-- `src/routes/` — fleet, vehicles, paints, import, settings, sync, analysis, debug
-- `src/sync/` — scwiki, fleetyards, scunpacked, rsi, pipeline
-- `src/lib/types.ts` — All TypeScript interfaces (Env includes API_TOKEN, GITHUB_TOKEN)
-- `src/lib/slug.ts` — Slug generation (port from Go)
-- `src/lib/crypto.ts` — AES-256-GCM encryption (Web Crypto API)
-- `src/lib/utils.ts` — Shared utilities (delay)
-- `wrangler.toml` — D1 binding, 4 staggered cron triggers, Workers Assets
-- `vite.config.ts` — Cloudflare Vite plugin
-
-### Old Go code (NOT yet removed)
-- `internal/` — All Go packages (api, database, sync, crypto, llm, analysis, etc.)
-- `cmd/` — Go entrypoint
-- `go.mod` / `go.sum` — Go dependencies
-- `Dockerfile` — Docker build
-- `helm/` — Helm chart for k8s deployment
-- `frontend/` — Original React SPA (same code, now also served by Workers Assets)
+- **URL:** `fleet.nerdz.cloud` (behind Zero Trust)
+- **Worker:** `sc-companion` on NERDZ account
+- **D1:** `sc-companion` (26 tables, Oceania region)
+- **Branch:** `main` (was `cf-rewrite`, now merged)
+- **CI/CD:** Push to main → GitHub Actions → `wrangler deploy`
+- **Figma:** File `Et3jaEnHdN2751GV8LrME4` (8 pages captured)
 
 ## Key Decisions
 
-- **Auth middleware**: `X-API-Key` header or `token` query param; no API_TOKEN = dev mode (allow all)
-- **Encryption enforcement**: Production (API_TOKEN set) refuses plaintext LLM key storage; dev mode allows it
-- **Staggered cron**: Each sync step is a separate cron invocation with its own 30s CPU budget
-- **Embedded analysis prompt**: Workers have no filesystem — content embedded as const in analysis.ts
-- **scunpacked via GitHub API**: Workers have no filesystem — fetch paint files via Git Trees API
-- **Go code stays until Phase 6 verified**: Don't delete the working backend until replacement is proven
+- Auth: `Sec-Fetch-Site: same-origin` trusts browser SPA; `X-API-Key` for external
+- Staggered cron: 5 schedules (3:00-3:45 UTC), each with own 30s CPU budget
+- scunpacked via GitHub API (Workers have no filesystem)
+- Analysis prompt embedded as const (no filesystem)
+- CI uses `npx wrangler deploy` with env vars (not wrangler-action, which failed to pass token)
 
-## Important Context
+## Recent Changes
 
-- **Branch:** `cf-rewrite` (7 commits ahead of main)
-- **Plan file:** `/home/gavin/.claude/plans/proud-chasing-harbor.md`
-- **Dev server:** `npx vite dev --port 5200`
-- **D1 migrations:** Applied locally via `npx wrangler d1 migrations apply fleet-manager --local`
-- **TypeScript:** Compiles clean (`npx tsc --noEmit`)
-- **All API endpoints tested:** health, status, ships, vehicles, sync, settings, LLM routes all working
+- Added structured JSON logging (`src/lib/logger.ts`) with `logEvent()` helper
+- Request logging middleware in `src/index.ts` (method, path, status, duration, geo, IP)
+- Structured events at all business action points: fleet_import, llm_analysis, llm_test, cron_trigger, sync_start/complete/error, sync_vehicles, sync_items, sync_ship_images, sync_paint_images, sync_paints, sync_rsi_ships, sync_rsi_paints
+- All events flow through existing OTEL pipeline to Grafana Cloud + New Relic
 
-## What's Next — Phase 6
+## What's Next
 
-Deployment + Access Control:
-- Custom domain: `fleet.nerdz.cloud` in wrangler.toml
-- WAF IP restriction via Cloudflare Dashboard (hostname + IP allowlist)
-- `wrangler secret put ENCRYPTION_KEY` (generate 32-byte base64 key)
-- `wrangler secret put API_TOKEN` (generate strong token)
-- GitHub Actions CI/CD with `cloudflare/wrangler-action@v3`
-- Production deployment: `wrangler deploy`
-- Run initial sync to populate D1
-- Import HangarXplor data via the UI
-- Verify everything works, then clean out old Go code
+- **Deploy & verify** structured logs in Grafana (LogQL `| json | event="request"`) and New Relic
+- **Testing & polish** (weekend work) — find bugs, UX improvements
+- **Side project:** Standalone scraper/sync microservice (working with another Claude agent) that Fleet Manager could consume
+- **Wrangler upgrade:** Currently 3.114.17, v4.67.0 available (not urgent)
 
 ---
-**Session compacted at:** 2026-02-18 20:27:04
-
-
----
-**Session compacted at:** 2026-02-19 07:59:36
-
-
----
-**Session compacted at:** 2026-02-20 09:31:12
-
-
----
-**Session compacted at:** 2026-02-20 11:37:45
-
-
----
-**Session compacted at:** 2026-02-20 12:24:42
-
-
----
-**Session compacted at:** 2026-02-20 12:55:59
-
-
----
-**Session compacted at:** 2026-02-20 16:18:55
+**Session compacted at:** 2026-02-21 15:07:50
 
