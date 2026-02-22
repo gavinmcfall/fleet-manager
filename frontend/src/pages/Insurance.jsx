@@ -127,7 +127,7 @@ export default function Insurance() {
               <div key={i} className="px-5 py-3 flex items-center gap-3">
                 <span className="text-sm text-gray-400">{ship.ship_name}</span>
                 {ship.custom_name && (
-                  <span className="text-xs text-gray-600 italic">"{ship.custom_name}"</span>
+                  <span className="text-xs text-gray-400 italic">"{ship.custom_name}"</span>
                 )}
               </div>
             ))}
@@ -150,8 +150,8 @@ function InsuranceRow({ ship }) {
         </div>
         {ship.pledge_name && (
           <div className="flex items-center gap-1 mt-0.5">
-            <Tag className="w-3 h-3 text-gray-600" />
-            <span className="text-[11px] font-mono text-gray-600 truncate">{ship.pledge_name}</span>
+            <Tag className="w-3 h-3 text-gray-500" />
+            <span className="text-[11px] font-mono text-gray-400 truncate">{ship.pledge_name}</span>
           </div>
         )}
       </div>

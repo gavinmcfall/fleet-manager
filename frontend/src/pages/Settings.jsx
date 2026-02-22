@@ -4,6 +4,7 @@ import { Settings as SettingsIcon, Key, CheckCircle, XCircle, Loader, Trash2, Ey
 import PageHeader from '../components/PageHeader'
 import PanelSection from '../components/PanelSection'
 import FilterSelect from '../components/FilterSelect'
+import ConfirmDialog from '../components/ConfirmDialog'
 
 export default function Settings() {
   const { data: config, refetch } = useLLMConfig()
@@ -16,6 +17,8 @@ export default function Settings() {
   const [saving, setSaving] = useState(false)
   const [saved, setSaved] = useState(false)
   const [showApiKey, setShowApiKey] = useState(false)
+  const [notification, setNotification] = useState(null)
+  const [confirmDialog, setConfirmDialog] = useState({ open: false })
 
   useEffect(() => {
     if (config) {
@@ -23,6 +26,11 @@ export default function Settings() {
       setModel(config.model || '')
     }
   }, [config])
+
+  const showNotification = (msg, variant = 'info') => {
+    setNotification({ msg, variant })
+    setTimeout(() => setNotification(null), 3000)
+  }
 
   const handleTestConnection = async () => {
     if (!provider || !apiKey) return
@@ -37,7 +45,6 @@ export default function Settings() {
       setModels(modelsList)
       setTestResult({ success: true, modelCount: modelsList.length })
 
-      // Auto-select first model if none selected
       if (modelsList.length > 0 && !model) {
         setModel(modelsList[0].id)
       }
@@ -55,44 +62,59 @@ export default function Settings() {
       setSaved(true)
       setTimeout(() => setSaved(false), 2000)
       refetch()
-      setAPIKey('') // Clear API key input after save
+      setAPIKey('')
     } catch (err) {
-      alert('Failed to save: ' + err.message)
+      showNotification('Failed to save: ' + err.message, 'error')
     } finally {
       setSaving(false)
     }
   }
 
-  const handleClear = async () => {
-    const confirmed = window.confirm(
-      'Are you sure you want to remove your LLM configuration?\n\n' +
-      'This will delete your encrypted API key and model settings. ' +
-      'You will need to re-configure to use AI fleet analysis.'
-    )
-    if (!confirmed) return
-
-    try {
-      await setLLMConfig({ provider: '', api_key: '', model: '' })
-      setProvider('')
-      setAPIKey('')
-      setModel('')
-      setModels([])
-      setTestResult(null)
-      await refetch() // Wait for config to reload from server
-      alert('LLM configuration cleared successfully')
-    } catch (err) {
-      alert('Failed to clear configuration: ' + err.message)
-    }
+  const handleClear = () => {
+    setConfirmDialog({
+      open: true,
+      title: 'Remove LLM Configuration',
+      message: 'This will delete your encrypted API key and model settings. You will need to re-configure to use AI fleet analysis.',
+      variant: 'danger',
+      confirmLabel: 'Remove Configuration',
+      onConfirm: async () => {
+        setConfirmDialog({ open: false })
+        try {
+          await setLLMConfig({ provider: '', api_key: '', model: '' })
+          setProvider('')
+          setAPIKey('')
+          setModel('')
+          setModels([])
+          setTestResult(null)
+          await refetch()
+          showNotification('LLM configuration cleared successfully', 'success')
+        } catch (err) {
+          showNotification('Failed to clear configuration: ' + err.message, 'error')
+        }
+      },
+    })
   }
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-6 animate-fade-in-up">
       <PageHeader
         title="SETTINGS"
         subtitle="Configure LLM provider for AI fleet analysis"
       />
 
-      {/* Provider Selection */}
+      {/* Inline notification */}
+      {notification && (
+        <div className={`panel p-4 flex items-center gap-2 text-sm animate-fade-in ${
+          notification.variant === 'error' ? 'border-sc-danger/30 text-sc-danger' :
+          notification.variant === 'success' ? 'border-sc-success/30 text-sc-success' :
+          'text-gray-300'
+        }`}>
+          {notification.variant === 'success' && <CheckCircle className="w-4 h-4" />}
+          {notification.variant === 'error' && <XCircle className="w-4 h-4" />}
+          {notification.msg}
+        </div>
+      )}
+
       <PanelSection title="LLM Provider" icon={SettingsIcon}>
         <div className="p-5 space-y-4">
           <p className="text-sm text-gray-400">
@@ -110,7 +132,7 @@ export default function Settings() {
                 className={`block p-4 rounded border-2 cursor-pointer transition-colors ${
                   provider === p.value
                     ? 'border-sc-accent bg-sc-accent/10'
-                    : 'border-sc-border hover:border-sc-border/50'
+                    : 'border-sc-border hover:border-sc-accent2/40'
                 }`}
               >
                 <input
@@ -129,7 +151,6 @@ export default function Settings() {
         </div>
       </PanelSection>
 
-      {/* API Key Input */}
       {provider && (
         <PanelSection title="API Key" icon={Key}>
           <div className="p-5 space-y-4">
@@ -149,7 +170,7 @@ export default function Settings() {
                 value={apiKey}
                 onChange={(e) => setAPIKey(e.target.value)}
                 placeholder="Enter your API key"
-                className="w-full bg-sc-darker border border-sc-border rounded px-3 py-2 pr-10 text-sm font-mono text-gray-300 placeholder:text-gray-600 focus:outline-none focus:border-sc-accent/50"
+                className="w-full bg-sc-darker border border-sc-border rounded px-3 py-2 pr-10 text-sm font-mono text-gray-300 placeholder:text-gray-500 focus:outline-none focus:border-sc-accent/50 focus:ring-1 focus:ring-sc-accent/20 transition-colors"
               />
               {apiKey && (
                 <button
@@ -202,7 +223,6 @@ export default function Settings() {
         </PanelSection>
       )}
 
-      {/* Model Selection */}
       {models.length > 0 && (
         <PanelSection title="Select Model">
           <div className="p-5">
@@ -216,7 +236,6 @@ export default function Settings() {
         </PanelSection>
       )}
 
-      {/* Save Button */}
       {provider && apiKey && model && (
         <button
           onClick={handleSave}
@@ -239,7 +258,6 @@ export default function Settings() {
         </button>
       )}
 
-      {/* Clear Configuration Button */}
       {config?.api_key_set && (
         <button
           onClick={handleClear}
@@ -249,6 +267,16 @@ export default function Settings() {
           Clear Configuration
         </button>
       )}
+
+      <ConfirmDialog
+        open={confirmDialog.open}
+        onConfirm={confirmDialog.onConfirm || (() => {})}
+        onCancel={() => setConfirmDialog({ open: false })}
+        title={confirmDialog.title}
+        message={confirmDialog.message}
+        confirmLabel={confirmDialog.confirmLabel}
+        variant={confirmDialog.variant}
+      />
     </div>
   )
 }
