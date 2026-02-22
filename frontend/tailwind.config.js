@@ -10,7 +10,7 @@ export default {
         'sc-darker': '#09131f',
         'sc-panel': '#132238',
         'sc-border': '#2a4a6b',
-        'sc-accent': '#e8873a',
+        'sc-accent': '#22d3ee',
         'sc-accent2': '#5b9bd5',
         'sc-warn': '#f5a623',
         'sc-danger': '#ef4444',
@@ -20,8 +20,8 @@ export default {
       },
       fontFamily: {
         mono: ['"JetBrains Mono"', '"Fira Code"', 'monospace'],
-        display: ['"Electrolize"', '"Rajdhani"', 'sans-serif'],
-        body: ['"Inter"', '"Segoe UI"', 'sans-serif'],
+        display: ['var(--font-display)', 'sans-serif'],
+        body: ['var(--font-body)', 'sans-serif'],
       },
       keyframes: {
         'fade-in-up': {
@@ -36,11 +36,21 @@ export default {
           '0%': { backgroundPosition: '-200% 0' },
           '100%': { backgroundPosition: '200% 0' },
         },
+        'slide-in-right': {
+          '0%': { opacity: '0', transform: 'translateX(16px)' },
+          '100%': { opacity: '1', transform: 'translateX(0)' },
+        },
+        'slide-up': {
+          '0%': { opacity: '0', transform: 'translateY(12px)' },
+          '100%': { opacity: '1', transform: 'translateY(0)' },
+        },
       },
       animation: {
         'fade-in-up': 'fade-in-up 0.3s ease-out',
         'fade-in': 'fade-in 0.2s ease-out',
         shimmer: 'shimmer 1.5s infinite linear',
+        'slide-in-right': 'slide-in-right 0.3s ease-out',
+        'slide-up': 'slide-up 0.3s ease-out',
       },
     },
   },

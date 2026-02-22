@@ -2,6 +2,7 @@ import React, { useState, Suspense, lazy } from 'react'
 import { Routes, Route, NavLink, useLocation } from 'react-router-dom'
 import { Rocket, BarChart3, Shield, Upload, RefreshCw, Database, Settings as SettingsIcon, ChevronDown, ChevronRight, History, Menu, X } from 'lucide-react'
 import LoadingState from './components/LoadingState'
+import useFontPreference from './hooks/useFontPreference'
 
 import Dashboard from './pages/Dashboard'
 
@@ -129,6 +130,7 @@ function SidebarContent({ expandedMenu, setExpandedMenu, onNavClick }) {
 }
 
 export default function App() {
+  useFontPreference()
   const [expandedMenu, setExpandedMenu] = useState('/analysis')
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false)
 

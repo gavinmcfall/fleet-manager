@@ -4,15 +4,21 @@ This file maintains running context across compactions.
 
 ## Current Focus
 
-**UX Overhaul + Accessibility audit complete — all changes implemented, build verified.**
+**Font preference settings + code review fixes — all implemented, build verified, ready for deploy.**
 
 ## Recent Changes
 
-- **UX Phase 1-4:** Color tokens, typography, animations, ShipImage, ConfirmDialog, component polish, page-by-page UX, app shell mobile responsive
-- **A11y Critical:** btn-primary text→sc-darker (2.64:1→13.5:1), global :focus-visible ring, .sr-only, .skip-link, @media prefers-reduced-motion, App.jsx skip nav + aria-labels
-- **A11y Contrast:** sc-danger→#ef4444, sc-border→#2a4a6b, stat-label/table-header opacity removed, gray-600→gray-500 (icons) or gray-400 (text) across 13 files, gray-500→gray-400 for small body text, sort icon gray-700→gray-500
-- **A11y Semantic HTML:** scope="col" on all th elements, sr-only captions on data tables, aria-labelledby/describedby on ConfirmDialog
-- **A11y Screen Reader:** Charts wrapped in role="img" with data summaries, LoadingState role="status" + aria-live, ShipImage fallback aria-label, Import drop zone role="button" + keyboard handler + aria-label, aria-sort on sortable FleetTable headers
+- **Font preferences:** User-selectable body/display fonts (Default, Lexend, Atkinson Hyperlegible, OpenDyslexic) via Settings page. CSS custom properties (`--font-body`, `--font-display`) swapped at runtime, persisted in localStorage via `useFontPreference` hook.
+- **Code review fixes (all 8 findings + 5 minor notes):**
+  - Removed unused `FONT_PRESETS` import/export
+  - Self-hosted OpenDyslexic via `@fontsource/opendyslexic` npm package (replaced unreliable CDN)
+  - Synced root `tailwind.config.js` color tokens to match frontend palette
+  - Fixed `col-span-2` overflow on single-column mobile grids
+  - FleetTable selection now tracks by stable `id`/`vehicle_id` instead of array index
+  - Removed unused `panel-angular` CSS and variant prop
+  - Added arrow key (Up/Down) navigation on FleetTable rows + `role="row"` + `aria-selected`
+  - Removed Figma capture script from production HTML
+  - Fixed Dashboard JSX whitespace, reordered chart colors for hue differentiation
 
 ## Production
 
@@ -24,18 +30,19 @@ This file maintains running context across compactions.
 
 ## Key Decisions
 
-- Auth: `Sec-Fetch-Site: same-origin` trusts browser SPA; `X-API-Key` for external
-- Staggered cron: 5 schedules (3:00-3:45 UTC), each with own 30s CPU budget
-- Color tokens: sc-warn amber (#f5a623), sc-success teal (#2ec4b6), sc-melt gold (#f0c674) — deuteranopia safe
-- ShipImage component replaces all inline <img> tags — no more layout collapse on error
-- ConfirmDialog replaces all window.confirm()/alert() calls
+- Font system uses CSS custom properties so Tailwind classes (`font-body`, `font-display`) work unchanged — only `:root` vars get swapped
+- OpenDyslexic self-hosted via `@fontsource/opendyslexic` instead of `fonts.cdnfonts.com` CDN (SIL license, no external dependency)
+- FleetTable selection by ID not index — stable across sort/filter changes
+- Chart colors reordered to alternate hues (cyan→violet→amber→teal→pink→blue) for better data distinguishability
 
 ## What's Next
 
-- **Commit** accessibility changes
-- **Visual review** — run wrangler dev and check all pages
 - **Deploy** to production via git push
 
 ---
 **Session compacted at:** 2026-02-22 15:12:41
+
+
+---
+**Session compacted at:** 2026-02-22 17:46:51
 
