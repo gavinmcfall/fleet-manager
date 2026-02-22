@@ -1,0 +1,103 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  body {
+    @apply antialiased;
+    background: #0b1120;
+    min-height: 100vh;
+  }
+
+  ::-webkit-scrollbar {
+    width: 6px;
+    height: 6px;
+  }
+  ::-webkit-scrollbar-track {
+    background: #0b1120;
+  }
+  ::-webkit-scrollbar-thumb {
+    background: #1e2d4a;
+    border-radius: 0;
+  }
+  ::-webkit-scrollbar-thumb:hover {
+    background: #2d4168;
+  }
+}
+
+@layer components {
+  .panel {
+    @apply bg-sc-panel border border-sc-border;
+    border-radius: 0;
+  }
+
+  .panel-header {
+    @apply px-4 py-2.5 border-b border-sc-border font-display font-semibold text-xs uppercase tracking-widest text-gray-400;
+  }
+
+  .badge {
+    @apply inline-flex items-center px-2 py-0.5 text-xs font-mono font-medium;
+    border-radius: 0;
+  }
+
+  .badge-lti {
+    @apply bg-sc-lti/15 text-sc-lti border border-sc-lti/25;
+  }
+
+  .badge-nonlti {
+    @apply bg-gray-700/40 text-gray-500 border border-gray-600/25;
+  }
+
+  .badge-warbond {
+    @apply bg-sc-warn/15 text-sc-warn border border-sc-warn/25;
+  }
+
+  .badge-size {
+    @apply bg-sc-accent/10 text-sc-accent border border-sc-accent/20;
+  }
+
+  .stat-card {
+    @apply panel p-3 flex flex-col gap-0.5;
+  }
+
+  .stat-value {
+    @apply text-2xl font-display font-bold text-white;
+  }
+
+  .stat-label {
+    @apply text-[11px] font-mono uppercase tracking-wider text-gray-500;
+  }
+
+  .btn {
+    @apply px-4 py-2 font-display font-semibold text-sm uppercase tracking-wider transition-all duration-150;
+    border-radius: 0;
+  }
+
+  .btn-primary {
+    @apply btn bg-sc-accent/15 text-sc-accent border border-sc-accent/30 hover:bg-sc-accent/25 hover:border-sc-accent/50;
+  }
+
+  .btn-secondary {
+    @apply btn bg-sc-accent2/15 text-sc-accent2 border border-sc-accent2/25 hover:bg-sc-accent2/25 hover:border-sc-accent2/40;
+  }
+
+  .btn-danger {
+    @apply btn bg-sc-danger/15 text-sc-danger border border-sc-danger/30 hover:bg-sc-danger/25;
+  }
+
+  .btn-ghost {
+    @apply btn text-gray-500 hover:text-white hover:bg-white/5;
+  }
+
+  .table-header {
+    @apply text-[11px] font-mono uppercase tracking-wider text-gray-500 text-left px-3 py-2;
+  }
+
+  .table-cell {
+    @apply px-3 py-2 text-sm border-t border-sc-border/50;
+  }
+
+  .glow-line {
+    @apply h-px bg-sc-border;
+  }
+}

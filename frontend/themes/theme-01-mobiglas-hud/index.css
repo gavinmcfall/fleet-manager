@@ -1,0 +1,145 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  body {
+    @apply antialiased;
+    background: linear-gradient(180deg, #020608 0%, #040a0f 50%, #061014 100%);
+    min-height: 100vh;
+    position: relative;
+  }
+
+  /* Scan-line overlay */
+  body::after {
+    content: '';
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    pointer-events: none;
+    z-index: 9999;
+    background: repeating-linear-gradient(
+      0deg,
+      transparent,
+      transparent 2px,
+      rgba(0, 229, 255, 0.015) 2px,
+      rgba(0, 229, 255, 0.015) 4px
+    );
+    animation: scanlines 8s linear infinite;
+  }
+
+  @keyframes scanlines {
+    0% { background-position: 0 0; }
+    100% { background-position: 0 100vh; }
+  }
+
+  ::-webkit-scrollbar {
+    width: 4px;
+    height: 4px;
+  }
+  ::-webkit-scrollbar-track {
+    background: #040a0f;
+  }
+  ::-webkit-scrollbar-thumb {
+    background: #0e3a40;
+    border-radius: 0;
+  }
+  ::-webkit-scrollbar-thumb:hover {
+    background: #00e5ff33;
+  }
+}
+
+@layer components {
+  .panel {
+    @apply bg-sc-panel/70 backdrop-blur-sm border border-sc-border;
+    border-radius: 2px;
+    box-shadow: 0 0 8px rgba(0, 229, 255, 0.05), inset 0 1px 0 rgba(0, 229, 255, 0.05);
+  }
+
+  .panel-header {
+    @apply px-5 py-3 border-b border-sc-border font-display font-semibold text-xs uppercase tracking-[0.2em] text-sc-accent/70;
+    text-shadow: 0 0 8px rgba(0, 229, 255, 0.3);
+    clip-path: polygon(0 0, calc(100% - 12px) 0, 100% 12px, 100% 100%, 0 100%);
+    background: linear-gradient(90deg, rgba(0, 229, 255, 0.06) 0%, transparent 100%);
+  }
+
+  .badge {
+    @apply inline-flex items-center px-2 py-0.5 text-xs font-mono font-medium;
+    border-radius: 1px;
+  }
+
+  .badge-lti {
+    @apply bg-sc-lti/10 text-sc-lti border border-sc-lti/30;
+    text-shadow: 0 0 6px rgba(24, 255, 255, 0.4);
+  }
+
+  .badge-nonlti {
+    @apply bg-gray-800/50 text-gray-500 border border-gray-700/30;
+  }
+
+  .badge-warbond {
+    @apply bg-sc-warn/10 text-sc-warn border border-sc-warn/30;
+    text-shadow: 0 0 6px rgba(255, 171, 0, 0.3);
+  }
+
+  .badge-size {
+    @apply bg-sc-accent/5 text-sc-accent border border-sc-accent/20;
+    text-shadow: 0 0 4px rgba(0, 229, 255, 0.3);
+  }
+
+  .stat-card {
+    @apply panel p-4 flex flex-col gap-1;
+  }
+
+  .stat-value {
+    @apply text-2xl font-display font-bold text-sc-accent;
+    text-shadow: 0 0 12px rgba(0, 229, 255, 0.4);
+  }
+
+  .stat-label {
+    @apply text-xs font-mono uppercase tracking-wider text-sc-accent/40;
+  }
+
+  .btn {
+    @apply px-4 py-2 font-display font-semibold text-sm uppercase tracking-wider transition-all duration-200;
+    border-radius: 2px;
+  }
+
+  .btn-primary {
+    @apply btn bg-sc-accent/10 text-sc-accent border border-sc-accent/40 hover:bg-sc-accent/20 hover:border-sc-accent/60;
+    text-shadow: 0 0 8px rgba(0, 229, 255, 0.3);
+    box-shadow: 0 0 6px rgba(0, 229, 255, 0.1);
+  }
+
+  .btn-primary:hover {
+    box-shadow: 0 0 12px rgba(0, 229, 255, 0.2);
+  }
+
+  .btn-secondary {
+    @apply btn bg-sc-accent2/10 text-sc-accent2 border border-sc-accent2/30 hover:bg-sc-accent2/20 hover:border-sc-accent2/50;
+  }
+
+  .btn-danger {
+    @apply btn bg-sc-danger/10 text-sc-danger border border-sc-danger/40 hover:bg-sc-danger/20;
+    box-shadow: 0 0 6px rgba(255, 23, 68, 0.1);
+  }
+
+  .btn-ghost {
+    @apply btn text-gray-500 hover:text-sc-accent hover:bg-sc-accent/5;
+  }
+
+  .table-header {
+    @apply text-xs font-mono uppercase tracking-wider text-sc-accent/50 text-left px-3 py-2;
+  }
+
+  .table-cell {
+    @apply px-3 py-2.5 text-sm border-t border-sc-border/40;
+  }
+
+  .glow-line {
+    @apply h-px bg-gradient-to-r from-transparent via-sc-accent/50 to-transparent;
+    box-shadow: 0 0 8px rgba(0, 229, 255, 0.2);
+  }
+}

@@ -1,0 +1,106 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  body {
+    @apply antialiased;
+    background: linear-gradient(180deg, #09131f 0%, #0d1b2a 40%, #0f1e30 100%);
+    min-height: 100vh;
+  }
+
+  ::-webkit-scrollbar {
+    width: 6px;
+    height: 6px;
+  }
+  ::-webkit-scrollbar-track {
+    background: #0d1b2a;
+  }
+  ::-webkit-scrollbar-thumb {
+    background: #1e3a5f;
+    border-radius: 3px;
+  }
+  ::-webkit-scrollbar-thumb:hover {
+    background: #2a5080;
+  }
+}
+
+@layer components {
+  .panel {
+    @apply bg-sc-panel/90 backdrop-blur-sm border border-sc-border rounded-lg;
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.3);
+  }
+
+  .panel-header {
+    @apply px-5 py-3 border-b border-sc-border font-display font-semibold text-sm uppercase tracking-widest text-sc-accent2;
+  }
+
+  .badge {
+    @apply inline-flex items-center px-2 py-0.5 rounded text-xs font-mono font-medium;
+  }
+
+  .badge-lti {
+    @apply bg-sc-lti/20 text-sc-lti border border-sc-lti/30;
+  }
+
+  .badge-nonlti {
+    @apply bg-gray-600/30 text-gray-400 border border-gray-500/30;
+  }
+
+  .badge-warbond {
+    @apply bg-sc-accent/20 text-sc-accent border border-sc-accent/40;
+  }
+
+  .badge-size {
+    @apply bg-sc-accent2/15 text-sc-accent2 border border-sc-accent2/25;
+  }
+
+  .stat-card {
+    @apply panel p-4 flex flex-col gap-1;
+  }
+
+  .stat-value {
+    @apply text-2xl font-display font-bold text-white;
+  }
+
+  .stat-label {
+    @apply text-xs font-mono uppercase tracking-wider text-sc-accent2/60;
+  }
+
+  .btn {
+    @apply px-4 py-2 rounded font-display font-semibold text-sm uppercase tracking-wider transition-all duration-200;
+  }
+
+  .btn-primary {
+    @apply btn bg-sc-accent text-white border border-sc-accent hover:bg-sc-accent/85;
+    box-shadow: 0 2px 8px rgba(232, 135, 58, 0.25);
+  }
+
+  .btn-primary:hover {
+    box-shadow: 0 4px 16px rgba(232, 135, 58, 0.35);
+  }
+
+  .btn-secondary {
+    @apply btn bg-sc-accent2/15 text-sc-accent2 border border-sc-accent2/40 hover:bg-sc-accent2/25 hover:border-sc-accent2/60;
+  }
+
+  .btn-danger {
+    @apply btn bg-sc-danger/20 text-sc-danger border border-sc-danger/40 hover:bg-sc-danger/30;
+  }
+
+  .btn-ghost {
+    @apply btn text-gray-400 hover:text-sc-accent2 hover:bg-sc-accent2/10;
+  }
+
+  .table-header {
+    @apply text-xs font-mono uppercase tracking-wider text-sc-accent2/50 text-left px-3 py-2;
+  }
+
+  .table-cell {
+    @apply px-3 py-2.5 text-sm border-t border-sc-border/50;
+  }
+
+  .glow-line {
+    @apply h-px bg-gradient-to-r from-transparent via-sc-accent/30 to-transparent;
+  }
+}

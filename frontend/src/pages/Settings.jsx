@@ -1,12 +1,21 @@
 import React, { useState, useEffect } from 'react'
 import { useLLMConfig, setLLMConfig, testLLMConnection } from '../hooks/useAPI'
-import { Settings as SettingsIcon, Key, CheckCircle, XCircle, Loader, Trash2, Eye, EyeOff } from 'lucide-react'
+import { Settings as SettingsIcon, Key, CheckCircle, XCircle, Loader, Trash2, Eye, EyeOff, Type } from 'lucide-react'
 import PageHeader from '../components/PageHeader'
 import PanelSection from '../components/PanelSection'
 import FilterSelect from '../components/FilterSelect'
 import ConfirmDialog from '../components/ConfirmDialog'
+import useFontPreference from '../hooks/useFontPreference'
+
+const FONT_OPTIONS = [
+  { key: 'default', label: 'Default', desc: 'Inter body + Electrolize headings', preview: '"Inter", "Segoe UI"' },
+  { key: 'lexend', label: 'Lexend', desc: 'Designed for improved reading fluency', preview: '"Lexend"' },
+  { key: 'atkinson', label: 'Atkinson Hyperlegible', desc: 'Maximum character distinction', preview: '"Atkinson Hyperlegible"' },
+  { key: 'opendyslexic', label: 'OpenDyslexic', desc: 'Weighted bottoms to reduce letter swapping', preview: '"OpenDyslexic"' },
+]
 
 export default function Settings() {
+  const { fontPreference, setFontPreference } = useFontPreference()
   const { data: config, refetch } = useLLMConfig()
   const [provider, setProvider] = useState('')
   const [apiKey, setAPIKey] = useState('')
@@ -114,6 +123,48 @@ export default function Settings() {
           {notification.msg}
         </div>
       )}
+
+      <PanelSection title="Display" icon={Type}>
+        <div className="p-5 space-y-4">
+          <p className="text-sm text-gray-400">
+            Choose a font for readability. Dyslexia-friendly options available.
+          </p>
+
+          <div className="space-y-2">
+            {FONT_OPTIONS.map((f) => (
+              <label
+                key={f.key}
+                className={`block p-4 rounded border-2 cursor-pointer transition-colors ${
+                  fontPreference === f.key
+                    ? 'border-sc-accent bg-sc-accent/10'
+                    : 'border-sc-border hover:border-sc-accent2/40'
+                }`}
+              >
+                <div className="flex items-center gap-3">
+                  <input
+                    type="radio"
+                    name="font-preference"
+                    value={f.key}
+                    checked={fontPreference === f.key}
+                    onChange={() => setFontPreference(f.key)}
+                    className="mr-1"
+                  />
+                  <div className="flex-1">
+                    <span className="text-white font-medium">{f.label}</span>
+                    <span className="text-xs text-gray-500 ml-2">{f.desc}</span>
+                    <p
+                      className="text-sm text-gray-400 mt-1"
+                      style={{ fontFamily: f.preview }}
+                    >
+                      The quick brown fox jumps over the lazy dog.
+                    </p>
+                  </div>
+                </div>
+              </label>
+            ))}
+          </div>
+        </div>
+      </PanelSection>
 
       <PanelSection title="LLM Provider" icon={SettingsIcon}>
         <div className="p-5 space-y-4">

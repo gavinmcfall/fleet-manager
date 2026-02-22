@@ -1,0 +1,111 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  body {
+    @apply antialiased;
+    background: linear-gradient(180deg, #08090d 0%, #0d0f14 50%, #111318 100%);
+    min-height: 100vh;
+  }
+
+  ::-webkit-scrollbar {
+    width: 6px;
+    height: 6px;
+  }
+  ::-webkit-scrollbar-track {
+    background: #0d0f14;
+  }
+  ::-webkit-scrollbar-thumb {
+    background: #2a2418;
+    border-radius: 2px;
+  }
+  ::-webkit-scrollbar-thumb:hover {
+    background: #3d3525;
+  }
+}
+
+@layer components {
+  .panel {
+    @apply bg-sc-panel/80 backdrop-blur-sm border border-sc-border;
+    border-radius: 3px;
+    box-shadow: 0 0 12px rgba(245, 158, 11, 0.03);
+  }
+
+  .panel-header {
+    @apply px-5 py-3 border-b border-sc-border font-display font-semibold text-sm uppercase tracking-widest text-sc-accent/70;
+    background: linear-gradient(90deg, rgba(245, 158, 11, 0.05) 0%, transparent 70%);
+    text-shadow: 0 0 10px rgba(245, 158, 11, 0.15);
+  }
+
+  .badge {
+    @apply inline-flex items-center px-2 py-0.5 text-xs font-mono font-medium;
+    border-radius: 2px;
+  }
+
+  .badge-lti {
+    @apply bg-sc-lti/15 text-sc-lti border border-sc-lti/25;
+    text-shadow: 0 0 6px rgba(224, 163, 255, 0.2);
+  }
+
+  .badge-nonlti {
+    @apply bg-gray-700/40 text-gray-500 border border-gray-600/25;
+  }
+
+  .badge-warbond {
+    @apply bg-sc-warn/15 text-sc-warn border border-sc-warn/25;
+    text-shadow: 0 0 6px rgba(251, 191, 36, 0.2);
+  }
+
+  .badge-size {
+    @apply bg-sc-accent/10 text-sc-accent border border-sc-accent/20;
+  }
+
+  .stat-card {
+    @apply panel p-4 flex flex-col gap-1;
+  }
+
+  .stat-value {
+    @apply text-2xl font-display font-bold text-sc-accent;
+    text-shadow: 0 0 10px rgba(245, 158, 11, 0.25);
+  }
+
+  .stat-label {
+    @apply text-xs font-mono uppercase tracking-wider text-gray-500;
+  }
+
+  .btn {
+    @apply px-4 py-2 font-display font-semibold text-sm uppercase tracking-wider transition-all duration-200;
+    border-radius: 3px;
+  }
+
+  .btn-primary {
+    @apply btn bg-sc-accent/15 text-sc-accent border border-sc-accent/35 hover:bg-sc-accent/25 hover:border-sc-accent/55;
+    text-shadow: 0 0 6px rgba(245, 158, 11, 0.2);
+  }
+
+  .btn-secondary {
+    @apply btn bg-sc-accent2/15 text-sc-accent2 border border-sc-accent2/30 hover:bg-sc-accent2/25 hover:border-sc-accent2/45;
+  }
+
+  .btn-danger {
+    @apply btn bg-sc-danger/15 text-sc-danger border border-sc-danger/35 hover:bg-sc-danger/25;
+  }
+
+  .btn-ghost {
+    @apply btn text-gray-500 hover:text-sc-accent hover:bg-sc-accent/5;
+  }
+
+  .table-header {
+    @apply text-xs font-mono uppercase tracking-wider text-sc-accent/45 text-left px-3 py-2;
+  }
+
+  .table-cell {
+    @apply px-3 py-2.5 text-sm border-t border-sc-border/50;
+  }
+
+  .glow-line {
+    @apply h-px bg-gradient-to-r from-transparent via-sc-accent/35 to-transparent;
+    box-shadow: 0 0 6px rgba(245, 158, 11, 0.15);
+  }
+}

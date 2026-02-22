@@ -1,12 +1,11 @@
 import React from 'react'
 import { Link } from 'react-router-dom'
 import { useStatus, useAnalysis, triggerImageSync } from '../hooks/useAPI'
-import { RefreshCw, Rocket, Package, Users, Shield, AlertTriangle, DollarSign } from 'lucide-react'
+import { RefreshCw, Rocket, Package, Users, Shield, DollarSign, Activity, Crosshair } from 'lucide-react'
 import { PieChart, Pie, Cell, ResponsiveContainer, Tooltip, BarChart, Bar, XAxis, YAxis } from 'recharts'
 import { CHART_COLORS, TOOLTIP_STYLE } from '../lib/theme'
 import PageHeader from '../components/PageHeader'
 import LoadingState from '../components/LoadingState'
-import StatCard from '../components/StatCard'
 import PanelSection from '../components/PanelSection'
 
 export default function Dashboard() {
@@ -29,6 +28,9 @@ export default function Dashboard() {
 
   const sizeData = Object.entries(sizeDist).map(([name, value]) => ({ name, value }))
   const roleData = Object.entries(roles).map(([name, ships]) => ({ name, count: ships.length }))
+
+  const ltiPercent = totalVehicles > 0 ? Math.round(((overview.lti_count || 0) / totalVehicles) * 100) : 0
+  const readyPercent = totalVehicles > 0 ? Math.round(((overview.flight_ready || 0) / totalVehicles) * 100) : 0
 
   // Empty fleet — show onboarding
   if (totalVehicles === 0) {
@@ -71,41 +73,89 @@ export default function Dashboard() {
         }
       />
 
-      {/* Hero Stat */}
-      <div className="panel p-6 flex items-center justify-between">
-        <div>
-          <p className="stat-label mb-1">Total Fleet Value</p>
-          <p className="text-4xl font-display font-bold text-sc-accent">
+      {/* Bento Grid */}
+      <div className="bento-grid">
+        {/* Hero: Fleet Value — spans 2 cols */}
+        <div className="panel col-span-2 p-6 bg-grid animate-slide-up" style={{ animationDelay: '0ms' }}>
+          <div className="flex items-center gap-2 mb-3">
+            <DollarSign className="w-4 h-4 text-sc-accent" />
+            <span className="stat-label">Total Fleet Value</span>
+          </div>
+          <p className="text-5xl font-display font-bold text-sc-accent leading-tight">
             ${(overview.total_pledge_value || 0).toLocaleString()}
           </p>
+          <p className="text-sm text-gray-500 mt-2 font-mono">{totalVehicles} ships pledged</p>
         </div>
-        <div className="text-right">
-          <p className="stat-label mb-1">Ship Count</p>
-          <p className="text-3xl font-display font-bold text-white">
-            {totalVehicles}
-          </p>
-        </div>
-      </div>
 
-      {/* Stats Grid */}
-      <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-6 gap-3 animate-fade-in-up">
-        <StatCard icon={Rocket} label="Total Ships" value={totalVehicles} />
-        <StatCard icon={Package} label="Cargo (SCU)" value={(overview.total_cargo || 0).toLocaleString()} />
-        <StatCard icon={Users} label="Min Crew" value={overview.min_crew || 0} />
-        <StatCard icon={Users} label="Max Crew" value={overview.max_crew || 0} />
-        <StatCard icon={Shield} label="LTI" value={overview.lti_count || 0} color="text-sc-lti" />
-        <StatCard
-          icon={DollarSign}
-          label="Pledge Value"
-          value={`$${(overview.total_pledge_value || 0).toLocaleString()}`}
-          color="text-sc-warn"
-        />
+        {/* Ship Count */}
+        <div className="panel p-5 bg-grid animate-slide-up" style={{ animationDelay: '50ms' }}>
+          <div className="flex items-center gap-2 mb-3">
+            <Rocket className="w-4 h-4 text-sc-accent2" />
+            <span className="stat-label">Ships</span>
+          </div>
+          <p className="text-4xl font-display font-bold text-white">{totalVehicles}</p>
+        </div>
+
+        {/* Cargo */}
+        <div className="panel p-5 bg-grid animate-slide-up" style={{ animationDelay: '100ms' }}>
+          <div className="flex items-center gap-2 mb-3">
+            <Package className="w-4 h-4 text-sc-accent2" />
+            <span className="stat-label">Cargo (SCU)</span>
+          </div>
+          <p className="text-4xl font-display font-bold text-white">{(overview.total_cargo || 0).toLocaleString()}</p>
+        </div>
+
+        {/* Min Crew */}
+        <div className="panel p-5 bg-grid animate-slide-up" style={{ animationDelay: '150ms' }}>
+          <div className="flex items-center gap-2 mb-3">
+            <Users className="w-4 h-4 text-gray-500" />
+            <span className="stat-label">Min Crew</span>
+          </div>
+          <p className="text-3xl font-display font-bold text-white">{overview.min_crew || 0}</p>
+        </div>
+
+        {/* Max Crew */}
+        <div className="panel p-5 bg-grid animate-slide-up" style={{ animationDelay: '200ms' }}>
+          <div className="flex items-center gap-2 mb-3">
+            <Users className="w-4 h-4 text-gray-500" />
+            <span className="stat-label">Max Crew</span>
+          </div>
+          <p className="text-3xl font-display font-bold text-white">{overview.max_crew || 0}</p>
+        </div>
+
+        {/* Fleet Health — spans 2 cols */}
+        <div className="panel col-span-2 p-5 bg-grid animate-slide-up" style={{ animationDelay: '250ms' }}>
+          <div className="flex items-center gap-2 mb-4">
+            <Activity className="w-4 h-4 text-sc-success" />
+            <span className="stat-label">Fleet Health</span>
+          </div>
+          <div className="space-y-3">
+            <div>
+              <div className="flex justify-between text-xs font-mono mb-1">
+                <span className="text-sc-lti">LTI Coverage</span>
+                <span className="text-gray-400">{overview.lti_count || 0}/{totalVehicles} ({ltiPercent}%)</span>
+              </div>
+              <div className="status-bar" role="progressbar" aria-valuenow={ltiPercent} aria-valuemin={0} aria-valuemax={100} aria-label={`LTI coverage: ${ltiPercent}%`}>
+                <div className="status-bar-fill bg-sc-lti" style={{ width: `${ltiPercent}%` }} />
+              </div>
+            </div>
+            <div>
+              <div className="flex justify-between text-xs font-mono mb-1">
+                <span className="text-sc-success">Flight Ready</span>
+                <span className="text-gray-400">{overview.flight_ready || 0}/{totalVehicles} ({readyPercent}%)</span>
+              </div>
+              <div className="status-bar" role="progressbar" aria-valuenow={readyPercent} aria-valuemin={0} aria-valuemax={100} aria-label={`Flight ready: ${readyPercent}%`}>
+                <div className="status-bar-fill bg-sc-success" style={{ width: `${readyPercent}%` }} />
+              </div>
+            </div>
+          </div>
+        </div>
       </div>
 
       {/* Charts Row */}
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
-        <PanelSection title="Size Distribution">
-          <div className="p-4 h-64" role="img" aria-label={`Size distribution: ${sizeData.map(d => `${d.name}: ${d.value}`).join(', ')}`}>
+        <PanelSection title="Size Distribution" icon={Crosshair}>
+          <div className="p-4 h-64 bg-grid" role="img" aria-label={`Size distribution: ${sizeData.map(d => `${d.name}: ${d.value}`).join(', ')}`}>
             <ResponsiveContainer width="100%" height="100%">
               <PieChart>
                 <Pie
@@ -129,8 +179,8 @@ export default function Dashboard() {
           </div>
         </PanelSection>
 
-        <PanelSection title="Role Categories">
-          <div className="p-4 h-64" role="img" aria-label={`Role categories: ${roleData.map(d => `${d.name}: ${d.count}`).join(', ')}`}>
+        <PanelSection title="Role Categories" icon={Shield}>
+          <div className="p-4 h-64 bg-grid" role="img" aria-label={`Role categories: ${roleData.map(d => `${d.name}: ${d.count}`).join(', ')}`}>
             <ResponsiveContainer width="100%" height="100%">
               <BarChart data={roleData} layout="vertical" margin={{ left: 80 }}>
                 <XAxis type="number" tick={{ fill: '#6b7280', fontSize: 11 }} />

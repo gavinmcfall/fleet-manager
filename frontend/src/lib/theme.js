@@ -1,12 +1,12 @@
 // Recharts can't use CSS vars in SVG fill, so JS constants are needed
 export const CHART_COLORS = [
-  '#5b9bd5', // sc-accent2
-  '#818cf8', // indigo
+  '#22d3ee', // sc-accent (cyan)
   '#a78bfa', // violet / sc-lti
-  '#e8873a', // sc-accent
-  '#2ec4b6', // sc-success (teal)
   '#f5a623', // sc-warn (amber)
+  '#2ec4b6', // sc-success (teal)
   '#ec4899', // pink
+  '#5b9bd5', // sc-accent2 (blue)
+  '#818cf8', // indigo
   '#6366f1', // indigo deeper
 ]
 

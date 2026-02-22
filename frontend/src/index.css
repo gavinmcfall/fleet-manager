@@ -3,6 +3,11 @@
 @tailwind utilities;
 
 @layer base {
+  :root {
+    --font-body: "Inter", "Segoe UI";
+    --font-display: "Electrolize", "Rajdhani";
+  }
+
   body {
     @apply antialiased;
     background: linear-gradient(180deg, #09131f 0%, #0d1b2a 40%, #0f1e30 100%);
@@ -62,7 +67,7 @@
   }
   .panel-hover:hover {
     @apply border-sc-accent/30 -translate-y-0.5;
-    box-shadow: 0 4px 16px rgba(0, 0, 0, 0.4), 0 0 0 1px rgba(232, 135, 58, 0.1);
+    box-shadow: 0 4px 16px rgba(0, 0, 0, 0.4), 0 0 0 1px rgba(34, 211, 238, 0.1);
   }
 
   .panel-header {
@@ -111,11 +116,11 @@
 
   .btn-primary {
     @apply btn bg-sc-accent text-sc-darker border border-sc-accent hover:bg-sc-accent/85;
-    box-shadow: 0 2px 8px rgba(232, 135, 58, 0.25);
+    box-shadow: 0 2px 8px rgba(34, 211, 238, 0.25);
   }
 
   .btn-primary:hover {
-    box-shadow: 0 4px 16px rgba(232, 135, 58, 0.35);
+    box-shadow: 0 4px 16px rgba(34, 211, 238, 0.35);
   }
 
   .btn-secondary {
@@ -140,6 +145,46 @@
 
   .glow-line {
     @apply h-px bg-gradient-to-r from-transparent via-sc-accent/30 to-transparent;
+  }
+
+  .bg-grid {
+    background-image: radial-gradient(rgba(91, 155, 213, 0.08) 1px, transparent 1px);
+    background-size: 20px 20px;
+  }
+
+  .status-bar {
+    @apply h-1.5 rounded-full bg-sc-border/30 overflow-hidden;
+  }
+  .status-bar-fill {
+    @apply h-full rounded-full transition-all duration-500;
+  }
+
+  .bento-grid {
+    display: grid;
+    grid-template-columns: repeat(4, 1fr);
+    gap: 1rem;
+  }
+  @media (max-width: 1024px) {
+    .bento-grid { grid-template-columns: repeat(2, 1fr); }
+  }
+  @media (max-width: 640px) {
+    .bento-grid { grid-template-columns: 1fr; }
+    .bento-grid > * { grid-column: span 1 !important; }
+  }
+
+  .fleet-layout {
+    display: grid;
+    grid-template-columns: 1fr 380px;
+    gap: 1rem;
+    align-items: start;
+  }
+  @media (max-width: 1024px) {
+    .fleet-layout { grid-template-columns: 1fr; }
+  }
+
+  .fleet-row-selected {
+    @apply bg-sc-accent/5;
+    box-shadow: inset 3px 0 0 #22d3ee;
   }
 
   /* Shimmer skeleton for loading states */

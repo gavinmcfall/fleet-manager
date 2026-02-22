@@ -1,4 +1,4 @@
-import React, { useState, useMemo } from 'react'
+import React, { useState, useMemo, useEffect, useCallback } from 'react'
 import { useFleet } from '../hooks/useAPI'
 import { ArrowUpDown, SearchX } from 'lucide-react'
 import PageHeader from '../components/PageHeader'
@@ -8,6 +8,7 @@ import FilterSelect from '../components/FilterSelect'
 import SearchInput from '../components/SearchInput'
 import InsuranceBadge from '../components/InsuranceBadge'
 import ShipImage from '../components/ShipImage'
+import ShipDetailPanel from '../components/ShipDetailPanel'
 
 export default function FleetTable() {
   const { data: fleet, loading, error } = useFleet()
@@ -15,6 +16,7 @@ export default function FleetTable() {
   const [sortDir, setSortDir] = useState('asc')
   const [filter, setFilter] = useState('')
   const [sizeFilter, setSizeFilter] = useState('all')
+  const [selectedId, setSelectedId] = useState(null)
 
   const sizes = useMemo(() => {
     if (!fleet) return []
@@ -45,12 +47,9 @@ export default function FleetTable() {
       let va, vb
       switch (sortKey) {
         case 'vehicle_name': va = a.vehicle_name; vb = b.vehicle_name; break
-        case 'manufacturer': va = a.manufacturer_name; vb = b.manufacturer_name; break
         case 'size': va = a.size_label || ''; vb = b.size_label || ''; break
-        case 'cargo': va = a.cargo || 0; vb = b.cargo || 0; break
-        case 'pledge': va = a.pledge_price || 0; vb = b.pledge_price || 0; break
-        case 'crew': va = a.crew_min || 0; vb = b.crew_min || 0; break
         case 'focus': va = a.focus || ''; vb = b.focus || ''; break
+        case 'pledge': va = a.pledge_price || 0; vb = b.pledge_price || 0; break
         default: va = a.vehicle_name; vb = b.vehicle_name
       }
       if (typeof va === 'string') {
@@ -62,6 +61,11 @@ export default function FleetTable() {
 
     return items
   }, [fleet, filter, sizeFilter, sortKey, sortDir])
+
+  // Reset selection when filters change
+  useEffect(() => {
+    setSelectedId(null)
+  }, [filter, sizeFilter])
 
   const toggleSort = (key) => {
     if (sortKey === key) {
@@ -76,6 +80,20 @@ export default function FleetTable() {
     setFilter('')
     setSizeFilter('all')
   }
+
+  const selectedShip = selectedId != null ? sorted.find((v) => (v.id || v.vehicle_id) === selectedId) : null
+
+  // Close detail panel on Escape
+  const handleKeyDown = useCallback((e) => {
+    if (e.key === 'Escape' && selectedId != null) {
+      setSelectedId(null)
+    }
+  }, [selectedId])
+
+  useEffect(() => {
+    document.addEventListener('keydown', handleKeyDown)
+    return () => document.removeEventListener('keydown', handleKeyDown)
+  }, [handleKeyDown])
 
   if (loading) return <LoadingState message="Loading fleet..." />
   if (error) return <ErrorState message={error} />
@@ -102,98 +120,110 @@ export default function FleetTable() {
         />
       </div>
 
-      <div className="panel overflow-hidden">
-        <div className="overflow-x-auto">
-          <table className="w-full">
-            <caption className="sr-only">Your fleet ships with details and insurance status</caption>
-            <thead>
-              <tr className="bg-sc-darker/50">
-                {[
-                  { key: 'vehicle_name', label: 'Ship' },
-                  { key: 'manufacturer', label: 'Manufacturer' },
-                  { key: 'size', label: 'Size' },
-                  { key: 'focus', label: 'Role' },
-                  { key: 'cargo', label: 'Cargo' },
-                  { key: 'crew', label: 'Crew' },
-                  { key: 'pledge', label: 'Pledge $' },
-                ].map(({ key, label }) => (
-                  <th
-                    key={key}
-                    scope="col"
-                    className="table-header cursor-pointer hover:text-gray-300 select-none"
-                    onClick={() => toggleSort(key)}
-                    aria-sort={sortKey === key ? (sortDir === 'asc' ? 'ascending' : 'descending') : undefined}
-                  >
-                    <span className="flex items-center gap-1">
-                      {label}
-                      <ArrowUpDown className={`w-3 h-3 ${sortKey === key ? 'text-sc-accent' : 'text-gray-500'}`} aria-hidden="true" />
-                    </span>
-                  </th>
-                ))}
-                <th scope="col" className="table-header">Insurance</th>
-              </tr>
-            </thead>
-            <tbody>
-              {sorted.length === 0 ? (
-                <tr>
-                  <td colSpan={8} className="py-12">
-                    <div className="flex flex-col items-center gap-3 text-center">
-                      <SearchX className="w-10 h-10 text-gray-500" />
-                      <p className="text-gray-500 text-sm">No ships match your filters</p>
-                      <button onClick={clearFilters} className="btn-secondary text-xs">
-                        Clear Filters
-                      </button>
-                    </div>
-                  </td>
+      <div className="fleet-layout">
+        {/* Master: Ship List */}
+        <div className="panel overflow-hidden">
+          <div className="overflow-x-auto">
+            <table className="w-full">
+              <caption className="sr-only">Your fleet ships — click a row to see details</caption>
+              <thead>
+                <tr className="bg-sc-darker/50">
+                  {[
+                    { key: 'vehicle_name', label: 'Ship' },
+                    { key: 'size', label: 'Size' },
+                    { key: 'focus', label: 'Role' },
+                    { key: 'pledge', label: 'Pledge $' },
+                  ].map(({ key, label }) => (
+                    <th
+                      key={key}
+                      scope="col"
+                      className="table-header cursor-pointer hover:text-gray-300 select-none"
+                      onClick={() => toggleSort(key)}
+                      aria-sort={sortKey === key ? (sortDir === 'asc' ? 'ascending' : 'descending') : undefined}
+                    >
+                      <span className="flex items-center gap-1">
+                        {label}
+                        <ArrowUpDown className={`w-3 h-3 ${sortKey === key ? 'text-sc-accent' : 'text-gray-500'}`} aria-hidden="true" />
+                      </span>
+                    </th>
+                  ))}
+                  <th scope="col" className="table-header">Insurance</th>
                 </tr>
-              ) : (
-                sorted.map((v, i) => (
-                  <tr
-                    key={i}
-                    className="hover:bg-white/[0.03] transition-colors"
-                    style={{ boxShadow: 'none' }}
-                    onMouseEnter={(e) => e.currentTarget.style.boxShadow = 'inset 3px 0 0 #e8873a'}
-                    onMouseLeave={(e) => e.currentTarget.style.boxShadow = 'none'}
-                  >
-                    <td className="table-cell">
-                      <div className="flex items-center gap-3">
-                        <ShipImage
-                          src={v.image_url}
-                          alt={v.vehicle_name}
-                          aspectRatio="thumbnail"
-                          className="rounded border border-sc-border/50 shrink-0"
-                        />
-                        <div>
-                          <span className="font-medium text-white">{v.vehicle_name}</span>
-                          {v.custom_name && (
-                            <span className="block text-xs text-gray-500 italic">"{v.custom_name}"</span>
-                          )}
-                        </div>
+              </thead>
+              <tbody>
+                {sorted.length === 0 ? (
+                  <tr>
+                    <td colSpan={5} className="py-12">
+                      <div className="flex flex-col items-center gap-3 text-center">
+                        <SearchX className="w-10 h-10 text-gray-500" />
+                        <p className="text-gray-500 text-sm">No ships match your filters</p>
+                        <button onClick={clearFilters} className="btn-secondary text-xs">
+                          Clear Filters
+                        </button>
                       </div>
                     </td>
-                    <td className="table-cell text-gray-400">{v.manufacturer_name}</td>
-                    <td className="table-cell">
-                      <span className="badge badge-size">{v.size_label || '?'}</span>
-                    </td>
-                    <td className="table-cell text-gray-400">{v.focus || '-'}</td>
-                    <td className="table-cell font-mono text-gray-400">
-                      {v.cargo ? v.cargo.toLocaleString() : '-'}
-                    </td>
-                    <td className="table-cell font-mono text-gray-400">
-                      {v.crew_min || 0}-{v.crew_max || 0}
-                    </td>
-                    <td className="table-cell font-mono text-gray-400">
-                      {v.pledge_price ? `$${v.pledge_price}` : '-'}
-                    </td>
-                    <td className="table-cell">
-                      <InsuranceBadge isLifetime={v.is_lifetime} label={v.insurance_label} />
-                    </td>
                   </tr>
-                ))
-              )}
-            </tbody>
-          </table>
+                ) : (
+                  sorted.map((v, i) => {
+                    const rowId = v.id || v.vehicle_id
+                    const isSelected = selectedId === rowId
+                    return (
+                    <tr
+                      key={rowId || i}
+                      className={`cursor-pointer transition-colors hover:bg-white/[0.03] ${isSelected ? 'fleet-row-selected' : ''}`}
+                      onClick={() => setSelectedId(rowId)}
+                      onKeyDown={(e) => {
+                        if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); setSelectedId(rowId) }
+                        if (e.key === 'ArrowDown') { e.preventDefault(); const next = e.currentTarget.nextElementSibling; if (next) next.focus() }
+                        if (e.key === 'ArrowUp') { e.preventDefault(); const prev = e.currentTarget.previousElementSibling; if (prev) prev.focus() }
+                      }}
+                      tabIndex={0}
+                      role="row"
+                      aria-selected={isSelected}
+                      aria-label={`View details for ${v.vehicle_name}${v.custom_name ? ` "${v.custom_name}"` : ''}`}
+                    >
+                      <td className="table-cell">
+                        <div className="flex items-center gap-3">
+                          <ShipImage
+                            src={v.image_url}
+                            alt={v.vehicle_name}
+                            aspectRatio="thumbnail"
+                            className="rounded border border-sc-border/50 shrink-0"
+                          />
+                          <div>
+                            <span className="font-medium text-white">{v.vehicle_name}</span>
+                            {v.custom_name && (
+                              <span className="block text-xs text-gray-500 italic">"{v.custom_name}"</span>
+                            )}
+                          </div>
+                        </div>
+                      </td>
+                      <td className="table-cell">
+                        <span className="badge badge-size">{v.size_label || '?'}</span>
+                      </td>
+                      <td className="table-cell text-gray-400">{v.focus || '-'}</td>
+                      <td className="table-cell font-mono text-gray-400">
+                        {v.pledge_price ? `$${v.pledge_price}` : '-'}
+                      </td>
+                      <td className="table-cell">
+                        <InsuranceBadge isLifetime={v.is_lifetime} label={v.insurance_label} />
+                      </td>
+                    </tr>
+                    )
+                  })
+                )}
+              </tbody>
+            </table>
+          </div>
         </div>
+
+        {/* Detail: Ship Info Panel */}
+        {selectedShip && (
+          <ShipDetailPanel
+            ship={selectedShip}
+            onClose={() => setSelectedId(null)}
+          />
+        )}
       </div>
     </div>
   )
