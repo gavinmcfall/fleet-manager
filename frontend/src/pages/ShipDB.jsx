@@ -1,11 +1,14 @@
 import React, { useState, useMemo } from 'react'
 import { useShips } from '../hooks/useAPI'
-import { Database, ArrowUpDown } from 'lucide-react'
+import { Database, ArrowUpDown, CheckCircle, Wrench, ChevronLeft, ChevronRight } from 'lucide-react'
 import PageHeader from '../components/PageHeader'
 import LoadingState from '../components/LoadingState'
 import ErrorState from '../components/ErrorState'
 import FilterSelect from '../components/FilterSelect'
 import SearchInput from '../components/SearchInput'
+import ShipImage from '../components/ShipImage'
+
+const PAGE_SIZE = 30
 
 export default function ShipDB() {
   const { data: ships, loading, error } = useShips()
@@ -16,6 +19,7 @@ export default function ShipDB() {
   const [statusFilter, setStatusFilter] = useState('all')
   const [sortBy, setSortBy] = useState('name')
   const [sortDir, setSortDir] = useState('asc')
+  const [page, setPage] = useState(1)
 
   const manufacturers = useMemo(() => {
     if (!ships) return []
@@ -45,7 +49,6 @@ export default function ShipDB() {
     if (!ships) return []
     let items = [...ships]
 
-    // Text search
     if (filter) {
       const f = filter.toLowerCase()
       items = items.filter(
@@ -56,24 +59,11 @@ export default function ShipDB() {
       )
     }
 
-    // Filters
-    if (mfrFilter !== 'all') {
-      items = items.filter((s) => s.manufacturer_name === mfrFilter)
-    }
+    if (mfrFilter !== 'all') items = items.filter((s) => s.manufacturer_name === mfrFilter)
+    if (sizeFilter !== 'all') items = items.filter((s) => s.size_label === sizeFilter)
+    if (classFilter !== 'all') items = items.filter((s) => s.classification === classFilter)
+    if (statusFilter !== 'all') items = items.filter((s) => s.production_status === statusFilter)
 
-    if (sizeFilter !== 'all') {
-      items = items.filter((s) => s.size_label === sizeFilter)
-    }
-
-    if (classFilter !== 'all') {
-      items = items.filter((s) => s.classification === classFilter)
-    }
-
-    if (statusFilter !== 'all') {
-      items = items.filter((s) => s.production_status === statusFilter)
-    }
-
-    // Sorting
     items.sort((a, b) => {
       let va, vb
       switch (sortBy) {
@@ -93,51 +83,37 @@ export default function ShipDB() {
     return items
   }, [ships, filter, mfrFilter, sizeFilter, classFilter, statusFilter, sortBy, sortDir])
 
+  // Reset page when filters change
+  const resetPage = () => setPage(1)
+  const handleFilterChange = (setter) => (e) => { setter(e.target.value); resetPage() }
+  const handleSearchChange = (e) => { setFilter(e.target.value); resetPage() }
+
+  const totalPages = Math.ceil(filtered.length / PAGE_SIZE)
+  const paged = filtered.slice((page - 1) * PAGE_SIZE, page * PAGE_SIZE)
+
   if (loading) return <LoadingState message="Loading ship database..." />
   if (error) return <ErrorState message={error} />
 
   return (
-    <div className="space-y-4">
+    <div className="space-y-4 animate-fade-in-up">
       <PageHeader
         title="SHIP DATABASE"
         subtitle={`${ships?.length || 0} ships synced from SC Wiki`}
-        actions={<Database className="w-5 h-5 text-gray-600" />}
+        actions={<Database className="w-5 h-5 text-gray-500" />}
       />
 
-      {/* Search */}
       <SearchInput
         value={filter}
-        onChange={(e) => setFilter(e.target.value)}
+        onChange={handleSearchChange}
         placeholder="Search ships..."
         className="max-w-md"
       />
 
-      {/* Filters */}
       <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-3">
-        <FilterSelect
-          value={mfrFilter}
-          onChange={(e) => setMfrFilter(e.target.value)}
-          options={manufacturers}
-          allLabel="All Manufacturers"
-        />
-        <FilterSelect
-          value={classFilter}
-          onChange={(e) => setClassFilter(e.target.value)}
-          options={classifications}
-          allLabel="All Classes"
-        />
-        <FilterSelect
-          value={sizeFilter}
-          onChange={(e) => setSizeFilter(e.target.value)}
-          options={sizes}
-          allLabel="All Sizes"
-        />
-        <FilterSelect
-          value={statusFilter}
-          onChange={(e) => setStatusFilter(e.target.value)}
-          options={statuses}
-          allLabel="All Statuses"
-        />
+        <FilterSelect value={mfrFilter} onChange={handleFilterChange(setMfrFilter)} options={manufacturers} allLabel="All Manufacturers" />
+        <FilterSelect value={classFilter} onChange={handleFilterChange(setClassFilter)} options={classifications} allLabel="All Classes" />
+        <FilterSelect value={sizeFilter} onChange={handleFilterChange(setSizeFilter)} options={sizes} allLabel="All Sizes" />
+        <FilterSelect value={statusFilter} onChange={handleFilterChange(setStatusFilter)} options={statuses} allLabel="All Statuses" />
         <FilterSelect
           value={sortBy}
           onChange={(e) => setSortBy(e.target.value)}
@@ -149,7 +125,6 @@ export default function ShipDB() {
         />
       </div>
 
-      {/* Sort Direction & Results */}
       <div className="flex items-center justify-between">
         <button
           onClick={() => setSortDir(sortDir === 'asc' ? 'desc' : 'asc')}
@@ -163,44 +138,47 @@ export default function ShipDB() {
 
       {/* Ship Grid */}
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">
-        {filtered.slice(0, 60).map((ship) => (
-          <div key={ship.slug} className="panel hover:border-sc-accent/20 transition-colors overflow-hidden">
-            {ship.image_url && (
-              <div className="w-full h-40 bg-sc-darker/50 overflow-hidden">
-                <img
-                  src={ship.image_url_medium || ship.image_url}
-                  alt={ship.name}
-                  loading="lazy"
-                  className="w-full h-full object-cover"
-                  onError={(e) => e.target.parentElement.style.display = 'none'}
-                />
-              </div>
-            )}
+        {paged.map((ship) => (
+          <div key={ship.slug} className="panel-hover group cursor-pointer overflow-hidden">
+            <ShipImage
+              src={ship.image_url_medium || ship.image_url}
+              alt={ship.name}
+              aspectRatio="landscape"
+              hoverZoom
+            />
             <div className="p-4">
               <div className="flex items-start justify-between gap-2 mb-2">
                 <div>
                   <h3 className="font-display font-semibold text-white text-sm">{ship.name}</h3>
-                  <span className="text-xs text-gray-500">{ship.manufacturer_name}</span>
+                  <span className="text-xs text-gray-400">{ship.manufacturer_name}</span>
                 </div>
-                <span className="badge badge-size text-[10px]">{ship.size_label}</span>
+                <span className="badge badge-size">{ship.size_label}</span>
               </div>
               <div className="grid grid-cols-3 gap-2 text-xs font-mono text-gray-400 mt-3">
                 <div>
-                  <span className="text-gray-600 block">Role</span>
+                  <span className="text-gray-400 block">Role</span>
                   {ship.focus || '-'}
                 </div>
                 <div>
-                  <span className="text-gray-600 block">Cargo</span>
+                  <span className="text-gray-400 block">Cargo</span>
                   {ship.cargo > 0 ? `${ship.cargo} SCU` : '-'}
                 </div>
                 <div>
-                  <span className="text-gray-600 block">Crew</span>
+                  <span className="text-gray-400 block">Crew</span>
                   {ship.min_crew}-{ship.max_crew}
                 </div>
               </div>
               <div className="flex items-center justify-between mt-3 pt-2 border-t border-sc-border/30">
                 <span className="text-xs font-mono text-gray-500">
-                  {ship.production_status === 'flight_ready' ? '✅ Flight Ready' : '🔧 ' + (ship.production_status || 'Unknown')}
+                  {ship.production_status === 'flight_ready' ? (
+                    <span className="inline-flex items-center gap-1 text-sc-success">
+                      <CheckCircle className="w-3 h-3" /> Flight Ready
+                    </span>
+                  ) : (
+                    <span className="inline-flex items-center gap-1 text-sc-warn">
+                      <Wrench className="w-3 h-3" /> {ship.production_status || 'Unknown'}
+                    </span>
+                  )}
                 </span>
                 {ship.pledge_price > 0 && (
                   <span className="text-xs font-mono text-sc-warn">${ship.pledge_price}</span>
@@ -211,10 +189,27 @@ export default function ShipDB() {
         ))}
       </div>
 
-      {filtered.length > 60 && (
-        <p className="text-center text-xs font-mono text-gray-600 py-4">
-          Showing 60 of {filtered.length} — refine your search to see more
-        </p>
+      {/* Pagination */}
+      {totalPages > 1 && (
+        <div className="flex items-center justify-center gap-4 py-4">
+          <button
+            onClick={() => setPage((p) => Math.max(1, p - 1))}
+            disabled={page === 1}
+            className="btn-secondary flex items-center gap-1 text-xs disabled:opacity-30 disabled:cursor-not-allowed"
+          >
+            <ChevronLeft className="w-3.5 h-3.5" /> Previous
+          </button>
+          <span className="text-xs font-mono text-gray-500">
+            Page {page} of {totalPages}
+          </span>
+          <button
+            onClick={() => setPage((p) => Math.min(totalPages, p + 1))}
+            disabled={page === totalPages}
+            className="btn-secondary flex items-center gap-1 text-xs disabled:opacity-30 disabled:cursor-not-allowed"
+          >
+            Next <ChevronRight className="w-3.5 h-3.5" />
+          </button>
+        </div>
       )}
     </div>
   )

@@ -1,12 +1,13 @@
 import React, { useState, useMemo } from 'react'
 import { useFleet } from '../hooks/useAPI'
-import { ArrowUpDown } from 'lucide-react'
+import { ArrowUpDown, SearchX } from 'lucide-react'
 import PageHeader from '../components/PageHeader'
 import LoadingState from '../components/LoadingState'
 import ErrorState from '../components/ErrorState'
 import FilterSelect from '../components/FilterSelect'
 import SearchInput from '../components/SearchInput'
 import InsuranceBadge from '../components/InsuranceBadge'
+import ShipImage from '../components/ShipImage'
 
 export default function FleetTable() {
   const { data: fleet, loading, error } = useFleet()
@@ -25,7 +26,6 @@ export default function FleetTable() {
     if (!fleet) return []
     let items = [...fleet]
 
-    // Text filter
     if (filter) {
       const f = filter.toLowerCase()
       items = items.filter(
@@ -37,12 +37,10 @@ export default function FleetTable() {
       )
     }
 
-    // Size filter
     if (sizeFilter !== 'all') {
       items = items.filter((v) => (v.size_label || 'Unknown') === sizeFilter)
     }
 
-    // Sort
     items.sort((a, b) => {
       let va, vb
       switch (sortKey) {
@@ -74,17 +72,21 @@ export default function FleetTable() {
     }
   }
 
+  const clearFilters = () => {
+    setFilter('')
+    setSizeFilter('all')
+  }
+
   if (loading) return <LoadingState message="Loading fleet..." />
   if (error) return <ErrorState message={error} />
 
   return (
-    <div className="space-y-4">
+    <div className="space-y-4 animate-fade-in-up">
       <PageHeader
         title="MY FLEET"
         actions={<span className="text-xs font-mono text-gray-500">{sorted.length} vehicles</span>}
       />
 
-      {/* Filters */}
       <div className="flex gap-3 items-center">
         <SearchInput
           value={filter}
@@ -100,10 +102,10 @@ export default function FleetTable() {
         />
       </div>
 
-      {/* Table */}
       <div className="panel overflow-hidden">
         <div className="overflow-x-auto">
           <table className="w-full">
+            <caption className="sr-only">Your fleet ships with details and insurance status</caption>
             <thead>
               <tr className="bg-sc-darker/50">
                 {[
@@ -117,59 +119,78 @@ export default function FleetTable() {
                 ].map(({ key, label }) => (
                   <th
                     key={key}
+                    scope="col"
                     className="table-header cursor-pointer hover:text-gray-300 select-none"
                     onClick={() => toggleSort(key)}
+                    aria-sort={sortKey === key ? (sortDir === 'asc' ? 'ascending' : 'descending') : undefined}
                   >
                     <span className="flex items-center gap-1">
                       {label}
-                      <ArrowUpDown className={`w-3 h-3 ${sortKey === key ? 'text-sc-accent' : 'text-gray-700'}`} />
+                      <ArrowUpDown className={`w-3 h-3 ${sortKey === key ? 'text-sc-accent' : 'text-gray-500'}`} aria-hidden="true" />
                     </span>
                   </th>
                 ))}
-                <th className="table-header">Insurance</th>
+                <th scope="col" className="table-header">Insurance</th>
               </tr>
             </thead>
             <tbody>
-              {sorted.map((v, i) => (
-                <tr key={i} className="hover:bg-white/[0.02] transition-colors">
-                  <td className="table-cell">
-                    <div className="flex items-center gap-3">
-                      {v.image_url && (
-                        <img
-                          src={v.image_url}
-                          alt={v.vehicle_name}
-                          loading="lazy"
-                          className="w-16 h-16 object-cover rounded border border-sc-border/50"
-                          onError={(e) => e.target.style.display = 'none'}
-                        />
-                      )}
-                      <div>
-                        <span className="font-medium text-white">{v.vehicle_name}</span>
-                        {v.custom_name && (
-                          <span className="block text-xs text-gray-500 italic">"{v.custom_name}"</span>
-                        )}
-                      </div>
+              {sorted.length === 0 ? (
+                <tr>
+                  <td colSpan={8} className="py-12">
+                    <div className="flex flex-col items-center gap-3 text-center">
+                      <SearchX className="w-10 h-10 text-gray-500" />
+                      <p className="text-gray-500 text-sm">No ships match your filters</p>
+                      <button onClick={clearFilters} className="btn-secondary text-xs">
+                        Clear Filters
+                      </button>
                     </div>
                   </td>
-                  <td className="table-cell text-gray-400">{v.manufacturer_name}</td>
-                  <td className="table-cell">
-                    <span className="badge badge-size">{v.size_label || '?'}</span>
-                  </td>
-                  <td className="table-cell text-gray-400">{v.focus || '-'}</td>
-                  <td className="table-cell font-mono text-gray-400">
-                    {v.cargo ? v.cargo.toLocaleString() : '-'}
-                  </td>
-                  <td className="table-cell font-mono text-gray-400">
-                    {v.crew_min || 0}-{v.crew_max || 0}
-                  </td>
-                  <td className="table-cell font-mono text-gray-400">
-                    {v.pledge_price ? `$${v.pledge_price}` : '-'}
-                  </td>
-                  <td className="table-cell">
-                    <InsuranceBadge isLifetime={v.is_lifetime} label={v.insurance_label} />
-                  </td>
                 </tr>
-              ))}
+              ) : (
+                sorted.map((v, i) => (
+                  <tr
+                    key={i}
+                    className="hover:bg-white/[0.03] transition-colors"
+                    style={{ boxShadow: 'none' }}
+                    onMouseEnter={(e) => e.currentTarget.style.boxShadow = 'inset 3px 0 0 #e8873a'}
+                    onMouseLeave={(e) => e.currentTarget.style.boxShadow = 'none'}
+                  >
+                    <td className="table-cell">
+                      <div className="flex items-center gap-3">
+                        <ShipImage
+                          src={v.image_url}
+                          alt={v.vehicle_name}
+                          aspectRatio="thumbnail"
+                          className="rounded border border-sc-border/50 shrink-0"
+                        />
+                        <div>
+                          <span className="font-medium text-white">{v.vehicle_name}</span>
+                          {v.custom_name && (
+                            <span className="block text-xs text-gray-500 italic">"{v.custom_name}"</span>
+                          )}
+                        </div>
+                      </div>
+                    </td>
+                    <td className="table-cell text-gray-400">{v.manufacturer_name}</td>
+                    <td className="table-cell">
+                      <span className="badge badge-size">{v.size_label || '?'}</span>
+                    </td>
+                    <td className="table-cell text-gray-400">{v.focus || '-'}</td>
+                    <td className="table-cell font-mono text-gray-400">
+                      {v.cargo ? v.cargo.toLocaleString() : '-'}
+                    </td>
+                    <td className="table-cell font-mono text-gray-400">
+                      {v.crew_min || 0}-{v.crew_max || 0}
+                    </td>
+                    <td className="table-cell font-mono text-gray-400">
+                      {v.pledge_price ? `$${v.pledge_price}` : '-'}
+                    </td>
+                    <td className="table-cell">
+                      <InsuranceBadge isLifetime={v.is_lifetime} label={v.insurance_label} />
+                    </td>
+                  </tr>
+                ))
+              )}
             </tbody>
           </table>
         </div>

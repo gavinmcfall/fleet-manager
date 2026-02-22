@@ -11,13 +11,13 @@ export default function Import() {
   const [result, setResult] = useState(null)
   const [preview, setPreview] = useState(null)
   const [error, setError] = useState(null)
+  const [dragging, setDragging] = useState(false)
   const fileRef = useRef(null)
+  const dragCounter = useRef(0)
 
   const vehicleCount = appStatus?.vehicles || 0
 
-  // --- HangarXplor Import ---
-  const handleFile = async (e) => {
-    const file = e.target.files?.[0]
+  const processFile = async (file) => {
     if (!file) return
 
     setStatus('parsing')
@@ -52,6 +52,41 @@ export default function Import() {
     }
   }
 
+  const handleFile = (e) => processFile(e.target.files?.[0])
+
+  const handleDragEnter = (e) => {
+    e.preventDefault()
+    e.stopPropagation()
+    dragCounter.current++
+    setDragging(true)
+  }
+
+  const handleDragLeave = (e) => {
+    e.preventDefault()
+    e.stopPropagation()
+    dragCounter.current--
+    if (dragCounter.current === 0) setDragging(false)
+  }
+
+  const handleDragOver = (e) => {
+    e.preventDefault()
+    e.stopPropagation()
+  }
+
+  const handleDrop = (e) => {
+    e.preventDefault()
+    e.stopPropagation()
+    dragCounter.current = 0
+    setDragging(false)
+    const file = e.dataTransfer.files?.[0]
+    if (file && file.name.endsWith('.json')) {
+      processFile(file)
+    } else {
+      setError('Please drop a .json file')
+      setStatus('error')
+    }
+  }
+
   const handleImport = async () => {
     if (!preview?.data) return
 
@@ -71,13 +106,12 @@ export default function Import() {
   }
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-6 animate-fade-in-up">
       <PageHeader
         title="IMPORT HANGAR"
         subtitle="Import your fleet from HangarXplor to populate ships, insurance, and pledge data"
       />
 
-      {/* Current Fleet Indicator */}
       {vehicleCount > 0 && (
         <AlertBanner variant="info" icon={CheckCircle}>
           <span className="text-sm text-gray-300">
@@ -86,7 +120,6 @@ export default function Import() {
         </AlertBanner>
       )}
 
-      {/* Warning about replacing data */}
       {vehicleCount > 0 && (
         <AlertBanner variant="warning" icon={AlertTriangle}>
           <p className="text-xs text-gray-400">
@@ -96,7 +129,6 @@ export default function Import() {
         </AlertBanner>
       )}
 
-      {/* HangarXplor Import */}
       <PanelSection title="HangarXplor Import" icon={FileJson}>
         <div className="p-5 space-y-4">
           <p className="text-sm text-gray-400">
@@ -124,8 +156,20 @@ export default function Import() {
           </div>
 
           <div
-            className="p-4 border-2 border-dashed border-sc-border hover:border-sc-accent/30 transition-colors cursor-pointer rounded text-center"
+            role="button"
+            tabIndex={0}
+            aria-label="Drop a JSON file here or click to browse for a file"
+            className={`p-8 border-2 border-dashed rounded text-center cursor-pointer transition-all duration-200 ${
+              dragging
+                ? 'border-sc-accent bg-sc-accent/5 scale-[1.01]'
+                : 'border-sc-border hover:border-sc-accent/30'
+            }`}
             onClick={() => fileRef.current?.click()}
+            onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); fileRef.current?.click() } }}
+            onDragEnter={handleDragEnter}
+            onDragLeave={handleDragLeave}
+            onDragOver={handleDragOver}
+            onDrop={handleDrop}
           >
             <input
               ref={fileRef}
@@ -134,15 +178,14 @@ export default function Import() {
               className="hidden"
               onChange={handleFile}
             />
-            <Upload className="w-6 h-6 mx-auto text-gray-600 mb-2" />
-            <p className="text-xs text-gray-400">
+            <Upload className={`w-10 h-10 mx-auto mb-3 transition-colors ${dragging ? 'text-sc-accent' : 'text-gray-500'}`} aria-hidden="true" />
+            <p className="text-sm text-gray-400">
               Drop <span className="text-gray-300 font-mono">.json</span> file or click to browse
             </p>
           </div>
         </div>
       </PanelSection>
 
-      {/* HangarXplor Preview */}
       {preview && (
         <PanelSection title={preview.filename} icon={FileJson}>
           <div className="p-5 space-y-4">
@@ -171,7 +214,6 @@ export default function Import() {
         </PanelSection>
       )}
 
-      {/* Status Messages */}
       {status === 'importing' && (
         <div className="panel p-5 flex items-center gap-3">
           <div className="w-4 h-4 border-2 border-sc-accent border-t-transparent rounded-full animate-spin" />
@@ -196,7 +238,6 @@ export default function Import() {
         </AlertBanner>
       )}
 
-      {/* HangarXplor Instructions (collapsed) */}
       <details className="panel">
         <summary className="panel-header cursor-pointer select-none hover:text-gray-300 transition-colors">
           How to export from HangarXplor

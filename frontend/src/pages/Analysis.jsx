@@ -10,7 +10,7 @@ import EmptyState from '../components/EmptyState'
 const PRIORITY_CONFIG = {
   high: { icon: AlertCircle, color: 'text-sc-danger', bg: 'bg-sc-danger/10', border: 'border-sc-danger/20', label: 'HIGH' },
   medium: { icon: AlertTriangle, color: 'text-sc-warn', bg: 'bg-sc-warn/10', border: 'border-sc-warn/20', label: 'MEDIUM' },
-  low: { icon: Info, color: 'text-sc-accent', bg: 'bg-sc-accent/10', border: 'border-sc-accent/20', label: 'LOW' },
+  low: { icon: Info, color: 'text-sc-accent2', bg: 'bg-sc-accent2/10', border: 'border-sc-accent2/20', label: 'LOW' },
 }
 
 export default function Analysis() {
@@ -18,22 +18,28 @@ export default function Analysis() {
   const { data: llmConfig } = useLLMConfig()
   const { data: latestAnalysis } = useLatestAIAnalysis()
   const [aiInsights, setAIInsights] = useState(null)
+  const [aiTimestamp, setAITimestamp] = useState(null)
   const [generating, setGenerating] = useState(false)
+  const [aiError, setAIError] = useState(null)
 
-  // Load latest analysis on mount
   useEffect(() => {
     if (latestAnalysis?.analysis) {
       setAIInsights(latestAnalysis.analysis)
+      if (latestAnalysis.created_at) {
+        setAITimestamp(latestAnalysis.created_at)
+      }
     }
   }, [latestAnalysis])
 
   const handleGenerateAI = async () => {
     setGenerating(true)
+    setAIError(null)
     try {
       const result = await generateAIAnalysis()
       setAIInsights(result.analysis)
+      setAITimestamp(new Date().toISOString())
     } catch (err) {
-      alert('Failed to generate AI analysis: ' + err.message)
+      setAIError('Failed to generate AI analysis: ' + err.message)
     } finally {
       setGenerating(false)
     }
@@ -46,7 +52,7 @@ export default function Analysis() {
   const redundancies = analysis?.redundancies || []
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-6 animate-fade-in-up">
       <PageHeader
         title="FLEET ANALYSIS"
         subtitle="Gap analysis and redundancy detection"
@@ -75,15 +81,33 @@ export default function Analysis() {
         </div>
       )}
 
+      {/* AI Error */}
+      {aiError && (
+        <div className="panel p-4">
+          <div className="flex items-start gap-3">
+            <AlertCircle className="w-5 h-5 text-sc-danger shrink-0 mt-0.5" />
+            <div>
+              <p className="text-sm text-sc-danger">{aiError}</p>
+              <button onClick={() => setAIError(null)} className="btn-ghost text-xs mt-2">Dismiss</button>
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* AI Insights Panel */}
       {aiInsights && (
         <div className="panel">
           <div className="panel-header flex items-center gap-2">
             <Sparkles className="w-3.5 h-3.5" />
-            AI Fleet Insights
+            <span className="flex-1">AI Fleet Insights</span>
+            {aiTimestamp && (
+              <span className="text-[11px] font-mono text-gray-500 normal-case tracking-normal">
+                Generated {new Date(aiTimestamp).toLocaleDateString('en-NZ', { year: 'numeric', month: 'short', day: 'numeric' })}
+              </span>
+            )}
           </div>
           <div className="p-5">
-            <div className="prose prose-invert prose-sm max-w-none text-gray-300">
+            <div className="prose-fleet">
               <ReactMarkdown>{aiInsights}</ReactMarkdown>
             </div>
           </div>
@@ -162,7 +186,7 @@ export default function Analysis() {
                     </div>
                   ))}
                   {group.notes && (
-                    <p className="text-xs text-gray-600 mt-2 pt-2 border-t border-sc-border/30">
+                    <p className="text-xs text-gray-400 mt-2 pt-2 border-t border-sc-border/30">
                       {group.notes}
                     </p>
                   )}

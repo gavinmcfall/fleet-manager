@@ -6,31 +6,41 @@ import PageHeader from '../components/PageHeader'
 import LoadingState from '../components/LoadingState'
 import ErrorState from '../components/ErrorState'
 import EmptyState from '../components/EmptyState'
+import ConfirmDialog from '../components/ConfirmDialog'
 
 export default function AnalysisHistory() {
   const { data, loading, error, refetch } = useAIAnalysisHistory()
   const [expandedId, setExpandedId] = useState(null)
   const [deleting, setDeleting] = useState(null)
+  const [notification, setNotification] = useState(null)
+  const [confirmDialog, setConfirmDialog] = useState({ open: false })
 
-  const handleDelete = async (id, e) => {
-    e.stopPropagation() // Prevent expanding/collapsing when clicking delete
+  const handleDelete = (id, e) => {
+    e.stopPropagation()
 
-    if (!confirm('Are you sure you want to delete this analysis? This cannot be undone.')) {
-      return
-    }
-
-    setDeleting(id)
-    try {
-      await deleteAIAnalysis(id)
-      await refetch() // Refresh the list
-      if (expandedId === id) {
-        setExpandedId(null) // Collapse if it was expanded
-      }
-    } catch (err) {
-      alert('Failed to delete analysis: ' + err.message)
-    } finally {
-      setDeleting(null)
-    }
+    setConfirmDialog({
+      open: true,
+      title: 'Delete Analysis',
+      message: 'Are you sure you want to delete this analysis? This cannot be undone.',
+      variant: 'danger',
+      confirmLabel: 'Delete',
+      onConfirm: async () => {
+        setConfirmDialog({ open: false })
+        setDeleting(id)
+        try {
+          await deleteAIAnalysis(id)
+          await refetch()
+          if (expandedId === id) {
+            setExpandedId(null)
+          }
+        } catch (err) {
+          setNotification({ msg: 'Failed to delete analysis: ' + err.message, variant: 'error' })
+          setTimeout(() => setNotification(null), 3000)
+        } finally {
+          setDeleting(null)
+        }
+      },
+    })
   }
 
   if (loading) return <LoadingState message="Loading history..." />
@@ -40,7 +50,7 @@ export default function AnalysisHistory() {
 
   if (history.length === 0) {
     return (
-      <div className="space-y-6">
+      <div className="space-y-6 animate-fade-in-up">
         <PageHeader
           title="ANALYSIS HISTORY"
           subtitle="Past AI fleet analyses"
@@ -49,17 +59,24 @@ export default function AnalysisHistory() {
           icon={Sparkles}
           message="No analyses yet. Generate your first AI fleet analysis!"
           large
+          actionLink={{ label: 'Go to Analysis', to: '/analysis' }}
         />
       </div>
     )
   }
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-6 animate-fade-in-up">
       <PageHeader
         title="ANALYSIS HISTORY"
         subtitle={`Past AI fleet analyses (${history.length} total)`}
       />
+
+      {notification && (
+        <div className="panel p-4 flex items-center gap-2 text-sm animate-fade-in border-sc-danger/30 text-sc-danger">
+          {notification.msg}
+        </div>
+      )}
 
       <div className="space-y-3">
         {history.map((item) => {
@@ -98,7 +115,7 @@ export default function AnalysisHistory() {
                     </span>
                   </div>
 
-                  <span className="text-xs text-gray-600">
+                  <span className="text-xs text-gray-400">
                     {item.vehicle_count} ships
                   </span>
                 </div>
@@ -113,7 +130,7 @@ export default function AnalysisHistory() {
                     <Trash2 className="w-3.5 h-3.5" />
                   </button>
 
-                  <span className="text-xs text-gray-600">
+                  <span className="text-xs text-gray-400">
                     {isExpanded ? 'Hide' : 'View'}
                   </span>
                 </div>
@@ -121,7 +138,7 @@ export default function AnalysisHistory() {
 
               {isExpanded && (
                 <div className="border-t border-sc-border p-5">
-                  <div className="prose prose-invert prose-sm max-w-none text-gray-300">
+                  <div className="prose-fleet">
                     <ReactMarkdown>{item.analysis}</ReactMarkdown>
                   </div>
                 </div>
@@ -130,6 +147,16 @@ export default function AnalysisHistory() {
           )
         })}
       </div>
+
+      <ConfirmDialog
+        open={confirmDialog.open}
+        onConfirm={confirmDialog.onConfirm || (() => {})}
+        onCancel={() => setConfirmDialog({ open: false })}
+        title={confirmDialog.title}
+        message={confirmDialog.message}
+        confirmLabel={confirmDialog.confirmLabel}
+        variant={confirmDialog.variant}
+      />
     </div>
   )
 }
