@@ -1,6 +1,6 @@
 import React, { useState, Suspense, lazy } from 'react'
 import { Routes, Route, NavLink, useLocation, useNavigate } from 'react-router-dom'
-import { Rocket, BarChart3, Shield, Upload, RefreshCw, Database, Settings as SettingsIcon, ChevronDown, ChevronRight, ChevronLeft, History, Menu, X, LogOut, LogIn, User, Wrench, Users, Building2, FileText, Search, MapPin, Palette, ShoppingCart, Hammer, Briefcase, Star, Scale, Crosshair, BookOpen, Layers } from 'lucide-react'
+import { Rocket, BarChart3, Shield, Upload, RefreshCw, Database, Settings as SettingsIcon, ChevronDown, ChevronRight, ChevronLeft, History, Menu, X, LogOut, LogIn, User, Wrench, Users, Building2, FileText, Search, MapPin, Palette, ShoppingCart, Hammer, Briefcase, Star, Scale, Crosshair, BookOpen, Layers, TrendingUp } from 'lucide-react'
 import LoadingState from './components/LoadingState'
 import ErrorBoundary from './components/ErrorBoundary'
 import RequireAuth from './components/RequireAuth'
@@ -41,6 +41,7 @@ const POIDetail = lazy(() => import('./pages/POIDetail'))
 const PaintBrowser = lazy(() => import('./pages/PaintBrowser'))
 const ArmorSetDetail = lazy(() => import('./pages/ArmorSetDetail'))
 const Shops = lazy(() => import('./pages/Shops'))
+const TradeCommodities = lazy(() => import('./pages/TradeCommodities'))
 const MiningGuide = lazy(() => import('./pages/MiningGuide'))
 const Careers = lazy(() => import('./pages/Careers'))
 const Reputation = lazy(() => import('./pages/Reputation'))
@@ -61,6 +62,7 @@ const authNavItems = [
       { to: '/poi', icon: MapPin, label: 'Locations' },
       { to: '/contracts', icon: FileText, label: 'Contracts' },
       { to: '/shops', icon: ShoppingCart, label: 'Shops' },
+      { to: '/trade', icon: TrendingUp, label: 'Trade' },
       { to: '/mining', icon: Hammer, label: 'Mining Guide' },
     ],
   },
@@ -558,6 +560,7 @@ export default function App() {
                       <Route path="/poi/:type/:slug" element={<RequireAuth><POIDetail /></RequireAuth>} />
                       <Route path="/contracts" element={<RequireAuth><Contracts /></RequireAuth>} />
                       <Route path="/shops" element={<RequireAuth><Shops /></RequireAuth>} />
+                      <Route path="/trade" element={<RequireAuth><TradeCommodities /></RequireAuth>} />
                       <Route path="/mining" element={<RequireAuth><MiningGuide /></RequireAuth>} />
                       <Route path="/careers" element={<RequireAuth><Careers /></RequireAuth>} />
                       <Route path="/reputation" element={<RequireAuth><Reputation /></RequireAuth>} />

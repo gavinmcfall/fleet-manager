@@ -237,6 +237,60 @@ export function gamedataRoutes<E extends HonoEnv>() {
     return c.json(results)
   })
 
+  // GET /api/gamedata/trade — trade commodities with per-shop buy/sell/stock data
+  app.get("/trade", async (c) => {
+    const db = c.env.DB
+
+    const [commoditiesResult, listingsResult] = await Promise.all([
+      db
+        .prepare(
+          `SELECT * FROM trade_commodities
+           WHERE game_version_id = ${DEFAULT_VERSION_SUBQUERY}
+           ORDER BY category, name`,
+        )
+        .all(),
+      db
+        .prepare(
+          `SELECT si.item_uuid, si.buy_price, si.sell_price,
+             si.base_inventory, si.max_inventory,
+             s.name as shop_name, s.slug as shop_slug,
+             REPLACE(REPLACE(REPLACE(s.name, 'Inv ', ''), '_', ' '), '  ', ' ') as shop_display_name,
+             s.location_label
+           FROM shop_inventory si
+           JOIN shops s ON s.id = si.shop_id
+           JOIN trade_commodities tc ON tc.uuid = si.item_uuid
+           WHERE s.shop_type = 'admin'
+             AND s.game_version_id = ${DEFAULT_VERSION_SUBQUERY}
+           ORDER BY s.location_label, s.name`,
+        )
+        .all(),
+    ])
+
+    // Nest listings under their commodity UUID
+    const listingsByUuid = new Map<string, any[]>()
+    for (const l of listingsResult.results) {
+      const uuid = l.item_uuid as string
+      if (!listingsByUuid.has(uuid)) listingsByUuid.set(uuid, [])
+      listingsByUuid.get(uuid)!.push(l)
+    }
+
+    const commodities = commoditiesResult.results.map((c) => ({
+      ...c,
+      listings: listingsByUuid.get(c.uuid as string) ?? [],
+    }))
+
+    // Unique locations for filter UI
+    const locations = [
+      ...new Set(
+        listingsResult.results
+          .map((l) => l.location_label as string)
+          .filter(Boolean),
+      ),
+    ].sort()
+
+    return c.json({ commodities, locations })
+  })
+
   // GET /api/gamedata/missions — mission types + givers with faction/location data
   app.get("/missions", async (c) => {
     const db = c.env.DB
