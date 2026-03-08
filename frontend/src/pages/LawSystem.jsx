@@ -83,9 +83,9 @@ function formatCredits(amount) {
 
 // ── Stat display row ──────────────────────────────────────────────────────────
 
-function StatPill({ label, value, color = 'text-gray-300' }) {
+function StatPill({ label, value, color = 'text-gray-300', title }) {
   return (
-    <div className="flex items-center gap-1.5">
+    <div className="flex items-center gap-1.5" title={title}>
       <span className="text-[10px] font-display uppercase tracking-wider text-gray-500">{label}</span>
       <span className={`${color}`}>{value}</span>
     </div>
@@ -96,25 +96,25 @@ function InfractionStats({ stats }) {
   const pills = []
 
   if (stats.fine) pills.push(
-    <StatPill key="fine" label="Fine" value={formatCredits(stats.fine)} color="text-sc-melt" />
+    <StatPill key="fine" label="Fine" value={formatCredits(stats.fine)} color="text-sc-melt" title="Credit penalty paid to clear the infraction" />
   )
   if (stats.demeritPoints > 0) pills.push(
-    <StatPill key="demerits" label="Demerits" value={stats.demeritPoints} color="text-red-400" />
+    <StatPill key="demerits" label="Demerits" value={stats.demeritPoints} color="text-red-400" title="Demerit points added to your criminal record. Accumulating demerits increases your CrimeStat level" />
   )
   if (stats.meritPoints > 0) pills.push(
-    <StatPill key="merits" label="Merits" value={stats.meritPoints} color="text-green-400" />
+    <StatPill key="merits" label="Merits" value={stats.meritPoints} color="text-green-400" title="Merit points earned by paying off or serving time for this infraction" />
   )
   if (stats.felonyMerits > 0) pills.push(
-    <StatPill key="felony-merits" label="Felony Merits" value={stats.felonyMerits} color="text-green-300" />
+    <StatPill key="felony-merits" label="Felony Merits" value={stats.felonyMerits} color="text-green-300" title="Merit points specifically for clearing felony-level infractions" />
   )
   if (stats.lifetime) pills.push(
-    <StatPill key="lifetime" label="Lifetime" value={formatDuration(stats.lifetime)} color="text-blue-400" />
+    <StatPill key="lifetime" label="Lifetime" value={formatDuration(stats.lifetime)} color="text-blue-400" title="How long this infraction stays on your record before expiring" />
   )
   if (stats.coolOffTime) pills.push(
-    <StatPill key="cooloff" label="Cool-off" value={formatCoolOff(stats.coolOffTime)} color="text-amber-400" />
+    <StatPill key="cooloff" label="Cool-off" value={formatCoolOff(stats.coolOffTime)} color="text-amber-400" title="Time before this infraction can be triggered again" />
   )
   if (stats.escalatedPaymentFineMultiplier && stats.escalatedPaymentFineMultiplier !== 1) pills.push(
-    <StatPill key="escalated" label="Escalated" value={`${stats.escalatedPaymentFineMultiplier}x`} color="text-orange-400" />
+    <StatPill key="escalated" label="Escalated" value={`${stats.escalatedPaymentFineMultiplier}x`} color="text-orange-400" title="Fine multiplier applied when infraction is repeated or escalated" />
   )
 
   if (pills.length === 0) return null
@@ -134,8 +134,8 @@ function InfractionCard({ infraction, overrides }) {
   const hasOverrides = overrides && overrides.length > 0
 
   return (
-    <div className="panel p-4 space-y-3">
-      {/* Header */}
+    <div className="panel p-4 flex flex-col h-full">
+      {/* 1. Header */}
       <div className="flex items-start justify-between gap-3">
         <h3 className="font-display font-semibold text-white text-sm leading-tight flex-1 min-w-0">
           {infraction.name}
@@ -145,31 +145,19 @@ function InfractionCard({ infraction, overrides }) {
         </span>
       </div>
 
-      {/* Description */}
+      {/* 2. Description */}
       {infraction.description && (
-        <p className="text-xs text-gray-400 leading-relaxed">{infraction.description}</p>
+        <p className="text-xs text-gray-400 leading-relaxed mt-3">{infraction.description}</p>
       )}
 
-      {/* Stats */}
-      <InfractionStats stats={stats} />
+      {/* 3. Metadata stats */}
+      <div className="mt-3">
+        <InfractionStats stats={stats} />
+      </div>
 
-      {/* Triggers */}
-      {triggers.length > 0 && (
-        <div className="space-y-1">
-          <span className="text-[10px] font-display uppercase tracking-wider text-gray-500">Triggers</span>
-          <div className="flex flex-wrap gap-1.5">
-            {triggers.map((t, i) => (
-              <span key={i} className="text-[10px] font-mono px-2 py-0.5 rounded bg-gray-700/60 text-gray-400">
-                {t}
-              </span>
-            ))}
-          </div>
-        </div>
-      )}
-
-      {/* Jurisdiction overrides */}
+      {/* 4. Jurisdiction overrides */}
       {hasOverrides && (
-        <div className="space-y-1.5 pt-1 border-t border-sc-border">
+        <div className="space-y-1.5 pt-1 mt-3 border-t border-sc-border">
           <span className="text-[10px] font-display uppercase tracking-wider text-gray-500 flex items-center gap-1">
             <Shield className="w-3 h-3" />
             Jurisdiction overrides ({overrides.length})
@@ -196,6 +184,20 @@ function InfractionCard({ infraction, overrides }) {
               )
             })}
           </ul>
+        </div>
+      )}
+
+      {/* 5. Triggers — always at bottom */}
+      {triggers.length > 0 && (
+        <div className="space-y-1 mt-auto pt-3">
+          <span className="text-[10px] font-display uppercase tracking-wider text-gray-500">Triggers</span>
+          <div className="flex flex-wrap gap-1.5">
+            {triggers.map((t, i) => (
+              <span key={i} className="text-[10px] font-mono px-2 py-0.5 rounded bg-gray-700/60 text-gray-400">
+                {t}
+              </span>
+            ))}
+          </div>
         </div>
       )}
     </div>
@@ -229,6 +231,53 @@ function JurisdictionCard({ jurisdiction, infractions, overrides }) {
 
   const overrideCount = overrides ? overrides.length : 0
 
+  // Group infractions by severity
+  const { felonies, misdemeanors } = useMemo(() => {
+    if (!infractions) return { felonies: [], misdemeanors: [] }
+    return {
+      felonies: infractions.filter((i) => i.severity === 'felony'),
+      misdemeanors: infractions.filter((i) => i.severity !== 'felony'),
+    }
+  }, [infractions])
+
+  function renderInfractionRow(inf) {
+    const ov = overrideMap[inf.id]
+    const isModified = !!ov
+    const parsed = ov ? parseOverridesJson(ov) : {}
+    const entries = Object.entries(parsed)
+
+    return (
+      <div
+        key={inf.id}
+        className={`text-xs font-mono flex items-center gap-2 ${isModified ? 'text-amber-300' : 'text-gray-400'}`}
+      >
+        <span className={`shrink-0 ${isModified ? 'text-amber-500' : 'text-gray-600'}`}>
+          {isModified ? '*' : '-'}
+        </span>
+        <span className="flex-1">
+          <span className={isModified ? 'text-amber-300' : 'text-gray-400'}>
+            {inf.name}
+          </span>
+          {isModified && entries.length > 0 && (
+            <span className="text-amber-400/80 ml-1.5">
+              ({entries.map(([key, val]) => formatOverrideEntry(key, val)).join(', ')})
+            </span>
+          )}
+          {!isModified && (
+            <span className="text-gray-600 ml-1.5 italic">standard</span>
+          )}
+        </span>
+        <span className={`text-[10px] font-display uppercase tracking-wide px-1.5 py-0.5 rounded shrink-0 ${
+          inf.severity === 'felony'
+            ? 'bg-red-900/50 text-red-300 border border-red-700/50'
+            : 'bg-yellow-900/50 text-yellow-300 border border-yellow-700/50'
+        }`}>
+          {inf.severity === 'felony' ? 'Felony' : 'Misd.'}
+        </span>
+      </div>
+    )
+  }
+
   return (
     <div className="panel p-4 space-y-3">
       {/* Header */}
@@ -255,46 +304,38 @@ function JurisdictionCard({ jurisdiction, infractions, overrides }) {
         )}
       </div>
 
-      {/* Infraction enforcement list */}
+      {/* Infraction enforcement list — grouped by severity */}
       {infractions && infractions.length > 0 && (
-        <div className="space-y-1.5 pt-1 border-t border-sc-border">
+        <div className="space-y-2 pt-1 border-t border-sc-border">
           <span className="text-[10px] font-display uppercase tracking-wider text-gray-500">
             Enforcement ({infractions.length} infractions{overrideCount > 0 ? `, ${overrideCount} modified` : ''})
           </span>
-          <div className="space-y-1 max-h-64 overflow-y-auto pr-1">
-            {infractions.map((inf) => {
-              const ov = overrideMap[inf.id]
-              const isModified = !!ov
-              const parsed = ov ? parseOverridesJson(ov) : {}
-              const entries = Object.entries(parsed)
-
-              return (
-                <div
-                  key={inf.id}
-                  className={`text-xs font-mono flex items-start gap-2 ${isModified ? 'text-amber-300' : 'text-gray-400'}`}
-                >
-                  <span className={`shrink-0 ${isModified ? 'text-amber-500' : 'text-gray-600'}`}>
-                    {isModified ? '*' : '-'}
-                  </span>
-                  <span className="flex-1">
-                    <span className={isModified ? 'text-amber-300' : 'text-gray-400'}>
-                      {inf.name}
-                    </span>
-                    {isModified && entries.length > 0 && (
-                      <span className="text-amber-400/80 ml-1.5">
-                        ({entries.map(([key, val]) => formatOverrideEntry(key, val)).join(', ')})
-                      </span>
-                    )}
-                    {!isModified && (
-                      <span className="text-gray-600 ml-1.5 italic">standard</span>
-                    )}
-                  </span>
-                  <span className={`text-[10px] shrink-0 ${inf.severity === 'felony' ? 'text-red-400/60' : 'text-yellow-400/40'}`}>
-                    {inf.severity === 'felony' ? 'F' : 'M'}
+          <div className="space-y-3 max-h-72 overflow-y-auto pr-1">
+            {/* Felonies group */}
+            {felonies.length > 0 && (
+              <div className="space-y-1">
+                <div className="flex items-center gap-1.5 mb-1">
+                  <AlertTriangle className="w-3 h-3 text-red-400" />
+                  <span className="text-[10px] font-display uppercase tracking-wider text-red-400">
+                    Felonies ({felonies.length})
                   </span>
                 </div>
-              )
-            })}
+                {felonies.map(renderInfractionRow)}
+              </div>
+            )}
+
+            {/* Misdemeanors group */}
+            {misdemeanors.length > 0 && (
+              <div className="space-y-1">
+                <div className="flex items-center gap-1.5 mb-1">
+                  <Scale className="w-3 h-3 text-yellow-400" />
+                  <span className="text-[10px] font-display uppercase tracking-wider text-yellow-400">
+                    Misdemeanors ({misdemeanors.length})
+                  </span>
+                </div>
+                {misdemeanors.map(renderInfractionRow)}
+              </div>
+            )}
           </div>
         </div>
       )}

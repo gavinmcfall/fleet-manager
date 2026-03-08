@@ -6,6 +6,23 @@ import ErrorState from '../components/ErrorState'
 import SearchInput from '../components/SearchInput'
 import { Star, Lock, TrendingDown } from 'lucide-react'
 
+/** Clean internal standing names into human-friendly labels */
+function friendlyStandingName(name) {
+  if (!name) return ''
+  let s = name
+  // Strip known prefixes
+  s = s.replace(/^(Affinity|Racing_GravLev|Racing_Ground|Reliability)_/, '')
+  // Replace underscores with spaces
+  s = s.replace(/_/g, ' ')
+  // Remove leading numeric segments like "000 ", "050 ", "100 "
+  s = s.replace(/^\d{2,}\s+/, '')
+  // Add space before trailing digits attached to words (e.g. "Rank0" → "Rank 0")
+  s = s.replace(/([a-zA-Z])(\d)/, '$1 $2')
+  // Title-case
+  s = s.replace(/\b\w/g, (c) => c.toUpperCase())
+  return s.trim()
+}
+
 /** Color based on position index within the standings list (0 = worst, last = best) */
 const STANDING_COLORS = [
   { bg: 'bg-red-900/50', text: 'text-red-300', border: 'border-red-700/40', bar: 'bg-red-700/60' },
@@ -37,18 +54,18 @@ function StandingSegment({ standing, index, total, widthPercent }) {
       {/* Bar segment */}
       <div
         className={`h-7 ${color.bar} border-r border-sc-bg/60 flex items-center justify-center gap-1 cursor-default transition-all duration-150 group-hover:brightness-125 ${index === 0 ? 'rounded-l' : ''} ${index === total - 1 ? 'rounded-r' : ''}`}
-        title={`${standing.name}: ${standing.min_reputation}+ rep${standing.is_gated ? ' (Gated)' : ''}${hasDrift ? ` — Drifts to ${standing.drift_reputation} over ${standing.drift_time_hours}h` : ''}`}
+        title={`${friendlyStandingName(standing.name)}: ${standing.min_reputation}+ rep${standing.is_gated ? ' (Gated)' : ''}${hasDrift ? ` — Drifts to ${standing.drift_reputation} over ${standing.drift_time_hours}h` : ''}`}
       >
         {standing.is_gated && <Lock className="w-3 h-3 text-current opacity-70 shrink-0" />}
         <span className={`text-[10px] font-mono truncate ${color.text}`}>
-          {standing.name}
+          {friendlyStandingName(standing.name)}
         </span>
       </div>
 
       {/* Tooltip on hover */}
       <div className="absolute bottom-full left-1/2 -translate-x-1/2 mb-2 w-56 p-3 rounded bg-sc-panel border border-sc-border shadow-xl z-20 opacity-0 pointer-events-none group-hover:opacity-100 group-hover:pointer-events-auto transition-opacity duration-150">
         <p className={`text-xs font-display font-semibold ${color.text}`}>
-          {standing.name}
+          {friendlyStandingName(standing.name)}
           {standing.is_gated && (
             <span className="ml-1.5 text-[10px] text-amber-400 font-mono">(Gated)</span>
           )}
@@ -73,8 +90,10 @@ function StandingSegment({ standing, index, total, widthPercent }) {
 }
 
 function ScopeCard({ scope }) {
-  // Standings arrive sorted by sort_order from the backend
-  const standings = scope.standings || []
+  // Standings arrive sorted by sort_order from the backend; filter placeholders client-side
+  const standings = (scope.standings || []).filter(
+    (s) => s.name !== '<= PLACEHOLDER =>'
+  )
   const gatedCount = standings.filter((s) => s.is_gated).length
   const maxRep = scope.max_reputation || 0
 
@@ -173,7 +192,7 @@ function ScopeCard({ scope }) {
                 <div className={`w-2 h-2 rounded-full mt-1 shrink-0 ${color.bg} ${color.border} border`} />
                 <div className="flex-1 min-w-0">
                   <div className="flex items-center gap-2">
-                    <span className={`text-xs font-mono ${color.text}`}>{standing.name}</span>
+                    <span className={`text-xs font-mono ${color.text}`}>{friendlyStandingName(standing.name)}</span>
                     {standing.is_gated && <Lock className="w-3 h-3 text-amber-400" />}
                     {hasDrift && <TrendingDown className="w-3 h-3 text-gray-600" />}
                     <span className="text-[10px] font-mono text-gray-600 ml-auto shrink-0">
@@ -215,7 +234,7 @@ export default function Reputation() {
         s.name.toLowerCase().includes(q) ||
         (s.scope_key && s.scope_key.toLowerCase().includes(q)) ||
         (s.description && s.description.toLowerCase().includes(q)) ||
-        s.standings?.some((st) => st.name.toLowerCase().includes(q))
+        s.standings?.some((st) => st.name.toLowerCase().includes(q) || friendlyStandingName(st.name).toLowerCase().includes(q))
     )
   }, [scopes, search])
 

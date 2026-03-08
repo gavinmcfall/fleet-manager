@@ -14,8 +14,8 @@ export function gamedataRoutes<E extends HonoEnv>() {
     const db = c.env.DB
 
     const [careersResult, rolesResult] = await Promise.all([
-      db.prepare("SELECT * FROM vehicle_careers ORDER BY name").all(),
-      db.prepare("SELECT * FROM vehicle_roles ORDER BY name").all(),
+      db.prepare("SELECT * FROM vehicle_careers WHERE name != '<= PLACEHOLDER =>' ORDER BY name").all(),
+      db.prepare("SELECT * FROM vehicle_roles WHERE name != '<= PLACEHOLDER =>' AND name NOT LIKE '%Haymaker%' ORDER BY name").all(),
     ])
 
     return c.json({
@@ -43,6 +43,7 @@ export function gamedataRoutes<E extends HonoEnv>() {
          FROM reputation_standings rs
          JOIN reputation_scopes rsc ON rsc.id = rs.scope_id
          WHERE rs.game_version_id = ${DEFAULT_VERSION_SUBQUERY}
+           AND rs.name != '<= PLACEHOLDER =>'
          ORDER BY rs.scope_id, rs.sort_order`,
       )
       .all()

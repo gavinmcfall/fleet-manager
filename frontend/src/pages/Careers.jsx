@@ -4,7 +4,9 @@ import PageHeader from '../components/PageHeader'
 import LoadingState from '../components/LoadingState'
 import ErrorState from '../components/ErrorState'
 import SearchInput from '../components/SearchInput'
-import { Briefcase, Target } from 'lucide-react'
+import { Briefcase, Target, Info } from 'lucide-react'
+
+const FILTERED_NAMES = ['<= PLACEHOLDER =>', 'haymaker']
 
 const CAREER_COLORS = [
   'text-red-400',
@@ -64,8 +66,12 @@ export default function Careers() {
   const { filteredCareers, groupedRoles, hasResults } = useMemo(() => {
     if (!data) return { filteredCareers: [], groupedRoles: [], hasResults: false }
 
-    const careers = data.careers || []
-    const roles = data.roles || []
+    const careers = (data.careers || []).filter(
+      (c) => !FILTERED_NAMES.some((f) => c.name.toLowerCase() === f.toLowerCase())
+    )
+    const roles = (data.roles || []).filter(
+      (r) => !FILTERED_NAMES.some((f) => r.name.toLowerCase() === f.toLowerCase())
+    )
     const q = search.toLowerCase().trim()
 
     const matchedCareers = q
@@ -114,6 +120,11 @@ export default function Careers() {
           onChange={setSearch}
           placeholder="Search careers and roles..."
         />
+      </div>
+
+      <div className="flex items-center gap-2 bg-blue-900/20 border border-blue-800/30 text-blue-300/80 text-xs rounded px-3 py-2">
+        <Info className="w-4 h-4 shrink-0" />
+        <span>Vehicle careers and roles define the gameplay categories for ships. Ship assignments are coming in a future update.</span>
       </div>
 
       {!hasResults && (
