@@ -12,176 +12,297 @@ const TABS = [
 ]
 
 const SEVERITY_BADGE = {
-  felony:       'bg-red-900/50 text-red-300 border border-red-700/50',
-  misdemeanor:  'bg-yellow-900/50 text-yellow-300 border border-yellow-700/50',
-  infraction:   'bg-gray-700/60 text-gray-400 border border-gray-600/50',
+  felony:      'bg-red-900/50 text-red-300 border border-red-700/50',
+  misdemeanor: 'bg-yellow-900/50 text-yellow-300 border border-yellow-700/50',
 }
 
 function severityBadgeClass(severity) {
-  if (!severity) return SEVERITY_BADGE.infraction
-  return SEVERITY_BADGE[severity.toLowerCase()] || SEVERITY_BADGE.infraction
+  if (!severity) return SEVERITY_BADGE.misdemeanor
+  return SEVERITY_BADGE[severity.toLowerCase()] || SEVERITY_BADGE.misdemeanor
 }
 
-function formatGracePeriod(seconds) {
+// ── Stat parsing helpers ──────────────────────────────────────────────────────
+
+function parseStats(infraction) {
+  if (!infraction.stats_json) return {}
+  try {
+    return typeof infraction.stats_json === 'string'
+      ? JSON.parse(infraction.stats_json)
+      : infraction.stats_json
+  } catch { return {} }
+}
+
+function parseTriggers(infraction) {
+  if (!infraction.triggers_json) return []
+  try {
+    const parsed = typeof infraction.triggers_json === 'string'
+      ? JSON.parse(infraction.triggers_json)
+      : infraction.triggers_json
+    return Array.isArray(parsed) ? parsed : []
+  } catch { return [] }
+}
+
+function parseOverridesJson(override) {
+  if (!override.overrides_json) return {}
+  try {
+    return typeof override.overrides_json === 'string'
+      ? JSON.parse(override.overrides_json)
+      : override.overrides_json
+  } catch { return {} }
+}
+
+function formatDuration(hours) {
+  if (!hours || hours <= 0) return null
+  if (hours >= 24) {
+    const days = Math.floor(hours / 24)
+    const rem = hours % 24
+    return rem > 0 ? `${days}d ${rem}h` : `${days}d`
+  }
+  return `${hours}h`
+}
+
+function formatCoolOff(seconds) {
   if (!seconds || seconds <= 0) return null
+  if (seconds >= 3600) {
+    const hrs = Math.floor(seconds / 3600)
+    const mins = Math.floor((seconds % 3600) / 60)
+    return mins > 0 ? `${hrs}h ${mins}m` : `${hrs}h`
+  }
   if (seconds >= 60) {
     const mins = Math.floor(seconds / 60)
     const secs = seconds % 60
-    return secs > 0 ? `${mins}m ${secs}s grace period` : `${mins}m grace period`
+    return secs > 0 ? `${mins}m ${secs}s` : `${mins}m`
   }
-  return `${seconds}s grace period`
-}
-
-function formatMultiplier(value) {
-  if (value == null) return '1.0x'
-  return `${parseFloat(value).toFixed(1)}x`
+  return `${seconds}s`
 }
 
 function formatCredits(amount) {
   if (amount == null || amount === 0) return null
-  return `${amount.toLocaleString()} aUEC`
+  return `${Number(amount).toLocaleString()} aUEC`
 }
 
+// ── Stat display row ──────────────────────────────────────────────────────────
+
+function StatPill({ label, value, color = 'text-gray-300' }) {
+  return (
+    <div className="flex items-center gap-1.5">
+      <span className="text-[10px] font-display uppercase tracking-wider text-gray-500">{label}</span>
+      <span className={`${color}`}>{value}</span>
+    </div>
+  )
+}
+
+function InfractionStats({ stats }) {
+  const pills = []
+
+  if (stats.fine) pills.push(
+    <StatPill key="fine" label="Fine" value={formatCredits(stats.fine)} color="text-sc-melt" />
+  )
+  if (stats.demeritPoints > 0) pills.push(
+    <StatPill key="demerits" label="Demerits" value={stats.demeritPoints} color="text-red-400" />
+  )
+  if (stats.meritPoints > 0) pills.push(
+    <StatPill key="merits" label="Merits" value={stats.meritPoints} color="text-green-400" />
+  )
+  if (stats.felonyMerits > 0) pills.push(
+    <StatPill key="felony-merits" label="Felony Merits" value={stats.felonyMerits} color="text-green-300" />
+  )
+  if (stats.lifetime) pills.push(
+    <StatPill key="lifetime" label="Lifetime" value={formatDuration(stats.lifetime)} color="text-blue-400" />
+  )
+  if (stats.coolOffTime) pills.push(
+    <StatPill key="cooloff" label="Cool-off" value={formatCoolOff(stats.coolOffTime)} color="text-amber-400" />
+  )
+  if (stats.escalatedPaymentFineMultiplier && stats.escalatedPaymentFineMultiplier !== 1) pills.push(
+    <StatPill key="escalated" label="Escalated" value={`${stats.escalatedPaymentFineMultiplier}x`} color="text-orange-400" />
+  )
+
+  if (pills.length === 0) return null
+
+  return (
+    <div className="flex flex-wrap items-center gap-3 text-xs font-mono">
+      {pills}
+    </div>
+  )
+}
+
+// ── Infraction Card ───────────────────────────────────────────────────────────
+
 function InfractionCard({ infraction, overrides }) {
-  const grace = formatGracePeriod(infraction.grace_period_seconds)
-  const fine = formatCredits(infraction.fine_amount)
+  const stats = parseStats(infraction)
+  const triggers = parseTriggers(infraction)
   const hasOverrides = overrides && overrides.length > 0
 
   return (
     <div className="panel p-4 space-y-3">
       {/* Header */}
       <div className="flex items-start justify-between gap-3">
-        <div className="flex-1 min-w-0">
-          <h3 className="font-display font-semibold text-white text-sm leading-tight">
-            {infraction.name}
-          </h3>
-        </div>
-        <div className="flex items-center gap-1.5 shrink-0 flex-wrap justify-end">
-          {infraction.is_felony === 1 && (
-            <span className="text-[10px] font-display uppercase tracking-wide px-2 py-0.5 rounded bg-red-900/60 text-red-300 border border-red-700/50">
-              Felony
-            </span>
-          )}
-          <span className={`text-[10px] font-display uppercase tracking-wide px-2 py-0.5 rounded ${severityBadgeClass(infraction.severity)}`}>
-            {infraction.severity || 'Unknown'}
-          </span>
-        </div>
-      </div>
-
-      {/* Type */}
-      {infraction.infraction_type && (
-        <span className="text-[10px] font-mono px-2 py-0.5 rounded bg-gray-700/60 text-gray-400">
-          {infraction.infraction_type}
+        <h3 className="font-display font-semibold text-white text-sm leading-tight flex-1 min-w-0">
+          {infraction.name}
+        </h3>
+        <span className={`text-[10px] font-display uppercase tracking-wide px-2 py-0.5 rounded shrink-0 ${severityBadgeClass(infraction.severity)}`}>
+          {infraction.severity || 'Unknown'}
         </span>
-      )}
-
-      {/* Stats row */}
-      <div className="flex flex-wrap items-center gap-3 text-xs font-mono">
-        {fine && (
-          <div className="flex items-center gap-1.5">
-            <span className="text-[10px] font-display uppercase tracking-wider text-gray-500">Fine</span>
-            <span className="text-sc-melt">{fine}</span>
-          </div>
-        )}
-        {infraction.demerit_points > 0 && (
-          <div className="flex items-center gap-1.5">
-            <span className="text-[10px] font-display uppercase tracking-wider text-gray-500">Demerits</span>
-            <span className="text-red-400">{infraction.demerit_points}</span>
-          </div>
-        )}
-        {infraction.merit_points > 0 && (
-          <div className="flex items-center gap-1.5">
-            <span className="text-[10px] font-display uppercase tracking-wider text-gray-500">Merits</span>
-            <span className="text-green-400">{infraction.merit_points}</span>
-          </div>
-        )}
       </div>
-
-      {/* Grace period */}
-      {grace && (
-        <div className="text-[10px] font-mono text-amber-400/80 italic">{grace}</div>
-      )}
 
       {/* Description */}
       {infraction.description && (
         <p className="text-xs text-gray-400 leading-relaxed">{infraction.description}</p>
       )}
 
-      {/* Jurisdiction overrides indicator */}
+      {/* Stats */}
+      <InfractionStats stats={stats} />
+
+      {/* Triggers */}
+      {triggers.length > 0 && (
+        <div className="space-y-1">
+          <span className="text-[10px] font-display uppercase tracking-wider text-gray-500">Triggers</span>
+          <div className="flex flex-wrap gap-1.5">
+            {triggers.map((t, i) => (
+              <span key={i} className="text-[10px] font-mono px-2 py-0.5 rounded bg-gray-700/60 text-gray-400">
+                {t}
+              </span>
+            ))}
+          </div>
+        </div>
+      )}
+
+      {/* Jurisdiction overrides */}
       {hasOverrides && (
-        <div className="flex items-center gap-1.5 text-[10px] font-mono text-blue-400/80">
-          <Shield className="w-3 h-3" />
-          <span>Varies by jurisdiction ({overrides.length})</span>
-        </div>
-      )}
-    </div>
-  )
-}
-
-function JurisdictionCard({ jurisdiction, overrides }) {
-  return (
-    <div className="panel p-4 space-y-3">
-      {/* Header */}
-      <div className="flex items-start justify-between gap-3">
-        <h3 className="font-display font-semibold text-white text-sm leading-tight">
-          {jurisdiction.name}
-        </h3>
-      </div>
-
-      {/* Description */}
-      {jurisdiction.description && (
-        <p className="text-xs text-gray-400 leading-relaxed">{jurisdiction.description}</p>
-      )}
-
-      {/* Default multipliers */}
-      <div className="flex flex-wrap items-center gap-4 text-xs font-mono">
-        <div className="flex items-center gap-1.5">
-          <span className="text-[10px] font-display uppercase tracking-wider text-gray-500">Fine mult</span>
-          <span className="text-sc-melt">{formatMultiplier(jurisdiction.default_fine_multiplier)}</span>
-        </div>
-        <div className="flex items-center gap-1.5">
-          <span className="text-[10px] font-display uppercase tracking-wider text-gray-500">Merit mult</span>
-          <span className="text-green-400">{formatMultiplier(jurisdiction.default_merit_multiplier)}</span>
-        </div>
-      </div>
-
-      {/* Overrides */}
-      {overrides && overrides.length > 0 && (
         <div className="space-y-1.5 pt-1 border-t border-sc-border">
-          <span className="text-[10px] font-display uppercase tracking-wider text-gray-500">
-            Local overrides
+          <span className="text-[10px] font-display uppercase tracking-wider text-gray-500 flex items-center gap-1">
+            <Shield className="w-3 h-3" />
+            Jurisdiction overrides ({overrides.length})
           </span>
           <ul className="space-y-1">
-            {overrides.map((ov) => (
-              <li key={ov.id} className="text-xs font-mono text-gray-300 flex items-start gap-2">
-                <span className="text-gray-500 shrink-0">-</span>
-                {ov.is_suppressed ? (
+            {overrides.map((ov) => {
+              const parsed = parseOverridesJson(ov)
+              const entries = Object.entries(parsed)
+              return (
+                <li key={`${ov.jurisdiction_id}-${ov.infraction_id}`} className="text-xs font-mono text-gray-300 flex items-start gap-2">
+                  <span className="text-gray-500 shrink-0">-</span>
                   <span>
-                    <span className="text-gray-400">{ov.infraction_name}</span>
-                    <span className="text-green-400/80 ml-1.5">not enforced</span>
-                  </span>
-                ) : (
-                  <span>
-                    <span className="text-gray-400">{ov.infraction_name}:</span>
-                    {ov.fine_override != null && (
-                      <span className="text-sc-melt ml-1.5">fine {ov.fine_override.toLocaleString()}</span>
-                    )}
-                    {ov.demerit_override != null && (
-                      <span className="text-red-400 ml-1.5">demerits {ov.demerit_override}</span>
-                    )}
-                    {ov.merit_override != null && (
-                      <span className="text-green-400 ml-1.5">merits {ov.merit_override}</span>
+                    <span className="text-blue-400">{ov.jurisdiction_name}:</span>
+                    {entries.map(([key, val]) => (
+                      <span key={key} className="text-amber-400 ml-1.5">
+                        {formatOverrideEntry(key, val)}
+                      </span>
+                    ))}
+                    {entries.length === 0 && (
+                      <span className="text-gray-500 ml-1.5 italic">custom enforcement</span>
                     )}
                   </span>
-                )}
-              </li>
-            ))}
+                </li>
+              )
+            })}
           </ul>
         </div>
       )}
     </div>
   )
 }
+
+function formatOverrideEntry(key, value) {
+  if (key === 'escalatedPaymentFineMultiplier') return `escalated fine ${value}x`
+  if (key === 'fine') return `fine ${formatCredits(value)}`
+  if (key === 'demeritPoints') return `demerits ${value}`
+  if (key === 'meritPoints') return `merits ${value}`
+  if (key === 'felonyMerits') return `felony merits ${value}`
+  // Fallback: camelCase → spaced
+  const label = key.replace(/([A-Z])/g, ' $1').toLowerCase().trim()
+  return `${label} ${value}`
+}
+
+// ── Jurisdiction Card ─────────────────────────────────────────────────────────
+
+function JurisdictionCard({ jurisdiction, infractions, overrides }) {
+  // Build a lookup of override data keyed by infraction_id
+  const overrideMap = useMemo(() => {
+    const map = {}
+    if (overrides) {
+      for (const ov of overrides) {
+        map[ov.infraction_id] = ov
+      }
+    }
+    return map
+  }, [overrides])
+
+  const overrideCount = overrides ? overrides.length : 0
+
+  return (
+    <div className="panel p-4 space-y-3">
+      {/* Header */}
+      <div className="flex items-start justify-between gap-3">
+        <h3 className="font-display font-semibold text-white text-sm leading-tight flex-1 min-w-0">
+          {jurisdiction.name}
+        </h3>
+        <div className="flex items-center gap-1.5 shrink-0">
+          {jurisdiction.is_prison === 1 && (
+            <span className="text-[10px] font-display uppercase tracking-wide px-2 py-0.5 rounded bg-red-900/60 text-red-300 border border-red-700/50">
+              Prison
+            </span>
+          )}
+        </div>
+      </div>
+
+      {/* Stats row */}
+      <div className="flex flex-wrap items-center gap-4 text-xs font-mono">
+        {jurisdiction.base_fine != null && jurisdiction.base_fine > 0 && (
+          <StatPill label="Base fine" value={formatCredits(jurisdiction.base_fine)} color="text-sc-melt" />
+        )}
+        {jurisdiction.max_stolen_goods_scu != null && jurisdiction.max_stolen_goods_scu > 0 && (
+          <StatPill label="Max stolen SCU" value={jurisdiction.max_stolen_goods_scu} color="text-orange-400" />
+        )}
+      </div>
+
+      {/* Infraction enforcement list */}
+      {infractions && infractions.length > 0 && (
+        <div className="space-y-1.5 pt-1 border-t border-sc-border">
+          <span className="text-[10px] font-display uppercase tracking-wider text-gray-500">
+            Enforcement ({infractions.length} infractions{overrideCount > 0 ? `, ${overrideCount} modified` : ''})
+          </span>
+          <div className="space-y-1 max-h-64 overflow-y-auto pr-1">
+            {infractions.map((inf) => {
+              const ov = overrideMap[inf.id]
+              const isModified = !!ov
+              const parsed = ov ? parseOverridesJson(ov) : {}
+              const entries = Object.entries(parsed)
+
+              return (
+                <div
+                  key={inf.id}
+                  className={`text-xs font-mono flex items-start gap-2 ${isModified ? 'text-amber-300' : 'text-gray-400'}`}
+                >
+                  <span className={`shrink-0 ${isModified ? 'text-amber-500' : 'text-gray-600'}`}>
+                    {isModified ? '*' : '-'}
+                  </span>
+                  <span className="flex-1">
+                    <span className={isModified ? 'text-amber-300' : 'text-gray-400'}>
+                      {inf.name}
+                    </span>
+                    {isModified && entries.length > 0 && (
+                      <span className="text-amber-400/80 ml-1.5">
+                        ({entries.map(([key, val]) => formatOverrideEntry(key, val)).join(', ')})
+                      </span>
+                    )}
+                    {!isModified && (
+                      <span className="text-gray-600 ml-1.5 italic">standard</span>
+                    )}
+                  </span>
+                  <span className={`text-[10px] shrink-0 ${inf.severity === 'felony' ? 'text-red-400/60' : 'text-yellow-400/40'}`}>
+                    {inf.severity === 'felony' ? 'F' : 'M'}
+                  </span>
+                </div>
+              )
+            })}
+          </div>
+        </div>
+      )}
+    </div>
+  )
+}
+
+// ── Main Component ────────────────────────────────────────────────────────────
 
 export default function LawSystem() {
   const { data, loading, error, refetch } = useAPI('/gamedata/law')
@@ -209,37 +330,55 @@ export default function LawSystem() {
     return map
   }, [data])
 
-  const filteredInfractions = useMemo(() => {
-    if (!data?.infractions) return []
-    if (!search) return data.infractions
+  // Infractions grouped by severity: felonies first, then misdemeanors, alphabetical within each
+  const groupedInfractions = useMemo(() => {
+    if (!data?.infractions) return { felonies: [], misdemeanors: [] }
     const q = search.toLowerCase()
-    return data.infractions.filter(
-      (i) =>
-        i.name.toLowerCase().includes(q) ||
-        (i.description && i.description.toLowerCase().includes(q)) ||
-        (i.infraction_type && i.infraction_type.toLowerCase().includes(q)) ||
-        (i.severity && i.severity.toLowerCase().includes(q))
-    )
+    const filtered = search
+      ? data.infractions.filter(
+          (i) =>
+            i.name.toLowerCase().includes(q) ||
+            (i.description && i.description.toLowerCase().includes(q)) ||
+            (i.severity && i.severity.toLowerCase().includes(q))
+        )
+      : data.infractions
+    const sorted = [...filtered].sort((a, b) => a.name.localeCompare(b.name))
+    return {
+      felonies: sorted.filter((i) => i.severity === 'felony'),
+      misdemeanors: sorted.filter((i) => i.severity !== 'felony'),
+    }
   }, [data, search])
+
+  const totalInfractions = groupedInfractions.felonies.length + groupedInfractions.misdemeanors.length
 
   const filteredJurisdictions = useMemo(() => {
     if (!data?.jurisdictions) return []
     if (!search) return data.jurisdictions
     const q = search.toLowerCase()
     return data.jurisdictions.filter(
-      (j) =>
-        j.name.toLowerCase().includes(q) ||
-        (j.description && j.description.toLowerCase().includes(q))
+      (j) => j.name.toLowerCase().includes(q)
     )
   }, [data, search])
+
+  // For jurisdictions tab: all infractions sorted for the enforcement list
+  const allInfractionsSorted = useMemo(() => {
+    if (!data?.infractions) return []
+    return [...data.infractions].sort((a, b) => {
+      // Felonies first, then alphabetical
+      if (a.severity === 'felony' && b.severity !== 'felony') return -1
+      if (a.severity !== 'felony' && b.severity === 'felony') return 1
+      return a.name.localeCompare(b.name)
+    })
+  }, [data])
 
   if (loading) return <LoadingState message="Loading law system..." />
   if (error) return <ErrorState message={error} onRetry={refetch} />
 
-  const items = tab === 'infractions' ? filteredInfractions : filteredJurisdictions
   const countLabel = tab === 'infractions'
-    ? `${filteredInfractions.length} infraction${filteredInfractions.length !== 1 ? 's' : ''}`
+    ? `${totalInfractions} infraction${totalInfractions !== 1 ? 's' : ''}`
     : `${filteredJurisdictions.length} jurisdiction${filteredJurisdictions.length !== 1 ? 's' : ''}`
+
+  const isEmpty = tab === 'infractions' ? totalInfractions === 0 : filteredJurisdictions.length === 0
 
   return (
     <div className="space-y-4 animate-fade-in-up">
@@ -281,31 +420,66 @@ export default function LawSystem() {
         <span className="text-xs font-mono text-gray-500">{countLabel}</span>
       </div>
 
+      {/* Infractions tab — grouped by severity */}
       {tab === 'infractions' && (
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">
-          {filteredInfractions.map((infraction) => (
-            <InfractionCard
-              key={infraction.id}
-              infraction={infraction}
-              overrides={overridesByInfraction[infraction.id]}
-            />
-          ))}
+        <div className="space-y-6">
+          {groupedInfractions.felonies.length > 0 && (
+            <div className="space-y-3">
+              <div className="flex items-center gap-2">
+                <AlertTriangle className="w-4 h-4 text-red-400" />
+                <h2 className="font-display text-sm uppercase tracking-wider text-red-400">
+                  Felonies ({groupedInfractions.felonies.length})
+                </h2>
+              </div>
+              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">
+                {groupedInfractions.felonies.map((infraction) => (
+                  <InfractionCard
+                    key={infraction.id}
+                    infraction={infraction}
+                    overrides={overridesByInfraction[infraction.id]}
+                  />
+                ))}
+              </div>
+            </div>
+          )}
+
+          {groupedInfractions.misdemeanors.length > 0 && (
+            <div className="space-y-3">
+              <div className="flex items-center gap-2">
+                <Scale className="w-4 h-4 text-yellow-400" />
+                <h2 className="font-display text-sm uppercase tracking-wider text-yellow-400">
+                  Misdemeanors ({groupedInfractions.misdemeanors.length})
+                </h2>
+              </div>
+              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">
+                {groupedInfractions.misdemeanors.map((infraction) => (
+                  <InfractionCard
+                    key={infraction.id}
+                    infraction={infraction}
+                    overrides={overridesByInfraction[infraction.id]}
+                  />
+                ))}
+              </div>
+            </div>
+          )}
         </div>
       )}
 
+      {/* Jurisdictions tab */}
       {tab === 'jurisdictions' && (
         <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
           {filteredJurisdictions.map((jurisdiction) => (
             <JurisdictionCard
               key={jurisdiction.id}
               jurisdiction={jurisdiction}
+              infractions={allInfractionsSorted}
               overrides={overridesByJurisdiction[jurisdiction.id]}
             />
           ))}
         </div>
       )}
 
-      {items.length === 0 && !loading && (
+      {isEmpty && !loading && (
         <div className="text-center py-12 text-gray-500 font-mono text-sm">
           No {tab} found.
         </div>

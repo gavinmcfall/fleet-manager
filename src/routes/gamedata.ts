@@ -9,24 +9,19 @@ const DEFAULT_VERSION_SUBQUERY = "(SELECT id FROM game_versions WHERE is_default
 export function gamedataRoutes<E extends HonoEnv>() {
   const app = new Hono<E>()
 
-  // GET /api/gamedata/careers — vehicle careers + roles
+  // GET /api/gamedata/careers — vehicle careers + roles (flat lists, no junction data yet)
   app.get("/careers", async (c) => {
     const db = c.env.DB
 
-    const { results: careers } = await db
-      .prepare("SELECT * FROM vehicle_careers ORDER BY name")
-      .all()
+    const [careersResult, rolesResult] = await Promise.all([
+      db.prepare("SELECT * FROM vehicle_careers ORDER BY name").all(),
+      db.prepare("SELECT * FROM vehicle_roles ORDER BY name").all(),
+    ])
 
-    const { results: roles } = await db
-      .prepare(
-        `SELECT vr.*, vc.name as career_name
-         FROM vehicle_roles vr
-         LEFT JOIN vehicle_careers vc ON vc.id = vr.career_id
-         ORDER BY vc.name, vr.name`,
-      )
-      .all()
-
-    return c.json({ careers, roles })
+    return c.json({
+      careers: careersResult.results,
+      roles: rolesResult.results,
+    })
   })
 
   // GET /api/gamedata/reputation — reputation scopes with nested standings
@@ -37,6 +32,7 @@ export function gamedataRoutes<E extends HonoEnv>() {
       .prepare(
         `SELECT * FROM reputation_scopes
          WHERE game_version_id = ${DEFAULT_VERSION_SUBQUERY}
+           AND name NOT LIKE '%PLACEHOLDER%'
          ORDER BY name`,
       )
       .all()
@@ -74,21 +70,26 @@ export function gamedataRoutes<E extends HonoEnv>() {
     const [infractions, jurisdictions, overrides] = await Promise.all([
       db
         .prepare(
-          `SELECT * FROM law_infractions
+          `SELECT *, stats_json FROM law_infractions
            WHERE game_version_id = ${DEFAULT_VERSION_SUBQUERY}
            ORDER BY name`,
         )
         .all(),
       db
         .prepare(
-          `SELECT * FROM law_jurisdictions
+          `SELECT *, prohibited_goods_json, controlled_substances_json FROM law_jurisdictions
            WHERE game_version_id = ${DEFAULT_VERSION_SUBQUERY}
            ORDER BY name`,
         )
         .all(),
       db
         .prepare(
-          `SELECT jio.*, li.name as infraction_name, lj.name as jurisdiction_name
+          `SELECT jio.*,
+             li.name as infraction_name,
+             lj.name as jurisdiction_name,
+             li.description as infraction_description,
+             li.severity as infraction_severity,
+             jio.overrides_json
            FROM jurisdiction_infraction_overrides jio
            JOIN law_infractions li ON li.id = jio.infraction_id
            JOIN law_jurisdictions lj ON lj.id = jio.jurisdiction_id
@@ -146,6 +147,7 @@ export function gamedataRoutes<E extends HonoEnv>() {
     const { results } = await db
       .prepare(
         `SELECT s.*,
+           REPLACE(REPLACE(REPLACE(s.name, 'Inv ', ''), '_', ' '), '  ', ' ') as display_name,
            (SELECT COUNT(*) FROM shop_inventory si WHERE si.shop_id = s.id) as item_count
          FROM shops s
          WHERE s.game_version_id = ${DEFAULT_VERSION_SUBQUERY}
@@ -163,12 +165,15 @@ export function gamedataRoutes<E extends HonoEnv>() {
 
     const { results } = await db
       .prepare(
-        `SELECT si.*
+        `SELECT si.*,
+           COALESCE(fi.name, v.name, si.item_name) as resolved_name
          FROM shop_inventory si
+         LEFT JOIN fps_items fi ON fi.uuid = si.item_uuid
+         LEFT JOIN vehicles v ON v.uuid = si.item_uuid
          JOIN shops s ON s.id = si.shop_id
          WHERE s.slug = ?
            AND s.game_version_id = ${DEFAULT_VERSION_SUBQUERY}
-         ORDER BY si.buy_price DESC`,
+         ORDER BY COALESCE(fi.name, v.name, si.item_name), si.buy_price DESC`,
       )
       .bind(slug)
       .all()

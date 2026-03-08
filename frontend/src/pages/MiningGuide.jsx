@@ -12,6 +12,42 @@ const TABS = [
   { key: 'refining',     label: 'Refining',          icon: FlaskConical },
 ]
 
+const STAT_LABELS = {
+  elementInstability: 'Instability',
+  elementResistance: 'Resistance',
+  elementOptimalWindowMidpoint: 'Optimal Window',
+  elementOptimalWindowMidpointRandomness: 'Window Randomness',
+  elementOptimalWindowThinness: 'Window Thinness',
+  elementExplosionMultiplier: 'Explosion Multiplier',
+  elementClusterFactor: 'Cluster Factor',
+}
+
+const CATEGORY_STYLES = {
+  ore: 'bg-amber-900/40 text-amber-300 border-amber-700/50',
+  raw: 'bg-cyan-900/40 text-cyan-300 border-cyan-700/50',
+}
+
+const ROCK_TYPE_STYLES = {
+  asteroid: 'bg-violet-900/40 text-violet-300 border-violet-700/50',
+  surface:  'bg-emerald-900/40 text-emerald-300 border-emerald-700/50',
+  unknown:  'bg-gray-700/60 text-gray-400 border-gray-600/50',
+}
+
+const SPEED_STYLES = {
+  'Very Fast': 'bg-green-900/40 text-green-300 border-green-700/50',
+  'Fast':      'bg-green-900/40 text-green-300 border-green-700/50',
+  'Normal':    'bg-gray-700/60 text-gray-400 border-gray-600/50',
+  'Slow':      'bg-amber-900/40 text-amber-300 border-amber-700/50',
+  'Very Slow': 'bg-red-900/40 text-red-300 border-red-700/50',
+}
+
+const QUALITY_STYLES = {
+  'Careful':   'bg-green-900/40 text-green-300 border-green-700/50',
+  'Normal':    'bg-gray-700/60 text-gray-400 border-gray-600/50',
+  'Rushed':    'bg-amber-900/40 text-amber-300 border-amber-700/50',
+  'Reckless':  'bg-red-900/40 text-red-300 border-red-700/50',
+}
+
 function instabilityColor(val) {
   if (val == null) return 'text-gray-400'
   if (val >= 0.7) return 'text-red-400'
@@ -33,23 +69,31 @@ function instabilityBarColor(val) {
   return 'bg-green-500'
 }
 
-function StatRow({ label, value, unit = '' }) {
+function StatRow({ label, value }) {
   if (value == null) return null
   return (
     <div className="flex items-center justify-between text-xs">
       <span className="font-mono text-gray-500">{label}</span>
-      <span className="font-mono text-gray-300">{typeof value === 'number' ? value.toFixed(2) : value}{unit}</span>
+      <span className="font-mono text-gray-300">{typeof value === 'number' ? value.toFixed(2) : value}</span>
     </div>
   )
 }
 
-function PercentBar({ value, max = 1, color = 'bg-sc-accent' }) {
-  const pct = max > 0 ? Math.min((value / max) * 100, 100) : 0
+function Badge({ children, style }) {
+  const classes = style || 'bg-gray-700/60 text-gray-400 border-gray-600/50'
   return (
-    <div className="h-1.5 w-full bg-gray-700 rounded-full overflow-hidden">
-      <div className={`h-full rounded-full transition-all ${color}`} style={{ width: `${pct}%` }} />
-    </div>
+    <span className={`text-[10px] font-display uppercase tracking-wide px-2 py-0.5 rounded border shrink-0 ${classes}`}>
+      {children}
+    </span>
   )
+}
+
+/** Convert class_name like "aluminium_ore" to "Aluminium Ore" */
+function friendlyElementName(className) {
+  if (!className) return '--'
+  return className
+    .replace(/_/g, ' ')
+    .replace(/\b\w/g, (c) => c.toUpperCase())
 }
 
 function ElementCard({ element }) {
@@ -58,43 +102,45 @@ function ElementCard({ element }) {
     try { return JSON.parse(element.stats_json) } catch { return null }
   }, [element.stats_json])
 
+  const instability = stats?.elementInstability ?? null
+
   return (
     <div className="panel p-4 space-y-3">
       <div className="flex items-start justify-between gap-2">
         <h3 className="font-display font-semibold text-white text-sm leading-tight">{element.name}</h3>
-        {element.inert === 1 && (
-          <span className="text-[10px] font-display uppercase tracking-wide px-2 py-0.5 rounded bg-gray-700/60 text-gray-400 border border-gray-600/50 shrink-0">
-            Inert
-          </span>
-        )}
+        <div className="flex items-center gap-1.5">
+          {element.category && (
+            <Badge style={CATEGORY_STYLES[element.category]}>
+              {element.category}
+            </Badge>
+          )}
+        </div>
       </div>
 
-      {/* Instability */}
+      {/* Instability bar */}
       <div className="space-y-1">
         <div className="flex items-center justify-between text-xs">
           <span className="font-mono text-gray-500">Instability</span>
-          <span className={`font-mono font-semibold ${instabilityColor(element.instability)}`}>
-            {element.instability != null ? (element.instability * 100).toFixed(0) + '%' : '--'}
+          <span className={`font-mono font-semibold ${instabilityColor(instability)}`}>
+            {instability != null ? (instability * 100).toFixed(0) + '%' : '--'}
           </span>
         </div>
-        {element.instability != null && (
-          <div className={`h-1.5 w-full rounded-full overflow-hidden ${instabilityBg(element.instability)}`}>
+        {instability != null && (
+          <div className={`h-1.5 w-full rounded-full overflow-hidden ${instabilityBg(instability)}`}>
             <div
-              className={`h-full rounded-full transition-all ${instabilityBarColor(element.instability)}`}
-              style={{ width: `${(element.instability * 100).toFixed(0)}%` }}
+              className={`h-full rounded-full transition-all ${instabilityBarColor(instability)}`}
+              style={{ width: `${(instability * 100).toFixed(0)}%` }}
             />
           </div>
         )}
       </div>
 
-      <StatRow label="Resistance" value={element.resistance} />
-      <StatRow label="Charge Window" value={element.optimal_charge_window_size} />
-      <StatRow label="Charge Rate" value={element.optimal_charge_rate} />
-
-      {/* Extra stats from stats_json */}
-      {stats && Object.entries(stats).map(([key, val]) => (
-        <StatRow key={key} label={key.replace(/_/g, ' ')} value={val} />
-      ))}
+      {/* Remaining stats from stats_json */}
+      {stats && Object.entries(STAT_LABELS).map(([key, label]) => {
+        if (key === 'elementInstability') return null
+        const val = stats[key]
+        return <StatRow key={key} label={label} value={val} />
+      })}
     </div>
   )
 }
@@ -105,19 +151,21 @@ function CompositionCard({ composition }) {
     try { return JSON.parse(composition.composition_json) } catch { return [] }
   }, [composition.composition_json])
 
+  const rockStyle = ROCK_TYPE_STYLES[composition.rock_type] || ROCK_TYPE_STYLES.unknown
+
   return (
     <div className="panel p-4 space-y-3">
       <div className="flex items-start justify-between gap-2">
         <h3 className="font-display font-semibold text-white text-sm leading-tight">{composition.name}</h3>
         {composition.rock_type && (
-          <span className="text-[10px] font-display uppercase tracking-wide px-2 py-0.5 rounded bg-indigo-900/40 text-indigo-300 border border-indigo-700/50 shrink-0">
+          <Badge style={rockStyle}>
             {composition.rock_type}
-          </span>
+          </Badge>
         )}
       </div>
 
       <div className="flex items-center gap-3 text-xs font-mono text-gray-400">
-        <span>{composition.min_elements}–{composition.max_elements} elements</span>
+        <span>Min elements: {composition.min_elements ?? '--'}</span>
       </div>
 
       {/* Element list */}
@@ -125,11 +173,11 @@ function CompositionCard({ composition }) {
         <div className="space-y-1.5 pt-1 border-t border-sc-border">
           <span className="text-[10px] font-display uppercase tracking-wider text-gray-500">Composition</span>
           {elements.map((el, i) => (
-            <div key={el.element_uuid || i} className="flex items-center justify-between text-xs">
-              <span className="font-mono text-gray-300">{el.element_name}</span>
-              <div className="flex items-center gap-2">
+            <div key={el.element || i} className="flex items-center justify-between text-xs gap-2">
+              <span className="font-mono text-gray-300 truncate">{friendlyElementName(el.element)}</span>
+              <div className="flex items-center gap-2 shrink-0">
                 <span className="font-mono text-gray-500">
-                  {el.min_pct != null ? `${(el.min_pct * 100).toFixed(1)}–${(el.max_pct * 100).toFixed(1)}%` : '--'}
+                  {el.minPct != null ? `${(el.minPct * 100).toFixed(1)}–${(el.maxPct * 100).toFixed(1)}%` : '--'}
                 </span>
                 {el.probability != null && (
                   <span className="font-mono text-gray-600 text-[10px]">
@@ -146,49 +194,41 @@ function CompositionCard({ composition }) {
 }
 
 function RefiningTable({ processes }) {
-  const maxSpeed = useMemo(() => Math.max(...processes.map(p => p.refining_speed || 0), 1), [processes])
-  const maxQuality = useMemo(() => Math.max(...processes.map(p => p.refining_quality || 0), 1), [processes])
-
   return (
     <div className="space-y-2">
       {/* Header */}
-      <div className="hidden sm:grid grid-cols-[1fr_1fr_1fr] gap-4 px-4 py-2 text-[10px] font-display uppercase tracking-wider text-gray-500">
+      <div className="hidden sm:grid grid-cols-[1fr_auto_auto] gap-4 px-4 py-2 text-[10px] font-display uppercase tracking-wider text-gray-500">
         <span>Process</span>
-        <span>Speed</span>
-        <span>Quality</span>
+        <span className="w-24 text-center">Speed</span>
+        <span className="w-24 text-center">Quality</span>
       </div>
 
-      {processes.map((proc) => (
-        <div key={proc.id} className="panel p-4 sm:grid sm:grid-cols-[1fr_1fr_1fr] sm:gap-4 sm:items-center space-y-2 sm:space-y-0">
-          <h3 className="font-display font-semibold text-white text-sm">{proc.name}</h3>
+      {processes.map((proc) => {
+        const speedStyle = SPEED_STYLES[proc.speed] || SPEED_STYLES.Normal
+        const qualityStyle = QUALITY_STYLES[proc.quality] || QUALITY_STYLES.Normal
 
-          {/* Speed */}
-          <div className="space-y-1">
-            <div className="flex items-center justify-between sm:hidden">
-              <span className="text-[10px] font-display uppercase tracking-wider text-gray-500">Speed</span>
+        return (
+          <div key={proc.id} className="panel p-4 sm:grid sm:grid-cols-[1fr_auto_auto] sm:gap-4 sm:items-center space-y-2 sm:space-y-0">
+            <h3 className="font-display font-semibold text-white text-sm">{proc.name}</h3>
+
+            {/* Speed */}
+            <div className="flex items-center gap-2 sm:justify-center">
+              <span className="text-[10px] font-display uppercase tracking-wider text-gray-500 sm:hidden">Speed:</span>
+              <Badge style={speedStyle}>
+                {proc.speed || '--'}
+              </Badge>
             </div>
-            <div className="flex items-center gap-2">
-              <PercentBar value={proc.refining_speed || 0} max={maxSpeed} color="bg-sc-accent" />
-              <span className="font-mono text-xs text-gray-300 w-12 text-right shrink-0">
-                {proc.refining_speed != null ? proc.refining_speed.toFixed(2) : '--'}
-              </span>
+
+            {/* Quality */}
+            <div className="flex items-center gap-2 sm:justify-center">
+              <span className="text-[10px] font-display uppercase tracking-wider text-gray-500 sm:hidden">Quality:</span>
+              <Badge style={qualityStyle}>
+                {proc.quality || '--'}
+              </Badge>
             </div>
           </div>
-
-          {/* Quality */}
-          <div className="space-y-1">
-            <div className="flex items-center justify-between sm:hidden">
-              <span className="text-[10px] font-display uppercase tracking-wider text-gray-500">Quality</span>
-            </div>
-            <div className="flex items-center gap-2">
-              <PercentBar value={proc.refining_quality || 0} max={maxQuality} color="bg-sc-accent2" />
-              <span className="font-mono text-xs text-gray-300 w-12 text-right shrink-0">
-                {proc.refining_quality != null ? proc.refining_quality.toFixed(2) : '--'}
-              </span>
-            </div>
-          </div>
-        </div>
-      ))}
+        )
+      })}
     </div>
   )
 }

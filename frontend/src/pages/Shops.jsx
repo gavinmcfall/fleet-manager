@@ -43,6 +43,16 @@ function formatPrice(price) {
   return price.toLocaleString()
 }
 
+/** Sort inventory: named items first (alpha), then UUID-only items by price desc */
+function sortInventory(items) {
+  if (!items) return []
+  const named = items.filter((i) => i.resolved_name)
+  const uuidOnly = items.filter((i) => !i.resolved_name)
+  named.sort((a, b) => a.resolved_name.localeCompare(b.resolved_name))
+  uuidOnly.sort((a, b) => (b.buy_price || b.sell_price || 0) - (a.buy_price || a.sell_price || 0))
+  return [...named, ...uuidOnly]
+}
+
 // ── Inventory slide-over panel ────────────────────────────────────────────
 function InventoryPanel({ shop, onClose }) {
   const { data: inventory, loading: invLoading } = useAPI(
@@ -50,18 +60,20 @@ function InventoryPanel({ shop, onClose }) {
     { skip: !shop }
   )
 
+  const sorted = useMemo(() => sortInventory(inventory), [inventory])
+
   return (
     <div className="fixed inset-0 z-50 flex justify-end">
       {/* Backdrop */}
       <div className="absolute inset-0 bg-black/60" onClick={onClose} />
 
       {/* Panel */}
-      <div className="relative w-full max-w-lg bg-sc-dark border-l border-sc-border overflow-y-auto animate-fade-in-up">
+      <div className="relative w-full max-w-2xl bg-sc-dark border-l border-sc-border overflow-y-auto animate-fade-in-up">
         {/* Header */}
         <div className="sticky top-0 bg-sc-dark/95 backdrop-blur border-b border-sc-border p-4 flex items-start justify-between gap-3 z-10">
           <div className="min-w-0">
             <h2 className="font-display font-semibold text-white text-sm leading-tight">
-              {shop.name}
+              {shop.display_name}
             </h2>
             <div className="flex items-center gap-2 mt-1.5">
               <span className={`text-[10px] font-display uppercase tracking-wide px-2 py-0.5 rounded ${typeBadgeClass(shop.shop_type)}`}>
@@ -89,36 +101,50 @@ function InventoryPanel({ shop, onClose }) {
             </div>
           )}
 
-          {!invLoading && inventory && inventory.length === 0 && (
+          {!invLoading && sorted.length === 0 && (
             <div className="text-center py-8 text-gray-500 font-mono text-sm">
               No items in inventory.
             </div>
           )}
 
-          {!invLoading && inventory && inventory.length > 0 && (
+          {!invLoading && sorted.length > 0 && (
             <div className="space-y-1">
               {/* Column header */}
               <div className="flex items-center gap-3 px-3 py-1.5 text-[10px] font-display uppercase tracking-widest text-gray-500">
                 <span className="flex-1">Item</span>
-                <span className="w-24 text-right">Buy</span>
-                <span className="w-24 text-right">Sell</span>
+                <span className="w-20 text-right">Buy</span>
+                <span className="w-20 text-right">Sell</span>
+                <span className="w-14 text-right">Base</span>
+                <span className="w-14 text-right">Max</span>
               </div>
 
-              {inventory.map((item) => (
+              {sorted.map((item) => (
                 <div
                   key={item.id}
                   className="flex items-center gap-3 px-3 py-2 rounded hover:bg-white/[0.03] transition-colors"
                 >
                   <div className="flex-1 min-w-0">
-                    <span className="text-xs font-mono text-gray-200 truncate block">
-                      {item.item_name}
-                    </span>
+                    {item.resolved_name ? (
+                      <span className="text-xs font-mono text-gray-200 truncate block">
+                        {item.resolved_name}
+                      </span>
+                    ) : (
+                      <span className="text-xs font-mono text-gray-500 truncate block">
+                        {item.item_uuid}
+                      </span>
+                    )}
                   </div>
-                  <span className="w-24 text-right text-xs font-mono text-sc-melt shrink-0">
+                  <span className="w-20 text-right text-xs font-mono text-sc-melt shrink-0">
                     {formatPrice(item.buy_price) ? `${formatPrice(item.buy_price)} aUEC` : '--'}
                   </span>
-                  <span className="w-24 text-right text-xs font-mono text-green-400 shrink-0">
+                  <span className="w-20 text-right text-xs font-mono text-green-400 shrink-0">
                     {formatPrice(item.sell_price) ? `${formatPrice(item.sell_price)} aUEC` : '--'}
+                  </span>
+                  <span className="w-14 text-right text-xs font-mono text-gray-400 shrink-0">
+                    {item.base_inventory ?? '--'}
+                  </span>
+                  <span className="w-14 text-right text-xs font-mono text-gray-400 shrink-0">
+                    {item.max_inventory ?? '--'}
                   </span>
                 </div>
               ))}
@@ -139,7 +165,7 @@ function ShopCard({ shop, onClick }) {
     >
       <div className="flex items-start justify-between gap-2 mb-2">
         <h3 className="font-display font-semibold text-white text-sm leading-tight">
-          {shop.name}
+          {shop.display_name}
         </h3>
         <span className="text-[10px] font-mono text-gray-500 shrink-0">
           {shop.item_count} items
@@ -183,10 +209,10 @@ export default function Shops() {
 
     if (search) {
       const q = search.toLowerCase()
-      items = items.filter((s) => s.name.toLowerCase().includes(q))
+      items = items.filter((s) => s.display_name.toLowerCase().includes(q))
     }
 
-    return items.sort((a, b) => a.name.localeCompare(b.name))
+    return items.sort((a, b) => a.display_name.localeCompare(b.display_name))
   }, [shops, typeTab, search])
 
   // Reset pagination when filters change

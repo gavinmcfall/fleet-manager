@@ -4,54 +4,55 @@ import PageHeader from '../components/PageHeader'
 import LoadingState from '../components/LoadingState'
 import ErrorState from '../components/ErrorState'
 import SearchInput from '../components/SearchInput'
-import { Briefcase, ChevronDown, ChevronRight } from 'lucide-react'
+import { Briefcase, Target } from 'lucide-react'
 
-function CareerCard({ career, roles, defaultExpanded }) {
-  const [expanded, setExpanded] = useState(defaultExpanded)
+const CAREER_COLORS = [
+  'text-red-400',
+  'text-amber-400',
+  'text-emerald-400',
+  'text-cyan-400',
+  'text-blue-400',
+  'text-violet-400',
+  'text-pink-400',
+  'text-orange-400',
+  'text-lime-400',
+  'text-teal-400',
+  'text-indigo-400',
+]
 
+function getCareerColor(index) {
+  return CAREER_COLORS[index % CAREER_COLORS.length]
+}
+
+function CareerCard({ career, colorClass }) {
   return (
-    <div className="panel overflow-hidden">
-      <button
-        onClick={() => setExpanded(!expanded)}
-        className="w-full flex items-center gap-3 p-4 text-left hover:bg-white/[0.02] transition-colors"
-      >
-        {expanded
-          ? <ChevronDown className="w-4 h-4 text-sc-accent shrink-0" />
-          : <ChevronRight className="w-4 h-4 text-gray-500 shrink-0" />
-        }
-        <Briefcase className="w-5 h-5 text-sc-accent shrink-0" />
-        <div className="flex-1 min-w-0">
-          <h3 className="font-display font-semibold text-white text-sm">{career.name}</h3>
-          {career.description && (
-            <p className="text-xs text-gray-400 mt-0.5 line-clamp-2">{career.description}</p>
-          )}
-        </div>
-        <span className="text-xs font-mono text-gray-500 shrink-0">
-          {roles.length} {roles.length === 1 ? 'role' : 'roles'}
-        </span>
-      </button>
+    <div className="panel p-4 flex items-center gap-3 hover:bg-white/[0.02] transition-colors">
+      <Briefcase className={`w-5 h-5 shrink-0 ${colorClass}`} />
+      <span className="font-display font-semibold text-white text-sm">{career.name}</span>
+    </div>
+  )
+}
 
-      {expanded && roles.length > 0 && (
-        <div className="border-t border-white/5">
-          {roles.map((role) => (
-            <div
-              key={role.id}
-              className="px-4 py-3 pl-14 border-b border-white/5 last:border-b-0 hover:bg-white/[0.02] transition-colors"
-            >
-              <p className="text-sm text-gray-200 font-medium">{role.name}</p>
-              {role.description && (
-                <p className="text-xs text-gray-500 mt-1">{role.description}</p>
-              )}
-            </div>
-          ))}
-        </div>
-      )}
+function RoleCard({ role }) {
+  return (
+    <div className="panel p-3 flex items-center gap-2.5 hover:bg-white/[0.02] transition-colors">
+      <Target className="w-4 h-4 shrink-0 text-sc-accent" />
+      <span className="text-sm text-gray-200 font-medium">{role.name}</span>
+    </div>
+  )
+}
 
-      {expanded && roles.length === 0 && (
-        <div className="border-t border-white/5 px-4 py-3 pl-14">
-          <p className="text-xs text-gray-600 italic">No roles defined</p>
-        </div>
-      )}
+function LetterGroup({ letter, roles }) {
+  return (
+    <div>
+      <h3 className="font-mono text-xs text-gray-500 uppercase tracking-wider mb-2 pl-1">
+        {letter}
+      </h3>
+      <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-2">
+        {roles.map((role) => (
+          <RoleCard key={role.id} role={role} />
+        ))}
+      </div>
     </div>
   )
 }
@@ -60,46 +61,38 @@ export default function Careers() {
   const { data, loading, error, refetch } = useAPI('/gamedata/careers')
   const [search, setSearch] = useState('')
 
-  const filtered = useMemo(() => {
-    if (!data) return []
+  const { filteredCareers, groupedRoles, hasResults } = useMemo(() => {
+    if (!data) return { filteredCareers: [], groupedRoles: [], hasResults: false }
 
     const careers = data.careers || []
     const roles = data.roles || []
     const q = search.toLowerCase().trim()
 
-    // Group roles by career_id
-    const rolesByCareer = {}
-    for (const role of roles) {
-      if (!rolesByCareer[role.career_id]) rolesByCareer[role.career_id] = []
-      rolesByCareer[role.career_id].push(role)
+    const matchedCareers = q
+      ? careers.filter((c) => c.name.toLowerCase().includes(q))
+      : careers
+
+    const matchedRoles = q
+      ? roles.filter((r) => r.name.toLowerCase().includes(q))
+      : roles
+
+    // Group roles by first letter
+    const byLetter = {}
+    for (const role of matchedRoles) {
+      const letter = role.name.charAt(0).toUpperCase()
+      if (!byLetter[letter]) byLetter[letter] = []
+      byLetter[letter].push(role)
     }
 
-    if (!q) {
-      return careers.map((c) => ({
-        career: c,
-        roles: rolesByCareer[c.id] || [],
-      }))
+    const sorted = Object.entries(byLetter)
+      .sort(([a], [b]) => a.localeCompare(b))
+      .map(([letter, letterRoles]) => ({ letter, roles: letterRoles }))
+
+    return {
+      filteredCareers: matchedCareers,
+      groupedRoles: sorted,
+      hasResults: matchedCareers.length > 0 || sorted.length > 0,
     }
-
-    // Filter: include career if name/description matches, or if any role matches
-    return careers
-      .map((c) => {
-        const careerMatch =
-          c.name.toLowerCase().includes(q) ||
-          (c.description && c.description.toLowerCase().includes(q))
-
-        const careerRoles = rolesByCareer[c.id] || []
-        const matchingRoles = careerRoles.filter(
-          (r) =>
-            r.name.toLowerCase().includes(q) ||
-            (r.description && r.description.toLowerCase().includes(q))
-        )
-
-        if (careerMatch) return { career: c, roles: careerRoles }
-        if (matchingRoles.length > 0) return { career: c, roles: matchingRoles }
-        return null
-      })
-      .filter(Boolean)
   }, [data, search])
 
   const totalCareers = data?.careers?.length || 0
@@ -109,7 +102,7 @@ export default function Careers() {
   if (error) return <ErrorState message={error} onRetry={refetch} />
 
   return (
-    <div className="space-y-6 animate-fade-in">
+    <div className="space-y-6 animate-fade-in-up">
       <PageHeader
         title="Careers & Roles"
         subtitle={`${totalCareers} careers · ${totalRoles} roles`}
@@ -119,26 +112,47 @@ export default function Careers() {
         <SearchInput
           value={search}
           onChange={setSearch}
-          placeholder="Search careers and roles…"
+          placeholder="Search careers and roles..."
         />
       </div>
 
-      <div className="space-y-3">
-        {filtered.length === 0 && (
-          <div className="panel p-8 text-center">
-            <p className="text-gray-500 text-sm">No careers or roles match your search.</p>
-          </div>
-        )}
+      {!hasResults && (
+        <div className="panel p-8 text-center">
+          <p className="text-gray-500 text-sm">No careers or roles match your search.</p>
+        </div>
+      )}
 
-        {filtered.map(({ career, roles }) => (
-          <CareerCard
-            key={career.id}
-            career={career}
-            roles={roles}
-            defaultExpanded={!search}
-          />
-        ))}
-      </div>
+      {/* Vehicle Careers */}
+      {filteredCareers.length > 0 && (
+        <section className="space-y-3">
+          <h2 className="font-display text-lg font-semibold text-white flex items-center gap-2">
+            <Briefcase className="w-5 h-5 text-sc-accent" />
+            Vehicle Careers
+            <span className="text-xs font-mono text-gray-500 ml-1">{filteredCareers.length}</span>
+          </h2>
+          <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-6 gap-2">
+            {filteredCareers.map((career, i) => (
+              <CareerCard key={career.id} career={career} colorClass={getCareerColor(i)} />
+            ))}
+          </div>
+        </section>
+      )}
+
+      {/* Vehicle Roles */}
+      {groupedRoles.length > 0 && (
+        <section className="space-y-4">
+          <h2 className="font-display text-lg font-semibold text-white flex items-center gap-2">
+            <Target className="w-5 h-5 text-sc-accent" />
+            Vehicle Roles
+            <span className="text-xs font-mono text-gray-500 ml-1">{totalRoles}</span>
+          </h2>
+          <div className="space-y-4">
+            {groupedRoles.map(({ letter, roles }) => (
+              <LetterGroup key={letter} letter={letter} roles={roles} />
+            ))}
+          </div>
+        </section>
+      )}
     </div>
   )
 }
