@@ -150,6 +150,25 @@ function ScopeCard({ scope }) {
         </div>
       </div>
 
+      {/* Factions */}
+      {scope.factions?.length > 0 && (
+        <div className="flex flex-wrap gap-1.5">
+          {scope.factions.map((f) => (
+            <span
+              key={f.faction_id}
+              className={`inline-flex items-center gap-1 text-[11px] font-mono px-2 py-0.5 rounded-full border ${
+                f.is_primary
+                  ? 'bg-sc-accent/20 text-sc-accent border-sc-accent/40'
+                  : 'bg-gray-700/60 text-gray-300 border-gray-600/50'
+              }`}
+            >
+              {f.is_primary && <Star className="w-3 h-3 shrink-0" />}
+              {f.faction_name}
+            </span>
+          ))}
+        </div>
+      )}
+
       {/* Reputation bar */}
       {standings.length > 0 ? (
         <div className="space-y-1.5">
@@ -234,7 +253,8 @@ export default function Reputation() {
         s.name.toLowerCase().includes(q) ||
         (s.scope_key && s.scope_key.toLowerCase().includes(q)) ||
         (s.description && s.description.toLowerCase().includes(q)) ||
-        s.standings?.some((st) => st.name.toLowerCase().includes(q) || friendlyStandingName(st.name).toLowerCase().includes(q))
+        s.standings?.some((st) => st.name.toLowerCase().includes(q) || friendlyStandingName(st.name).toLowerCase().includes(q)) ||
+        s.factions?.some((f) => f.faction_name.toLowerCase().includes(q))
     )
   }, [scopes, search])
 
@@ -252,7 +272,7 @@ export default function Reputation() {
       <SearchInput
         value={search}
         onChange={setSearch}
-        placeholder="Search scopes or standings..."
+        placeholder="Search scopes, standings, or factions..."
         className="max-w-md"
       />
 

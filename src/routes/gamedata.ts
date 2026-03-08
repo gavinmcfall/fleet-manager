@@ -9,19 +9,55 @@ const DEFAULT_VERSION_SUBQUERY = "(SELECT id FROM game_versions WHERE is_default
 export function gamedataRoutes<E extends HonoEnv>() {
   const app = new Hono<E>()
 
-  // GET /api/gamedata/careers — vehicle careers + roles (flat lists, no junction data yet)
+  // GET /api/gamedata/careers — vehicle careers + roles with linked vehicles
   app.get("/careers", async (c) => {
     const db = c.env.DB
 
-    const [careersResult, rolesResult] = await Promise.all([
+    const [careersResult, rolesResult, careerAssignments, roleAssignments] = await Promise.all([
       db.prepare("SELECT * FROM vehicle_careers WHERE name != '<= PLACEHOLDER =>' ORDER BY name").all(),
       db.prepare("SELECT * FROM vehicle_roles WHERE name != '<= PLACEHOLDER =>' AND name NOT LIKE '%Haymaker%' ORDER BY name").all(),
+      db.prepare(`
+        SELECT vca.career_id, v.id, v.name, v.slug, v.image_url, v.manufacturer_name, v.size_label, v.focus, v.classification
+        FROM vehicle_career_assignments vca
+        JOIN vehicles v ON v.id = vca.vehicle_id
+        ORDER BY v.name
+      `).all(),
+      db.prepare(`
+        SELECT vra.role_id, v.id, v.name, v.slug, v.image_url, v.manufacturer_name, v.size_label, v.focus, v.classification
+        FROM vehicle_role_assignments vra
+        JOIN vehicles v ON v.id = vra.vehicle_id
+        ORDER BY v.name
+      `).all(),
     ])
 
-    return c.json({
-      careers: careersResult.results,
-      roles: rolesResult.results,
-    })
+    // Nest vehicles under their career/role
+    const vehiclesByCareer = new Map<number, any[]>()
+    for (const v of careerAssignments.results) {
+      const careerId = v.career_id as number
+      if (!vehiclesByCareer.has(careerId)) vehiclesByCareer.set(careerId, [])
+      vehiclesByCareer.get(careerId)!.push(v)
+    }
+
+    const vehiclesByRole = new Map<number, any[]>()
+    for (const v of roleAssignments.results) {
+      const roleId = v.role_id as number
+      if (!vehiclesByRole.has(roleId)) vehiclesByRole.set(roleId, [])
+      vehiclesByRole.get(roleId)!.push(v)
+    }
+
+    const careers = careersResult.results.map((career) => ({
+      ...career,
+      vehicles: vehiclesByCareer.get(career.id as number) ?? [],
+      vehicle_count: (vehiclesByCareer.get(career.id as number) ?? []).length,
+    }))
+
+    const roles = rolesResult.results.map((role) => ({
+      ...role,
+      vehicles: vehiclesByRole.get(role.id as number) ?? [],
+      vehicle_count: (vehiclesByRole.get(role.id as number) ?? []).length,
+    }))
+
+    return c.json({ careers, roles })
   })
 
   // GET /api/gamedata/reputation — reputation scopes with nested standings
@@ -48,6 +84,16 @@ export function gamedataRoutes<E extends HonoEnv>() {
       )
       .all()
 
+    const { results: factionLinks } = await db
+      .prepare(
+        `SELECT frs.reputation_scope_id, frs.is_primary, f.id as faction_id, f.name as faction_name, f.slug as faction_slug
+         FROM faction_reputation_scopes frs
+         JOIN factions f ON f.id = frs.faction_id
+         WHERE frs.game_version_id = ${DEFAULT_VERSION_SUBQUERY}
+         ORDER BY frs.is_primary DESC, f.name`,
+      )
+      .all()
+
     // Nest standings under their parent scope
     const standingsByScope = new Map<number, typeof standings>()
     for (const s of standings) {
@@ -56,9 +102,17 @@ export function gamedataRoutes<E extends HonoEnv>() {
       standingsByScope.get(scopeId)!.push(s)
     }
 
+    const factionsByScope = new Map<number, typeof factionLinks>()
+    for (const fl of factionLinks) {
+      const scopeId = fl.reputation_scope_id as number
+      if (!factionsByScope.has(scopeId)) factionsByScope.set(scopeId, [])
+      factionsByScope.get(scopeId)!.push(fl)
+    }
+
     const scopesWithStandings = scopes.map((scope) => ({
       ...scope,
       standings: standingsByScope.get(scope.id as number) ?? [],
+      factions: factionsByScope.get(scope.id as number) ?? [],
     }))
 
     return c.json({ scopes: scopesWithStandings })
@@ -180,6 +234,37 @@ export function gamedataRoutes<E extends HonoEnv>() {
       .all()
 
     return c.json(results)
+  })
+
+  // GET /api/gamedata/missions — mission types + givers with faction/location data
+  app.get("/missions", async (c) => {
+    const db = c.env.DB
+
+    const [typesResult, giversResult] = await Promise.all([
+      db.prepare(
+        `SELECT * FROM mission_types
+         WHERE game_version_id = ${DEFAULT_VERSION_SUBQUERY}
+           AND name != '<= PLACEHOLDER =>'
+         ORDER BY name`,
+      ).all(),
+      db.prepare(
+        `SELECT mg.*,
+           f.name as faction_name, f.slug as faction_slug,
+           sml.name as location_name
+         FROM mission_givers mg
+         LEFT JOIN factions f ON f.id = mg.faction_id
+         LEFT JOIN star_map_locations sml ON sml.id = mg.location_id
+         WHERE mg.game_version_id = ${DEFAULT_VERSION_SUBQUERY}
+           AND mg.name != '<= PLACEHOLDER =>'
+           AND mg.name != '<= UNINITIALIZED =>'
+         ORDER BY mg.name`,
+      ).all(),
+    ])
+
+    return c.json({
+      types: typesResult.results,
+      givers: giversResult.results,
+    })
   })
 
   return app
