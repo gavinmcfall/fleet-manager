@@ -204,10 +204,8 @@ export function gamedataRoutes<E extends HonoEnv>() {
         `SELECT s.*,
            REPLACE(REPLACE(REPLACE(s.name, 'Inv ', ''), '_', ' '), '  ', ' ') as display_name,
            (SELECT COUNT(*) FROM shop_inventory si WHERE si.shop_id = s.id) as item_count,
-           sml.name as location_name,
-           sml.type as location_type
+           s.location_label as location_name
          FROM shops s
-         LEFT JOIN star_map_locations sml ON sml.id = s.location_id
          WHERE s.game_version_id = ${DEFAULT_VERSION_SUBQUERY}
          ORDER BY s.name`,
       )

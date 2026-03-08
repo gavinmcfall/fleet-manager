@@ -85,8 +85,8 @@ function InventoryPanel({ shop, onClose }) {
             </div>
             {shop.location_name && (
               <div className="flex items-center gap-1 mt-1.5">
-                <MapPin className="w-3 h-3 text-gray-500 shrink-0" />
-                <span className="text-[10px] font-mono text-gray-500">
+                <MapPin className={`w-3 h-3 shrink-0 ${shop.location_name.includes('(Removed)') ? 'text-gray-600' : 'text-gray-500'}`} />
+                <span className={`text-[10px] font-mono ${shop.location_name.includes('(Removed)') ? 'text-gray-600 line-through' : 'text-gray-500'}`}>
                   {shop.location_name}
                 </span>
               </div>
@@ -191,8 +191,8 @@ function ShopCard({ shop, onClick }) {
       </div>
       {shop.location_name && (
         <div className="flex items-center gap-1 mt-2">
-          <MapPin className="w-3 h-3 text-gray-500 shrink-0" />
-          <span className="text-[10px] font-mono text-gray-500">
+          <MapPin className={`w-3 h-3 shrink-0 ${shop.location_name.includes('(Removed)') ? 'text-gray-600' : 'text-gray-500'}`} />
+          <span className={`text-[10px] font-mono ${shop.location_name.includes('(Removed)') ? 'text-gray-600 line-through' : 'text-gray-500'}`}>
             {shop.location_name}
           </span>
         </div>
