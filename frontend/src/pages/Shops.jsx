@@ -4,7 +4,7 @@ import PageHeader from '../components/PageHeader'
 import LoadingState from '../components/LoadingState'
 import ErrorState from '../components/ErrorState'
 import SearchInput from '../components/SearchInput'
-import { ShoppingCart, Package, X } from 'lucide-react'
+import { ShoppingCart, Package, X, MapPin } from 'lucide-react'
 
 // ── Shop type tabs ────────────────────────────────────────────────────────
 const TYPE_TABS = [
@@ -83,6 +83,14 @@ function InventoryPanel({ shop, onClose }) {
                 {shop.item_count} items
               </span>
             </div>
+            {shop.location_name && (
+              <div className="flex items-center gap-1 mt-1.5">
+                <MapPin className="w-3 h-3 text-gray-500 shrink-0" />
+                <span className="text-[10px] font-mono text-gray-500">
+                  {shop.location_name}
+                </span>
+              </div>
+            )}
           </div>
           <button
             onClick={onClose}
@@ -181,6 +189,14 @@ function ShopCard({ shop, onClick }) {
           </span>
         )}
       </div>
+      {shop.location_name && (
+        <div className="flex items-center gap-1 mt-2">
+          <MapPin className="w-3 h-3 text-gray-500 shrink-0" />
+          <span className="text-[10px] font-mono text-gray-500">
+            {shop.location_name}
+          </span>
+        </div>
+      )}
     </button>
   )
 }
@@ -192,13 +208,22 @@ export default function Shops() {
   const { data: shops, loading, error, refetch } = useAPI('/gamedata/shops')
   const [search, setSearch] = useState('')
   const [typeTab, setTypeTab] = useState('all')
+  const [locationFilter, setLocationFilter] = useState('all')
   const [selectedShop, setSelectedShop] = useState(null)
   const [showAll, setShowAll] = useState(false)
+
+  // Derive unique locations from shop data
+  const locations = useMemo(() => {
+    if (!shops) return []
+    const locs = [...new Set(shops.filter(s => s.location_name).map(s => s.location_name))].sort()
+    return locs
+  }, [shops])
 
   const filtered = useMemo(() => {
     if (!shops) return []
     let items = shops
 
+    // Type filter
     if (typeTab !== 'all') {
       if (typeTab === 'event') {
         items = items.filter((s) => s.is_event === 1)
@@ -207,16 +232,33 @@ export default function Shops() {
       }
     }
 
-    if (search) {
-      const q = search.toLowerCase()
-      items = items.filter((s) => s.display_name.toLowerCase().includes(q))
+    // Location filter
+    if (locationFilter === 'unlocated') {
+      items = items.filter((s) => !s.location_name)
+    } else if (locationFilter !== 'all') {
+      items = items.filter((s) => s.location_name === locationFilter)
     }
 
-    return items.sort((a, b) => a.display_name.localeCompare(b.display_name))
-  }, [shops, typeTab, search])
+    // Search — match on display_name or location_name
+    if (search) {
+      const q = search.toLowerCase()
+      items = items.filter((s) =>
+        s.display_name.toLowerCase().includes(q) ||
+        (s.location_name && s.location_name.toLowerCase().includes(q))
+      )
+    }
+
+    // Sort: shops with locations first (alpha), then unlocated shops (alpha)
+    return items.sort((a, b) => {
+      const aHasLoc = a.location_name ? 0 : 1
+      const bHasLoc = b.location_name ? 0 : 1
+      if (aHasLoc !== bHasLoc) return aHasLoc - bHasLoc
+      return a.display_name.localeCompare(b.display_name)
+    })
+  }, [shops, typeTab, locationFilter, search])
 
   // Reset pagination when filters change
-  React.useEffect(() => { setShowAll(false) }, [typeTab, search])
+  React.useEffect(() => { setShowAll(false) }, [typeTab, locationFilter, search])
 
   const visible = showAll ? filtered : filtered.slice(0, INITIAL_COUNT)
   const hasMore = !showAll && filtered.length > INITIAL_COUNT
@@ -249,10 +291,50 @@ export default function Shops() {
         ))}
       </div>
 
+      {/* Location filter */}
+      {locations.length > 0 && (
+        <div className="flex flex-wrap gap-1.5">
+          <button
+            onClick={() => setLocationFilter('all')}
+            className={`px-3 py-1.5 rounded text-xs font-display uppercase tracking-wide transition-all duration-150 ${
+              locationFilter === 'all'
+                ? 'bg-emerald-500/20 text-emerald-400 border border-emerald-500/40'
+                : 'text-gray-400 hover:text-gray-300 border border-sc-border hover:border-gray-600'
+            }`}
+          >
+            All Locations
+          </button>
+          {locations.map((loc) => (
+            <button
+              key={loc}
+              onClick={() => setLocationFilter(loc)}
+              className={`px-3 py-1.5 rounded text-xs font-display tracking-wide transition-all duration-150 flex items-center gap-1 ${
+                locationFilter === loc
+                  ? 'bg-emerald-500/20 text-emerald-400 border border-emerald-500/40'
+                  : 'text-gray-400 hover:text-gray-300 border border-sc-border hover:border-gray-600'
+              }`}
+            >
+              <MapPin className="w-3 h-3" />
+              {loc}
+            </button>
+          ))}
+          <button
+            onClick={() => setLocationFilter('unlocated')}
+            className={`px-3 py-1.5 rounded text-xs font-display uppercase tracking-wide transition-all duration-150 ${
+              locationFilter === 'unlocated'
+                ? 'bg-emerald-500/20 text-emerald-400 border border-emerald-500/40'
+                : 'text-gray-400 hover:text-gray-300 border border-sc-border hover:border-gray-600'
+            }`}
+          >
+            Unlocated
+          </button>
+        </div>
+      )}
+
       <SearchInput
         value={search}
         onChange={setSearch}
-        placeholder="Search shops..."
+        placeholder="Search shops or locations..."
         className="max-w-md"
       />
 
