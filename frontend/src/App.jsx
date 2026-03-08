@@ -1,6 +1,6 @@
 import React, { useState, Suspense, lazy } from 'react'
 import { Routes, Route, NavLink, useLocation, useNavigate } from 'react-router-dom'
-import { Rocket, BarChart3, Shield, Upload, RefreshCw, Database, Settings as SettingsIcon, ChevronDown, ChevronRight, ChevronLeft, History, Menu, X, LogOut, LogIn, User, Wrench, Users, Building2, FileText, Search, MapPin, Palette } from 'lucide-react'
+import { Rocket, BarChart3, Shield, Upload, RefreshCw, Database, Settings as SettingsIcon, ChevronDown, ChevronRight, ChevronLeft, History, Menu, X, LogOut, LogIn, User, Wrench, Users, Building2, FileText, Search, MapPin, Palette, ShoppingCart, Hammer, Briefcase, Star, Scale, Crosshair, BookOpen, Layers } from 'lucide-react'
 import LoadingState from './components/LoadingState'
 import ErrorBoundary from './components/ErrorBoundary'
 import RequireAuth from './components/RequireAuth'
@@ -40,6 +40,11 @@ const POI = lazy(() => import('./pages/POI'))
 const POIDetail = lazy(() => import('./pages/POIDetail'))
 const PaintBrowser = lazy(() => import('./pages/PaintBrowser'))
 const ArmorSetDetail = lazy(() => import('./pages/ArmorSetDetail'))
+const Shops = lazy(() => import('./pages/Shops'))
+const MiningGuide = lazy(() => import('./pages/MiningGuide'))
+const Careers = lazy(() => import('./pages/Careers'))
+const Reputation = lazy(() => import('./pages/Reputation'))
+const LawSystem = lazy(() => import('./pages/LawSystem'))
 const NotFound = lazy(() => import('./pages/NotFound'))
 
 const publicNavItems = [
@@ -48,23 +53,46 @@ const publicNavItems = [
 
 const authNavItems = [
   { to: '/', icon: BarChart3, label: 'Dashboard' },
-  { to: '/loot', icon: Search, label: 'Item Finder' },
-  { to: '/poi', icon: MapPin, label: 'Locations' },
-  { to: '/contracts', icon: FileText, label: 'Contracts' },
-  { to: '/fleet', icon: Rocket, label: 'Fleet' },
-  { to: '/insurance', icon: Shield, label: 'Insurance' },
   {
-    to: '/analysis',
-    icon: RefreshCw,
-    label: 'Analysis',
-    submenu: [
-      { to: '/analysis', icon: RefreshCw, label: 'Current' },
-      { to: '/analysis/history', icon: History, label: 'History' },
+    group: 'Game Data',
+    icon: Crosshair,
+    items: [
+      { to: '/loot', icon: Search, label: 'Item Finder' },
+      { to: '/poi', icon: MapPin, label: 'Locations' },
+      { to: '/contracts', icon: FileText, label: 'Contracts' },
+      { to: '/shops', icon: ShoppingCart, label: 'Shops' },
+      { to: '/mining', icon: Hammer, label: 'Mining Guide' },
     ],
   },
-  { to: '/ships', icon: Database, label: 'Ship DB' },
-  { to: '/paints', icon: Palette, label: 'Paints' },
-  { to: '/import', icon: Upload, label: 'Import' },
+  {
+    group: 'My Fleet',
+    icon: Rocket,
+    items: [
+      { to: '/fleet', icon: Rocket, label: 'Fleet' },
+      { to: '/insurance', icon: Shield, label: 'Insurance' },
+      {
+        to: '/analysis',
+        icon: RefreshCw,
+        label: 'Analysis',
+        submenu: [
+          { to: '/analysis', icon: RefreshCw, label: 'Current' },
+          { to: '/analysis/history', icon: History, label: 'History' },
+        ],
+      },
+      { to: '/import', icon: Upload, label: 'Import' },
+    ],
+  },
+  {
+    group: 'Reference',
+    icon: BookOpen,
+    items: [
+      { to: '/ships', icon: Database, label: 'Ship DB' },
+      { to: '/paints', icon: Palette, label: 'Paints' },
+      { to: '/careers', icon: Briefcase, label: 'Careers & Roles' },
+      { to: '/reputation', icon: Star, label: 'Reputation' },
+      { to: '/law', icon: Scale, label: 'Law System' },
+    ],
+  },
   { to: '/settings', icon: SettingsIcon, label: 'Settings' },
   { to: '/orgs', icon: Building2, label: 'Orgs' },
 ]
@@ -105,6 +133,81 @@ function VersionBadge() {
   )
 }
 
+function renderNavItem(item, location, expandedMenu, setExpandedMenu, onNavClick) {
+  const { to, icon: Icon, label, submenu } = item
+  const hasSubmenu = submenu && submenu.length > 0
+  const isParentActive = location.pathname.startsWith(to)
+  const isExpanded = expandedMenu === to
+
+  if (hasSubmenu) {
+    return (
+      <div key={to} role="listitem">
+        <button
+          onClick={() => setExpandedMenu(isExpanded ? null : to)}
+          aria-expanded={isExpanded}
+          className={`w-full flex items-center gap-3 px-3 py-2.5 rounded text-sm font-medium transition-all duration-150 ${
+            isParentActive
+              ? 'bg-sc-accent/10 text-sc-accent border-l-2 border-l-sc-accent border-r border-t border-b border-sc-accent/20'
+              : 'text-gray-400 hover:text-gray-300 hover:bg-white/5 hover:translate-x-0.5 border border-transparent'
+          }`}
+        >
+          <Icon className="w-4 h-4" aria-hidden="true" />
+          <span className="font-display tracking-wide text-xs uppercase flex-1 text-left">{label}</span>
+          {isExpanded ? (
+            <ChevronDown className="w-3 h-3" aria-hidden="true" />
+          ) : (
+            <ChevronRight className="w-3 h-3" aria-hidden="true" />
+          )}
+        </button>
+
+        {isExpanded && (
+          <div className="ml-4 mt-0.5 space-y-0.5 border-l-2 border-sc-border pl-2" role="list">
+            {submenu.map((sub) => (
+              <NavLink
+                key={sub.to}
+                to={sub.to}
+                end
+                role="listitem"
+                onClick={onNavClick}
+                className={({ isActive }) =>
+                  `flex items-center gap-2 px-3 py-2 rounded text-xs font-medium transition-all duration-150 ${
+                    isActive
+                      ? 'bg-sc-accent/10 text-sc-accent'
+                      : 'text-gray-400 hover:text-gray-300 hover:bg-white/5 hover:translate-x-0.5'
+                  }`
+                }
+              >
+                <sub.icon className="w-3.5 h-3.5" aria-hidden="true" />
+                <span className="font-display tracking-wide uppercase">{sub.label}</span>
+              </NavLink>
+            ))}
+          </div>
+        )}
+      </div>
+    )
+  }
+
+  return (
+    <NavLink
+      key={to}
+      to={to}
+      end={to === '/'}
+      role="listitem"
+      onClick={onNavClick}
+      className={({ isActive }) =>
+        `flex items-center gap-3 px-3 py-2.5 rounded text-sm font-medium transition-all duration-150 ${
+          isActive
+            ? 'bg-sc-accent/10 text-sc-accent border-l-2 border-l-sc-accent border-r border-t border-b border-sc-accent/20'
+            : 'text-gray-400 hover:text-gray-300 hover:bg-white/5 hover:translate-x-0.5 border border-transparent'
+        }`
+      }
+    >
+      <Icon className="w-4 h-4" aria-hidden="true" />
+      <span className="font-display tracking-wide text-xs uppercase">{label}</span>
+    </NavLink>
+  )
+}
+
 function SidebarContent({ expandedMenu, setExpandedMenu, onNavClick }) {
   const location = useLocation()
   const navigate = useNavigate()
@@ -128,80 +231,50 @@ function SidebarContent({ expandedMenu, setExpandedMenu, onNavClick }) {
         <p className="text-xs font-mono text-gray-500 mt-1 tracking-widest">STAR CITIZEN COMPANION</p>
         <VersionBadge />
       </div>
-      <div className="flex flex-col gap-0.5 p-2 flex-1" role="list">
+      <div className="flex flex-col gap-0.5 p-2 flex-1 overflow-y-auto" role="list">
         {navItems.map((item) => {
-          const { to, icon: Icon, label, submenu } = item
-          const hasSubmenu = submenu && submenu.length > 0
-          const isParentActive = location.pathname.startsWith(to)
-          const isExpanded = expandedMenu === to
+          // Group with collapsible children
+          if (item.group) {
+            const GroupIcon = item.icon
+            const groupKey = item.group
+            const isGroupExpanded = expandedMenu === groupKey
+            const isGroupActive = item.items.some(child =>
+              child.submenu
+                ? child.submenu.some(s => location.pathname === s.to || location.pathname.startsWith(s.to + '/'))
+                : location.pathname === child.to || location.pathname.startsWith(child.to + '/')
+            )
 
-          if (hasSubmenu) {
             return (
-              <div key={to} role="listitem">
+              <div key={groupKey} role="listitem">
                 <button
-                  onClick={() => setExpandedMenu(isExpanded ? null : to)}
-                  aria-expanded={isExpanded}
-                  className={`w-full flex items-center gap-3 px-3 py-2.5 rounded text-sm font-medium transition-all duration-150 ${
-                    isParentActive
-                      ? 'bg-sc-accent/10 text-sc-accent border-l-2 border-l-sc-accent border-r border-t border-b border-sc-accent/20'
-                      : 'text-gray-400 hover:text-gray-300 hover:bg-white/5 hover:translate-x-0.5 border border-transparent'
+                  onClick={() => setExpandedMenu(isGroupExpanded ? null : groupKey)}
+                  aria-expanded={isGroupExpanded}
+                  className={`w-full flex items-center gap-3 px-3 py-2 rounded text-sm font-medium transition-all duration-150 ${
+                    isGroupActive && !isGroupExpanded
+                      ? 'text-sc-accent'
+                      : 'text-gray-500 hover:text-gray-300 hover:bg-white/5'
                   }`}
                 >
-                  <Icon className="w-4 h-4" aria-hidden="true" />
-                  <span className="font-display tracking-wide text-xs uppercase flex-1 text-left">{label}</span>
-                  {isExpanded ? (
+                  <GroupIcon className="w-4 h-4" aria-hidden="true" />
+                  <span className="font-display tracking-wide text-[10px] uppercase flex-1 text-left">{groupKey}</span>
+                  {isGroupExpanded ? (
                     <ChevronDown className="w-3 h-3" aria-hidden="true" />
                   ) : (
                     <ChevronRight className="w-3 h-3" aria-hidden="true" />
                   )}
                 </button>
 
-                {isExpanded && (
-                  <div className="ml-4 mt-0.5 space-y-0.5 border-l-2 border-sc-border pl-2" role="list">
-                    {submenu.map((sub) => (
-                      <NavLink
-                        key={sub.to}
-                        to={sub.to}
-                        end
-                        role="listitem"
-                        onClick={onNavClick}
-                        className={({ isActive }) =>
-                          `flex items-center gap-2 px-3 py-2 rounded text-xs font-medium transition-all duration-150 ${
-                            isActive
-                              ? 'bg-sc-accent/10 text-sc-accent'
-                              : 'text-gray-400 hover:text-gray-300 hover:bg-white/5 hover:translate-x-0.5'
-                          }`
-                        }
-                      >
-                        <sub.icon className="w-3.5 h-3.5" aria-hidden="true" />
-                        <span className="font-display tracking-wide uppercase">{sub.label}</span>
-                      </NavLink>
-                    ))}
+                {isGroupExpanded && (
+                  <div className="ml-3 mt-0.5 space-y-0.5 border-l border-sc-border pl-2" role="list">
+                    {item.items.map((child) => renderNavItem(child, location, expandedMenu, setExpandedMenu, onNavClick))}
                   </div>
                 )}
               </div>
             )
           }
 
-          return (
-            <NavLink
-              key={to}
-              to={to}
-              end={to === '/'}
-              role="listitem"
-              onClick={onNavClick}
-              className={({ isActive }) =>
-                `flex items-center gap-3 px-3 py-2.5 rounded text-sm font-medium transition-all duration-150 ${
-                  isActive
-                    ? 'bg-sc-accent/10 text-sc-accent border-l-2 border-l-sc-accent border-r border-t border-b border-sc-accent/20'
-                    : 'text-gray-400 hover:text-gray-300 hover:bg-white/5 hover:translate-x-0.5 border border-transparent'
-                }`
-              }
-            >
-              <Icon className="w-4 h-4" aria-hidden="true" />
-              <span className="font-display tracking-wide text-xs uppercase">{label}</span>
-            </NavLink>
-          )
+          // Top-level item (Dashboard, Settings, Orgs)
+          return renderNavItem(item, location, expandedMenu, setExpandedMenu, onNavClick)
         })}
       </div>
 
@@ -276,6 +349,32 @@ function CollapsedSidebar({ onExpand }) {
       </div>
       <div className="flex flex-col gap-1 p-1.5 flex-1" role="list">
         {navItems.map((item) => {
+          // Group — show group icon, active if any child active
+          if (item.group) {
+            const GroupIcon = item.icon
+            const isActive = item.items.some(child =>
+              child.submenu
+                ? child.submenu.some(s => location.pathname === s.to || location.pathname.startsWith(s.to + '/'))
+                : location.pathname === child.to || location.pathname.startsWith(child.to + '/')
+            )
+            const firstTo = item.items[0]?.submenu ? item.items[0].submenu[0].to : item.items[0]?.to
+            return (
+              <NavLink
+                key={item.group}
+                to={firstTo}
+                role="listitem"
+                title={item.group}
+                className={`flex items-center justify-center p-2 rounded transition-all duration-150 ${
+                  isActive
+                    ? 'bg-sc-accent/10 text-sc-accent border border-sc-accent/20'
+                    : 'text-gray-500 hover:text-gray-300 hover:bg-white/5 border border-transparent'
+                }`}
+              >
+                <GroupIcon className="w-4 h-4" aria-hidden="true" />
+              </NavLink>
+            )
+          }
+
           const { to, icon: Icon, label, submenu } = item
           const isActive = submenu
             ? location.pathname.startsWith(to)
@@ -337,7 +436,7 @@ function ImpersonationBanner() {
 
 export default function App() {
   useFontPreference()
-  const [expandedMenu, setExpandedMenu] = useState('/analysis')
+  const [expandedMenu, setExpandedMenu] = useState('My Fleet')
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false)
   const [sidebarCollapsed, setSidebarCollapsed] = useState(() => {
     try { return localStorage.getItem('sidebar-collapsed') === '1' } catch { return false }
@@ -458,6 +557,11 @@ export default function App() {
                       <Route path="/poi/:slug" element={<RequireAuth><POIDetail /></RequireAuth>} />
                       <Route path="/poi/:type/:slug" element={<RequireAuth><POIDetail /></RequireAuth>} />
                       <Route path="/contracts" element={<RequireAuth><Contracts /></RequireAuth>} />
+                      <Route path="/shops" element={<RequireAuth><Shops /></RequireAuth>} />
+                      <Route path="/mining" element={<RequireAuth><MiningGuide /></RequireAuth>} />
+                      <Route path="/careers" element={<RequireAuth><Careers /></RequireAuth>} />
+                      <Route path="/reputation" element={<RequireAuth><Reputation /></RequireAuth>} />
+                      <Route path="/law" element={<RequireAuth><LawSystem /></RequireAuth>} />
                       <Route path="/fleet" element={<RequireAuth><FleetTable /></RequireAuth>} />
                       <Route path="/insurance" element={<RequireAuth><Insurance /></RequireAuth>} />
                       <Route path="/analysis" element={<RequireAuth><Analysis /></RequireAuth>} />
