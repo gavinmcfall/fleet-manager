@@ -17,15 +17,17 @@ export function gamedataRoutes<E extends HonoEnv>() {
       db.prepare("SELECT * FROM vehicle_careers WHERE name != '<= PLACEHOLDER =>' ORDER BY name").all(),
       db.prepare("SELECT * FROM vehicle_roles WHERE name != '<= PLACEHOLDER =>' AND name NOT LIKE '%Haymaker%' ORDER BY name").all(),
       db.prepare(`
-        SELECT vca.career_id, v.id, v.name, v.slug, v.image_url, v.manufacturer_name, v.size_label, v.focus, v.classification
+        SELECT vca.career_id, v.id, v.name, v.slug, v.image_url, m.name as manufacturer_name, v.size_label, v.focus, v.classification
         FROM vehicle_career_assignments vca
         JOIN vehicles v ON v.id = vca.vehicle_id
+        LEFT JOIN manufacturers m ON m.id = v.manufacturer_id
         ORDER BY v.name
       `).all(),
       db.prepare(`
-        SELECT vra.role_id, v.id, v.name, v.slug, v.image_url, v.manufacturer_name, v.size_label, v.focus, v.classification
+        SELECT vra.role_id, v.id, v.name, v.slug, v.image_url, m.name as manufacturer_name, v.size_label, v.focus, v.classification
         FROM vehicle_role_assignments vra
         JOIN vehicles v ON v.id = vra.vehicle_id
+        LEFT JOIN manufacturers m ON m.id = v.manufacturer_id
         ORDER BY v.name
       `).all(),
     ])
