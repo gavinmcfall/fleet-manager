@@ -845,33 +845,34 @@ export default function LootDB() {
         <div className="space-y-6">
           {wishlistItems && wishlistItems.length > 0 ? (
             <>
-              {/* Shopping list — compact location rows */}
+              {/* Shopping list — full-width rows per source, 3-col locations inside */}
               {Object.keys(shoppingList).length > 0 && (
-                <div>
-                  <p className="text-[10px] font-display uppercase tracking-widest text-gray-500 mb-3">Shopping List</p>
-                  <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-3">
-                    {Object.entries(shoppingList).map(([key, { label, icon: Icon, locations }]) => (
+                <div className="space-y-3">
+                  <p className="text-[10px] font-display uppercase tracking-widest text-gray-500">Shopping List</p>
+                  {Object.entries(shoppingList).map(([key, { label, icon: Icon, locations }]) => {
+                    const locEntries = Object.entries(locations).sort((a, b) => b[1].length - a[1].length)
+                    return (
                       <div key={key} className="panel p-3 space-y-2">
                         <div className="flex items-center gap-2">
                           <Icon className="w-3.5 h-3.5 text-gray-400" />
                           <span className="text-[10px] font-display uppercase tracking-wider text-gray-400">{label}</span>
-                          <span className="text-[10px] font-mono text-gray-600 ml-auto">{Object.keys(locations).length}</span>
+                          <span className="text-[10px] font-mono text-gray-600 ml-auto">
+                            {locEntries.length} location{locEntries.length !== 1 ? 's' : ''}
+                          </span>
                         </div>
-                        <div className="space-y-0">
-                          {Object.entries(locations)
-                            .sort((a, b) => b[1].length - a[1].length)
-                            .map(([loc, items]) => (
-                              <div key={loc} className="flex items-center justify-between py-1 border-t border-sc-border/50 first:border-0">
-                                <span className="text-xs text-gray-300 truncate mr-2">{loc}</span>
-                                <span className="text-[10px] font-mono text-gray-500 shrink-0">
-                                  {[...new Set(items)].length} item{[...new Set(items)].length !== 1 ? 's' : ''}
-                                </span>
-                              </div>
-                            ))}
+                        <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 gap-x-4 gap-y-0">
+                          {locEntries.map(([loc, items]) => (
+                            <div key={loc} className="flex items-center justify-between py-1 border-t border-sc-border/50">
+                              <span className="text-xs text-gray-300 truncate mr-2">{loc}</span>
+                              <span className="text-[10px] font-mono text-gray-500 shrink-0">
+                                {[...new Set(items)].length}
+                              </span>
+                            </div>
+                          ))}
                         </div>
                       </div>
-                    ))}
-                  </div>
+                    )
+                  })}
                 </div>
               )}
 
