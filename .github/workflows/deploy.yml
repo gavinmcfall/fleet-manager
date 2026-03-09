@@ -28,6 +28,11 @@ jobs:
       - name: Build
         run: npm run build
 
+      - name: Build frontend for staging
+        if: github.ref == 'refs/heads/staging'
+        run: npm run build
+        working-directory: frontend
+
       - name: TypeScript check
         run: npm run typecheck
 
