@@ -1,5 +1,5 @@
 import React, { useState, useMemo, useCallback, useEffect } from 'react'
-import { useParams, useNavigate } from 'react-router-dom'
+import { useParams, useNavigate, useSearchParams } from 'react-router-dom'
 import {
   Search, ShoppingCart, Package, Swords, Skull, FileText, MapPin,
   LayoutGrid, List, X, ChevronRight, ChevronDown, Check, Plus, Bookmark, BookmarkPlus,
@@ -60,7 +60,18 @@ export default function LootDB() {
   )
 
   const [actionError, setActionError] = useState(null)
-  const [activeTab, setActiveTab] = useState('browse')
+  const [searchParams, setSearchParams] = useSearchParams()
+  const VALID_TABS = ['browse', 'collection', 'wishlist']
+  const tabParam = searchParams.get('tab')
+  const activeTab = VALID_TABS.includes(tabParam) ? tabParam : 'browse'
+  const setActiveTab = useCallback((tab) => {
+    setSearchParams(prev => {
+      const next = new URLSearchParams(prev)
+      if (tab === 'browse') next.delete('tab')
+      else next.set('tab', tab)
+      return next
+    }, { replace: true })
+  }, [setSearchParams])
   const [search, setSearch] = useState('')
   const [category, setCategory] = useState('all')
   const [brand, setBrand] = useState(null)
