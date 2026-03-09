@@ -41,6 +41,33 @@ ENVIRONMENT = "production"
 BETTER_AUTH_URL = "https://scbridge.app"
 EMAIL_FROM = "SC Bridge <noreply@scbridge.app>"
 
+# ── Staging Environment ──
+[env.staging]
+workers_dev = true
+preview_urls = false
+routes = [{ pattern = "staging.scbridge.app", custom_domain = true }]
+
+[env.staging.vars]
+RSI_API_ENABLED = "false"
+ENVIRONMENT = "staging"
+BETTER_AUTH_URL = "https://staging.scbridge.app"
+EMAIL_FROM = "SC Bridge Staging <noreply@scbridge.app>"
+RSI_BASE_URL = "https://robertsspaceindustries.com"
+RSI_RATE_LIMIT = "1.0"
+
+[[env.staging.d1_databases]]
+binding = "DB"
+database_name = "sc-companion-staging"
+database_id = "6c6a387b-362f-4dda-88dc-b441b6dc268f"
+migrations_dir = "src/db/migrations"
+
+[[env.staging.r2_buckets]]
+binding = "AVATARS"
+bucket_name = "sc-bridge-avatars-staging"
+
+[env.staging.triggers]
+crons = []
+
 # Workers Observability — structured logs + OTEL export to Grafana Cloud
 [observability]
 
