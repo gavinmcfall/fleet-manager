@@ -287,7 +287,7 @@ export async function seedPersona(
       pledge_name: entry.pledge_name,
       pledge_cost: entry.pledge_cost,
       pledge_date: entry.pledge_date,
-      custom_name: customName,
+      custom_name: customName ?? undefined,
     });
   }
 

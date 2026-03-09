@@ -16,5 +16,5 @@
     "types": ["@cloudflare/workers-types", "@cloudflare/vitest-pool-workers"]
   },
   "include": ["src/**/*.ts", "src/**/*.tsx", "test/**/*.ts"],
-  "exclude": ["node_modules", "frontend"]
+  "exclude": ["node_modules", "frontend", "test/fixtures/generate-whale.ts", "e2e"]
 }
