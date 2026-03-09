@@ -109,3 +109,97 @@ export function buildShoppingList(wishlistItems) {
   })
   return groups
 }
+
+// ── Wishlist grouping ────────────────────────────────────────────────────────
+
+// Top-level groups that merge related DB categories
+export const WISHLIST_GROUPS = [
+  { key: 'armour',          label: 'Armour',          categories: ['armour', 'helmet'] },
+  { key: 'weapons',         label: 'Weapons',         categories: ['weapon'] },
+  { key: 'clothing',        label: 'Clothing',        categories: ['clothing'] },
+  { key: 'attachments',     label: 'Attachments',     categories: ['attachment'] },
+  { key: 'consumables',     label: 'Consumables',     categories: ['consumable'] },
+  { key: 'utility',         label: 'Utility',         categories: ['utility'] },
+  { key: 'ship_components', label: 'Ship Components', categories: ['ship_component', 'missile'] },
+  { key: 'other',           label: 'Other',           categories: ['harvestable', 'prop', 'unknown'] },
+]
+
+// Friendly sub-group labels derived from type/sub_type
+const TYPE_LABELS = {
+  Char_Armor_Arms: 'Arms', Char_Armor_Helmet: 'Helmets', Char_Armor_Torso: 'Core',
+  Char_Armor_Legs: 'Legs', Char_Armor_Backpack: 'Backpacks', Char_Armor_Undersuit: 'Undersuits',
+  Char_Clothing_Hat: 'Hats', Char_Clothing_Torso_0: 'Shirts', Char_Clothing_Torso_1: 'Jackets',
+  Char_Clothing_Legs: 'Pants', Char_Clothing_Feet: 'Boots', Char_Clothing_Hands: 'Gloves',
+  Char_Clothing_Backpack: 'Backpacks', Char_Accessory_Eyes: 'Eyewear',
+  Cooler: 'Coolers', PowerPlant: 'Power Plants', QuantumDrive: 'Quantum Drives',
+  Shield: 'Shields', WeaponGun: 'Ship Weapons', MiningModifier: 'Mining Lasers',
+  MissileLauncher: 'Missile Racks', Turret: 'Turrets', Missile: 'Missiles',
+  Drink: 'Drinks', Food: 'Food',
+  FPS_Consumable: 'Medical', Gadget: 'Gadgets', RemovableChip: 'Data Chips',
+  Misc: 'Miscellaneous',
+}
+
+// Weapons use sub_type for grouping
+const WEAPON_SUB_LABELS = {
+  Small: 'Pistols', Medium: 'Rifles', Large: 'Heavy Weapons',
+  Knife: 'Melee', Grenade: 'Grenades', Gadget: 'Gadgets',
+}
+const ATTACHMENT_SUB_LABELS = {
+  Barrel: 'Barrels', IronSight: 'Sights', Magazine: 'Magazines',
+  BottomAttachment: 'Underbarrel', Utility: 'Utility', Missile: 'Missiles',
+}
+
+// Get a friendly sub-group label for an item
+export function getSubGroupKey(item) {
+  if (item.category === 'weapon') return WEAPON_SUB_LABELS[item.sub_type] || item.sub_type || 'Other'
+  if (item.category === 'attachment') return ATTACHMENT_SUB_LABELS[item.sub_type] || item.sub_type || 'Other'
+  return TYPE_LABELS[item.type] || item.type || 'Other'
+}
+
+// Group items into top-level groups > sub-groups
+// Returns: [{ key, label, count, subGroups: [{ label, items }] }]
+export function groupWishlistItems(items) {
+  if (!items?.length) return []
+  const catSet = new Set(items.map(i => i.category))
+  return WISHLIST_GROUPS
+    .filter(g => g.categories.some(c => catSet.has(c)))
+    .map(g => {
+      const groupItems = items.filter(i => g.categories.includes(i.category))
+      // Build sub-groups
+      const subMap = new Map()
+      for (const item of groupItems) {
+        const subLabel = getSubGroupKey(item)
+        if (!subMap.has(subLabel)) subMap.set(subLabel, [])
+        subMap.get(subLabel).push(item)
+      }
+      const subGroups = [...subMap.entries()]
+        .sort((a, b) => a[0].localeCompare(b[0]))
+        .map(([label, items]) => ({ label, items }))
+      return { key: g.key, label: g.label, count: groupItems.length, subGroups }
+    })
+}
+
+// Build location-grouped view: { locationLabel: { sourceType, items[] } }
+export function groupWishlistByLocation(items) {
+  if (!items?.length) return []
+  const locMap = new Map() // locationLabel → { sourceType, sourceLabel, sourceIcon, itemNames: Set }
+  const parseJson = (str) => { try { return JSON.parse(str) || [] } catch { return [] } }
+
+  for (const item of items) {
+    for (const { key, label, jsonKey, icon } of SOURCE_DEFS) {
+      const entries = parseJson(item[jsonKey])
+      if (!entries.length) continue
+      const uniqueLocs = [...new Set(entries.map(e => resolveLocationEntry(e, key).label))]
+      for (const loc of uniqueLocs) {
+        const mapKey = `${key}::${loc}`
+        if (!locMap.has(mapKey)) {
+          locMap.set(mapKey, { location: loc, sourceType: key, sourceLabel: label, sourceIcon: icon, items: [] })
+        }
+        locMap.get(mapKey).items.push(item)
+      }
+    }
+  }
+
+  // Sort by location name, group by source type
+  return [...locMap.values()].sort((a, b) => a.location.localeCompare(b.location))
+}

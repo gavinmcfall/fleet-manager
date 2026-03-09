@@ -1,7 +1,7 @@
 import React, { useState, useMemo, useCallback, useEffect } from 'react'
 import { useParams, useNavigate } from 'react-router-dom'
 import {
-  Search, ShoppingCart, Package, Swords, Skull, FileText,
+  Search, ShoppingCart, Package, Swords, Skull, FileText, MapPin,
   LayoutGrid, List, X, ChevronRight, ChevronDown, Check, Plus, Bookmark, BookmarkPlus
 } from 'lucide-react'
 import {
@@ -20,7 +20,10 @@ import {
   CATEGORY_LABELS, CATEGORY_BADGE_STYLES,
 } from '../../lib/lootDisplay'
 
-import { extractSetName, PAGE_SIZE_GRID, PAGE_SIZE_LIST, buildShoppingList } from './lootHelpers'
+import {
+  extractSetName, PAGE_SIZE_GRID, PAGE_SIZE_LIST,
+  buildShoppingList, groupWishlistItems, groupWishlistByLocation, SOURCE_DEFS,
+} from './lootHelpers'
 import SourceIcons from './SourceIcons'
 import CollectionStepper from './CollectionStepper'
 import ItemCard from './ItemCard'
@@ -79,9 +82,8 @@ export default function LootDB() {
 
   // Wishlist tab state
   const [wishSearch, setWishSearch] = useState('')
-  const [wishCategory, setWishCategory] = useState('all')
-  const [wishPage, setWishPage] = useState(1)
-  const [collapsedShopSections, setCollapsedShopSections] = useState(new Set())
+  const [wishViewMode, setWishViewMode] = useState('item') // 'item' | 'location'
+  const [collapsedWishGroups, setCollapsedWishGroups] = useState(new Set())
 
   // Reset cascades
   useEffect(() => { setBrand(null); setSetName(null) }, [category])
@@ -227,34 +229,25 @@ export default function LootDB() {
 
   const shoppingList = useMemo(() => buildShoppingList(wishlistItems), [wishlistItems])
 
-  // Wishlist: per-category counts for filter pills
-  const wishlistCategoryCounts = useMemo(() => {
-    if (!wishlistItems) return {}
-    const counts = {}
-    for (const item of wishlistItems) {
-      counts[item.category] = (counts[item.category] || 0) + 1
-    }
-    return counts
-  }, [wishlistItems])
-
-  // Wishlist: filtered + paginated
+  // Wishlist: search-filtered items
   const filteredWishlistItems = useMemo(() => {
     if (!wishlistItems) return []
-    let items = wishlistItems
-    if (wishCategory !== 'all') items = items.filter(i => i.category === wishCategory)
-    if (wishSearch.trim()) {
-      const q = wishSearch.toLowerCase()
-      items = items.filter(i => i.name.toLowerCase().includes(q))
-    }
-    return items
-  }, [wishlistItems, wishCategory, wishSearch])
+    if (!wishSearch.trim()) return wishlistItems
+    const q = wishSearch.toLowerCase()
+    return wishlistItems.filter(i => i.name.toLowerCase().includes(q))
+  }, [wishlistItems, wishSearch])
 
-  const WISHLIST_PAGE_SIZE = 25
-  const wishTotalPages = Math.ceil(filteredWishlistItems.length / WISHLIST_PAGE_SIZE)
-  const pagedWishlistItems = filteredWishlistItems.slice((wishPage - 1) * WISHLIST_PAGE_SIZE, wishPage * WISHLIST_PAGE_SIZE)
+  // Wishlist: grouped by category > sub-type (for "By Item" view)
+  const wishlistGrouped = useMemo(
+    () => groupWishlistItems(filteredWishlistItems),
+    [filteredWishlistItems],
+  )
 
-  // Reset wishlist page on filter change
-  useEffect(() => { setWishPage(1) }, [wishSearch, wishCategory])
+  // Wishlist: grouped by location (for "By Location" view)
+  const wishlistByLocation = useMemo(
+    () => groupWishlistByLocation(filteredWishlistItems),
+    [filteredWishlistItems],
+  )
 
   // qty=0 removes from collection (backend handles via PATCH)
   const handleSetCollectionQty = useCallback(async (uuid, qty) => {
@@ -852,65 +845,37 @@ export default function LootDB() {
         <div className="space-y-6">
           {wishlistItems && wishlistItems.length > 0 ? (
             <>
-              {/* Summary bar */}
-              <div className="panel p-4 flex items-center justify-between">
-                <div className="flex items-center gap-3">
-                  <Bookmark className="w-4 h-4 text-amber-400" />
-                  <span className="text-sm font-display text-gray-200">
-                    {wishlistItems.length} item{wishlistItems.length !== 1 ? 's' : ''} wishlisted
-                  </span>
-                </div>
-                <span className="text-xs font-mono text-gray-500">
-                  {Object.keys(wishlistCategoryCounts).length} categor{Object.keys(wishlistCategoryCounts).length !== 1 ? 'ies' : 'y'}
-                </span>
-              </div>
-
-              {/* Shopping list — collapsible per source */}
+              {/* Shopping list — compact location rows */}
               {Object.keys(shoppingList).length > 0 && (
                 <div>
                   <p className="text-[10px] font-display uppercase tracking-widest text-gray-500 mb-3">Shopping List</p>
-                  <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4">
-                    {Object.entries(shoppingList).map(([key, { label, icon: Icon, locations }]) => {
-                      const locEntries = Object.entries(locations)
-                      const isCollapsed = collapsedShopSections.has(key)
-                      const toggleCollapse = () => setCollapsedShopSections(prev => {
-                        const next = new Set(prev)
-                        next.has(key) ? next.delete(key) : next.add(key)
-                        return next
-                      })
-                      return (
-                        <div key={key} className="panel p-4 space-y-3">
-                          <button
-                            onClick={toggleCollapse}
-                            className="w-full flex items-center gap-2 group"
-                          >
-                            <Icon className="w-4 h-4 text-gray-400" />
-                            <span className="text-[10px] font-display uppercase tracking-wider text-gray-400 flex-1 text-left">{label}</span>
-                            <span className="text-[10px] font-mono text-gray-600">{locEntries.length} location{locEntries.length !== 1 ? 's' : ''}</span>
-                            <ChevronDown className={`w-3 h-3 text-gray-500 transition-transform ${isCollapsed ? '-rotate-90' : ''}`} />
-                          </button>
-                          {!isCollapsed && (
-                            <div className="space-y-2 max-h-48 overflow-y-auto">
-                              {locEntries.map(([loc, items]) => (
-                                <div key={loc} className="pl-2 border-l border-sc-border">
-                                  <p className="text-[10px] font-mono text-gray-400 mb-1">{loc}</p>
-                                  <ul className="space-y-0.5">
-                                    {items.map((name, i) => (
-                                      <li key={i} className="text-xs text-gray-300 font-mono">• {name}</li>
-                                    ))}
-                                  </ul>
-                                </div>
-                              ))}
-                            </div>
-                          )}
+                  <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-3">
+                    {Object.entries(shoppingList).map(([key, { label, icon: Icon, locations }]) => (
+                      <div key={key} className="panel p-3 space-y-2">
+                        <div className="flex items-center gap-2">
+                          <Icon className="w-3.5 h-3.5 text-gray-400" />
+                          <span className="text-[10px] font-display uppercase tracking-wider text-gray-400">{label}</span>
+                          <span className="text-[10px] font-mono text-gray-600 ml-auto">{Object.keys(locations).length}</span>
                         </div>
-                      )
-                    })}
+                        <div className="space-y-0">
+                          {Object.entries(locations)
+                            .sort((a, b) => b[1].length - a[1].length)
+                            .map(([loc, items]) => (
+                              <div key={loc} className="flex items-center justify-between py-1 border-t border-sc-border/50 first:border-0">
+                                <span className="text-xs text-gray-300 truncate mr-2">{loc}</span>
+                                <span className="text-[10px] font-mono text-gray-500 shrink-0">
+                                  {[...new Set(items)].length} item{[...new Set(items)].length !== 1 ? 's' : ''}
+                                </span>
+                              </div>
+                            ))}
+                        </div>
+                      </div>
+                    ))}
                   </div>
                 </div>
               )}
 
-              {/* Search + category filter */}
+              {/* Toolbar: search + view toggle */}
               <div className="flex items-center gap-2 flex-wrap">
                 <SearchInput
                   value={wishSearch}
@@ -918,95 +883,176 @@ export default function LootDB() {
                   placeholder="Search wishlist..."
                   className="flex-1 min-w-48"
                 />
-                {wishCategory !== 'all' && (
+                <div className="flex items-center gap-1 border border-sc-border rounded p-0.5">
                   <button
-                    onClick={() => setWishCategory('all')}
-                    className="flex items-center gap-1 text-[10px] font-mono bg-amber-400/10 border border-amber-400/30 text-amber-400 px-2 py-1 rounded"
-                  >
-                    {CATEGORY_LABELS[wishCategory] || wishCategory}
-                    <X className="w-2.5 h-2.5" />
-                  </button>
-                )}
-              </div>
-
-              {/* Category pills */}
-              {Object.keys(wishlistCategoryCounts).length > 1 && (
-                <div className="flex gap-1.5 overflow-x-auto pb-1 scrollbar-none">
-                  <button
-                    onClick={() => setWishCategory('all')}
-                    className={`px-2.5 py-1 rounded text-[10px] font-display uppercase tracking-wide whitespace-nowrap transition-colors shrink-0 ${
-                      wishCategory === 'all' ? 'bg-amber-400/20 text-amber-400 border border-amber-400/40' : 'text-gray-400 border border-sc-border'
+                    onClick={() => setWishViewMode('item')}
+                    className={`px-2 py-1 rounded text-[10px] font-display uppercase tracking-wide transition-colors ${
+                      wishViewMode === 'item' ? 'bg-amber-400/20 text-amber-400' : 'text-gray-400 hover:text-gray-300'
                     }`}
                   >
-                    All ({wishlistItems.length})
+                    By Item
                   </button>
-                  {Object.entries(wishlistCategoryCounts)
-                    .sort((a, b) => b[1] - a[1])
-                    .map(([cat, count]) => (
-                      <button
-                        key={cat}
-                        onClick={() => setWishCategory(wishCategory === cat ? 'all' : cat)}
-                        className={`px-2.5 py-1 rounded text-[10px] font-display uppercase tracking-wide whitespace-nowrap transition-colors shrink-0 ${
-                          wishCategory === cat ? 'bg-amber-400/20 text-amber-400 border border-amber-400/40' : 'text-gray-400 border border-sc-border'
-                        }`}
-                      >
-                        {CATEGORY_LABELS[cat] || cat} ({count})
-                      </button>
-                    ))}
+                  <button
+                    onClick={() => setWishViewMode('location')}
+                    className={`px-2 py-1 rounded text-[10px] font-display uppercase tracking-wide transition-colors ${
+                      wishViewMode === 'location' ? 'bg-amber-400/20 text-amber-400' : 'text-gray-400 hover:text-gray-300'
+                    }`}
+                  >
+                    By Location
+                  </button>
                 </div>
-              )}
+              </div>
 
-              {/* Result count + pagination info */}
+              {/* Result count */}
               <div className="flex items-center justify-between">
                 <span className="text-xs font-mono text-gray-500">
                   {filteredWishlistItems.length} item{filteredWishlistItems.length !== 1 ? 's' : ''}
                   {filteredWishlistItems.length !== wishlistItems.length && ` of ${wishlistItems.length}`}
                 </span>
-                {wishTotalPages > 1 && (
-                  <span className="text-xs font-mono text-gray-500">
-                    Page {wishPage} / {wishTotalPages}
-                  </span>
-                )}
               </div>
 
-              {/* Wishlisted items list — paginated */}
-              <div className="border border-sc-border rounded overflow-hidden">
-                {pagedWishlistItems.map((item) => (
-                  <WishlistRow
-                    key={item.id}
-                    item={item}
-                    collectionQty={collected.get(item.id) ?? 0}
-                    onSetCollectionQty={handleSetCollectionQty}
-                    wishlistQty={wishlistMap.get(item.id) ?? 1}
-                    onSetWishlistQty={handleSetWishlistQty}
-                    onSelect={setDetailUuid}
-                  />
-                ))}
-                {filteredWishlistItems.length === 0 && (
-                  <div className="py-8 text-center text-gray-500 font-mono text-sm">
-                    No items match your filters.
-                  </div>
-                )}
-              </div>
+              {/* ── By Item view: grouped by category > sub-type ── */}
+              {wishViewMode === 'item' && (
+                <div className="space-y-2">
+                  {wishlistGrouped.map((group) => {
+                    const groupKey = `group::${group.key}`
+                    const isGroupCollapsed = collapsedWishGroups.has(groupKey)
+                    return (
+                      <div key={group.key} className="border border-sc-border rounded overflow-hidden">
+                        {/* Top-level group header */}
+                        <button
+                          onClick={() => setCollapsedWishGroups(prev => {
+                            const next = new Set(prev)
+                            next.has(groupKey) ? next.delete(groupKey) : next.add(groupKey)
+                            return next
+                          })}
+                          className="w-full flex items-center gap-3 px-4 py-2.5 bg-sc-darker/50 hover:bg-white/3 transition-colors"
+                        >
+                          <ChevronDown className={`w-3.5 h-3.5 text-gray-500 transition-transform ${isGroupCollapsed ? '-rotate-90' : ''}`} />
+                          <span className="text-xs font-display uppercase tracking-wider text-amber-400">{group.label}</span>
+                          <span className="text-[10px] font-mono text-gray-500">{group.count}</span>
+                        </button>
 
-              {/* Pagination */}
-              {wishTotalPages > 1 && (
-                <div className="flex items-center justify-center gap-2 pt-2">
-                  <button
-                    onClick={() => setWishPage((p) => Math.max(1, p - 1))}
-                    disabled={wishPage === 1}
-                    className="px-3 py-1.5 rounded text-xs font-display uppercase tracking-wide border border-sc-border text-gray-400 hover:text-gray-200 disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
-                  >
-                    Prev
-                  </button>
-                  <span className="text-xs font-mono text-gray-500">{wishPage} / {wishTotalPages}</span>
-                  <button
-                    onClick={() => setWishPage((p) => Math.min(wishTotalPages, p + 1))}
-                    disabled={wishPage === wishTotalPages}
-                    className="px-3 py-1.5 rounded text-xs font-display uppercase tracking-wide border border-sc-border text-gray-400 hover:text-gray-200 disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
-                  >
-                    Next
-                  </button>
+                        {!isGroupCollapsed && group.subGroups.map((sub) => {
+                          const subKey = `sub::${group.key}::${sub.label}`
+                          const isSubCollapsed = collapsedWishGroups.has(subKey)
+                          return (
+                            <div key={sub.label}>
+                              {/* Sub-group header */}
+                              <button
+                                onClick={() => setCollapsedWishGroups(prev => {
+                                  const next = new Set(prev)
+                                  next.has(subKey) ? next.delete(subKey) : next.add(subKey)
+                                  return next
+                                })}
+                                className="w-full flex items-center gap-3 px-4 py-2 pl-8 bg-sc-darker/30 hover:bg-white/3 transition-colors border-t border-sc-border/50"
+                              >
+                                <ChevronDown className={`w-3 h-3 text-gray-600 transition-transform ${isSubCollapsed ? '-rotate-90' : ''}`} />
+                                <span className="text-[11px] font-display tracking-wide text-gray-300">{sub.label}</span>
+                                <span className="text-[10px] font-mono text-gray-600">{sub.items.length}</span>
+                              </button>
+
+                              {!isSubCollapsed && sub.items.map((item) => (
+                                <WishlistRow
+                                  key={item.id}
+                                  item={item}
+                                  collectionQty={collected.get(item.id) ?? 0}
+                                  onSetCollectionQty={handleSetCollectionQty}
+                                  wishlistQty={wishlistMap.get(item.id) ?? 1}
+                                  onSetWishlistQty={handleSetWishlistQty}
+                                  onSelect={setDetailUuid}
+                                />
+                              ))}
+                            </div>
+                          )
+                        })}
+                      </div>
+                    )
+                  })}
+                </div>
+              )}
+
+              {/* ── By Location view: grouped by source type > location ── */}
+              {wishViewMode === 'location' && (
+                <div className="space-y-2">
+                  {(() => {
+                    // Group locations by source type
+                    const bySource = new Map()
+                    for (const loc of wishlistByLocation) {
+                      if (!bySource.has(loc.sourceType)) bySource.set(loc.sourceType, [])
+                      bySource.get(loc.sourceType).push(loc)
+                    }
+                    return [...bySource.entries()].map(([sourceType, locations]) => {
+                      const sourceKey = `locsrc::${sourceType}`
+                      const isSourceCollapsed = collapsedWishGroups.has(sourceKey)
+                      const SourceIcon = locations[0].sourceIcon
+                      return (
+                        <div key={sourceType} className="border border-sc-border rounded overflow-hidden">
+                          {/* Source type header */}
+                          <button
+                            onClick={() => setCollapsedWishGroups(prev => {
+                              const next = new Set(prev)
+                              next.has(sourceKey) ? next.delete(sourceKey) : next.add(sourceKey)
+                              return next
+                            })}
+                            className="w-full flex items-center gap-3 px-4 py-2.5 bg-sc-darker/50 hover:bg-white/3 transition-colors"
+                          >
+                            <ChevronDown className={`w-3.5 h-3.5 text-gray-500 transition-transform ${isSourceCollapsed ? '-rotate-90' : ''}`} />
+                            <SourceIcon className="w-3.5 h-3.5 text-gray-400" />
+                            <span className="text-xs font-display uppercase tracking-wider text-amber-400">{locations[0].sourceLabel}</span>
+                            <span className="text-[10px] font-mono text-gray-500">{locations.length} location{locations.length !== 1 ? 's' : ''}</span>
+                          </button>
+
+                          {!isSourceCollapsed && locations.map((loc) => {
+                            const locKey = `loc::${sourceType}::${loc.location}`
+                            const isLocCollapsed = collapsedWishGroups.has(locKey)
+                            return (
+                              <div key={loc.location}>
+                                {/* Location header */}
+                                <button
+                                  onClick={() => setCollapsedWishGroups(prev => {
+                                    const next = new Set(prev)
+                                    next.has(locKey) ? next.delete(locKey) : next.add(locKey)
+                                    return next
+                                  })}
+                                  className="w-full flex items-center gap-3 px-4 py-2 pl-8 bg-sc-darker/30 hover:bg-white/3 transition-colors border-t border-sc-border/50"
+                                >
+                                  <ChevronDown className={`w-3 h-3 text-gray-600 transition-transform ${isLocCollapsed ? '-rotate-90' : ''}`} />
+                                  <MapPin className="w-3 h-3 text-gray-500" />
+                                  <span className="text-[11px] text-gray-300 flex-1 text-left truncate">{loc.location}</span>
+                                  <span className="text-[10px] font-mono text-gray-600 shrink-0">{loc.items.length} item{loc.items.length !== 1 ? 's' : ''}</span>
+                                </button>
+
+                                {!isLocCollapsed && loc.items.map((item) => (
+                                  <WishlistRow
+                                    key={`${loc.location}-${item.id}`}
+                                    item={item}
+                                    collectionQty={collected.get(item.id) ?? 0}
+                                    onSetCollectionQty={handleSetCollectionQty}
+                                    wishlistQty={wishlistMap.get(item.id) ?? 1}
+                                    onSetWishlistQty={handleSetWishlistQty}
+                                    onSelect={setDetailUuid}
+                                  />
+                                ))}
+                              </div>
+                            )
+                          })}
+                        </div>
+                      )
+                    })
+                  })()}
+
+                  {wishlistByLocation.length === 0 && (
+                    <div className="py-8 text-center text-gray-500 font-mono text-sm">
+                      No location data available for wishlisted items.
+                    </div>
+                  )}
+                </div>
+              )}
+
+              {filteredWishlistItems.length === 0 && (
+                <div className="py-8 text-center text-gray-500 font-mono text-sm">
+                  No items match your search.
                 </div>
               )}
             </>
