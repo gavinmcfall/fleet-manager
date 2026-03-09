@@ -2,7 +2,7 @@ import React, { useState, useMemo, useCallback, useEffect } from 'react'
 import { useParams, useNavigate } from 'react-router-dom'
 import {
   Search, ShoppingCart, Package, Swords, Skull, FileText,
-  LayoutGrid, List, X, ChevronRight, Check, Plus, Bookmark, BookmarkPlus
+  LayoutGrid, List, X, ChevronRight, ChevronDown, Check, Plus, Bookmark, BookmarkPlus
 } from 'lucide-react'
 import {
   useLoot, useLootCollection, toggleLootCollection,
@@ -76,6 +76,12 @@ export default function LootDB() {
   // Collection tab state
   const [collSearch, setCollSearch] = useState('')
   const [collCategory, setCollCategory] = useState('all')
+
+  // Wishlist tab state
+  const [wishSearch, setWishSearch] = useState('')
+  const [wishCategory, setWishCategory] = useState('all')
+  const [wishPage, setWishPage] = useState(1)
+  const [collapsedShopSections, setCollapsedShopSections] = useState(new Set())
 
   // Reset cascades
   useEffect(() => { setBrand(null); setSetName(null) }, [category])
@@ -220,6 +226,35 @@ export default function LootDB() {
   const totalCount = allItems?.length || 0
 
   const shoppingList = useMemo(() => buildShoppingList(wishlistItems), [wishlistItems])
+
+  // Wishlist: per-category counts for filter pills
+  const wishlistCategoryCounts = useMemo(() => {
+    if (!wishlistItems) return {}
+    const counts = {}
+    for (const item of wishlistItems) {
+      counts[item.category] = (counts[item.category] || 0) + 1
+    }
+    return counts
+  }, [wishlistItems])
+
+  // Wishlist: filtered + paginated
+  const filteredWishlistItems = useMemo(() => {
+    if (!wishlistItems) return []
+    let items = wishlistItems
+    if (wishCategory !== 'all') items = items.filter(i => i.category === wishCategory)
+    if (wishSearch.trim()) {
+      const q = wishSearch.toLowerCase()
+      items = items.filter(i => i.name.toLowerCase().includes(q))
+    }
+    return items
+  }, [wishlistItems, wishCategory, wishSearch])
+
+  const WISHLIST_PAGE_SIZE = 25
+  const wishTotalPages = Math.ceil(filteredWishlistItems.length / WISHLIST_PAGE_SIZE)
+  const pagedWishlistItems = filteredWishlistItems.slice((wishPage - 1) * WISHLIST_PAGE_SIZE, wishPage * WISHLIST_PAGE_SIZE)
+
+  // Reset wishlist page on filter change
+  useEffect(() => { setWishPage(1) }, [wishSearch, wishCategory])
 
   // qty=0 removes from collection (backend handles via PATCH)
   const handleSetCollectionQty = useCallback(async (uuid, qty) => {
@@ -814,44 +849,129 @@ export default function LootDB() {
 
       {/* ── Wishlist tab ── */}
       {activeTab === 'wishlist' && isAuthed && (
-        <div className="space-y-8">
-          {/* Shopping list */}
-          {Object.keys(shoppingList).length > 0 && (
-            <div>
-              <p className="text-[10px] font-display uppercase tracking-widest text-gray-500 mb-3">Shopping List</p>
-              <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4">
-                {Object.entries(shoppingList).map(([key, { label, icon: Icon, locations }]) => (
-                  <div key={key} className="panel p-4 space-y-3">
-                    <div className="flex items-center gap-2">
-                      <Icon className="w-4 h-4 text-gray-400" />
-                      <span className="text-[10px] font-display uppercase tracking-wider text-gray-400">{label}</span>
-                    </div>
-                    <div className="space-y-2">
-                      {Object.entries(locations).map(([loc, items]) => (
-                        <div key={loc} className="pl-2 border-l border-sc-border">
-                          <p className="text-[10px] font-mono text-gray-400 mb-1">{loc}</p>
-                          <ul className="space-y-0.5">
-                            {items.map((name, i) => (
-                              <li key={i} className="text-xs text-gray-300 font-mono">• {name}</li>
-                            ))}
-                          </ul>
-                        </div>
-                      ))}
-                    </div>
-                  </div>
-                ))}
-              </div>
-            </div>
-          )}
-
-          {/* Wishlisted items list */}
+        <div className="space-y-6">
           {wishlistItems && wishlistItems.length > 0 ? (
-            <div>
-              <p className="text-[10px] font-display uppercase tracking-widest text-gray-500 mb-3">
-                Wishlisted Items ({wishlistItems.length})
-              </p>
+            <>
+              {/* Summary bar */}
+              <div className="panel p-4 flex items-center justify-between">
+                <div className="flex items-center gap-3">
+                  <Bookmark className="w-4 h-4 text-amber-400" />
+                  <span className="text-sm font-display text-gray-200">
+                    {wishlistItems.length} item{wishlistItems.length !== 1 ? 's' : ''} wishlisted
+                  </span>
+                </div>
+                <span className="text-xs font-mono text-gray-500">
+                  {Object.keys(wishlistCategoryCounts).length} categor{Object.keys(wishlistCategoryCounts).length !== 1 ? 'ies' : 'y'}
+                </span>
+              </div>
+
+              {/* Shopping list — collapsible per source */}
+              {Object.keys(shoppingList).length > 0 && (
+                <div>
+                  <p className="text-[10px] font-display uppercase tracking-widest text-gray-500 mb-3">Shopping List</p>
+                  <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4">
+                    {Object.entries(shoppingList).map(([key, { label, icon: Icon, locations }]) => {
+                      const locEntries = Object.entries(locations)
+                      const isCollapsed = collapsedShopSections.has(key)
+                      const toggleCollapse = () => setCollapsedShopSections(prev => {
+                        const next = new Set(prev)
+                        next.has(key) ? next.delete(key) : next.add(key)
+                        return next
+                      })
+                      return (
+                        <div key={key} className="panel p-4 space-y-3">
+                          <button
+                            onClick={toggleCollapse}
+                            className="w-full flex items-center gap-2 group"
+                          >
+                            <Icon className="w-4 h-4 text-gray-400" />
+                            <span className="text-[10px] font-display uppercase tracking-wider text-gray-400 flex-1 text-left">{label}</span>
+                            <span className="text-[10px] font-mono text-gray-600">{locEntries.length} location{locEntries.length !== 1 ? 's' : ''}</span>
+                            <ChevronDown className={`w-3 h-3 text-gray-500 transition-transform ${isCollapsed ? '-rotate-90' : ''}`} />
+                          </button>
+                          {!isCollapsed && (
+                            <div className="space-y-2 max-h-48 overflow-y-auto">
+                              {locEntries.map(([loc, items]) => (
+                                <div key={loc} className="pl-2 border-l border-sc-border">
+                                  <p className="text-[10px] font-mono text-gray-400 mb-1">{loc}</p>
+                                  <ul className="space-y-0.5">
+                                    {items.map((name, i) => (
+                                      <li key={i} className="text-xs text-gray-300 font-mono">• {name}</li>
+                                    ))}
+                                  </ul>
+                                </div>
+                              ))}
+                            </div>
+                          )}
+                        </div>
+                      )
+                    })}
+                  </div>
+                </div>
+              )}
+
+              {/* Search + category filter */}
+              <div className="flex items-center gap-2 flex-wrap">
+                <SearchInput
+                  value={wishSearch}
+                  onChange={setWishSearch}
+                  placeholder="Search wishlist..."
+                  className="flex-1 min-w-48"
+                />
+                {wishCategory !== 'all' && (
+                  <button
+                    onClick={() => setWishCategory('all')}
+                    className="flex items-center gap-1 text-[10px] font-mono bg-amber-400/10 border border-amber-400/30 text-amber-400 px-2 py-1 rounded"
+                  >
+                    {CATEGORY_LABELS[wishCategory] || wishCategory}
+                    <X className="w-2.5 h-2.5" />
+                  </button>
+                )}
+              </div>
+
+              {/* Category pills */}
+              {Object.keys(wishlistCategoryCounts).length > 1 && (
+                <div className="flex gap-1.5 overflow-x-auto pb-1 scrollbar-none">
+                  <button
+                    onClick={() => setWishCategory('all')}
+                    className={`px-2.5 py-1 rounded text-[10px] font-display uppercase tracking-wide whitespace-nowrap transition-colors shrink-0 ${
+                      wishCategory === 'all' ? 'bg-amber-400/20 text-amber-400 border border-amber-400/40' : 'text-gray-400 border border-sc-border'
+                    }`}
+                  >
+                    All ({wishlistItems.length})
+                  </button>
+                  {Object.entries(wishlistCategoryCounts)
+                    .sort((a, b) => b[1] - a[1])
+                    .map(([cat, count]) => (
+                      <button
+                        key={cat}
+                        onClick={() => setWishCategory(wishCategory === cat ? 'all' : cat)}
+                        className={`px-2.5 py-1 rounded text-[10px] font-display uppercase tracking-wide whitespace-nowrap transition-colors shrink-0 ${
+                          wishCategory === cat ? 'bg-amber-400/20 text-amber-400 border border-amber-400/40' : 'text-gray-400 border border-sc-border'
+                        }`}
+                      >
+                        {CATEGORY_LABELS[cat] || cat} ({count})
+                      </button>
+                    ))}
+                </div>
+              )}
+
+              {/* Result count + pagination info */}
+              <div className="flex items-center justify-between">
+                <span className="text-xs font-mono text-gray-500">
+                  {filteredWishlistItems.length} item{filteredWishlistItems.length !== 1 ? 's' : ''}
+                  {filteredWishlistItems.length !== wishlistItems.length && ` of ${wishlistItems.length}`}
+                </span>
+                {wishTotalPages > 1 && (
+                  <span className="text-xs font-mono text-gray-500">
+                    Page {wishPage} / {wishTotalPages}
+                  </span>
+                )}
+              </div>
+
+              {/* Wishlisted items list — paginated */}
               <div className="border border-sc-border rounded overflow-hidden">
-                {wishlistItems.map((item) => (
+                {pagedWishlistItems.map((item) => (
                   <WishlistRow
                     key={item.id}
                     item={item}
@@ -862,8 +982,34 @@ export default function LootDB() {
                     onSelect={setDetailUuid}
                   />
                 ))}
+                {filteredWishlistItems.length === 0 && (
+                  <div className="py-8 text-center text-gray-500 font-mono text-sm">
+                    No items match your filters.
+                  </div>
+                )}
               </div>
-            </div>
+
+              {/* Pagination */}
+              {wishTotalPages > 1 && (
+                <div className="flex items-center justify-center gap-2 pt-2">
+                  <button
+                    onClick={() => setWishPage((p) => Math.max(1, p - 1))}
+                    disabled={wishPage === 1}
+                    className="px-3 py-1.5 rounded text-xs font-display uppercase tracking-wide border border-sc-border text-gray-400 hover:text-gray-200 disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
+                  >
+                    Prev
+                  </button>
+                  <span className="text-xs font-mono text-gray-500">{wishPage} / {wishTotalPages}</span>
+                  <button
+                    onClick={() => setWishPage((p) => Math.min(wishTotalPages, p + 1))}
+                    disabled={wishPage === wishTotalPages}
+                    className="px-3 py-1.5 rounded text-xs font-display uppercase tracking-wide border border-sc-border text-gray-400 hover:text-gray-200 disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
+                  >
+                    Next
+                  </button>
+                </div>
+              )}
+            </>
           ) : (
             <div className="text-center py-16 text-gray-500 font-mono text-sm">
               No wishlisted items. Browse items and click the{' '}
