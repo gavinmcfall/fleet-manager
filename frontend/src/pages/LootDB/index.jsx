@@ -2,7 +2,8 @@ import React, { useState, useMemo, useCallback, useEffect } from 'react'
 import { useParams, useNavigate } from 'react-router-dom'
 import {
   Search, ShoppingCart, Package, Swords, Skull, FileText, MapPin,
-  LayoutGrid, List, X, ChevronRight, ChevronDown, Check, Plus, Bookmark, BookmarkPlus
+  LayoutGrid, List, X, ChevronRight, ChevronDown, Check, Plus, Bookmark, BookmarkPlus,
+  ArrowUpDown, ChevronsUpDown, ChevronsDownUp,
 } from 'lucide-react'
 import {
   useLoot, useLootCollection, toggleLootCollection,
@@ -22,7 +23,7 @@ import {
 
 import {
   extractSetName, PAGE_SIZE_GRID, PAGE_SIZE_LIST,
-  buildShoppingList, groupWishlistItems, groupWishlistByLocation, SOURCE_DEFS,
+  buildShoppingList, groupWishlistItems, groupWishlistByLocation, getPrimarySource, SOURCE_DEFS,
 } from './lootHelpers'
 import SourceIcons from './SourceIcons'
 import CollectionStepper from './CollectionStepper'
@@ -84,6 +85,8 @@ export default function LootDB() {
   const [wishSearch, setWishSearch] = useState('')
   const [wishViewMode, setWishViewMode] = useState('item') // 'item' | 'location'
   const [collapsedWishGroups, setCollapsedWishGroups] = useState(new Set())
+  const [wishShopSort, setWishShopSort] = useState('count') // 'alpha' | 'count'
+  const [wishShopSortDesc, setWishShopSortDesc] = useState(true)
 
   // Reset cascades
   useEffect(() => { setBrand(null); setSetName(null) }, [category])
@@ -248,6 +251,17 @@ export default function LootDB() {
     () => groupWishlistByLocation(filteredWishlistItems),
     [filteredWishlistItems],
   )
+
+  // Primary source for each wishlist item (best place to find it)
+  const primarySourceMap = useMemo(() => {
+    const map = new Map()
+    if (!filteredWishlistItems?.length) return map
+    for (const item of filteredWishlistItems) {
+      const src = getPrimarySource(item)
+      if (src) map.set(item.id, src)
+    }
+    return map
+  }, [filteredWishlistItems])
 
   // qty=0 removes from collection (backend handles via PATCH)
   const handleSetCollectionQty = useCallback(async (uuid, qty) => {
@@ -848,9 +862,30 @@ export default function LootDB() {
               {/* Shopping list — full-width rows per source, 3-col locations inside */}
               {Object.keys(shoppingList).length > 0 && (
                 <div className="space-y-3">
-                  <p className="text-[10px] font-display uppercase tracking-widest text-gray-500">Shopping List</p>
+                  <div className="flex items-center gap-3">
+                    <p className="text-[10px] font-display uppercase tracking-widest text-gray-500">Shopping List</p>
+                    <div className="flex items-center gap-1 ml-auto">
+                      <button
+                        onClick={() => { setWishShopSort('alpha'); setWishShopSortDesc(d => wishShopSort === 'alpha' ? !d : false) }}
+                        className={`px-1.5 py-0.5 rounded text-[10px] font-display uppercase tracking-wide transition-colors ${
+                          wishShopSort === 'alpha' ? 'bg-amber-400/20 text-amber-400' : 'text-gray-500 hover:text-gray-400'
+                        }`}
+                      >A–Z{wishShopSort === 'alpha' ? (wishShopSortDesc ? ' ↓' : ' ↑') : ''}</button>
+                      <button
+                        onClick={() => { setWishShopSort('count'); setWishShopSortDesc(d => wishShopSort === 'count' ? !d : true) }}
+                        className={`px-1.5 py-0.5 rounded text-[10px] font-display uppercase tracking-wide transition-colors ${
+                          wishShopSort === 'count' ? 'bg-amber-400/20 text-amber-400' : 'text-gray-500 hover:text-gray-400'
+                        }`}
+                      ># Items{wishShopSort === 'count' ? (wishShopSortDesc ? ' ↓' : ' ↑') : ''}</button>
+                    </div>
+                  </div>
                   {Object.entries(shoppingList).map(([key, { label, icon: Icon, locations }]) => {
-                    const locEntries = Object.entries(locations).sort((a, b) => b[1].length - a[1].length)
+                    let locEntries = Object.entries(locations)
+                    if (wishShopSort === 'alpha') {
+                      locEntries.sort((a, b) => wishShopSortDesc ? b[0].localeCompare(a[0]) : a[0].localeCompare(b[0]))
+                    } else {
+                      locEntries.sort((a, b) => wishShopSortDesc ? b[1].length - a[1].length : a[1].length - b[1].length)
+                    }
                     return (
                       <div key={key} className="panel p-3 space-y-2">
                         <div className="flex items-center gap-2">
@@ -921,18 +956,40 @@ export default function LootDB() {
                     return (
                       <div key={group.key} className="border border-sc-border rounded overflow-hidden">
                         {/* Top-level group header */}
-                        <button
-                          onClick={() => setCollapsedWishGroups(prev => {
-                            const next = new Set(prev)
-                            next.has(groupKey) ? next.delete(groupKey) : next.add(groupKey)
-                            return next
-                          })}
-                          className="w-full flex items-center gap-3 px-4 py-2.5 bg-sc-darker/50 hover:bg-white/3 transition-colors"
-                        >
-                          <ChevronDown className={`w-3.5 h-3.5 text-gray-500 transition-transform ${isGroupCollapsed ? '-rotate-90' : ''}`} />
-                          <span className="text-xs font-display uppercase tracking-wider text-amber-400">{group.label}</span>
-                          <span className="text-[10px] font-mono text-gray-500">{group.count}</span>
-                        </button>
+                        <div className="flex items-center bg-sc-darker/50">
+                          <button
+                            onClick={() => setCollapsedWishGroups(prev => {
+                              const next = new Set(prev)
+                              next.has(groupKey) ? next.delete(groupKey) : next.add(groupKey)
+                              return next
+                            })}
+                            className="flex-1 flex items-center gap-3 px-4 py-2.5 hover:bg-white/3 transition-colors"
+                          >
+                            <ChevronDown className={`w-3.5 h-3.5 text-gray-500 transition-transform ${isGroupCollapsed ? '-rotate-90' : ''}`} />
+                            <span className="text-xs font-display uppercase tracking-wider text-amber-400">{group.label}</span>
+                            <span className="text-[10px] font-mono text-gray-500">{group.count}</span>
+                          </button>
+                          {!isGroupCollapsed && (
+                            <button
+                              onClick={(e) => {
+                                e.stopPropagation()
+                                setCollapsedWishGroups(prev => {
+                                  const next = new Set(prev)
+                                  const subKeys = group.subGroups.map(s => `sub::${group.key}::${s.label}`)
+                                  const allCollapsed = subKeys.every(k => next.has(k))
+                                  subKeys.forEach(k => allCollapsed ? next.delete(k) : next.add(k))
+                                  return next
+                                })
+                              }}
+                              className="px-3 py-2.5 text-gray-500 hover:text-gray-300 transition-colors"
+                              title={group.subGroups.every(s => collapsedWishGroups.has(`sub::${group.key}::${s.label}`)) ? 'Expand all' : 'Collapse all'}
+                            >
+                              {group.subGroups.every(s => collapsedWishGroups.has(`sub::${group.key}::${s.label}`))
+                                ? <ChevronsDownUp className="w-3.5 h-3.5" />
+                                : <ChevronsUpDown className="w-3.5 h-3.5" />}
+                            </button>
+                          )}
+                        </div>
 
                         {!isGroupCollapsed && group.subGroups.map((sub) => {
                           const subKey = `sub::${group.key}::${sub.label}`
@@ -957,6 +1014,7 @@ export default function LootDB() {
                                 <WishlistRow
                                   key={item.id}
                                   item={item}
+                                  primarySource={primarySourceMap.get(item.id)}
                                   collectionQty={collected.get(item.id) ?? 0}
                                   onSetCollectionQty={handleSetCollectionQty}
                                   wishlistQty={wishlistMap.get(item.id) ?? 1}
@@ -990,19 +1048,41 @@ export default function LootDB() {
                       return (
                         <div key={sourceType} className="border border-sc-border rounded overflow-hidden">
                           {/* Source type header */}
-                          <button
-                            onClick={() => setCollapsedWishGroups(prev => {
-                              const next = new Set(prev)
-                              next.has(sourceKey) ? next.delete(sourceKey) : next.add(sourceKey)
-                              return next
-                            })}
-                            className="w-full flex items-center gap-3 px-4 py-2.5 bg-sc-darker/50 hover:bg-white/3 transition-colors"
-                          >
-                            <ChevronDown className={`w-3.5 h-3.5 text-gray-500 transition-transform ${isSourceCollapsed ? '-rotate-90' : ''}`} />
-                            <SourceIcon className="w-3.5 h-3.5 text-gray-400" />
-                            <span className="text-xs font-display uppercase tracking-wider text-amber-400">{locations[0].sourceLabel}</span>
-                            <span className="text-[10px] font-mono text-gray-500">{locations.length} location{locations.length !== 1 ? 's' : ''}</span>
-                          </button>
+                          <div className="flex items-center bg-sc-darker/50">
+                            <button
+                              onClick={() => setCollapsedWishGroups(prev => {
+                                const next = new Set(prev)
+                                next.has(sourceKey) ? next.delete(sourceKey) : next.add(sourceKey)
+                                return next
+                              })}
+                              className="flex-1 flex items-center gap-3 px-4 py-2.5 hover:bg-white/3 transition-colors"
+                            >
+                              <ChevronDown className={`w-3.5 h-3.5 text-gray-500 transition-transform ${isSourceCollapsed ? '-rotate-90' : ''}`} />
+                              <SourceIcon className="w-3.5 h-3.5 text-gray-400" />
+                              <span className="text-xs font-display uppercase tracking-wider text-amber-400">{locations[0].sourceLabel}</span>
+                              <span className="text-[10px] font-mono text-gray-500">{locations.length} location{locations.length !== 1 ? 's' : ''}</span>
+                            </button>
+                            {!isSourceCollapsed && (
+                              <button
+                                onClick={(e) => {
+                                  e.stopPropagation()
+                                  setCollapsedWishGroups(prev => {
+                                    const next = new Set(prev)
+                                    const locKeys = locations.map(l => `loc::${sourceType}::${l.location}`)
+                                    const allCollapsed = locKeys.every(k => next.has(k))
+                                    locKeys.forEach(k => allCollapsed ? next.delete(k) : next.add(k))
+                                    return next
+                                  })
+                                }}
+                                className="px-3 py-2.5 text-gray-500 hover:text-gray-300 transition-colors"
+                                title={locations.every(l => collapsedWishGroups.has(`loc::${sourceType}::${l.location}`)) ? 'Expand all' : 'Collapse all'}
+                              >
+                                {locations.every(l => collapsedWishGroups.has(`loc::${sourceType}::${l.location}`))
+                                  ? <ChevronsDownUp className="w-3.5 h-3.5" />
+                                  : <ChevronsUpDown className="w-3.5 h-3.5" />}
+                              </button>
+                            )}
+                          </div>
 
                           {!isSourceCollapsed && locations.map((loc) => {
                             const locKey = `loc::${sourceType}::${loc.location}`
@@ -1028,6 +1108,7 @@ export default function LootDB() {
                                   <WishlistRow
                                     key={`${loc.location}-${item.id}`}
                                     item={item}
+                                    primarySource={primarySourceMap.get(item.id)}
                                     collectionQty={collected.get(item.id) ?? 0}
                                     onSetCollectionQty={handleSetCollectionQty}
                                     wishlistQty={wishlistMap.get(item.id) ?? 1}

@@ -1,9 +1,11 @@
-import { Plus, Bookmark } from 'lucide-react'
+import { Plus, MapPin, ShoppingCart } from 'lucide-react'
 import { rarityStyle, CATEGORY_BADGE_STYLES, CATEGORY_LABELS } from '../../lib/lootDisplay'
 import SourceIcons from './SourceIcons'
 import CollectionStepper from './CollectionStepper'
 
-export default function WishlistRow({ item, collectionQty, onSetCollectionQty, wishlistQty, onSetWishlistQty, onSelect }) {
+const SOURCE_ICON = { shop: ShoppingCart, containers: MapPin, npcs: MapPin, corpses: MapPin, contract: MapPin }
+
+export default function WishlistRow({ item, primarySource, collectionQty, onSetCollectionQty, wishlistQty, onSetWishlistQty, onSelect }) {
   const catStyle = CATEGORY_BADGE_STYLES[item.category] || CATEGORY_BADGE_STYLES.unknown
   const catLabel = CATEGORY_LABELS[item.category] || item.category
   const rs = item.rarity ? rarityStyle(item.rarity) : null
@@ -16,7 +18,15 @@ export default function WishlistRow({ item, collectionQty, onSetCollectionQty, w
       <span className={`text-[10px] font-display uppercase px-1.5 py-0.5 rounded shrink-0 w-20 text-center ${catStyle}`}>
         {catLabel}
       </span>
-      <span className="text-xs text-gray-200 flex-1 min-w-0 truncate">{item.name}</span>
+      <div className="flex-1 min-w-0">
+        <span className="text-xs text-gray-200 truncate block">{item.name}</span>
+        {primarySource && (
+          <span className="text-[10px] text-gray-500 truncate block mt-0.5">
+            {primarySource.type === 'shop' ? '🛒' : '📍'}{' '}
+            {primarySource.label}{primarySource.detail ? ` · ${primarySource.detail}` : ''}
+          </span>
+        )}
+      </div>
       {item.rarity && rs && (
         <span className={`text-[10px] font-mono px-1.5 py-0.5 rounded border ${rs.badge} shrink-0`}>
           {item.rarity}

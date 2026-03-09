@@ -179,6 +179,49 @@ export function groupWishlistItems(items) {
     })
 }
 
+// ── Primary source (best place to find an item) ─────────────────────────────
+// Priority: shops (guaranteed purchase) > highest-probability container/NPC/corpse > contracts
+export function getPrimarySource(item) {
+  const parse = (str) => { try { return JSON.parse(str) || [] } catch { return [] } }
+
+  // Shops are guaranteed — pick cheapest
+  const shops = parse(item.shops_json)
+  if (shops.length) {
+    const best = shops.reduce((a, b) => {
+      const pa = a.buyPrice ?? Infinity
+      const pb = b.buyPrice ?? Infinity
+      return pa <= pb ? a : b
+    })
+    const entry = resolveLocationEntry(best, 'shops')
+    return { label: entry.label, type: 'shop', detail: entry.detail }
+  }
+
+  // Containers / NPCs / corpses — pick highest probability
+  let best = null
+  let bestProb = -1
+  for (const [key, jsonKey] of [['containers', 'containers_json'], ['npcs', 'npcs_json'], ['corpses', 'corpses_json']]) {
+    const entries = parse(item[jsonKey])
+    for (const e of entries) {
+      const resolved = resolveLocationEntry(e, key)
+      const prob = resolved.probability ?? 0
+      if (prob > bestProb || (!best && prob === 0)) {
+        best = { label: resolved.label, type: key, detail: prob > 0 ? `${Math.round(prob * 100)}%` : null }
+        bestProb = prob
+      }
+    }
+  }
+  if (best) return best
+
+  // Contracts fallback
+  const contracts = parse(item.contracts_json)
+  if (contracts.length) {
+    const entry = resolveLocationEntry(contracts[0], 'contracts')
+    return { label: entry.label, type: 'contract', detail: null }
+  }
+
+  return null
+}
+
 // Build location-grouped view: { locationLabel: { sourceType, items[] } }
 export function groupWishlistByLocation(items) {
   if (!items?.length) return []
