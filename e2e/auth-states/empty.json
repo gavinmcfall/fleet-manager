@@ -1,0 +1,37 @@
+{
+  "cookies": [
+    {
+      "name": "cf_clearance",
+      "value": "rqPtj.I.DhIJIFd.LNqhYFZ7FXIxRixlrBwi0HHFqHI-1773010498-1.2.1.1-HV1izshAh75V0HSz.LwNJaUJG9Bpjdp7fw3g_8mOJJ3rPRMgoscMMtBt5pJhEe2Vox9ArfSmLRA7vk1fbWck_miB.anj5rgX0m3otHJbe9GYrgPeHHYrjtgGcQCDiw3eQtLfXNtNXx0e.TN_6yHKUieymhU.HU71MqfOkyVfHGhwHRYVhdkR9dGERlb5CoxE35e_C8iZ1niRV92PIEVzKqC.B0KoccHAIJA.J4zulBs",
+      "domain": ".scbridge.app",
+      "path": "/",
+      "expires": 1804546503.661345,
+      "httpOnly": true,
+      "secure": true,
+      "sameSite": "None",
+      "partitionKey": "https://scbridge.app",
+      "_crHasCrossSiteAncestor": false
+    },
+    {
+      "name": "__Secure-better-auth.session_token",
+      "value": "bJtDvwVtTcys6dx980OuR44UEextGnbX.vXPGGhQgrloP%2Bw2guQwVvA81ErZU1FGlUftVhklOcfE%3D",
+      "domain": "scbridge.app",
+      "path": "/",
+      "expires": 1773615305.200868,
+      "httpOnly": true,
+      "secure": true,
+      "sameSite": "Lax"
+    },
+    {
+      "name": "__Secure-better-auth.session_data",
+      "value": "eyJzZXNzaW9uIjp7InNlc3Npb24iOnsiZXhwaXJlc0F0IjoiMjAyNi0wMy0xNVQyMjo1NTowMC4zODRaIiwidG9rZW4iOiJiSnREdndWdFRjeXM2ZHg5ODBPdVI0NFVFZXh0R25iWCIsImNyZWF0ZWRBdCI6IjIwMjYtMDMtMDhUMjI6NTU6MDAuMzg0WiIsInVwZGF0ZWRBdCI6IjIwMjYtMDMtMDhUMjI6NTU6MDAuMzg0WiIsImlwQWRkcmVzcyI6IiIsInVzZXJBZ2VudCI6Ik1vemlsbGEvNS4wIChYMTE7IExpbnV4IHg4Nl82NCkgQXBwbGVXZWJLaXQvNTM3LjM2IChLSFRNTCwgbGlrZSBHZWNrbykgSGVhZGxlc3NDaHJvbWUvMTQ1LjAuNzYzMi42IFNhZmFyaS81MzcuMzYiLCJ1c2VySWQiOiJlMmUtdGVzdC11c2VyLTAwMSIsImltcGVyc29uYXRlZEJ5IjpudWxsLCJhY3RpdmVPcmdhbml6YXRpb25JZCI6bnVsbCwiaWQiOiI0VGVTVVRhZXZpTFJiYlR2UDJOS0xtSmxVODFnTkRMQiJ9LCJ1c2VyIjp7Im5hbWUiOiJFMkUgVGVzdCBVc2VyIiwiZW1haWwiOiJlMmUtdGVzdEBzY2JyaWRnZS5hcHAiLCJlbWFpbFZlcmlmaWVkIjp0cnVlLCJpbWFnZSI6bnVsbCwiY3JlYXRlZEF0IjoiMjAyNi0wMy0wOFQwOTowMjozMi4wMDBaIiwidXBkYXRlZEF0IjoiMjAyNi0wMy0wOFQwOTowMjozMi4wMDBaIiwicm9sZSI6InVzZXIiLCJiYW5uZWQiOm51bGwsImJhblJlYXNvbiI6bnVsbCwiYmFuRXhwaXJlcyI6bnVsbCwidHdvRmFjdG9yRW5hYmxlZCI6bnVsbCwiaWQiOiJlMmUtdGVzdC11c2VyLTAwMSJ9LCJ1cGRhdGVkQXQiOjE3NzMwMTA1MDA0MzgsInZlcnNpb24iOiIxIn0sImV4cGlyZXNBdCI6MTc3MzAxMDgwMDQzOCwic2lnbmF0dXJlIjoiWkNBMFJOREVJQmtLTHhrQ3o0Z0ZaTVNHRENrTmpFekE3SFQtVU5ISnowUSJ9",
+      "domain": "scbridge.app",
+      "path": "/",
+      "expires": 1773010805.200951,
+      "httpOnly": true,
+      "secure": true,
+      "sameSite": "Lax"
+    }
+  ],
+  "origins": []
+}

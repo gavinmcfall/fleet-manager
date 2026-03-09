@@ -221,6 +221,80 @@ export async function seedFleetEntry(
 }
 
 /**
+ * Seed a complete persona: create user, seed vehicles, import fleet entries.
+ * Returns the test user plus fleet count.
+ */
+export async function seedPersona(
+  db: D1Database,
+  personaKey: string,
+): Promise<TestUser & { fleetCount: number }> {
+  const { PERSONAS } = await import("./fixtures/personas");
+  const persona = PERSONAS[personaKey];
+  if (!persona) throw new Error(`Unknown persona: ${personaKey}`);
+
+  const user =
+    persona.role === "super_admin"
+      ? await createAdminUser(db, {
+          name: persona.displayName,
+          email: persona.email,
+        })
+      : await createTestUser(db, {
+          name: persona.displayName,
+          email: persona.email,
+        });
+
+  if (!persona.fleetFile) {
+    return { ...user, fleetCount: 0 };
+  }
+
+  // Load fleet data (handle both .ts and .json imports)
+  const fleetModule = await import(`./fixtures/${persona.fleetFile}`);
+  const entries = fleetModule.default as Array<{
+    ship_code: string;
+    name: string;
+    warbond: boolean;
+    pledge_id: string;
+    pledge_name: string;
+    pledge_cost: string;
+    pledge_date: string;
+    ship_name?: string;
+    lti: boolean;
+    insurance?: string;
+  }>;
+
+  // Seed vehicles and fleet entries
+  const vehicleCache = new Map<string, number>();
+  for (const entry of entries) {
+    const slug = entry.ship_code.toLowerCase().replace(/_/g, "-");
+    if (!vehicleCache.has(slug)) {
+      const vid = await seedVehicle(db, { slug, name: entry.name });
+      vehicleCache.set(slug, vid);
+    }
+
+    // Determine custom name (same logic as import route)
+    let customName: string | null = null;
+    if (entry.ship_name) {
+      const snLower = entry.ship_name.toLowerCase();
+      const nameLower = entry.name.toLowerCase();
+      if (!nameLower.includes(snLower) && !snLower.includes(nameLower)) {
+        customName = entry.ship_name;
+      }
+    }
+
+    await seedFleetEntry(db, user.userId, vehicleCache.get(slug)!, {
+      warbond: entry.warbond,
+      pledge_id: entry.pledge_id,
+      pledge_name: entry.pledge_name,
+      pledge_cost: entry.pledge_cost,
+      pledge_date: entry.pledge_date,
+      custom_name: customName,
+    });
+  }
+
+  return { ...user, fleetCount: entries.length };
+}
+
+/**
  * Insert a loot item into the loot_map table. Returns the id.
  */
 export async function seedLootItem(
