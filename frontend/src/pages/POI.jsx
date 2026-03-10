@@ -1,10 +1,11 @@
-import React, { useState, useMemo } from 'react'
-import { Link } from 'react-router-dom'
-import { MapPin, Package, ShoppingCart, Swords } from 'lucide-react'
-import { useLootLocations } from '../hooks/useAPI'
+import React, { useState, useMemo, useCallback } from 'react'
+import { Link, useSearchParams } from 'react-router-dom'
+import { MapPin, Package, ShoppingCart, Swords, ChevronDown, ChevronRight, Store, X } from 'lucide-react'
+import { useLootLocations, useAPI } from '../hooks/useAPI'
 import useGameVersion from '../hooks/useGameVersion'
 import { friendlyLocation, friendlyFaction, getLocationGroup } from '../lib/lootLocations'
 import { friendlyShopName } from '../lib/shopNames'
+import { LOCATION_TREE, assignShopsToTree, countShopsInNode } from '../lib/locationHierarchy'
 import PageHeader from '../components/PageHeader'
 import LoadingState from '../components/LoadingState'
 import ErrorState from '../components/ErrorState'
@@ -81,14 +82,192 @@ function PaginatedGrid({ entries, linkPrefix }) {
   )
 }
 
+// ── Shop type badges ────────────────────────────────────────────────────────
+const SHOP_TYPE_BADGE = {
+  admin:      'bg-gray-700/60 text-gray-300 border border-gray-600/50',
+  weapons:    'bg-red-900/50 text-red-300 border border-red-700/50',
+  armor:      'bg-blue-900/50 text-blue-300 border border-blue-700/50',
+  clothing:   'bg-purple-900/50 text-purple-300 border border-purple-700/50',
+  ships:      'bg-cyan-900/50 text-cyan-300 border border-cyan-700/50',
+  food:       'bg-green-900/50 text-green-300 border border-green-700/50',
+  mining:     'bg-amber-900/50 text-amber-300 border border-amber-700/50',
+  commodity:  'bg-yellow-900/50 text-yellow-300 border border-yellow-700/50',
+  general:    'bg-gray-700/60 text-gray-300 border border-gray-600/50',
+}
+
+function ShopTreeNode({ node, depth = 0, search, onShopClick }) {
+  const [expanded, setExpanded] = useState(depth < 1)
+  const shopCount = countShopsInNode(node)
+  const hasChildren = node.children?.length > 0
+  const hasShops = node.shops?.length > 0
+
+  // When searching, auto-expand to show matches
+  const matchingShops = useMemo(() => {
+    if (!search || !node.shops) return node.shops || []
+    const q = search.toLowerCase()
+    return node.shops.filter(s =>
+      s.display_name?.toLowerCase().includes(q) ||
+      s.location_name?.toLowerCase().includes(q)
+    )
+  }, [node.shops, search])
+
+  const hasMatchingDescendants = useMemo(() => {
+    if (!search) return shopCount > 0
+    function checkNode(n) {
+      if (n.shops?.some(s =>
+        s.display_name?.toLowerCase().includes(search.toLowerCase()) ||
+        s.location_name?.toLowerCase().includes(search.toLowerCase())
+      )) return true
+      return n.children?.some(checkNode) || false
+    }
+    return checkNode(node)
+  }, [node, search, shopCount])
+
+  if (shopCount === 0 && !search) return null
+  if (search && !hasMatchingDescendants) return null
+
+  const isExpanded = search ? true : expanded
+
+  return (
+    <div className={depth > 0 ? 'ml-4 border-l border-sc-border/30 pl-3' : ''}>
+      <button
+        onClick={() => setExpanded(!expanded)}
+        className="w-full flex items-center gap-2 py-1.5 hover:bg-white/3 transition-colors text-left rounded px-1 -mx-1"
+      >
+        {(hasChildren || hasShops) ? (
+          isExpanded
+            ? <ChevronDown className="w-3.5 h-3.5 text-gray-500 shrink-0" />
+            : <ChevronRight className="w-3.5 h-3.5 text-gray-500 shrink-0" />
+        ) : (
+          <span className="w-3.5 shrink-0" />
+        )}
+        <MapPin className={`w-3 h-3 shrink-0 ${depth === 0 ? 'text-sc-accent' : 'text-gray-500'}`} />
+        <span className={`text-xs flex-1 ${depth === 0 ? 'font-display font-semibold text-gray-100 uppercase tracking-wide' : 'text-gray-200'}`}>
+          {node.name}
+        </span>
+        <span className="text-[10px] font-mono text-gray-600 shrink-0">
+          {shopCount} {shopCount === 1 ? 'shop' : 'shops'}
+        </span>
+      </button>
+
+      {isExpanded && (
+        <div className="mt-1">
+          {hasChildren && node.children.map(child => (
+            <ShopTreeNode key={child.name} node={child} depth={depth + 1} search={search} onShopClick={onShopClick} />
+          ))}
+          {(search ? matchingShops : node.shops || []).map(shop => (
+            <Link
+              key={shop.id}
+              to={`/shops?type=${shop.shop_type || 'all'}`}
+              onClick={(e) => { e.preventDefault(); onShopClick(shop) }}
+              className="flex items-center gap-2 py-1.5 px-2 ml-4 hover:bg-white/3 transition-colors rounded cursor-pointer"
+            >
+              <Store className="w-3 h-3 text-gray-600 shrink-0" />
+              <span className="text-xs text-gray-300 flex-1 min-w-0 truncate">{shop.display_name}</span>
+              <span className={`text-[10px] font-display uppercase tracking-wide px-1.5 py-0.5 rounded ${SHOP_TYPE_BADGE[shop.shop_type] || SHOP_TYPE_BADGE.general}`}>
+                {shop.shop_type}
+              </span>
+              <span className="text-[10px] font-mono text-gray-600 shrink-0">{shop.item_count} items</span>
+            </Link>
+          ))}
+        </div>
+      )}
+    </div>
+  )
+}
+
+// ── Shop inventory panel (slide-over) ────────────────────────────────────
+function ShopInventoryPanel({ shop, onClose }) {
+  const { data: inventory, loading: invLoading } = useAPI(
+    `/gamedata/shops/${shop.slug}/inventory`,
+    { skip: !shop }
+  )
+
+  const sorted = useMemo(() => {
+    if (!inventory) return []
+    const named = inventory.filter((i) => i.resolved_name)
+    const uuidOnly = inventory.filter((i) => !i.resolved_name)
+    named.sort((a, b) => a.resolved_name.localeCompare(b.resolved_name))
+    uuidOnly.sort((a, b) => (b.buy_price || b.sell_price || 0) - (a.buy_price || a.sell_price || 0))
+    return [...named, ...uuidOnly]
+  }, [inventory])
+
+  return (
+    <div className="fixed inset-0 z-50 flex justify-end">
+      <div className="absolute inset-0 bg-black/60" onClick={onClose} />
+      <div className="relative w-full max-w-2xl bg-sc-dark border-l border-sc-border overflow-y-auto animate-fade-in-up">
+        <div className="sticky top-0 bg-sc-dark/95 backdrop-blur border-b border-sc-border p-4 flex items-start justify-between gap-3 z-10">
+          <div className="min-w-0">
+            <h2 className="font-display font-semibold text-white text-sm leading-tight">{shop.display_name}</h2>
+            <div className="flex items-center gap-2 mt-1.5">
+              <span className={`text-[10px] font-display uppercase tracking-wide px-2 py-0.5 rounded ${SHOP_TYPE_BADGE[shop.shop_type] || SHOP_TYPE_BADGE.general}`}>
+                {shop.shop_type}
+              </span>
+              <span className="text-[10px] font-mono text-gray-500">{shop.item_count} items</span>
+            </div>
+            {shop.location_name && (
+              <div className="flex items-center gap-1 mt-1.5">
+                <MapPin className="w-3 h-3 shrink-0 text-gray-500" />
+                <span className="text-[10px] font-mono text-gray-500">{shop.location_name}</span>
+              </div>
+            )}
+          </div>
+          <button onClick={onClose} className="text-gray-500 hover:text-gray-300 transition-colors shrink-0 p-1" aria-label="Close panel">
+            <X className="w-5 h-5" />
+          </button>
+        </div>
+        <div className="p-4">
+          {invLoading && <div className="text-center py-8 text-gray-500 font-mono text-sm">Loading inventory...</div>}
+          {!invLoading && sorted.length === 0 && <div className="text-center py-8 text-gray-500 font-mono text-sm">No items in inventory.</div>}
+          {!invLoading && sorted.length > 0 && (
+            <div className="space-y-1">
+              <div className="flex items-center gap-3 px-3 py-1.5 text-[10px] font-display uppercase tracking-widest text-gray-500">
+                <span className="flex-1">Item</span>
+                <span className="w-20 text-right">Buy</span>
+                <span className="w-20 text-right">Sell</span>
+              </div>
+              {sorted.map((item) => (
+                <div key={item.id} className="flex items-center gap-3 px-3 py-2 rounded hover:bg-white/[0.03] transition-colors">
+                  <span className="flex-1 min-w-0 text-xs font-mono text-gray-200 truncate">
+                    {item.resolved_name || item.item_uuid}
+                  </span>
+                  <span className="w-20 text-right text-xs font-mono text-sc-melt shrink-0">
+                    {item.buy_price ? `${Math.round(item.buy_price).toLocaleString()} aUEC` : '--'}
+                  </span>
+                  <span className="w-20 text-right text-xs font-mono text-green-400 shrink-0">
+                    {item.sell_price ? `${Math.round(item.sell_price).toLocaleString()} aUEC` : '--'}
+                  </span>
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+      </div>
+    </div>
+  )
+}
+
 // ── Main page ──────────────────────────────────────────────────────────────
 const PAGE_SIZE = 30
 
 export default function POI() {
   const { activeCode } = useGameVersion()
   const { data, loading, error, refetch } = useLootLocations(activeCode)
+  const { data: allShops, loading: shopsLoading } = useAPI('/gamedata/shops')
+  const [selectedShop, setSelectedShop] = useState(null)
   const [search, setSearch] = useState('')
-  const [activeSection, setActiveSection] = useState('containers')
+  const VALID_SECTIONS = ['containers', 'shops', 'npcs']
+  const [searchParams, setSearchParams] = useSearchParams()
+  const sectionParam = searchParams.get('section')
+  const activeSection = VALID_SECTIONS.includes(sectionParam) ? sectionParam : 'containers'
+  const setActiveSection = useCallback((section) => {
+    setSearchParams(prev => {
+      const next = new URLSearchParams(prev)
+      if (section === 'containers') next.delete('section')
+      else next.set('section', section)
+      return next
+    }, { replace: true })
+  }, [setSearchParams])
   const [activeGroup, setActiveGroup] = useState('all')
   const [page, setPage] = useState(1)
 
@@ -104,7 +283,7 @@ export default function POI() {
     }))
   }, [data])
 
-  // Shops
+  // Shops (loot-system — kept for subtitle count)
   const shopEntries = useMemo(() => {
     if (!data?.shops) return []
     return data.shops.map((loc) => ({
@@ -114,6 +293,14 @@ export default function POI() {
       rarities: loc.rarities || {},
     }))
   }, [data])
+
+  // Shop tree — organized by location hierarchy
+  const shopTree = useMemo(() => {
+    if (!allShops) return { tree: [], unmatched: [] }
+    // Filter out removed locations
+    const active = allShops.filter(s => !s.location_name?.includes('(Removed)'))
+    return assignShopsToTree(LOCATION_TREE, active)
+  }, [allShops])
 
   // NPCs
   const npcEntries = useMemo(() => {
@@ -199,7 +386,7 @@ export default function POI() {
     <div className="space-y-4 animate-fade-in-up">
       <PageHeader
         title="LOCATIONS"
-        subtitle={`${containerEntries.length} loot locations, ${shopEntries.length} shops, ${npcEntries.length} factions`}
+        subtitle={`${containerEntries.length} loot locations, ${allShops?.length || shopEntries.length} shops, ${npcEntries.length} factions`}
         actions={<MapPin className="w-5 h-5 text-gray-500" />}
       />
 
@@ -262,9 +449,9 @@ export default function POI() {
       )}
 
       <span className="text-xs font-mono text-gray-500">
-        {activeSection === 'containers' ? filteredContainers.length
-         : activeSection === 'shops' ? filteredShops.length
-         : filteredNpcs.length} results
+        {activeSection === 'containers' ? `${filteredContainers.length} results`
+         : activeSection === 'shops' ? `${allShops?.filter(s => !s.location_name?.includes('(Removed)')).length || 0} shops`
+         : `${filteredNpcs.length} results`}
       </span>
 
       {/* ── Containers section ── */}
@@ -298,9 +485,24 @@ export default function POI() {
         </>
       )}
 
-      {/* ── Shops section ── */}
+      {/* ── Shops section — hierarchical tree ── */}
       {activeSection === 'shops' && (
-        <PaginatedGrid entries={pagedList} linkPrefix="/poi/shop/" />
+        shopsLoading ? (
+          <div className="text-center py-8 text-gray-500 font-mono text-sm">Loading shops...</div>
+        ) : (
+          <div className="space-y-2">
+            {shopTree.tree.map(node => (
+              <ShopTreeNode key={node.name} node={node} search={search} onShopClick={setSelectedShop} />
+            ))}
+            {shopTree.unmatched.length > 0 && (
+              <ShopTreeNode
+                node={{ name: 'Other', shops: shopTree.unmatched, children: [] }}
+                search={search}
+                onShopClick={setSelectedShop}
+              />
+            )}
+          </div>
+        )
       )}
 
       {/* ── NPCs section ── */}
@@ -318,6 +520,11 @@ export default function POI() {
             Show more ({currentList.length - pagedList.length} remaining)
           </button>
         </div>
+      )}
+
+      {/* Shop inventory slide-over */}
+      {selectedShop && (
+        <ShopInventoryPanel shop={selectedShop} onClose={() => setSelectedShop(null)} />
       )}
     </div>
   )

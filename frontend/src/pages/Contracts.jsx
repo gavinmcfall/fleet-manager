@@ -1,4 +1,4 @@
-import React, { useState, useMemo, useEffect, useRef } from 'react'
+import React, { useState, useMemo, useEffect, useRef, useCallback } from 'react'
 import { Link, useSearchParams } from 'react-router-dom'
 import { FileText, ChevronDown, ChevronUp, Package } from 'lucide-react'
 import { useContracts } from '../hooks/useAPI'
@@ -182,12 +182,21 @@ function ContractCard({ contract, highlighted }) {
 
 export default function Contracts() {
   const { data: contracts, loading, error, refetch } = useContracts()
+  const VALID_GIVERS = GIVER_TABS.map(t => t.key)
   const [searchParams, setSearchParams] = useSearchParams()
   const guildParam = searchParams.get('guild')
   const highlightParam = searchParams.get('highlight')
-  const [giverTab, setGiverTab] = useState(
-    guildParam ? (GUILD_TO_GIVER[guildParam] || 'all') : 'all'
-  )
+  const giverParam = searchParams.get('giver') || (guildParam ? (GUILD_TO_GIVER[guildParam] || 'all') : 'all')
+  const giverTab = VALID_GIVERS.includes(giverParam) ? giverParam : 'all'
+  const setGiverTab = useCallback((t) => {
+    setSearchParams(prev => {
+      const next = new URLSearchParams(prev)
+      next.delete('guild') // clear guild shorthand when explicitly selecting
+      if (t === 'all') next.delete('giver')
+      else next.set('giver', t)
+      return next
+    }, { replace: true })
+  }, [setSearchParams])
   const [search, setSearch] = useState('')
   const [highlightId, setHighlightId] = useState(highlightParam ? Number(highlightParam) : null)
   const [showAll, setShowAll] = useState(false)

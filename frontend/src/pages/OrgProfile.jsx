@@ -1,5 +1,5 @@
-import React, { useState } from 'react'
-import { useParams, Link } from 'react-router-dom'
+import React, { useState, useCallback } from 'react'
+import { useParams, Link, useSearchParams } from 'react-router-dom'
 import { ExternalLink, Users, Rocket, BarChart3, Building2, Globe, MessageSquare, Tv, Youtube, Settings } from 'lucide-react'
 import { useOrgProfile, useOrgFleet, useOrgMembers, useOrgAnalysis } from '../hooks/useAPI'
 import { useSession } from '../lib/auth-client'
@@ -183,7 +183,18 @@ export default function OrgProfile() {
   const { slug } = useParams()
   const { data: session } = useSession()
   const { data: org, loading, error, refetch } = useOrgProfile(slug)
-  const [activeTab, setActiveTab] = useState('fleet')
+  const VALID_TABS = ['fleet', 'members', 'analysis']
+  const [searchParams, setSearchParams] = useSearchParams()
+  const tabParam = searchParams.get('tab')
+  const activeTab = VALID_TABS.includes(tabParam) ? tabParam : 'fleet'
+  const setActiveTab = useCallback((t) => {
+    setSearchParams(prev => {
+      const next = new URLSearchParams(prev)
+      if (t === 'fleet') next.delete('tab')
+      else next.set('tab', t)
+      return next
+    }, { replace: true })
+  }, [setSearchParams])
 
   if (loading) return <LoadingState message="Loading organisation..." />
   if (error) return <ErrorState message={error} onRetry={refetch} />

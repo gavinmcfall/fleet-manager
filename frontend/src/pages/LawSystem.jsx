@@ -1,4 +1,5 @@
-import React, { useState, useMemo } from 'react'
+import React, { useState, useMemo, useCallback } from 'react'
+import { useSearchParams } from 'react-router-dom'
 import { useAPI } from '../hooks/useAPI'
 import PageHeader from '../components/PageHeader'
 import LoadingState from '../components/LoadingState'
@@ -347,7 +348,18 @@ function JurisdictionCard({ jurisdiction, infractions, overrides }) {
 
 export default function LawSystem() {
   const { data, loading, error, refetch } = useAPI('/gamedata/law')
-  const [tab, setTab] = useState('infractions')
+  const VALID_TABS = ['infractions', 'jurisdictions']
+  const [searchParams, setSearchParams] = useSearchParams()
+  const tabParam = searchParams.get('tab')
+  const tab = VALID_TABS.includes(tabParam) ? tabParam : 'infractions'
+  const setTab = useCallback((t) => {
+    setSearchParams(prev => {
+      const next = new URLSearchParams(prev)
+      if (t === 'infractions') next.delete('tab')
+      else next.set('tab', t)
+      return next
+    }, { replace: true })
+  }, [setSearchParams])
   const [search, setSearch] = useState('')
 
   // Index overrides by infraction and jurisdiction

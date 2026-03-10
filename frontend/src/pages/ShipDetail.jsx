@@ -1,5 +1,5 @@
-import React, { useState } from 'react'
-import { useParams, useNavigate } from 'react-router-dom'
+import React, { useState, useCallback } from 'react'
+import { useParams, useNavigate, useSearchParams } from 'react-router-dom'
 import {
   ArrowLeft, ExternalLink,
   Rocket, Zap, Box, Palette, LayoutGrid, List,
@@ -457,7 +457,18 @@ function PerformanceTab({ ship }) {
 export default function ShipDetail() {
   const { slug } = useParams()
   const navigate = useNavigate()
-  const [activeTab, setActiveTab] = useState('overview')
+  const VALID_TABS = ['overview', 'components', 'weapons', 'performance', 'paints']
+  const [searchParams, setSearchParams] = useSearchParams()
+  const tabParam = searchParams.get('tab')
+  const activeTab = VALID_TABS.includes(tabParam) ? tabParam : 'overview'
+  const setActiveTab = useCallback((t) => {
+    setSearchParams(prev => {
+      const next = new URLSearchParams(prev)
+      if (t === 'overview') next.delete('tab')
+      else next.set('tab', t)
+      return next
+    }, { replace: true })
+  }, [setSearchParams])
   const { data: ship, loading, error, refetch } = useShip(slug)
 
   if (loading) return <LoadingState message="Loading ship data..." />

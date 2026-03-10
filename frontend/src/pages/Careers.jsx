@@ -1,5 +1,5 @@
-import React, { useState, useMemo } from 'react'
-import { Link } from 'react-router-dom'
+import React, { useState, useMemo, useCallback } from 'react'
+import { Link, useSearchParams } from 'react-router-dom'
 import { useAPI } from '../hooks/useAPI'
 import PageHeader from '../components/PageHeader'
 import LoadingState from '../components/LoadingState'
@@ -114,7 +114,18 @@ function ExpandableCard({ name, icon: Icon, vehicleCount, vehicles, colorClasses
 export default function Careers() {
   const { data, loading, error, refetch } = useAPI('/gamedata/careers')
   const [search, setSearch] = useState('')
-  const [activeTab, setActiveTab] = useState('careers')
+  const VALID_TABS = ['careers', 'roles']
+  const [searchParams, setSearchParams] = useSearchParams()
+  const tabParam = searchParams.get('tab')
+  const activeTab = VALID_TABS.includes(tabParam) ? tabParam : 'careers'
+  const setActiveTab = useCallback((t) => {
+    setSearchParams(prev => {
+      const next = new URLSearchParams(prev)
+      if (t === 'careers') next.delete('tab')
+      else next.set('tab', t)
+      return next
+    }, { replace: true })
+  }, [setSearchParams])
 
   const { filteredCareers, filteredRoles, hasResults } = useMemo(() => {
     if (!data) return { filteredCareers: [], filteredRoles: [], hasResults: false }

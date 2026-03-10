@@ -1,4 +1,5 @@
-import React, { useState, useMemo } from 'react'
+import React, { useState, useMemo, useCallback } from 'react'
+import { useSearchParams } from 'react-router-dom'
 import { useAPI } from '../hooks/useAPI'
 import PageHeader from '../components/PageHeader'
 import LoadingState from '../components/LoadingState'
@@ -207,8 +208,20 @@ const INITIAL_COUNT = 30
 export default function Shops() {
   const { data: shops, loading, error, refetch } = useAPI('/gamedata/shops')
   const [search, setSearch] = useState('')
-  const [typeTab, setTypeTab] = useState('all')
-  const [locationFilter, setLocationFilter] = useState('all')
+  const VALID_TYPES = TYPE_TABS.map(t => t.key)
+  const [searchParams, setSearchParams] = useSearchParams()
+  const typeParam = searchParams.get('type')
+  const typeTab = VALID_TYPES.includes(typeParam) ? typeParam : 'all'
+  const setTypeTab = useCallback((t) => {
+    setSearchParams(prev => {
+      const next = new URLSearchParams(prev)
+      if (t === 'all') next.delete('type')
+      else next.set('type', t)
+      return next
+    }, { replace: true })
+  }, [setSearchParams])
+  const locParam = searchParams.get('location')
+  const [locationFilter, setLocationFilter] = useState(locParam || 'all')
   const [selectedShop, setSelectedShop] = useState(null)
   const [showAll, setShowAll] = useState(false)
 
