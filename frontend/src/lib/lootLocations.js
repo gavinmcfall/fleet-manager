@@ -251,13 +251,10 @@ export function friendlyFaction(raw) {
 
 /** @type {Record<string, string>} */
 export const LOCATION_SLUG_MAP = {
-  Covalex:          'covalex-shipping-hub',
-  Jumptown:         'jumptown',
-  Kareah:           'security-post-kareah',
-  FloatingIslands:  'orison',
-  StormBreaker:     'storm-breaker',
-  Kaboos:           'qv-logistics-station',
-  Orbageddon:       'orbageddon',
+  Covalex:          'starmapobject.covalexshippinghub',
+  Jumptown:         'stanton2c-druglab-jumptown',
+  Kareah:           'starmapobject.securitypostkareah',
+  FloatingIslands:  'stanton2-orison',
 }
 
 // ── Location grouping ─────────────────────────────────────────────────────────

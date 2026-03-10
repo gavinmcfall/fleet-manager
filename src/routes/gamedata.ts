@@ -226,7 +226,7 @@ export function gamedataRoutes<E extends HonoEnv>() {
         `SELECT si.*,
            COALESCE(fi.name, v.name, si.item_name) as resolved_name
          FROM shop_inventory si
-         LEFT JOIN fps_items fi ON fi.uuid = si.item_uuid
+         LEFT JOIN loot_map fi ON fi.uuid = si.item_uuid AND fi.game_version_id = ${DEFAULT_VERSION_SUBQUERY}
          LEFT JOIN vehicles v ON v.uuid = si.item_uuid
          JOIN shops s ON s.id = si.shop_id
          WHERE s.slug = ?
@@ -378,7 +378,7 @@ export function gamedataRoutes<E extends HonoEnv>() {
                ELSE 'other'
              END as item_category
            FROM shop_inventory si
-           LEFT JOIN fps_items fi ON fi.uuid = si.item_uuid
+           LEFT JOIN loot_map fi ON fi.uuid = si.item_uuid AND fi.game_version_id = ${DEFAULT_VERSION_SUBQUERY}
            LEFT JOIN trade_commodities tc ON tc.uuid = si.item_uuid
            LEFT JOIN vehicles v ON v.uuid = si.item_uuid
            WHERE si.shop_id IN (${invPlaceholders})
@@ -424,7 +424,7 @@ export function gamedataRoutes<E extends HonoEnv>() {
              ELSE 'other'
            END as item_category
          FROM shop_inventory si
-         LEFT JOIN fps_items fi ON fi.uuid = si.item_uuid
+         LEFT JOIN loot_map fi ON fi.uuid = si.item_uuid AND fi.game_version_id = ${DEFAULT_VERSION_SUBQUERY}
          LEFT JOIN trade_commodities tc ON tc.uuid = si.item_uuid
          LEFT JOIN vehicles v ON v.uuid = si.item_uuid
          WHERE si.shop_id IN (${invPlaceholders})
