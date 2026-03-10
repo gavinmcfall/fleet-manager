@@ -293,6 +293,169 @@ export function gamedataRoutes<E extends HonoEnv>() {
     return c.json({ commodities, locations })
   })
 
+  // GET /api/gamedata/locations/:slug/shops — shops at a location with inventory
+  app.get("/locations/:slug/shops", async (c) => {
+    const slug = c.req.param("slug")
+    const db = c.env.DB
+
+    // Find the location by slug
+    const location = await db
+      .prepare(
+        `SELECT id, name, slug, location_type
+         FROM star_map_locations
+         WHERE slug = ?
+           AND game_version_id = ${DEFAULT_VERSION_SUBQUERY}
+         LIMIT 1`,
+      )
+      .bind(slug)
+      .first()
+
+    if (!location) {
+      return c.json({ location: null, shops: [] })
+    }
+
+    // Find all child location IDs (outposts on a moon/planet) + the location itself
+    const { results: childLocations } = await db
+      .prepare(
+        `SELECT id FROM star_map_locations
+         WHERE (id = ? OR parent_uuid = (
+           SELECT uuid FROM star_map_locations WHERE id = ? AND game_version_id = ${DEFAULT_VERSION_SUBQUERY}
+         ))
+         AND game_version_id = ${DEFAULT_VERSION_SUBQUERY}`,
+      )
+      .bind(location.id, location.id)
+      .all()
+
+    const locationIds = childLocations.map((r) => r.id as number)
+    if (locationIds.length === 0) {
+      return c.json({ location, shops: [] })
+    }
+
+    // Find shops at these locations via shop_locations junction
+    const placeholders = locationIds.map(() => "?").join(",")
+    const { results: shops } = await db
+      .prepare(
+        `SELECT DISTINCT s.id, s.name, s.slug, s.shop_type, s.location_label,
+           sl.placement_name
+         FROM shops s
+         JOIN shop_locations sl ON sl.shop_id = s.id
+         WHERE sl.location_id IN (${placeholders})
+           AND s.game_version_id = ${DEFAULT_VERSION_SUBQUERY}
+         ORDER BY s.shop_type, s.name`,
+      )
+      .bind(...locationIds)
+      .all()
+
+    if (shops.length === 0) {
+      // Also try shops.location_id directly (legacy column)
+      const { results: directShops } = await db
+        .prepare(
+          `SELECT s.id, s.name, s.slug, s.shop_type, s.location_label, NULL as placement_name
+           FROM shops s
+           WHERE s.location_id IN (${placeholders})
+             AND s.game_version_id = ${DEFAULT_VERSION_SUBQUERY}
+           ORDER BY s.shop_type, s.name`,
+        )
+        .bind(...locationIds)
+        .all()
+
+      if (directShops.length === 0) {
+        return c.json({ location, shops: [] })
+      }
+
+      // Fetch inventory for direct shops
+      const directShopIds = directShops.map((s) => s.id as number)
+      const invPlaceholders = directShopIds.map(() => "?").join(",")
+      const { results: inventory } = await db
+        .prepare(
+          `SELECT si.shop_id, si.item_uuid, si.item_name, si.buy_price, si.sell_price,
+             si.base_inventory, si.max_inventory,
+             COALESCE(fi.name, tc.name, v.name, si.item_name) as resolved_name,
+             CASE
+               WHEN fi.id IS NOT NULL THEN 'gear'
+               WHEN tc.id IS NOT NULL THEN 'commodity'
+               WHEN v.id IS NOT NULL THEN 'vehicle'
+               ELSE 'other'
+             END as item_category
+           FROM shop_inventory si
+           LEFT JOIN fps_items fi ON fi.uuid = si.item_uuid
+           LEFT JOIN trade_commodities tc ON tc.uuid = si.item_uuid
+           LEFT JOIN vehicles v ON v.uuid = si.item_uuid
+           WHERE si.shop_id IN (${invPlaceholders})
+             AND si.game_version_id = ${DEFAULT_VERSION_SUBQUERY}
+           ORDER BY COALESCE(fi.name, tc.name, v.name, si.item_name)`,
+        )
+        .bind(...directShopIds)
+        .all()
+
+      const inventoryByShop = new Map<number, typeof inventory>()
+      for (const item of inventory) {
+        const shopId = item.shop_id as number
+        if (!inventoryByShop.has(shopId)) inventoryByShop.set(shopId, [])
+        inventoryByShop.get(shopId)!.push(item)
+      }
+
+      const shopsWithItems = directShops.map((shop) => ({
+        ...shop,
+        displayName:
+          (shop.name as string)
+            .replace(/^Inv /, "")
+            .replace(/_/g, " ")
+            .replace(/  +/g, " ")
+            .trim(),
+        items: inventoryByShop.get(shop.id as number) ?? [],
+      }))
+
+      return c.json({ location, shops: shopsWithItems })
+    }
+
+    // Fetch inventory for all matched shops
+    const shopIds = shops.map((s) => s.id as number)
+    const invPlaceholders = shopIds.map(() => "?").join(",")
+    const { results: inventory } = await db
+      .prepare(
+        `SELECT si.shop_id, si.item_uuid, si.item_name, si.buy_price, si.sell_price,
+           si.base_inventory, si.max_inventory,
+           COALESCE(fi.name, tc.name, v.name, si.item_name) as resolved_name,
+           CASE
+             WHEN fi.id IS NOT NULL THEN 'gear'
+             WHEN tc.id IS NOT NULL THEN 'commodity'
+             WHEN v.id IS NOT NULL THEN 'vehicle'
+             ELSE 'other'
+           END as item_category
+         FROM shop_inventory si
+         LEFT JOIN fps_items fi ON fi.uuid = si.item_uuid
+         LEFT JOIN trade_commodities tc ON tc.uuid = si.item_uuid
+         LEFT JOIN vehicles v ON v.uuid = si.item_uuid
+         WHERE si.shop_id IN (${invPlaceholders})
+           AND si.game_version_id = ${DEFAULT_VERSION_SUBQUERY}
+         ORDER BY COALESCE(fi.name, tc.name, v.name, si.item_name)`,
+      )
+      .bind(...shopIds)
+      .all()
+
+    // Nest inventory under shops
+    const inventoryByShop = new Map<number, typeof inventory>()
+    for (const item of inventory) {
+      const shopId = item.shop_id as number
+      if (!inventoryByShop.has(shopId)) inventoryByShop.set(shopId, [])
+      inventoryByShop.get(shopId)!.push(item)
+    }
+
+    const shopsWithItems = shops.map((shop) => ({
+      ...shop,
+      displayName:
+        (shop.name as string)
+          .replace(/^Inv /, "")
+          .replace(/_/g, " ")
+          .replace(/  +/g, " ")
+          .trim(),
+      items: inventoryByShop.get(shop.id as number) ?? [],
+    }))
+
+    return c.json({ location, shops: shopsWithItems })
+  })
+
   // GET /api/gamedata/missions — mission types + givers with faction/location data
   app.get("/missions", async (c) => {
     const db = c.env.DB

@@ -1,9 +1,9 @@
 import React, { useState, useMemo } from 'react'
 import { useParams, Link } from 'react-router-dom'
-import { MapPin, ArrowLeft } from 'lucide-react'
-import { useLootLocationDetail } from '../hooks/useAPI'
+import { MapPin, ArrowLeft, Store, ChevronDown, ChevronRight } from 'lucide-react'
+import { useLootLocationDetail, useLocationShops } from '../hooks/useAPI'
 import useGameVersion from '../hooks/useGameVersion'
-import { friendlyLocation, friendlyFaction, getLocationGroup } from '../lib/lootLocations'
+import { friendlyLocation, friendlyFaction, getLocationGroup, LOCATION_SLUG_MAP } from '../lib/lootLocations'
 import { friendlyShopName } from '../lib/shopNames'
 import PageHeader from '../components/PageHeader'
 import LoadingState from '../components/LoadingState'
@@ -27,6 +27,70 @@ const GROUP_LABELS = {
   generic:   'Generic',
 }
 
+// ── Shop type badges ─────────────────────────────────────────────────────────
+const SHOP_TYPE_STYLES = {
+  admin:    'bg-blue-500/10 text-blue-400 border-blue-500/30',
+  weapon:   'bg-red-500/10 text-red-400 border-red-500/30',
+  armor:    'bg-amber-500/10 text-amber-400 border-amber-500/30',
+  clothing: 'bg-purple-500/10 text-purple-400 border-purple-500/30',
+  food:     'bg-green-500/10 text-green-400 border-green-500/30',
+  ship:     'bg-cyan-500/10 text-cyan-400 border-cyan-500/30',
+  default:  'bg-gray-500/10 text-gray-400 border-gray-500/30',
+}
+
+function ShopCard({ shop }) {
+  const [expanded, setExpanded] = useState(false)
+  const typeStyle = SHOP_TYPE_STYLES[shop.shop_type] || SHOP_TYPE_STYLES.default
+  const displayName = shop.displayName || shop.name
+
+  return (
+    <div className="border border-sc-border rounded-lg overflow-hidden">
+      <button
+        onClick={() => setExpanded(!expanded)}
+        className="w-full flex items-center gap-3 px-3 py-2.5 hover:bg-white/3 transition-colors text-left"
+      >
+        <Store className="w-3.5 h-3.5 text-gray-500 shrink-0" />
+        <span className="text-xs text-gray-200 flex-1 min-w-0 truncate">{displayName}</span>
+        {shop.shop_type && (
+          <span className={`text-[10px] font-display uppercase px-1.5 py-0.5 rounded border shrink-0 ${typeStyle}`}>
+            {shop.shop_type}
+          </span>
+        )}
+        <span className="text-[10px] font-mono text-gray-500 shrink-0">{shop.items.length} items</span>
+        {expanded
+          ? <ChevronDown className="w-3.5 h-3.5 text-gray-500 shrink-0" />
+          : <ChevronRight className="w-3.5 h-3.5 text-gray-500 shrink-0" />}
+      </button>
+      {expanded && shop.items.length > 0 && (
+        <div className="border-t border-sc-border">
+          <table className="w-full text-xs">
+            <thead>
+              <tr className="text-[10px] font-display uppercase tracking-wide text-gray-500 border-b border-sc-border">
+                <th className="text-left px-3 py-1.5">Item</th>
+                <th className="text-right px-3 py-1.5 w-20">Buy</th>
+                <th className="text-right px-3 py-1.5 w-20">Sell</th>
+              </tr>
+            </thead>
+            <tbody>
+              {shop.items.map((item, i) => (
+                <tr key={item.item_uuid || i} className="border-b border-sc-border/50 hover:bg-white/3">
+                  <td className="px-3 py-1.5 text-gray-300">{item.resolved_name || item.item_name}</td>
+                  <td className="px-3 py-1.5 text-right font-mono text-gray-400">
+                    {item.buy_price != null ? `${Math.round(item.buy_price).toLocaleString()}` : '—'}
+                  </td>
+                  <td className="px-3 py-1.5 text-right font-mono text-gray-400">
+                    {item.sell_price != null ? `${Math.round(item.sell_price).toLocaleString()}` : '—'}
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      )}
+    </div>
+  )
+}
+
 // ── Detail page ────────────────────────────────────────────────────────────
 export default function POIDetail() {
   const { type, slug } = useParams()
@@ -41,6 +105,10 @@ export default function POIDetail() {
   const { activeCode } = useGameVersion()
   const { data, loading, error, refetch } = useLootLocationDetail(apiType, decodedSlug, activeCode)
   const items = data?.items || []
+
+  // Shop data bridge: map container slug → star_map_locations slug
+  const locationSlug = apiType === 'container' ? LOCATION_SLUG_MAP[decodedSlug] : null
+  const { data: shopData } = useLocationShops(locationSlug, activeCode)
 
   // Resolve display names
   const locationName = apiType === 'shop'
@@ -137,6 +205,20 @@ export default function POIDetail() {
           </span>
         }
       />
+
+      {/* Shop section — only for locations with mapped shops */}
+      {shopData?.shops?.length > 0 && (
+        <div className="space-y-2">
+          <h3 className="text-[10px] font-display uppercase tracking-widest text-gray-500 pl-1">
+            Shops at this location ({shopData.shops.length})
+          </h3>
+          <div className="space-y-2">
+            {shopData.shops.map(shop => (
+              <ShopCard key={shop.id} shop={shop} />
+            ))}
+          </div>
+        </div>
+      )}
 
       <SearchInput
         value={search}

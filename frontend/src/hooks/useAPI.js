@@ -213,6 +213,11 @@ export async function toggleLootWishlist(uuid, isCurrentlyWishlisted) {
   return apiFetch(isCurrentlyWishlisted ? 'DELETE' : 'POST', `/loot/wishlist/${uuid}`)
 }
 
+export function useLocationShops(locationSlug, patchCode) {
+  const suffix = patchCode ? `?patch=${encodeURIComponent(patchCode)}` : ''
+  return useAPI(locationSlug ? `/gamedata/locations/${locationSlug}/shops${suffix}` : null, { skip: !locationSlug })
+}
+
 export function useLootSet(setSlug, patchCode) {
   const suffix = patchCode ? `?patch=${encodeURIComponent(patchCode)}` : ''
   return useAPI(setSlug ? `/loot/sets/${setSlug}${suffix}` : null, { skip: !setSlug })

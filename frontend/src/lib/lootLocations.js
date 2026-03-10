@@ -244,6 +244,22 @@ export function friendlyFaction(raw) {
   return toWords(raw) || raw
 }
 
+// ── Container slug → star_map_locations slug bridge ──────────────────────────
+// Maps DataCore container location keys to star_map_locations slugs for shop lookups.
+// Only includes entries that correspond to real locations with shops.
+// Generic templates (ColonialOutpost, Station, etc.) are NOT mapped — no shop section for those.
+
+/** @type {Record<string, string>} */
+export const LOCATION_SLUG_MAP = {
+  Covalex:          'covalex-shipping-hub',
+  Jumptown:         'jumptown',
+  Kareah:           'security-post-kareah',
+  FloatingIslands:  'orison',
+  StormBreaker:     'storm-breaker',
+  Kaboos:           'qv-logistics-station',
+  Orbageddon:       'orbageddon',
+}
+
 // ── Location grouping ─────────────────────────────────────────────────────────
 
 /**
