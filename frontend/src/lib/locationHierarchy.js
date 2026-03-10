@@ -6,8 +6,8 @@
  *   - labels: array of shop `location_label` values that belong here
  *   - children: optional nested nodes
  *
- * A shop is placed under the first node whose `labels` array includes its `location_label`.
- * Shops with no match end up in "Other".
+ * Labels like 'All Rest Stops' and 'Outposts' are shared across many nodes —
+ * a shop with that label appears under every node that lists it.
  */
 
 /** @typedef {{ name: string, labels?: string[], children?: LocationNode[] }} LocationNode */
@@ -21,14 +21,14 @@ export const LOCATION_TREE = [
         name: 'Hurston',
         children: [
           { name: 'Lorville', labels: ['Lorville'] },
-          { name: 'Everus Harbor', labels: ['Everus Harbor'] },
+          { name: 'Everus Harbor', labels: ['Everus Harbor', 'All Rest Stops'] },
           {
             name: 'Hurston Moons',
             children: [
-              { name: 'Aberdeen', labels: ['Aberdeen'] },
-              { name: 'Arial', labels: ['Arial'] },
-              { name: 'Ita', labels: ['Ita'] },
-              { name: 'Magda', labels: ['Magda'] },
+              { name: 'Aberdeen', labels: ['Aberdeen', 'Outposts'] },
+              { name: 'Arial', labels: ['Arial', 'Outposts'] },
+              { name: 'Ita', labels: ['Ita', 'Outposts'] },
+              { name: 'Magda', labels: ['Magda', 'Outposts'] },
             ],
           },
         ],
@@ -37,13 +37,13 @@ export const LOCATION_TREE = [
         name: 'Crusader',
         children: [
           { name: 'Orison', labels: ['Orison'] },
-          { name: 'Seraphim Station', labels: ['Seraphim Station'] },
+          { name: 'Seraphim Station', labels: ['Seraphim Station', 'All Rest Stops'] },
           {
             name: 'Crusader Moons',
             children: [
-              { name: 'Cellin', labels: ['Cellin'] },
-              { name: 'Daymar', labels: ['Daymar'] },
-              { name: 'Yela', labels: ['Yela'] },
+              { name: 'Cellin', labels: ['Cellin', 'Outposts'] },
+              { name: 'Daymar', labels: ['Daymar', 'Outposts'] },
+              { name: 'Yela', labels: ['Yela', 'Outposts'] },
             ],
           },
         ],
@@ -52,12 +52,12 @@ export const LOCATION_TREE = [
         name: 'ArcCorp',
         children: [
           { name: 'Area18', labels: ['Area18'] },
-          { name: 'Baijini Point', labels: ['Baijini Point'] },
+          { name: 'Baijini Point', labels: ['Baijini Point', 'All Rest Stops'] },
           {
             name: 'ArcCorp Moons',
             children: [
-              { name: 'Lyria', labels: ['Lyria'] },
-              { name: 'Wala', labels: ['Wala'] },
+              { name: 'Lyria', labels: ['Lyria', 'Outposts'] },
+              { name: 'Wala', labels: ['Wala', 'Outposts'] },
             ],
           },
         ],
@@ -66,13 +66,13 @@ export const LOCATION_TREE = [
         name: 'microTech',
         children: [
           { name: 'New Babbage', labels: ['New Babbage'] },
-          { name: 'Port Tressler', labels: ['Port Tressler'] },
+          { name: 'Port Tressler', labels: ['Port Tressler', 'All Rest Stops'] },
           {
             name: 'microTech Moons',
             children: [
-              { name: 'Calliope', labels: ['Calliope'] },
-              { name: 'Clio', labels: ['Clio'] },
-              { name: 'Euterpe', labels: ['Euterpe'] },
+              { name: 'Calliope', labels: ['Calliope', 'Outposts'] },
+              { name: 'Clio', labels: ['Clio', 'Outposts'] },
+              { name: 'Euterpe', labels: ['Euterpe', 'Outposts'] },
             ],
           },
         ],
@@ -80,24 +80,24 @@ export const LOCATION_TREE = [
       {
         name: 'Lagrange Stations',
         children: [
-          { name: 'HUR-L1 Green Glade Station', labels: ['HUR-L1'] },
-          { name: 'HUR-L2 Faithful Dream Station', labels: ['HUR-L2'] },
-          { name: 'HUR-L3 Thundering Express Station', labels: ['HUR-L3'] },
-          { name: 'HUR-L4 Melodic Fields Station', labels: ['HUR-L4'] },
-          { name: 'HUR-L5 High Course Station', labels: ['HUR-L5'] },
-          { name: 'CRU-L1 Ambitious Dream Station', labels: ['CRU-L1'] },
-          { name: 'CRU-L4 Shallow Fields Station', labels: ['CRU-L4'] },
-          { name: 'CRU-L5 Beautiful Glen Station', labels: ['CRU-L5'] },
-          { name: 'ARC-L1 Wide Forest Station', labels: ['ARC-L1'] },
-          { name: 'ARC-L2 Lively Pathway Station', labels: ['ARC-L2'] },
-          { name: 'ARC-L3 Modern Express Station', labels: ['ARC-L3'] },
-          { name: 'ARC-L4 Faint Glen Station', labels: ['ARC-L4'] },
-          { name: 'ARC-L5 Yellow Core Station', labels: ['ARC-L5'] },
-          { name: 'MIC-L1 Shallow Frontier Station', labels: ['MIC-L1'] },
-          { name: 'MIC-L2 Long Forest Station', labels: ['MIC-L2'] },
-          { name: 'MIC-L3 Endless Odyssey Station', labels: ['MIC-L3'] },
-          { name: 'MIC-L4 Red Crossroads Station', labels: ['MIC-L4'] },
-          { name: 'MIC-L5 Modern Icarus Station', labels: ['MIC-L5'] },
+          { name: 'HUR-L1 Green Glade Station', labels: ['HUR-L1', 'All Rest Stops'] },
+          { name: 'HUR-L2 Faithful Dream Station', labels: ['HUR-L2', 'All Rest Stops'] },
+          { name: 'HUR-L3 Thundering Express Station', labels: ['HUR-L3', 'All Rest Stops'] },
+          { name: 'HUR-L4 Melodic Fields Station', labels: ['HUR-L4', 'All Rest Stops'] },
+          { name: 'HUR-L5 High Course Station', labels: ['HUR-L5', 'All Rest Stops'] },
+          { name: 'CRU-L1 Ambitious Dream Station', labels: ['CRU-L1', 'All Rest Stops'] },
+          { name: 'CRU-L4 Shallow Fields Station', labels: ['CRU-L4', 'All Rest Stops'] },
+          { name: 'CRU-L5 Beautiful Glen Station', labels: ['CRU-L5', 'All Rest Stops'] },
+          { name: 'ARC-L1 Wide Forest Station', labels: ['ARC-L1', 'All Rest Stops'] },
+          { name: 'ARC-L2 Lively Pathway Station', labels: ['ARC-L2', 'All Rest Stops'] },
+          { name: 'ARC-L3 Modern Express Station', labels: ['ARC-L3', 'All Rest Stops'] },
+          { name: 'ARC-L4 Faint Glen Station', labels: ['ARC-L4', 'All Rest Stops'] },
+          { name: 'ARC-L5 Yellow Core Station', labels: ['ARC-L5', 'All Rest Stops'] },
+          { name: 'MIC-L1 Shallow Frontier Station', labels: ['MIC-L1', 'All Rest Stops'] },
+          { name: 'MIC-L2 Long Forest Station', labels: ['MIC-L2', 'All Rest Stops'] },
+          { name: 'MIC-L3 Endless Odyssey Station', labels: ['MIC-L3', 'All Rest Stops'] },
+          { name: 'MIC-L4 Red Crossroads Station', labels: ['MIC-L4', 'All Rest Stops'] },
+          { name: 'MIC-L5 Modern Icarus Station', labels: ['MIC-L5', 'All Rest Stops'] },
         ],
       },
       {
@@ -107,14 +107,6 @@ export const LOCATION_TREE = [
       {
         name: 'Grim HEX',
         labels: ['Grim HEX'],
-      },
-      {
-        name: 'All Rest Stops',
-        labels: ['All Rest Stops'],
-      },
-      {
-        name: 'Outposts',
-        labels: ['Outposts'],
       },
     ],
   },
@@ -145,17 +137,22 @@ export const LOCATION_TREE = [
  * Assign shops to location tree nodes.
  * Returns a new tree with `shops` arrays populated.
  *
+ * Shared labels (like 'All Rest Stops') cause a shop to appear under
+ * every node that lists that label — not just the first match.
+ *
  * @param {LocationNode[]} tree
  * @param {Array<{location_name?: string}>} shops
  * @returns {{ tree: LocationNode[], unmatched: any[] }}
  */
 export function assignShopsToTree(tree, shops) {
-  // Build label → node path index
+  // Build label → node paths index (one label can map to many nodes)
+  /** @type {Map<string, string[][]>} */
   const labelIndex = new Map()
   function indexNode(node, path) {
     if (node.labels) {
       for (const label of node.labels) {
-        labelIndex.set(label, path)
+        if (!labelIndex.has(label)) labelIndex.set(label, [])
+        labelIndex.get(label).push(path)
       }
     }
     if (node.children) {
@@ -197,13 +194,17 @@ export function assignShopsToTree(tree, shops) {
       unmatched.push(shop)
       continue
     }
-    const path = labelIndex.get(label)
-    if (path) {
-      const node = findNode(path)
-      if (node) {
-        node.shops.push(shop)
-        continue
+    const paths = labelIndex.get(label)
+    if (paths) {
+      let placed = false
+      for (const path of paths) {
+        const node = findNode(path)
+        if (node) {
+          node.shops.push(shop)
+          placed = true
+        }
       }
+      if (placed) continue
     }
     unmatched.push(shop)
   }
