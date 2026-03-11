@@ -3,97 +3,8 @@ import type { HonoEnv } from "../lib/types"
 
 const DEFAULT_VERSION_SUBQUERY = "(SELECT id FROM game_versions WHERE is_default = 1)"
 
-/** SQL CASE expression mapping shop slugs to friendly display names */
-const SHOP_DISPLAY_NAME_CASE = `CASE s.slug
-  WHEN 'inv-admin-admin-truckstop-base-d' THEN 'Admin Office'
-  WHEN 'inv-admin-area18' THEN 'Admin Office'
-  WHEN 'inv-admin-grimhex' THEN 'Admin Office'
-  WHEN 'inv-admin-hurston-lorville' THEN 'Admin Office'
-  WHEN 'inv-admin-levski' THEN 'Admin Office'
-  WHEN 'inv-admin-newbabbage' THEN 'Admin Office'
-  WHEN 'inv-admin-portolisar' THEN 'Admin Office'
-  WHEN 'inv-aparelli-newbabbage' THEN 'Aparelli'
-  WHEN 'inv-astroarmada-area18' THEN 'Astro Armada'
-  WHEN 'inv-bargeneric-food-reststop' THEN 'Bar'
-  WHEN 'inv-burritobar-food-reststop' THEN 'Burrito Bar'
-  WHEN 'inv-cafemusain-food-levski' THEN 'Cafe Musain'
-  WHEN 'inv-casabaoutlet-area18' THEN 'Casaba Outlet (Clothing)'
-  WHEN 'inv-casabaoutlet-food-area18' THEN 'Casaba Outlet (Food)'
-  WHEN 'inv-casabaoutlet-food-portolisar' THEN 'Casaba Outlet (Food)'
-  WHEN 'inv-casabaoutlet-food-reststop' THEN 'Casaba Outlet (Food)'
-  WHEN 'inv-casabaoutlet-portolisar' THEN 'Casaba Outlet (Clothing)'
-  WHEN 'inv-casabaoutlet-lt-a-small-base-a' THEN 'Casaba Outlet'
-  WHEN 'inv-centermass-newbabbage' THEN 'CenterMass'
-  WHEN 'inv-clothingstand-levski' THEN 'Clothing Stand'
-  WHEN 'inv-coffeetogo-food-area18' THEN 'Coffee To Go'
-  WHEN 'inv-commex-transfers-lorville' THEN 'CommEx Transfers'
-  WHEN 'inv-conscientiousobjects-levski' THEN 'Conscientious Objects'
-  WHEN 'inv-cordrys-levski' THEN 'Cordry''s'
-  WHEN 'inv-cubbyblast-a18' THEN 'Cubby Blast'
-  WHEN 'inv-cubbyblast-area18' THEN 'Cubby Blast'
-  WHEN 'inv-cubbyblast-food-area18' THEN 'Cubby Blast (Food)'
-  WHEN 'inv-dumpersdepot-area18' THEN 'Dumper''s Depot'
-  WHEN 'inv-dumpersdepot-grimhex' THEN 'Dumper''s Depot'
-  WHEN 'inv-dumpersdepot-levski' THEN 'Dumper''s Depot'
-  WHEN 'inv-dumpersdepot-portolisar' THEN 'Dumper''s Depot'
-  WHEN 'inv-ellroys-food-newbabbage' THEN 'Ellroy''s'
-  WHEN 'inv-ellroys-food-reststop' THEN 'Ellroy''s'
-  WHEN 'inv-gloc-food-area18' THEN 'G-Loc Bar'
-  WHEN 'inv-gadgetstand-levski' THEN 'Gadget Stand'
-  WHEN 'inv-garciagreens-food-newbabbage' THEN 'Garcia''s Greens'
-  WHEN 'inv-garritydefense-portolisar' THEN 'Garrity Defense'
-  WHEN 'inv-generic-armor-reststop-small-a' THEN 'Armor Shop'
-  WHEN 'inv-generic-clothing-reststop-small-a' THEN 'Clothing Shop'
-  WHEN 'inv-generic-shipweap-reststop-small-a' THEN 'Ship Weapons'
-  WHEN 'inv-hotdogbar-food-reststop' THEN 'Hot Dog Stand'
-  WHEN 'inv-juicebar-food-reststop' THEN 'Juice Bar'
-  WHEN 'inv-kctrending-grimhex' THEN 'KC Trending'
-  WHEN 'inv-landingservices-a18' THEN 'Landing Services'
-  WHEN 'inv-landingservices-grimhex' THEN 'Landing Services'
-  WHEN 'inv-landingservices-levski' THEN 'Landing Services'
-  WHEN 'inv-landingservices-lorville' THEN 'Landing Services'
-  WHEN 'inv-landingservices-portolisar' THEN 'Landing Services'
-  WHEN 'inv-landingservices-rs-full-0001' THEN 'Landing Services'
-  WHEN 'inv-landingservices-rs-full-0002' THEN 'Landing Services'
-  WHEN 'inv-landingservices-rs-full-0003' THEN 'Landing Services'
-  WHEN 'inv-landingservices-rs-full-0005' THEN 'Landing Services'
-  WHEN 'inv-landingservices-rs-full-0006' THEN 'Landing Services'
-  WHEN 'inv-landingservices-rs-full-0007' THEN 'Landing Services'
-  WHEN 'inv-landingservices-rs-full-0008' THEN 'Landing Services'
-  WHEN 'inv-livefireweapons-food-portolisar' THEN 'Live Fire Weapons (Food)'
-  WHEN 'inv-livefireweapons-portolisar' THEN 'Live Fire Weapons'
-  WHEN 'inv-livefireweapons-lt-a-small-base-b' THEN 'Live Fire Weapons'
-  WHEN 'inv-mvbar-food-lorville' THEN 'M&V Bar'
-  WHEN 'inv-market-bar-food-levski' THEN 'The Market Bar'
-  WHEN 'inv-mining-area18' THEN 'Mining Supplies'
-  WHEN 'inv-mining-grimhex' THEN 'Mining Supplies'
-  WHEN 'inv-mining-levski' THEN 'Mining Supplies'
-  WHEN 'inv-mining-lorville' THEN 'Mining Supplies'
-  WHEN 'inv-mining-newbabbage' THEN 'Mining Supplies'
-  WHEN 'inv-mining-portolisar' THEN 'Mining Supplies'
-  WHEN 'inv-newdeal-lorville' THEN 'New Deal'
-  WHEN 'inv-noodlebar-food-lorville' THEN 'Noodle Bar'
-  WHEN 'inv-noodlebar-food-reststop' THEN 'Noodle Bar'
-  WHEN 'inv-old38-food-grimhex' THEN 'Old ''38'
-  WHEN 'inv-omegapro-newbabbage' THEN 'Omega Pro'
-  WHEN 'inv-pizzabar-food-reststop' THEN 'Pizza Bar'
-  WHEN 'inv-platinumbay-truckstop' THEN 'Platinum Bay'
-  WHEN 'inv-regalluxuryrentals-newbabbage' THEN 'Regal Luxury Rentals'
-  WHEN 'inv-shipweapon-hdshowcase-lorville' THEN 'Hurston Dynamics Showcase'
-  WHEN 'inv-shipweapons-centermass-area18' THEN 'CenterMass (Ship Weapons)'
-  WHEN 'inv-shubininterstellar-newbabbage' THEN 'Shubin Interstellar'
-  WHEN 'inv-skuttersfood-grimhex' THEN 'Skutters (Food)'
-  WHEN 'inv-skutters-grimhex' THEN 'Skutters'
-  WHEN 'inv-tammanyandsons-food-lorville' THEN 'Tammany & Sons (Food)'
-  WHEN 'inv-tammanyandsons-lorville' THEN 'Tammany & Sons'
-  WHEN 'inv-teachsshipshop-levski' THEN 'Teach''s Ship Shop'
-  WHEN 'inv-technotic-grimhex' THEN 'Technotic'
-  WHEN 'inv-twyns-food-newbabbage' THEN 'Twyn''s'
-  WHEN 'inv-wallys-food-newbabbage' THEN 'Wally''s'
-  WHEN 'inv-whammers-newbabbage' THEN 'Whammer''s'
-  WHEN 'temp-outpost-shopinventory' THEN 'Commodity Terminal'
-  ELSE REPLACE(REPLACE(REPLACE(s.name, 'Inv ', ''), '_', ' '), '  ', ' ')
-END`
+/** SQL expression for shop display name — populated by extraction scripts */
+const SHOP_DISPLAY_NAME_EXPR = `COALESCE(s.display_name, REPLACE(REPLACE(REPLACE(s.name, 'Inv ', ''), '_', ' '), '  ', ' '))`
 
 /**
  * /api/gamedata — Public reference data for careers, reputation, law, mining, shops
@@ -296,7 +207,7 @@ export function gamedataRoutes<E extends HonoEnv>() {
     const { results } = await db
       .prepare(
         `SELECT s.*,
-           ${SHOP_DISPLAY_NAME_CASE} as display_name,
+           ${SHOP_DISPLAY_NAME_EXPR} as display_name,
            (SELECT COUNT(*) FROM shop_inventory si WHERE si.shop_id = s.id) as item_count,
            s.location_label as location_name
          FROM shops s
@@ -348,7 +259,7 @@ export function gamedataRoutes<E extends HonoEnv>() {
           `SELECT si.item_uuid, si.buy_price, si.sell_price,
              si.base_inventory, si.max_inventory,
              s.name as shop_name, s.slug as shop_slug,
-             ${SHOP_DISPLAY_NAME_CASE} as shop_display_name,
+             ${SHOP_DISPLAY_NAME_EXPR} as shop_display_name,
              s.location_label
            FROM shop_inventory si
            JOIN shops s ON s.id = si.shop_id
