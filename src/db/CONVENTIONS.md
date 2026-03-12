@@ -58,12 +58,37 @@ Named `{table1}_{table2}` in alphabetical order:
 
 ## JSON Blob Columns
 
-Use `{field}_json TEXT` for structured data that would otherwise require schema changes:
+Use `{field}_json TEXT` for structured data that doesn't need querying/filtering:
 ```sql
 containers_json TEXT   -- JSON array of container refs
-stats_json      TEXT   -- JSON object of type-specific stats
+shops_json      TEXT   -- JSON array of shop locations
 ```
-Use sparingly — prefer proper columns for anything queried/filtered.
+Use sparingly — prefer proper columns for anything queried or filtered. **`stats_json` has been
+eliminated** (migrations 0092 + 0099). All stat data now lives in dedicated typed columns on each table.
+
+---
+
+## Stat Column Conventions
+
+### Resistance Profiles
+Use `resist_` prefix for damage resistance columns:
+```sql
+resist_physical    REAL    -- physical damage resistance (0.0–1.0)
+resist_energy      REAL    -- energy damage resistance
+resist_distortion  REAL    -- distortion damage resistance
+resist_thermal     REAL    -- thermal damage resistance
+resist_biochemical REAL    -- biochemical damage resistance
+resist_stun        REAL    -- stun damage resistance
+```
+Used by: `fps_armour`, `fps_helmets`, `fps_clothing`.
+
+### Display Names
+`display_name TEXT` for human-friendly names derived from localization files. Distinct from
+`name TEXT` which stores the raw game entity name. Used by: `franchises`, `shops`.
+
+### Controller Columns
+`controller TEXT` + `controller_label TEXT` on `vehicle_ports` for mapping port→controller
+relationships (e.g., which turret controls which weapon mount).
 
 ---
 
@@ -108,6 +133,7 @@ FK from the referencing table: `production_status_id INTEGER REFERENCES producti
 - Never skip numbers or reuse applied migration names
 - **Never alter PK or UNIQUE constraints in-place** — create new table, copy data, drop old
 - D1 tracks applied migrations in `d1_migrations` table automatically
+- **Known numbering collisions:** 0049 (two files) and 0051 (two files). D1 applied both in each case — do not rename or renumber as that would break the `d1_migrations` tracking table. Avoid future collisions by checking the latest file number before creating a new migration.
 
 ---
 
@@ -129,10 +155,5 @@ Schema changes applied directly via `wrangler d1 execute` (not through a migrati
 tracked in the session journal. They **do not** appear in `d1_migrations` and are not
 re-applied by `wrangler d1 migrations apply`. Document them in the journal when applied.
 
-Current out-of-band columns (as of 2026-02-28):
-- `vehicle_components.stats_json` — added directly, not in migration file
-- `fps_weapons.stats_json` — same
-- `fps_armour.stats_json` — same
-- `fps_attachments.stats_json` — same
-- `fps_utilities.stats_json` — same
-- `vehicles.price_auec` — added directly for aUEC pricing data
+As of migration `0037_patch_versioning`, all previously out-of-band columns were included in
+table rebuilds. No current out-of-band columns exist.

@@ -68,7 +68,13 @@ bucket_name = "sc-bridge-avatars-staging"
 [env.staging.triggers]
 crons = []
 
-# Workers Observability — structured logs + OTEL export to Grafana Cloud
+# Staging observability — logs + traces to New Relic (separate destinations from prod)
+[env.staging.observability]
+logs = { enabled = true, invocation_logs = true, head_sampling_rate = 1.0, destinations = ["newrelic-logs-staging"] }
+traces = { enabled = true, head_sampling_rate = 1.0, destinations = ["newrelic-traces-staging"] }
+
+# ── Production Observability ──
+# Structured logs + OTEL export to Grafana Cloud and New Relic
 [observability]
 
 [observability.logs]
