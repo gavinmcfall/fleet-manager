@@ -2,6 +2,9 @@
 -- These small reference tables need game_version_id so their data can vary
 -- across game versions (careers/roles may be added or renamed between patches).
 
+-- Disable FK checks during rebuild (child tables reference these via FK)
+PRAGMA foreign_keys = OFF;
+
 -- ── vehicle_careers ──────────────────────────────────────────────────
 
 ALTER TABLE vehicle_careers RENAME TO vehicle_careers_old;
@@ -41,3 +44,6 @@ SELECT id, uuid, name, slug,
 FROM vehicle_roles_old;
 
 DROP TABLE vehicle_roles_old;
+
+-- Re-enable FK checks
+PRAGMA foreign_keys = ON;
