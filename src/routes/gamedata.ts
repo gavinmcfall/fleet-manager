@@ -6,6 +6,50 @@ const DEFAULT_VERSION_SUBQUERY = "(SELECT id FROM game_versions WHERE is_default
 /** SQL expression for shop display name — populated by extraction scripts */
 const SHOP_DISPLAY_NAME_EXPR = `COALESCE(s.display_name, REPLACE(REPLACE(REPLACE(s.name, 'Inv ', ''), '_', ' '), '  ', ' '))`
 
+/** Build the inventory query for a set of shop IDs */
+function buildInventoryQuery(placeholders: string): string {
+  return `SELECT si.shop_id, si.item_uuid, si.item_name, si.buy_price, si.sell_price,
+       si.base_inventory, si.max_inventory,
+       COALESCE(fi.name, tc.name, v.name, si.item_name) as resolved_name,
+       CASE
+         WHEN fi.id IS NOT NULL THEN 'gear'
+         WHEN tc.id IS NOT NULL THEN 'commodity'
+         WHEN v.id IS NOT NULL THEN 'vehicle'
+         ELSE 'other'
+       END as item_category
+     FROM shop_inventory si
+     LEFT JOIN loot_map fi ON fi.uuid = si.item_uuid AND fi.game_version_id = ${DEFAULT_VERSION_SUBQUERY}
+     LEFT JOIN trade_commodities tc ON tc.uuid = si.item_uuid
+     LEFT JOIN vehicles v ON v.uuid = si.item_uuid
+     WHERE si.shop_id IN (${placeholders})
+       AND si.game_version_id = ${DEFAULT_VERSION_SUBQUERY}
+     ORDER BY COALESCE(fi.name, tc.name, v.name, si.item_name)`
+}
+
+/** Nest inventory items under their shops with cleaned display names */
+function nestInventoryUnderShops(
+  shops: Record<string, unknown>[],
+  inventory: Record<string, unknown>[],
+): Record<string, unknown>[] {
+  const inventoryByShop = new Map<number, Record<string, unknown>[]>()
+  for (const item of inventory) {
+    const shopId = item.shop_id as number
+    if (!inventoryByShop.has(shopId)) inventoryByShop.set(shopId, [])
+    inventoryByShop.get(shopId)!.push(item)
+  }
+
+  return shops.map((shop) => ({
+    ...shop,
+    displayName:
+      (shop.name as string)
+        .replace(/^Inv /, "")
+        .replace(/_/g, " ")
+        .replace(/  +/g, " ")
+        .trim(),
+    items: inventoryByShop.get(shop.id as number) ?? [],
+  }))
+}
+
 /**
  * /api/gamedata — Public reference data for careers, reputation, law, mining, shops
  */
@@ -370,93 +414,22 @@ export function gamedataRoutes<E extends HonoEnv>() {
       const directShopIds = directShops.map((s) => s.id as number)
       const invPlaceholders = directShopIds.map(() => "?").join(",")
       const { results: inventory } = await db
-        .prepare(
-          `SELECT si.shop_id, si.item_uuid, si.item_name, si.buy_price, si.sell_price,
-             si.base_inventory, si.max_inventory,
-             COALESCE(fi.name, tc.name, v.name, si.item_name) as resolved_name,
-             CASE
-               WHEN fi.id IS NOT NULL THEN 'gear'
-               WHEN tc.id IS NOT NULL THEN 'commodity'
-               WHEN v.id IS NOT NULL THEN 'vehicle'
-               ELSE 'other'
-             END as item_category
-           FROM shop_inventory si
-           LEFT JOIN loot_map fi ON fi.uuid = si.item_uuid AND fi.game_version_id = ${DEFAULT_VERSION_SUBQUERY}
-           LEFT JOIN trade_commodities tc ON tc.uuid = si.item_uuid
-           LEFT JOIN vehicles v ON v.uuid = si.item_uuid
-           WHERE si.shop_id IN (${invPlaceholders})
-             AND si.game_version_id = ${DEFAULT_VERSION_SUBQUERY}
-           ORDER BY COALESCE(fi.name, tc.name, v.name, si.item_name)`,
-        )
+        .prepare(buildInventoryQuery(invPlaceholders))
         .bind(...directShopIds)
         .all()
 
-      const inventoryByShop = new Map<number, typeof inventory>()
-      for (const item of inventory) {
-        const shopId = item.shop_id as number
-        if (!inventoryByShop.has(shopId)) inventoryByShop.set(shopId, [])
-        inventoryByShop.get(shopId)!.push(item)
-      }
-
-      const shopsWithItems = directShops.map((shop) => ({
-        ...shop,
-        displayName:
-          (shop.name as string)
-            .replace(/^Inv /, "")
-            .replace(/_/g, " ")
-            .replace(/  +/g, " ")
-            .trim(),
-        items: inventoryByShop.get(shop.id as number) ?? [],
-      }))
-
-      return c.json({ location, shops: shopsWithItems })
+      return c.json({ location, shops: nestInventoryUnderShops(directShops, inventory) })
     }
 
     // Fetch inventory for all matched shops
     const shopIds = shops.map((s) => s.id as number)
     const invPlaceholders = shopIds.map(() => "?").join(",")
     const { results: inventory } = await db
-      .prepare(
-        `SELECT si.shop_id, si.item_uuid, si.item_name, si.buy_price, si.sell_price,
-           si.base_inventory, si.max_inventory,
-           COALESCE(fi.name, tc.name, v.name, si.item_name) as resolved_name,
-           CASE
-             WHEN fi.id IS NOT NULL THEN 'gear'
-             WHEN tc.id IS NOT NULL THEN 'commodity'
-             WHEN v.id IS NOT NULL THEN 'vehicle'
-             ELSE 'other'
-           END as item_category
-         FROM shop_inventory si
-         LEFT JOIN loot_map fi ON fi.uuid = si.item_uuid AND fi.game_version_id = ${DEFAULT_VERSION_SUBQUERY}
-         LEFT JOIN trade_commodities tc ON tc.uuid = si.item_uuid
-         LEFT JOIN vehicles v ON v.uuid = si.item_uuid
-         WHERE si.shop_id IN (${invPlaceholders})
-           AND si.game_version_id = ${DEFAULT_VERSION_SUBQUERY}
-         ORDER BY COALESCE(fi.name, tc.name, v.name, si.item_name)`,
-      )
+      .prepare(buildInventoryQuery(invPlaceholders))
       .bind(...shopIds)
       .all()
 
-    // Nest inventory under shops
-    const inventoryByShop = new Map<number, typeof inventory>()
-    for (const item of inventory) {
-      const shopId = item.shop_id as number
-      if (!inventoryByShop.has(shopId)) inventoryByShop.set(shopId, [])
-      inventoryByShop.get(shopId)!.push(item)
-    }
-
-    const shopsWithItems = shops.map((shop) => ({
-      ...shop,
-      displayName:
-        (shop.name as string)
-          .replace(/^Inv /, "")
-          .replace(/_/g, " ")
-          .replace(/  +/g, " ")
-          .trim(),
-      items: inventoryByShop.get(shop.id as number) ?? [],
-    }))
-
-    return c.json({ location, shops: shopsWithItems })
+    return c.json({ location, shops: nestInventoryUnderShops(shops, inventory) })
   })
 
   // GET /api/gamedata/missions — mission types + givers with faction/location data
