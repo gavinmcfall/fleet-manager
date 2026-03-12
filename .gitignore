@@ -1,6 +1,6 @@
 # Claude Code
-.claude/ux-review-screenshots/
-.claude/qa-screenshots/
+.claude/
+CLAUDE.md
 
 # Code Review
 .codereview/
