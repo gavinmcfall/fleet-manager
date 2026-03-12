@@ -36,14 +36,14 @@ export function gamedataRoutes<E extends HonoEnv>() {
     ])
 
     // Nest vehicles under their career/role
-    const vehiclesByCareer = new Map<number, any[]>()
+    const vehiclesByCareer = new Map<number, Record<string, unknown>[]>()
     for (const v of careerAssignments.results) {
       const careerId = v.career_id as number
       if (!vehiclesByCareer.has(careerId)) vehiclesByCareer.set(careerId, [])
       vehiclesByCareer.get(careerId)!.push(v)
     }
 
-    const vehiclesByRole = new Map<number, any[]>()
+    const vehiclesByRole = new Map<number, Record<string, unknown>[]>()
     for (const v of roleAssignments.results) {
       const roleId = v.role_id as number
       if (!vehiclesByRole.has(roleId)) vehiclesByRole.set(roleId, [])
@@ -130,14 +130,14 @@ export function gamedataRoutes<E extends HonoEnv>() {
     const [infractions, jurisdictions, overrides] = await Promise.all([
       db
         .prepare(
-          `SELECT *, stats_json FROM law_infractions
+          `SELECT * FROM law_infractions
            WHERE game_version_id = ${DEFAULT_VERSION_SUBQUERY}
            ORDER BY name`,
         )
         .all(),
       db
         .prepare(
-          `SELECT *, prohibited_goods_json, controlled_substances_json FROM law_jurisdictions
+          `SELECT * FROM law_jurisdictions
            WHERE game_version_id = ${DEFAULT_VERSION_SUBQUERY}
            ORDER BY name`,
         )
@@ -272,7 +272,7 @@ export function gamedataRoutes<E extends HonoEnv>() {
     ])
 
     // Nest listings under their commodity UUID
-    const listingsByUuid = new Map<string, any[]>()
+    const listingsByUuid = new Map<string, Record<string, unknown>[]>()
     for (const l of listingsResult.results) {
       const uuid = l.item_uuid as string
       if (!listingsByUuid.has(uuid)) listingsByUuid.set(uuid, [])

@@ -12,14 +12,15 @@ const TABS = [
   { key: 'refining',     label: 'Refining',          icon: FlaskConical },
 ]
 
+/** Maps DB column names (snake_case) to display labels */
 const STAT_LABELS = {
-  elementInstability: 'Instability',
-  elementResistance: 'Resistance',
-  elementOptimalWindowMidpoint: 'Optimal Window',
-  elementOptimalWindowMidpointRandomness: 'Window Randomness',
-  elementOptimalWindowThinness: 'Window Thinness',
-  elementExplosionMultiplier: 'Explosion Multiplier',
-  elementClusterFactor: 'Cluster Factor',
+  instability: 'Instability',
+  resistance: 'Resistance',
+  optimal_window_midpoint: 'Optimal Window',
+  optimal_window_randomness: 'Window Randomness',
+  optimal_window_thinness: 'Window Thinness',
+  explosion_multiplier: 'Explosion Multiplier',
+  cluster_factor: 'Cluster Factor',
 }
 
 const CATEGORY_STYLES = {
@@ -97,12 +98,7 @@ function friendlyElementName(className) {
 }
 
 function ElementCard({ element }) {
-  const stats = useMemo(() => {
-    if (!element.stats_json) return null
-    try { return JSON.parse(element.stats_json) } catch { return null }
-  }, [element.stats_json])
-
-  const instability = stats?.elementInstability ?? null
+  const instability = element.instability ?? null
 
   return (
     <div className="panel p-4 space-y-3">
@@ -135,10 +131,10 @@ function ElementCard({ element }) {
         )}
       </div>
 
-      {/* Remaining stats from stats_json */}
-      {stats && Object.entries(STAT_LABELS).map(([key, label]) => {
-        if (key === 'elementInstability') return null
-        const val = stats[key]
+      {/* Remaining typed stat columns */}
+      {Object.entries(STAT_LABELS).map(([key, label]) => {
+        if (key === 'instability') return null
+        const val = element[key]
         return <StatRow key={key} label={label} value={val} />
       })}
     </div>

@@ -53,15 +53,15 @@ export const CATEGORY_ORDER = [
 
 // ── Resistance stats ─────────────────────────────────────────────────────────
 export const RESISTANCE_KEYS = [
-  'physical_resistance', 'energy_resistance', 'distortion_resistance',
-  'thermal_resistance', 'biochemical_resistance', 'stun_resistance',
+  'resist_physical', 'resist_energy', 'resist_distortion',
+  'resist_thermal', 'resist_biochemical', 'resist_stun',
 ]
 
 export const RESISTANCE_LABELS = {
-  physical_resistance: 'Physical',
-  energy_resistance: 'Energy',
-  distortion_resistance: 'Distortion',
-  thermal_resistance: 'Thermal',
-  biochemical_resistance: 'Biochemical',
-  stun_resistance: 'Stun',
+  resist_physical: 'Physical',
+  resist_energy: 'Energy',
+  resist_distortion: 'Distortion',
+  resist_thermal: 'Thermal',
+  resist_biochemical: 'Biochemical',
+  resist_stun: 'Stun',
 }

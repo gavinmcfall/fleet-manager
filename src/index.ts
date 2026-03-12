@@ -25,6 +25,18 @@ import { VEHICLE_VERSION_JOIN } from "./lib/constants";
 
 const app = new Hono<HonoEnv>();
 
+// Global error handler — structured logging for unhandled exceptions
+app.onError((err, c) => {
+  logEvent("unhandled_error", {
+    method: c.req.method,
+    path: c.req.path,
+    error: err.message,
+    stack: err.stack,
+    ray: c.req.header("CF-Ray"),
+  });
+  return c.json({ error: "Internal Server Error" }, 500);
+});
+
 // Validate ENCRYPTION_KEY on first request per isolate (fail fast)
 let encryptionKeyValidated = false;
 app.use("*", async (c, next) => {

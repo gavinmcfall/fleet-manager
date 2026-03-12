@@ -7,9 +7,6 @@ export interface Env {
   DB: D1Database;
   ASSETS: Fetcher;
   AVATARS: R2Bucket;
-  SC_WIKI_ENABLED: string;
-  SC_WIKI_RATE_LIMIT: string;
-  SC_WIKI_BURST: string;
   RSI_API_ENABLED: string;
   RSI_BASE_URL: string;
   RSI_RATE_LIMIT: string;

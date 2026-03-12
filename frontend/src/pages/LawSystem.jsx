@@ -24,13 +24,32 @@ function severityBadgeClass(severity) {
 
 // ── Stat parsing helpers ──────────────────────────────────────────────────────
 
+/** Build stats object from typed columns (was stats_json before migration 0098) */
 function parseStats(infraction) {
-  if (!infraction.stats_json) return {}
-  try {
-    return typeof infraction.stats_json === 'string'
-      ? JSON.parse(infraction.stats_json)
-      : infraction.stats_json
-  } catch { return {} }
+  const stats = {}
+  // Map snake_case DB columns → camelCase keys (matching overrides_json format)
+  const mapping = {
+    is_felony: 'isFelony',
+    grace_allowance: 'graceAllowance',
+    grace_allowance_cooldown: 'graceAllowanceCooldown',
+    grace_period: 'gracePeriod',
+    grace_cooloff_scale: 'graceCooloffScale',
+    display_grace_time: 'displayGraceTime',
+    escalated_fine_multiplier: 'escalatedPaymentFineMultiplier',
+    early_payment_period: 'earlyPaymentPeriod',
+    lifetime: 'lifetime',
+    cool_off_time: 'coolOffTime',
+    press_charges_notification_time: 'pressChargesNotificationTime',
+    remove_time_seconds: 'removeTimeSeconds',
+    felony_merits: 'felonyMerits',
+    ignore_party_member: 'ignoreIfAgainstPartyMember',
+    hide_crime_notification: 'hideCrimeNotification',
+    hide_crime_journal: 'hideCrimeInJournal',
+  }
+  for (const [col, key] of Object.entries(mapping)) {
+    if (infraction[col] != null) stats[key] = infraction[col]
+  }
+  return stats
 }
 
 function parseTriggers(infraction) {
@@ -96,15 +115,6 @@ function StatPill({ label, value, color = 'text-gray-300', title }) {
 function InfractionStats({ stats }) {
   const pills = []
 
-  if (stats.fine) pills.push(
-    <StatPill key="fine" label="Fine" value={formatCredits(stats.fine)} color="text-sc-melt" title="Credit penalty paid to clear the infraction" />
-  )
-  if (stats.demeritPoints > 0) pills.push(
-    <StatPill key="demerits" label="Demerits" value={stats.demeritPoints} color="text-red-400" title="Demerit points added to your criminal record. Accumulating demerits increases your CrimeStat level" />
-  )
-  if (stats.meritPoints > 0) pills.push(
-    <StatPill key="merits" label="Merits" value={stats.meritPoints} color="text-green-400" title="Merit points earned by paying off or serving time for this infraction" />
-  )
   if (stats.felonyMerits > 0) pills.push(
     <StatPill key="felony-merits" label="Felony Merits" value={stats.felonyMerits} color="text-green-300" title="Merit points specifically for clearing felony-level infractions" />
   )

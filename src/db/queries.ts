@@ -16,6 +16,16 @@ import type {
 import { extractSetName, makeSetSlug } from "../lib/loot-sets";
 import { VEHICLE_VERSION_JOIN } from "../lib/constants";
 
+// --- Loot JSON "has_*" column expressions ---
+// Reusable SQL fragment for SELECT clauses that compute boolean flags from JSON blob columns.
+// Each flag is 1 if the JSON column contains actual data, 0 otherwise.
+const LOOT_HAS_FLAGS = `
+        CASE WHEN lm.containers_json NOT IN ('null','[]','') AND lm.containers_json IS NOT NULL THEN 1 ELSE 0 END as has_containers,
+        CASE WHEN lm.shops_json     NOT IN ('null','[]','') AND lm.shops_json IS NOT NULL     THEN 1 ELSE 0 END as has_shops,
+        CASE WHEN lm.npcs_json      NOT IN ('null','[]','') AND lm.npcs_json IS NOT NULL      THEN 1 ELSE 0 END as has_npcs,
+        CASE WHEN lm.corpses_json   NOT IN ('null','[]','') AND lm.corpses_json IS NOT NULL   THEN 1 ELSE 0 END as has_corpses,
+        CASE WHEN lm.contracts_json NOT IN ('null','[]','') AND lm.contracts_json IS NOT NULL THEN 1 ELSE 0 END as has_contracts`;
+
 // --- Nullable helpers (mirror Go's nullableStr/nullableFloat/nullableInt) ---
 
 function n(val: string | undefined | null): string | null {
@@ -179,7 +189,20 @@ export async function getShipLoadout(db: D1Database, slug: string): Promise<Reco
       child_components AS (
         SELECT
           c.parent_port_id,
-          vc2.name, vc2.type, vc2.sub_type, vc2.size, vc2.grade, vc2.class, vc2.stats_json,
+          vc2.name, vc2.type, vc2.sub_type, vc2.size, vc2.grade, vc2.class,
+          vc2.power_output, vc2.overpower_performance, vc2.overclock_performance,
+          vc2.overclock_threshold_min, vc2.overclock_threshold_max, vc2.thermal_output,
+          vc2.cooling_rate, vc2.max_temperature, vc2.overheat_temperature,
+          vc2.shield_hp, vc2.shield_regen, vc2.resist_physical, vc2.resist_energy,
+          vc2.resist_distortion, vc2.resist_thermal, vc2.regen_delay, vc2.downed_regen_delay,
+          vc2.quantum_speed, vc2.quantum_range, vc2.fuel_rate, vc2.spool_time,
+          vc2.cooldown_time, vc2.stage1_accel, vc2.stage2_accel,
+          vc2.rounds_per_minute, vc2.ammo_container_size, vc2.damage_per_shot,
+          vc2.damage_type, vc2.projectile_speed, vc2.effective_range, vc2.dps,
+          vc2.heat_per_shot, vc2.power_draw, vc2.fire_modes,
+          vc2.rotation_speed, vc2.min_pitch, vc2.max_pitch, vc2.min_yaw, vc2.max_yaw, vc2.gimbal_type,
+          vc2.thrust_force, vc2.fuel_burn_rate, vc2.radar_range, vc2.radar_angle,
+          vc2.qed_range, vc2.qed_strength,
           m2.name AS manufacturer_name, m2.class AS manufacturer_class,
           ROW_NUMBER() OVER (PARTITION BY c.parent_port_id ORDER BY c.id) AS rn
         FROM ship_ports c
@@ -199,7 +222,52 @@ export async function getShipLoadout(db: D1Database, slug: string): Promise<Reco
         COALESCE(vc.sub_type, child.sub_type) AS sub_type,
         COALESCE(vc.size, child.size) AS component_size,
         COALESCE(vc.grade, child.grade) AS grade,
-        COALESCE(vc.stats_json, child.stats_json) AS stats_json,
+        COALESCE(vc.power_output, child.power_output) AS power_output,
+        COALESCE(vc.overpower_performance, child.overpower_performance) AS overpower_performance,
+        COALESCE(vc.overclock_performance, child.overclock_performance) AS overclock_performance,
+        COALESCE(vc.overclock_threshold_min, child.overclock_threshold_min) AS overclock_threshold_min,
+        COALESCE(vc.overclock_threshold_max, child.overclock_threshold_max) AS overclock_threshold_max,
+        COALESCE(vc.thermal_output, child.thermal_output) AS thermal_output,
+        COALESCE(vc.cooling_rate, child.cooling_rate) AS cooling_rate,
+        COALESCE(vc.max_temperature, child.max_temperature) AS max_temperature,
+        COALESCE(vc.overheat_temperature, child.overheat_temperature) AS overheat_temperature,
+        COALESCE(vc.shield_hp, child.shield_hp) AS shield_hp,
+        COALESCE(vc.shield_regen, child.shield_regen) AS shield_regen,
+        COALESCE(vc.resist_physical, child.resist_physical) AS resist_physical,
+        COALESCE(vc.resist_energy, child.resist_energy) AS resist_energy,
+        COALESCE(vc.resist_distortion, child.resist_distortion) AS resist_distortion,
+        COALESCE(vc.resist_thermal, child.resist_thermal) AS resist_thermal,
+        COALESCE(vc.regen_delay, child.regen_delay) AS regen_delay,
+        COALESCE(vc.downed_regen_delay, child.downed_regen_delay) AS downed_regen_delay,
+        COALESCE(vc.quantum_speed, child.quantum_speed) AS quantum_speed,
+        COALESCE(vc.quantum_range, child.quantum_range) AS quantum_range,
+        COALESCE(vc.fuel_rate, child.fuel_rate) AS fuel_rate,
+        COALESCE(vc.spool_time, child.spool_time) AS spool_time,
+        COALESCE(vc.cooldown_time, child.cooldown_time) AS cooldown_time,
+        COALESCE(vc.stage1_accel, child.stage1_accel) AS stage1_accel,
+        COALESCE(vc.stage2_accel, child.stage2_accel) AS stage2_accel,
+        COALESCE(vc.rounds_per_minute, child.rounds_per_minute) AS rounds_per_minute,
+        COALESCE(vc.ammo_container_size, child.ammo_container_size) AS ammo_container_size,
+        COALESCE(vc.damage_per_shot, child.damage_per_shot) AS damage_per_shot,
+        COALESCE(vc.damage_type, child.damage_type) AS damage_type,
+        COALESCE(vc.projectile_speed, child.projectile_speed) AS projectile_speed,
+        COALESCE(vc.effective_range, child.effective_range) AS effective_range,
+        COALESCE(vc.dps, child.dps) AS dps,
+        COALESCE(vc.heat_per_shot, child.heat_per_shot) AS heat_per_shot,
+        COALESCE(vc.power_draw, child.power_draw) AS power_draw,
+        COALESCE(vc.fire_modes, child.fire_modes) AS fire_modes,
+        COALESCE(vc.rotation_speed, child.rotation_speed) AS rotation_speed,
+        COALESCE(vc.min_pitch, child.min_pitch) AS min_pitch,
+        COALESCE(vc.max_pitch, child.max_pitch) AS max_pitch,
+        COALESCE(vc.min_yaw, child.min_yaw) AS min_yaw,
+        COALESCE(vc.max_yaw, child.max_yaw) AS max_yaw,
+        COALESCE(vc.gimbal_type, child.gimbal_type) AS gimbal_type,
+        COALESCE(vc.thrust_force, child.thrust_force) AS thrust_force,
+        COALESCE(vc.fuel_burn_rate, child.fuel_burn_rate) AS fuel_burn_rate,
+        COALESCE(vc.radar_range, child.radar_range) AS radar_range,
+        COALESCE(vc.radar_angle, child.radar_angle) AS radar_angle,
+        COALESCE(vc.qed_range, child.qed_range) AS qed_range,
+        COALESCE(vc.qed_strength, child.qed_strength) AS qed_strength,
         COALESCE(m.name, child.manufacturer_name) AS manufacturer_name,
         COALESCE(vc.class, m.class, child.class, child.manufacturer_class) AS component_class
       FROM ship_ports p
@@ -496,6 +564,35 @@ export async function loadInsuranceTypes(db: D1Database): Promise<Map<string, nu
   return map;
 }
 
+// --- Fleet queries ---
+
+/**
+ * Fleet query for analysis: vehicle characteristics + insurance, no paint or visibility fields.
+ * Used by gap analysis and LLM analysis endpoints.
+ */
+export async function getFleetForAnalysis(db: D1Database, userId: string): Promise<UserFleetEntry[]> {
+  const result = await db
+    .prepare(
+      `SELECT uf.id, uf.vehicle_id, uf.warbond, uf.is_loaner,
+        uf.pledge_id, uf.pledge_name, uf.pledge_cost, uf.pledge_date, uf.custom_name,
+        v.name as vehicle_name, v.slug as vehicle_slug, v.focus, v.size_label, v.cargo,
+        v.crew_min, v.crew_max, v.pledge_price, v.speed_scm, v.classification,
+        m.name as manufacturer_name, m.code as manufacturer_code,
+        it.label as insurance_label, it.duration_months, it.is_lifetime,
+        ps.key as production_status
+      FROM user_fleet uf
+      JOIN vehicles v ON v.id = uf.vehicle_id
+      LEFT JOIN manufacturers m ON m.id = v.manufacturer_id
+      LEFT JOIN insurance_types it ON it.id = uf.insurance_type_id
+      LEFT JOIN production_statuses ps ON ps.id = v.production_status_id
+      WHERE uf.user_id = ?
+      ORDER BY v.name`,
+    )
+    .bind(userId)
+    .all();
+  return result.results as unknown as UserFleetEntry[];
+}
+
 // ============================================================
 // Sync History Operations
 // ============================================================
@@ -679,9 +776,9 @@ export async function getGameVersions(db: D1Database): Promise<{ code: string; c
  * Returns { join, where, bind } where:
  *   - join: INNER JOIN clause to append after FROM loot_map lm
  *   - where: version part of WHERE (always 'lm.removed = 0')
- *   - bind: whether a patchCode bind parameter is needed
+ *   - params: bind parameters to spread (empty array or [patchCode])
  */
-function latestAsOf(patchCode?: string): { join: string; where: string; bind: boolean } {
+function latestAsOf(patchCode?: string): { join: string; where: string; params: unknown[] } {
   const versionCap = patchCode
     ? `(SELECT id FROM game_versions WHERE code = ?)`
     : `(SELECT id FROM game_versions WHERE is_default = 1)`;
@@ -694,7 +791,7 @@ function latestAsOf(patchCode?: string): { join: string; where: string; bind: bo
       GROUP BY uuid
     ) _lv ON lm.uuid = _lv.uuid AND lm.game_version_id = _lv.latest_gv`,
     where: `lm.removed = 0`,
-    bind: !!patchCode,
+    params: patchCode ? [patchCode] : [],
   };
 }
 
@@ -702,11 +799,7 @@ export async function getLootItems(db: D1Database, patchCode?: string): Promise<
   const lv = latestAsOf(patchCode);
   const sql = `SELECT lm.id, lm.uuid, lm.name, lm.type, lm.sub_type, lm.rarity,
         lm.category, lm.manufacturer_name,
-        CASE WHEN lm.containers_json NOT IN ('null','[]','') AND lm.containers_json IS NOT NULL THEN 1 ELSE 0 END as has_containers,
-        CASE WHEN lm.shops_json     NOT IN ('null','[]','') AND lm.shops_json IS NOT NULL     THEN 1 ELSE 0 END as has_shops,
-        CASE WHEN lm.npcs_json      NOT IN ('null','[]','') AND lm.npcs_json IS NOT NULL      THEN 1 ELSE 0 END as has_npcs,
-        CASE WHEN lm.corpses_json   NOT IN ('null','[]','') AND lm.corpses_json IS NOT NULL   THEN 1 ELSE 0 END as has_corpses,
-        CASE WHEN lm.contracts_json NOT IN ('null','[]','') AND lm.contracts_json IS NOT NULL THEN 1 ELSE 0 END as has_contracts
+        ${LOOT_HAS_FLAGS}
       FROM loot_map lm
       ${lv.join}
       WHERE ${lv.where}
@@ -720,7 +813,7 @@ export async function getLootItems(db: D1Database, patchCode?: string): Promise<
           'Currency','MobiGlas'
         )
       ORDER BY lm.name ASC`;
-  const result = await (lv.bind ? db.prepare(sql).bind(patchCode) : db.prepare(sql)).all();
+  const result = await db.prepare(sql).bind(...lv.params).all();
   return result.results as unknown as LootItem[];
 }
 
@@ -730,7 +823,7 @@ export async function getLootByUuid(db: D1Database, uuid: string, patchCode?: st
       FROM loot_map lm
       ${lv.join}
       WHERE lm.uuid = ? AND ${lv.where}`;
-  const row = await (lv.bind ? db.prepare(sql).bind(patchCode, uuid) : db.prepare(sql).bind(uuid)).first();
+  const row = await db.prepare(sql).bind(...lv.params, uuid).first();
   if (!row) return null;
 
   // Fetch linked item details based on which FK is set
@@ -739,32 +832,32 @@ export async function getLootByUuid(db: D1Database, uuid: string, patchCode?: st
 
   if (item.fps_weapon_id) {
     details = await db
-      .prepare("SELECT name, sub_type as type, size, description, stats_json FROM fps_weapons WHERE id = ?")
+      .prepare("SELECT name, sub_type as type, size, description, rounds_per_minute, fire_modes, burst_count, ammo_capacity, zoom_factor, item_port_count, damage, damage_type, projectile_speed, effective_range, dps FROM fps_weapons WHERE id = ?")
       .bind(item.fps_weapon_id)
       .first() as Record<string, unknown> | null;
   } else if (item.fps_armour_id) {
     details = await db
-      .prepare("SELECT name, sub_type as type, size, grade, description, stats_json FROM fps_armour WHERE id = ?")
+      .prepare("SELECT name, sub_type as type, size, grade, description, resist_physical, resist_energy, resist_distortion, resist_thermal, resist_biochemical, resist_stun, ir_emission, em_emission, item_port_count FROM fps_armour WHERE id = ?")
       .bind(item.fps_armour_id)
       .first() as Record<string, unknown> | null;
   } else if (item.fps_attachment_id) {
     details = await db
-      .prepare("SELECT name, sub_type as type, size, description, stats_json FROM fps_attachments WHERE id = ?")
+      .prepare("SELECT name, sub_type as type, size, description, zoom_scale, second_zoom_scale, damage_multiplier, sound_radius_multiplier FROM fps_attachments WHERE id = ?")
       .bind(item.fps_attachment_id)
       .first() as Record<string, unknown> | null;
   } else if (item.fps_utility_id) {
     details = await db
-      .prepare("SELECT name, sub_type as type, description, stats_json FROM fps_utilities WHERE id = ?")
+      .prepare("SELECT name, sub_type as type, description, heal_amount, effect_duration, consumable_type, damage, blast_radius, fuse_time, device_type FROM fps_utilities WHERE id = ?")
       .bind(item.fps_utility_id)
       .first() as Record<string, unknown> | null;
   } else if (item.fps_helmet_id) {
     details = await db
-      .prepare("SELECT name, sub_type as type, size, grade, description, stats_json FROM fps_helmets WHERE id = ?")
+      .prepare("SELECT name, sub_type as type, size, grade, description, resist_physical, resist_energy, resist_distortion, resist_thermal, resist_biochemical, resist_stun, ir_emission, em_emission, item_port_count, atmosphere_capacity FROM fps_helmets WHERE id = ?")
       .bind(item.fps_helmet_id)
       .first() as Record<string, unknown> | null;
   } else if (item.fps_clothing_id) {
     details = await db
-      .prepare("SELECT name, slot, size, grade, description, stats_json FROM fps_clothing WHERE id = ?")
+      .prepare("SELECT name, slot, size, grade, description, resist_physical, resist_energy, resist_distortion, resist_thermal, resist_biochemical, resist_stun, ir_emission, em_emission, storage_capacity, temperature_range_min, temperature_range_max FROM fps_clothing WHERE id = ?")
       .bind(item.fps_clothing_id)
       .first() as Record<string, unknown> | null;
   } else if (item.consumable_id) {
@@ -784,12 +877,12 @@ export async function getLootByUuid(db: D1Database, uuid: string, patchCode?: st
       .first() as Record<string, unknown> | null;
   } else if (item.vehicle_component_id) {
     details = await db
-      .prepare("SELECT name, type, sub_type, size, grade, description, stats_json FROM vehicle_components WHERE id = ?")
+      .prepare("SELECT name, type, sub_type, size, grade, description, power_output, overpower_performance, overclock_performance, overclock_threshold_min, overclock_threshold_max, thermal_output, cooling_rate, max_temperature, overheat_temperature, shield_hp, shield_regen, resist_physical, resist_energy, resist_distortion, resist_thermal, regen_delay, downed_regen_delay, quantum_speed, quantum_range, fuel_rate, spool_time, cooldown_time, stage1_accel, stage2_accel, rounds_per_minute, ammo_container_size, damage_per_shot, damage_type, projectile_speed, effective_range, dps, heat_per_shot, power_draw, fire_modes, rotation_speed, min_pitch, max_pitch, min_yaw, max_yaw, gimbal_type, thrust_force, fuel_burn_rate, radar_range, radar_angle, qed_range, qed_strength FROM vehicle_components WHERE id = ?")
       .bind(item.vehicle_component_id)
       .first() as Record<string, unknown> | null;
   } else if (item.ship_missile_id) {
     details = await db
-      .prepare("SELECT name, type, sub_type, size, grade, description, stats_json FROM ship_missiles WHERE id = ?")
+      .prepare("SELECT name, type, sub_type, size, grade, description, missile_type, lock_time, tracking_signal, damage, damage_type, blast_radius, speed, lock_range, ammo_count FROM ship_missiles WHERE id = ?")
       .bind(item.ship_missile_id)
       .first() as Record<string, unknown> | null;
   }
@@ -831,11 +924,7 @@ export async function getUserLootWishlist(db: D1Database, userId: string): Promi
     .prepare(
       `SELECT lm.id, lm.uuid, lm.name, lm.type, lm.sub_type, lm.rarity,
         lm.category, lm.manufacturer_name,
-        CASE WHEN lm.containers_json NOT IN ('null','[]','') AND lm.containers_json IS NOT NULL THEN 1 ELSE 0 END as has_containers,
-        CASE WHEN lm.shops_json     NOT IN ('null','[]','') AND lm.shops_json IS NOT NULL     THEN 1 ELSE 0 END as has_shops,
-        CASE WHEN lm.npcs_json      NOT IN ('null','[]','') AND lm.npcs_json IS NOT NULL      THEN 1 ELSE 0 END as has_npcs,
-        CASE WHEN lm.corpses_json   NOT IN ('null','[]','') AND lm.corpses_json IS NOT NULL   THEN 1 ELSE 0 END as has_corpses,
-        CASE WHEN lm.contracts_json NOT IN ('null','[]','') AND lm.contracts_json IS NOT NULL THEN 1 ELSE 0 END as has_contracts,
+        ${LOOT_HAS_FLAGS},
         lm.shops_json, lm.containers_json, lm.npcs_json, lm.corpses_json, lm.contracts_json,
         ulw.quantity as wishlist_quantity
       FROM user_loot_wishlist ulw
@@ -899,10 +988,7 @@ export async function getLootSets(
       AND lm.name NOT IN ('<= PLACEHOLDER =>')
       AND lm.type IS NOT NULL AND lm.type != ''
     ORDER BY lm.name ASC`;
-  const result = await (lv.bind
-    ? db.prepare(sql).bind(patchCode)
-    : db.prepare(sql)
-  ).all();
+  const result = await db.prepare(sql).bind(...lv.params).all();
 
   const groups = new Map<
     string,
@@ -944,11 +1030,7 @@ export async function getLootSetBySlug(
 ): Promise<LootSetDetail | null> {
   const lv = latestAsOf(patchCode);
   const sql = `SELECT lm.*,
-      CASE WHEN lm.containers_json NOT IN ('null','[]','') AND lm.containers_json IS NOT NULL THEN 1 ELSE 0 END as has_containers,
-      CASE WHEN lm.shops_json     NOT IN ('null','[]','') AND lm.shops_json IS NOT NULL     THEN 1 ELSE 0 END as has_shops,
-      CASE WHEN lm.npcs_json      NOT IN ('null','[]','') AND lm.npcs_json IS NOT NULL      THEN 1 ELSE 0 END as has_npcs,
-      CASE WHEN lm.corpses_json   NOT IN ('null','[]','') AND lm.corpses_json IS NOT NULL   THEN 1 ELSE 0 END as has_corpses,
-      CASE WHEN lm.contracts_json NOT IN ('null','[]','') AND lm.contracts_json IS NOT NULL THEN 1 ELSE 0 END as has_contracts
+      ${LOOT_HAS_FLAGS}
     FROM loot_map lm
     ${lv.join}
     WHERE ${lv.where}
@@ -956,10 +1038,7 @@ export async function getLootSetBySlug(
       AND lm.name NOT IN ('<= PLACEHOLDER =>')
       AND lm.type IS NOT NULL AND lm.type != ''
     ORDER BY lm.name ASC`;
-  const result = await (lv.bind
-    ? db.prepare(sql).bind(patchCode)
-    : db.prepare(sql)
-  ).all();
+  const result = await db.prepare(sql).bind(...lv.params).all();
 
   // Filter to matching set pieces
   const matchingItems: Record<string, unknown>[] = [];
@@ -995,7 +1074,7 @@ export async function getLootSetBySlug(
     const placeholders = armourIds.map(() => "?").join(",");
     const rows = await db
       .prepare(
-        `SELECT id, name, sub_type as type, size, grade, description, stats_json FROM fps_armour WHERE id IN (${placeholders})`
+        `SELECT id, name, sub_type as type, size, grade, description, resist_physical, resist_energy, resist_distortion, resist_thermal, resist_biochemical, resist_stun, ir_emission, em_emission, item_port_count FROM fps_armour WHERE id IN (${placeholders})`
       )
       .bind(...armourIds)
       .all();
@@ -1008,7 +1087,7 @@ export async function getLootSetBySlug(
     const placeholders = helmetIds.map(() => "?").join(",");
     const rows = await db
       .prepare(
-        `SELECT id, name, sub_type as type, size, grade, description, stats_json FROM fps_helmets WHERE id IN (${placeholders})`
+        `SELECT id, name, sub_type as type, size, grade, description, resist_physical, resist_energy, resist_distortion, resist_thermal, resist_biochemical, resist_stun, ir_emission, em_emission, item_port_count, atmosphere_capacity FROM fps_helmets WHERE id IN (${placeholders})`
       )
       .bind(...helmetIds)
       .all();
@@ -1216,13 +1295,13 @@ const LOOT_EXCLUSION_FILTER = `lm.removed = 0
   )`;
 
 /**
- * Returns { join, where } for "latest as of" queries used by location endpoints.
- * patchCode is interpolated directly (not parameterized) because these queries
- * already have their own bind parameters for pagination/LIKE.
+ * Returns { join, where, params } for "latest as of" queries used by location endpoints.
+ * The version cap is parameterized to prevent SQL injection.
+ * Callers must prepend `params` before their own bind values.
  */
-function lootBaseQuery(patchCode?: string): { join: string; where: string } {
+function lootBaseQuery(patchCode?: string): { join: string; where: string; params: unknown[] } {
   const versionCap = patchCode
-    ? `(SELECT id FROM game_versions WHERE code = '${patchCode}')`
+    ? `(SELECT id FROM game_versions WHERE code = ?)`
     : `(SELECT id FROM game_versions WHERE is_default = 1)`;
   return {
     join: `INNER JOIN (
@@ -1233,6 +1312,7 @@ function lootBaseQuery(patchCode?: string): { join: string; where: string } {
       GROUP BY uuid
     ) _lv ON lm.uuid = _lv.uuid AND lm.game_version_id = _lv.latest_gv`,
     where: LOOT_EXCLUSION_FILTER,
+    params: patchCode ? [patchCode] : [],
   };
 }
 
@@ -1283,7 +1363,7 @@ export async function getLootLocationSummary(db: D1Database, patchCode?: string)
 
   let offset = 0;
   while (true) {
-    const result = await db.prepare(sql).bind(PAGE_SIZE, offset).all<LootSummaryRow>();
+    const result = await db.prepare(sql).bind(...lq.params, PAGE_SIZE, offset).all<LootSummaryRow>();
     const rows = result.results;
     if (rows.length === 0) break;
 
@@ -1370,7 +1450,7 @@ export async function getLootLocationDetail(
       AND lm.${jsonCol} LIKE ? ESCAPE '\\'
     ORDER BY lm.name`;
 
-  const result = await db.prepare(sql).bind(likePattern).all<{
+  const result = await db.prepare(sql).bind(...lq.params, likePattern).all<{
     uuid: string;
     name: string;
     type: string | null;

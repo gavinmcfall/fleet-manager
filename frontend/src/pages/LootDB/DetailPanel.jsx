@@ -30,7 +30,7 @@ function formatFireModes(modes, burstCount) {
     .join(', ')
 }
 
-/** Human-readable labels for known stats_json fields. null = hidden. */
+/** Human-readable labels for stat columns. null = hidden. */
 const STAT_LABELS = {
   // FPS weapons
   item_port_count:       'Attachment Slots',
@@ -38,14 +38,19 @@ const STAT_LABELS = {
   rounds_per_minute:     'Rounds / Min',
   fire_modes:            'Fire Modes',
   burst_count:           null,           // merged into fire_modes display
-  physical_damage:       'Physical Damage',
+  damage:                'Damage',
+  damage_type:           'Damage Type',
+  projectile_speed:      'Projectile Speed',
+  effective_range:       'Effective Range',
+  dps:                   'DPS',
+  zoom_factor:           'Zoom',
   // Helmet / armour damage resistances (multiplier: lower = more resistant)
-  physical_resistance:   'Physical Resist',
-  energy_resistance:     'Energy Resist',
-  distortion_resistance: 'Distortion Resist',
-  thermal_resistance:    'Thermal Resist',
-  biochemical_resistance:'Biochemical Resist',
-  stun_resistance:       'Stun Resist',
+  resist_physical:       'Physical Resist',
+  resist_energy:         'Energy Resist',
+  resist_distortion:     'Distortion Resist',
+  resist_thermal:        'Thermal Resist',
+  resist_biochemical:    'Biochemical Resist',
+  resist_stun:           'Stun Resist',
   // Helmet / armour misc
   atmosphere_capacity:   'EVA Support',
   ir_emission:           'IR Emission',
@@ -56,27 +61,85 @@ const STAT_LABELS = {
   damage_multiplier:     'Damage Modifier',
   sound_radius_multiplier:'Sound Radius',
   // Utilities / consumables
-  consumable_volume:     'Volume (microSCU)',
-  consumable_doses:      'Doses',
+  heal_amount:           'Heal Amount',
+  effect_duration:       'Duration',
+  consumable_type:       'Consumable Type',
   blast_radius:          'Blast Radius',
-  pressure:              'Pressure',
+  fuse_time:             'Fuse Time',
   device_type:           'Device Type',
+  // Clothing
+  storage_capacity:      'Storage Capacity',
+  temperature_range_min: 'Min Temperature',
+  temperature_range_max: 'Max Temperature',
+  // Vehicle components
+  power_output:          'Power Output',
+  overpower_performance: 'Overpower Perf.',
+  overclock_performance: 'Overclock Perf.',
+  thermal_output:        'Thermal Output',
+  cooling_rate:          'Cooling Rate',
+  max_temperature:       'Max Temperature',
+  overheat_temperature:  'Overheat Temp',
+  shield_hp:             'Shield HP',
+  shield_regen:          'Shield Regen',
+  regen_delay:           'Regen Delay',
+  downed_regen_delay:    'Downed Regen Delay',
+  quantum_speed:         'QT Speed',
+  quantum_range:         'QT Range',
+  fuel_rate:             'Fuel Rate',
+  spool_time:            'Spool Time',
+  cooldown_time:         'Cooldown',
+  stage1_accel:          'Stage 1 Accel',
+  stage2_accel:          'Stage 2 Accel',
+  ammo_container_size:   'Ammo Pool',
+  damage_per_shot:       'Damage/Shot',
+  heat_per_shot:         'Heat/Shot',
+  power_draw:            'Power Draw',
+  rotation_speed:        'Rotation Speed',
+  gimbal_type:           'Gimbal Type',
+  thrust_force:          'Thrust Force',
+  fuel_burn_rate:        'Fuel Burn Rate',
+  radar_range:           'Radar Range',
+  radar_angle:           'Radar Angle',
+  qed_range:             'QED Range',
+  qed_strength:          'QED Strength',
+  // Ship missiles
+  missile_type:          'Missile Type',
+  lock_time:             'Lock Time',
+  tracking_signal:       'Tracking Signal',
+  speed:                 'Speed',
+  lock_range:            'Lock Range',
+  ammo_count:            'Ammo Count',
 }
 
-/** Display order for known stats fields. Unknown fields sort alphabetically after. */
+/** Display order for stat columns. Unknown fields sort alphabetically after. */
 const STAT_ORDER = [
-  'item_port_count', 'ammo_capacity', 'rounds_per_minute', 'fire_modes', 'physical_damage',
-  'zoom_scale', 'second_zoom_scale', 'damage_multiplier', 'sound_radius_multiplier',
-  'physical_resistance', 'energy_resistance', 'distortion_resistance',
-  'thermal_resistance', 'biochemical_resistance', 'stun_resistance',
+  'item_port_count', 'ammo_capacity', 'rounds_per_minute', 'fire_modes', 'damage', 'damage_type',
+  'damage_per_shot', 'dps', 'projectile_speed', 'effective_range', 'heat_per_shot', 'power_draw',
+  'zoom_factor', 'zoom_scale', 'second_zoom_scale', 'damage_multiplier', 'sound_radius_multiplier',
+  'resist_physical', 'resist_energy', 'resist_distortion',
+  'resist_thermal', 'resist_biochemical', 'resist_stun',
   'atmosphere_capacity', 'ir_emission', 'em_emission',
-  'consumable_volume', 'consumable_doses', 'blast_radius', 'pressure', 'device_type',
+  'storage_capacity', 'temperature_range_min', 'temperature_range_max',
+  'heal_amount', 'effect_duration', 'consumable_type', 'blast_radius', 'fuse_time', 'device_type',
+  'power_output', 'overpower_performance', 'overclock_performance', 'thermal_output',
+  'cooling_rate', 'max_temperature', 'overheat_temperature',
+  'shield_hp', 'shield_regen', 'regen_delay', 'downed_regen_delay',
+  'quantum_speed', 'quantum_range', 'fuel_rate', 'spool_time', 'cooldown_time', 'stage1_accel', 'stage2_accel',
+  'ammo_container_size', 'rotation_speed', 'gimbal_type',
+  'thrust_force', 'fuel_burn_rate', 'radar_range', 'radar_angle', 'qed_range', 'qed_strength',
+  'missile_type', 'lock_time', 'tracking_signal', 'speed', 'lock_range', 'ammo_count',
 ]
+
+/** Known stat keys that are hidden from generic display (metadata or merged into other stats) */
+const STAT_HIDDEN = new Set([
+  'name', 'type', 'sub_type', 'slot', 'size', 'grade', 'description', 'id',
+  'burst_count',  // merged into fire_modes display
+])
 
 /** Keys where the stored value is a multiplier (1.0 = base); display as % of base. */
 const MULTIPLIER_STATS = new Set(['damage_multiplier', 'sound_radius_multiplier'])
 /** Keys where the stored value is a damage resistance multiplier (lower = more resistant). */
-const RESISTANCE_STATS = new Set(RESISTANCE_KEYS)
+const RESISTANCE_STATS = new Set(['resist_physical', 'resist_energy', 'resist_distortion', 'resist_thermal', 'resist_biochemical', 'resist_stun'])
 
 export default function DetailPanel({ uuid, manufacturerName, collectionQty, onSetCollectionQty, wishlisted, onToggleWishlist, isAuthed, onClose }) {
   const { activeCode } = useGameVersion()
@@ -204,51 +267,43 @@ export default function DetailPanel({ uuid, manufacturerName, collectionQty, onS
               const hasSlot = !!det.slot
               const hasSize = det.size != null
               const hasGrade = det.grade != null
-              const hasStats = det.stats_json && det.stats_json !== 'null'
-              if (!hasDescription && !hasType && !hasSubType && !hasSlot && !hasSize && !hasGrade && !hasStats) return null
+              // Build stats from direct columns on det (no more JSON parsing)
+              const statsEntries = Object.entries(det)
+                .filter(([k, v]) => !STAT_HIDDEN.has(k) && v != null && STAT_LABELS[k] !== null && STAT_LABELS[k] !== undefined)
+                .sort(([a], [b]) => {
+                  const ai = STAT_ORDER.indexOf(a)
+                  const bi = STAT_ORDER.indexOf(b)
+                  if (ai === -1 && bi === -1) return a.localeCompare(b)
+                  if (ai === -1) return 1
+                  if (bi === -1) return -1
+                  return ai - bi
+                })
+                .map(([k, v]) => {
+                  const label = STAT_LABELS[k] ?? k.replace(/_/g, ' ').replace(/\b\w/g, c => c.toUpperCase())
+                  let display
+                  if (k === 'fire_modes') {
+                    display = formatFireModes(typeof v === 'string' ? v.split(',').map(s => s.trim()) : v, det.burst_count)
+                  } else if (Array.isArray(v)) {
+                    display = v.join(', ')
+                  } else if (RESISTANCE_STATS.has(k) && typeof v === 'number') {
+                    display = `${Math.round((1 - v) * 100)}% reduction`
+                  } else if (MULTIPLIER_STATS.has(k) && typeof v === 'number') {
+                    display = `${Math.round(v * 100)}% of base`
+                  } else if ((k === 'zoom_scale' || k === 'second_zoom_scale' || k === 'zoom_factor') && typeof v === 'number') {
+                    display = `${v}x`
+                  } else if (k === 'atmosphere_capacity' && typeof v === 'number') {
+                    display = v > 0 ? 'Yes' : 'No'
+                  } else if (k === 'blast_radius' && typeof v === 'number') {
+                    display = `${v}m`
+                  } else {
+                    display = String(v)
+                  }
+                  return { k, label, display }
+                })
+                .filter(({ display }) => display)
 
-              // Parse and sort stats entries: known fields first (STAT_ORDER), then alphabetical
-              let statsEntries = []
-              if (hasStats) {
-                try {
-                  const stats = JSON.parse(det.stats_json)
-                  statsEntries = Object.entries(stats)
-                    .filter(([k]) => STAT_LABELS[k] !== null)
-                    .sort(([a], [b]) => {
-                      const ai = STAT_ORDER.indexOf(a)
-                      const bi = STAT_ORDER.indexOf(b)
-                      if (ai === -1 && bi === -1) return a.localeCompare(b)
-                      if (ai === -1) return 1
-                      if (bi === -1) return -1
-                      return ai - bi
-                    })
-                    .map(([k, v]) => {
-                      const label = STAT_LABELS[k] ?? k.replace(/_/g, ' ').replace(/\b\w/g, c => c.toUpperCase())
-                      let display
-                      if (k === 'fire_modes') {
-                        display = formatFireModes(v, stats.burst_count)
-                      } else if (Array.isArray(v)) {
-                        display = v.join(', ')
-                      } else if (RESISTANCE_STATS.has(k) && typeof v === 'number') {
-                        // e.g. 0.6 → "40% reduction"
-                        display = `${Math.round((1 - v) * 100)}% reduction`
-                      } else if (MULTIPLIER_STATS.has(k) && typeof v === 'number') {
-                        // e.g. 0.66 → "66% of base"
-                        display = `${Math.round(v * 100)}% of base`
-                      } else if ((k === 'zoom_scale' || k === 'second_zoom_scale') && typeof v === 'number') {
-                        display = `${v}x`
-                      } else if (k === 'atmosphere_capacity' && typeof v === 'number') {
-                        display = v > 0 ? 'Yes' : 'No'
-                      } else if (k === 'blast_radius' && typeof v === 'number') {
-                        display = `${v}m`
-                      } else {
-                        display = String(v)
-                      }
-                      return { k, label, display }
-                    })
-                    .filter(({ display }) => display)
-                } catch { /* skip */ }
-              }
+              const hasStats = statsEntries.length > 0
+              if (!hasDescription && !hasType && !hasSubType && !hasSlot && !hasSize && !hasGrade && !hasStats) return null
 
               return (
                 <div>
@@ -284,7 +339,7 @@ export default function DetailPanel({ uuid, manufacturerName, collectionQty, onS
                         <span className="text-gray-300">{det.grade}</span>
                       </div>
                     )}
-                    {/* stats_json fields before description so RPM/fire modes group with structural info */}
+                    {/* stat fields before description so RPM/fire modes group with structural info */}
                     {statsEntries.map(({ k, label, display }) => (
                       <div key={k} className="flex gap-2">
                         <span className="text-gray-500 w-32 shrink-0">{label}</span>

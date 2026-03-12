@@ -6,6 +6,7 @@ import { logEvent } from "../lib/logger";
 import { ANALYSIS_PROMPT } from "../lib/analysis-prompt";
 import { validate, IntIdParam, LLMProvider } from "../lib/validation";
 import { VEHICLE_VERSION_JOIN } from "../lib/constants";
+import { getFleetForAnalysis } from "../db/queries";
 
 /**
  * /api/analysis/* — Fleet analysis, LLM analysis
@@ -18,27 +19,7 @@ export function analysisRoutes() {
     const db = c.env.DB;
     const userID = getAuthUser(c).id;
 
-    const fleetResult = await db
-      .prepare(
-        `SELECT uf.id, uf.vehicle_id, uf.warbond, uf.is_loaner,
-          uf.pledge_id, uf.pledge_name, uf.pledge_cost, uf.pledge_date, uf.custom_name,
-          v.name as vehicle_name, v.slug as vehicle_slug, v.focus, v.size_label, v.cargo,
-          v.crew_min, v.crew_max, v.pledge_price, v.speed_scm, v.classification,
-          m.name as manufacturer_name, m.code as manufacturer_code,
-          it.label as insurance_label, it.duration_months, it.is_lifetime,
-          ps.key as production_status
-        FROM user_fleet uf
-        JOIN vehicles v ON v.id = uf.vehicle_id
-        LEFT JOIN manufacturers m ON m.id = v.manufacturer_id
-        LEFT JOIN insurance_types it ON it.id = uf.insurance_type_id
-        LEFT JOIN production_statuses ps ON ps.id = v.production_status_id
-        WHERE uf.user_id = ?
-        ORDER BY v.name`,
-      )
-      .bind(userID)
-      .all();
-
-    const fleet = fleetResult.results as unknown as UserFleetEntry[];
+    const fleet = await getFleetForAnalysis(db, userID);
 
     const allVehiclesResult = await db
       .prepare(
@@ -144,27 +125,7 @@ export function analysisRoutes() {
     const model = body.model || config.model || defaultModel;
 
     // Get fleet data
-    const fleetResult = await db
-      .prepare(
-        `SELECT uf.id, uf.vehicle_id, uf.warbond, uf.is_loaner,
-          uf.pledge_id, uf.pledge_name, uf.pledge_cost, uf.pledge_date, uf.custom_name,
-          v.name as vehicle_name, v.slug as vehicle_slug, v.focus, v.size_label, v.cargo,
-          v.crew_min, v.crew_max, v.pledge_price, v.speed_scm, v.classification,
-          m.name as manufacturer_name, m.code as manufacturer_code,
-          it.label as insurance_label, it.duration_months, it.is_lifetime,
-          ps.key as production_status
-        FROM user_fleet uf
-        JOIN vehicles v ON v.id = uf.vehicle_id
-        LEFT JOIN manufacturers m ON m.id = v.manufacturer_id
-        LEFT JOIN insurance_types it ON it.id = uf.insurance_type_id
-        LEFT JOIN production_statuses ps ON ps.id = v.production_status_id
-        WHERE uf.user_id = ?
-        ORDER BY v.name`,
-      )
-      .bind(userID)
-      .all();
-
-    const fleet = fleetResult.results;
+    const fleet = await getFleetForAnalysis(db, userID);
     if (fleet.length === 0) {
       return c.json({ error: "No fleet data to analyze" }, 400);
     }
@@ -172,9 +133,7 @@ export function analysisRoutes() {
     try {
       // Strip personal data before sending to LLM — ship characteristics + pricing for analysis
       // pledge_price is needed for budget recommendations; custom_name is personal and excluded
-      const sanitizedFleet = fleet.map((entry) => {
-        const e = entry as Record<string, unknown>;
-        return {
+      const sanitizedFleet = fleet.map((e) => ({
           vehicle_name: e.vehicle_name,
           vehicle_slug: e.vehicle_slug,
           focus: e.focus,
@@ -190,8 +149,7 @@ export function analysisRoutes() {
           is_lifetime: e.is_lifetime,
           production_status: e.production_status,
           warbond: e.warbond,
-        };
-      });
+      }));
       const userPrompt = `Fleet data:\n\n${JSON.stringify(sanitizedFleet)}\n\nProvide a comprehensive fleet analysis.`;
 
       const analysisText = await callLLM(provider, apiKey, {
