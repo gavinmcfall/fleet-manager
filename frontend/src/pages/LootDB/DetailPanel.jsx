@@ -357,6 +357,7 @@ export default function DetailPanel({ uuid, manufacturerName, collectionQty, onS
                           {eff.magnitude != null ? eff.magnitude : ''}
                           {eff.magnitude != null && eff.duration_seconds != null ? ' · ' : ''}
                           {eff.duration_seconds != null ? `${eff.duration_seconds}s` : ''}
+                          {eff.magnitude == null && eff.duration_seconds == null ? 'Active' : ''}
                         </span>
                       </div>
                     ))}
