@@ -140,6 +140,11 @@ const STAT_HIDDEN = new Set([
 const MULTIPLIER_STATS = new Set(['damage_multiplier', 'sound_radius_multiplier'])
 /** Keys where the stored value is a damage resistance multiplier (lower = more resistant). */
 const RESISTANCE_STATS = new Set(['resist_physical', 'resist_energy', 'resist_distortion', 'resist_thermal', 'resist_biochemical', 'resist_stun'])
+/** Stats that should always display for certain categories — show "N/A" when null so users know it's not missing data. */
+const ALWAYS_SHOW_STATS = {
+  armour:  ['ir_emission', 'em_emission'],
+  helmet:  ['ir_emission', 'em_emission'],
+}
 
 export default function DetailPanel({ uuid, manufacturerName, collectionQty, onSetCollectionQty, wishlisted, onToggleWishlist, isAuthed, onClose }) {
   const { activeCode } = useGameVersion()
@@ -269,8 +274,14 @@ export default function DetailPanel({ uuid, manufacturerName, collectionQty, onS
               const hasSize = det.size != null
               const hasGrade = det.grade != null
               // Build stats from direct columns on det (no more JSON parsing)
-              const statsEntries = Object.entries(det)
-                .filter(([k, v]) => !STAT_HIDDEN.has(k) && v != null && STAT_LABELS[k] !== null && STAT_LABELS[k] !== undefined)
+              // Include "always show" stats for this category even when null (displayed as N/A)
+              const alwaysShow = new Set(ALWAYS_SHOW_STATS[eCat] || [])
+              const detWithDefaults = { ...det }
+              for (const key of alwaysShow) {
+                if (!(key in detWithDefaults)) detWithDefaults[key] = null
+              }
+              const statsEntries = Object.entries(detWithDefaults)
+                .filter(([k, v]) => !STAT_HIDDEN.has(k) && (v != null || alwaysShow.has(k)) && STAT_LABELS[k] !== null && STAT_LABELS[k] !== undefined)
                 .sort(([a], [b]) => {
                   const ai = STAT_ORDER.indexOf(a)
                   const bi = STAT_ORDER.indexOf(b)
@@ -282,7 +293,9 @@ export default function DetailPanel({ uuid, manufacturerName, collectionQty, onS
                 .map(([k, v]) => {
                   const label = STAT_LABELS[k] ?? k.replace(/_/g, ' ').replace(/\b\w/g, c => c.toUpperCase())
                   let display
-                  if (k === 'fire_modes') {
+                  if (v == null) {
+                    display = 'N/A'
+                  } else if (k === 'fire_modes') {
                     display = formatFireModes(typeof v === 'string' ? v.split(',').map(s => s.trim()) : v, det.burst_count)
                   } else if (Array.isArray(v)) {
                     display = v.join(', ')
