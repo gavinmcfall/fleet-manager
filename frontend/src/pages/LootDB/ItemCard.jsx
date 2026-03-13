@@ -1,12 +1,13 @@
 import { Bookmark, BookmarkPlus } from 'lucide-react'
-import { rarityStyle, CATEGORY_BADGE_STYLES, CATEGORY_LABELS } from '../../lib/lootDisplay'
+import { rarityStyle, CATEGORY_BADGE_STYLES, CATEGORY_LABELS, effectiveCategory } from '../../lib/lootDisplay'
 import SourceIcons from './SourceIcons'
 import CollectionStepper from './CollectionStepper'
 
 export default function ItemCard({ item, collectionQty, onSetCollectionQty, wishlisted, onToggleWishlist, isAuthed, onSelect }) {
   const rs = rarityStyle(item.rarity)
-  const catStyle = CATEGORY_BADGE_STYLES[item.category] || CATEGORY_BADGE_STYLES.unknown
-  const catLabel = CATEGORY_LABELS[item.category] || item.category
+  const eCat = effectiveCategory(item)
+  const catStyle = CATEGORY_BADGE_STYLES[eCat] || CATEGORY_BADGE_STYLES.unknown
+  const catLabel = CATEGORY_LABELS[eCat] || eCat
 
   return (
     <div

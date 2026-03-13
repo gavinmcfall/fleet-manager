@@ -1,7 +1,7 @@
 import { X, ShoppingCart, Package, Swords, Skull, FileText, Plus, Bookmark, BookmarkPlus } from 'lucide-react'
 import { useLootItem } from '../../hooks/useAPI'
 import useGameVersion from '../../hooks/useGameVersion'
-import { rarityStyle, CATEGORY_BADGE_STYLES, CATEGORY_LABELS, RESISTANCE_KEYS } from '../../lib/lootDisplay'
+import { rarityStyle, CATEGORY_BADGE_STYLES, CATEGORY_LABELS, RESISTANCE_KEYS, effectiveCategory } from '../../lib/lootDisplay'
 import LoadingState from '../../components/LoadingState'
 import LocationSection from './LocationSection'
 
@@ -153,8 +153,9 @@ export default function DetailPanel({ uuid, manufacturerName, collectionQty, onS
   }
 
   const rs = item?.rarity ? rarityStyle(item.rarity) : null
-  const catStyle = item ? CATEGORY_BADGE_STYLES[item.category] || CATEGORY_BADGE_STYLES.unknown : ''
-  const catLabel = item ? CATEGORY_LABELS[item.category] || item.category : ''
+  const eCat = item ? effectiveCategory(item) : ''
+  const catStyle = item ? CATEGORY_BADGE_STYLES[eCat] || CATEGORY_BADGE_STYLES.unknown : ''
+  const catLabel = item ? CATEGORY_LABELS[eCat] || eCat : ''
 
   return (
     <>

@@ -1,13 +1,14 @@
 import { Plus, MapPin, ShoppingCart } from 'lucide-react'
-import { rarityStyle, CATEGORY_BADGE_STYLES, CATEGORY_LABELS } from '../../lib/lootDisplay'
+import { rarityStyle, CATEGORY_BADGE_STYLES, CATEGORY_LABELS, effectiveCategory } from '../../lib/lootDisplay'
 import SourceIcons from './SourceIcons'
 import CollectionStepper from './CollectionStepper'
 
 const SOURCE_ICON = { shop: ShoppingCart, containers: MapPin, npcs: MapPin, corpses: MapPin, contract: MapPin }
 
 export default function WishlistRow({ item, primarySource, collectionQty, onSetCollectionQty, wishlistQty, onSetWishlistQty, onSelect }) {
-  const catStyle = CATEGORY_BADGE_STYLES[item.category] || CATEGORY_BADGE_STYLES.unknown
-  const catLabel = CATEGORY_LABELS[item.category] || item.category
+  const eCat = effectiveCategory(item)
+  const catStyle = CATEGORY_BADGE_STYLES[eCat] || CATEGORY_BADGE_STYLES.unknown
+  const catLabel = CATEGORY_LABELS[eCat] || eCat
   const rs = item.rarity ? rarityStyle(item.rarity) : null
 
   return (

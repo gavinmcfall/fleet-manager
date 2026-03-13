@@ -18,7 +18,7 @@ import ErrorState from '../../components/ErrorState'
 import SearchInput from '../../components/SearchInput'
 import {
   RARITY_ORDER, RARITY_STYLES, rarityStyle,
-  CATEGORY_LABELS, CATEGORY_BADGE_STYLES,
+  CATEGORY_LABELS, CATEGORY_BADGE_STYLES, effectiveCategory,
 } from '../../lib/lootDisplay'
 
 import {
@@ -111,7 +111,8 @@ export default function LootDB() {
     if (!allItems) return {}
     const counts = {}
     for (const item of allItems) {
-      counts[item.category] = (counts[item.category] || 0) + 1
+      const cat = effectiveCategory(item)
+      counts[cat] = (counts[cat] || 0) + 1
     }
     return counts
   }, [allItems])
@@ -127,16 +128,17 @@ export default function LootDB() {
     if (!allItems) return {}
     const stats = {}
     for (const item of allItems) {
-      if (!stats[item.category]) stats[item.category] = { total: 0, collected: 0 }
-      stats[item.category].total++
-      if (collected.has(item.id)) stats[item.category].collected++
+      const cat = effectiveCategory(item)
+      if (!stats[cat]) stats[cat] = { total: 0, collected: 0 }
+      stats[cat].total++
+      if (collected.has(item.id)) stats[cat].collected++
     }
     return stats
   }, [allItems, collected])
 
   const filteredCollectedItems = useMemo(() => {
     let items = collectedItems
-    if (collCategory !== 'all') items = items.filter(i => i.category === collCategory)
+    if (collCategory !== 'all') items = items.filter(i => effectiveCategory(i) === collCategory)
     if (collSearch.trim()) {
       const q = collSearch.toLowerCase()
       items = items.filter(i => i.name.toLowerCase().includes(q))
@@ -147,8 +149,8 @@ export default function LootDB() {
   // All categories present in data
   const categories = useMemo(() => {
     if (!allItems) return []
-    const seen = new Set(allItems.map((i) => i.category))
-    const ordered = ['weapon', 'armour', 'helmet', 'clothing', 'attachment', 'consumable', 'harvestable', 'prop', 'utility', 'ship_component', 'missile', 'unknown']
+    const seen = new Set(allItems.map((i) => effectiveCategory(i)))
+    const ordered = ['weapon', 'armour', 'helmet', 'clothing', 'attachment', 'consumable', 'harvestable', 'prop', 'utility', 'ship_weapon', 'ship_component', 'missile', 'unknown']
     return ordered.filter((c) => seen.has(c))
   }, [allItems])
 
@@ -156,7 +158,7 @@ export default function LootDB() {
   const brands = useMemo(() => {
     if (!allItems) return new Map()
     const map = new Map()
-    const base = category !== 'all' ? allItems.filter(i => i.category === category) : allItems
+    const base = category !== 'all' ? allItems.filter(i => effectiveCategory(i) === category) : allItems
     for (const item of base) {
       if (item.manufacturer_name) {
         map.set(item.manufacturer_name, (map.get(item.manufacturer_name) || 0) + 1)
@@ -170,7 +172,7 @@ export default function LootDB() {
     if (!allItems || !brand) return new Map()
     const map = new Map()
     let base = allItems.filter(i => i.manufacturer_name === brand)
-    if (category !== 'all') base = base.filter(i => i.category === category)
+    if (category !== 'all') base = base.filter(i => effectiveCategory(i) === category)
     for (const item of base) {
       const sn = extractSetName(item.name, item.manufacturer_name)
       if (sn) {
@@ -186,7 +188,7 @@ export default function LootDB() {
     let items = allItems
 
     if (category !== 'all') {
-      items = items.filter((i) => i.category === category)
+      items = items.filter((i) => effectiveCategory(i) === category)
     }
 
     if (brand) {
@@ -226,7 +228,7 @@ export default function LootDB() {
     if (sortBy === 'rarity') {
       items.sort((a, b) => (rarityRank[a.rarity] ?? 5) - (rarityRank[b.rarity] ?? 5) || a.name.localeCompare(b.name))
     } else if (sortBy === 'category') {
-      items.sort((a, b) => (a.category || '').localeCompare(b.category || '') || a.name.localeCompare(b.name))
+      items.sort((a, b) => (effectiveCategory(a)).localeCompare(effectiveCategory(b)) || a.name.localeCompare(b.name))
     } else {
       items.sort((a, b) => a.name.localeCompare(b.name))
     }
@@ -663,8 +665,9 @@ export default function LootDB() {
               <div className="divide-y divide-sc-border border border-sc-border rounded">
                 {paged.map((item) => {
                   const rs = item.rarity ? rarityStyle(item.rarity) : null
-                  const catStyle = CATEGORY_BADGE_STYLES[item.category] || CATEGORY_BADGE_STYLES.unknown
-                  const catLabel = CATEGORY_LABELS[item.category] || item.category
+                  const eCat = effectiveCategory(item)
+                  const catStyle = CATEGORY_BADGE_STYLES[eCat] || CATEGORY_BADGE_STYLES.unknown
+                  const catLabel = CATEGORY_LABELS[eCat] || eCat
                   const itemCollectionQty = collected.get(item.id) ?? 0
                   const isWishlisted = wishlistIds.has(item.id)
                   return (
@@ -826,8 +829,9 @@ export default function LootDB() {
                 <div className="border border-sc-border rounded overflow-hidden">
                   {filteredCollectedItems.map((item) => {
                     const rs = item.rarity ? rarityStyle(item.rarity) : null
-                    const catStyle = CATEGORY_BADGE_STYLES[item.category] || CATEGORY_BADGE_STYLES.unknown
-                    const catLabel = CATEGORY_LABELS[item.category] || item.category
+                    const eCat = effectiveCategory(item)
+                    const catStyle = CATEGORY_BADGE_STYLES[eCat] || CATEGORY_BADGE_STYLES.unknown
+                    const catLabel = CATEGORY_LABELS[eCat] || eCat
                     const qty = collected.get(item.id) ?? 0
                     return (
                       <div
