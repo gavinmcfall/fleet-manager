@@ -60,7 +60,7 @@ const authNavItems = [
     items: [
       { to: '/loot', icon: Search, label: 'Item Finder' },
       { to: '/poi', icon: MapPin, label: 'Locations' },
-      { to: '/contracts', icon: FileText, label: 'Contracts' },
+      { to: '/contracts', icon: FileText, label: 'Missions' },
       { to: '/shops', icon: ShoppingCart, label: 'Shops' },
       { to: '/trade', icon: TrendingUp, label: 'Trade' },
       { to: '/mining', icon: Hammer, label: 'Mining Guide' },
