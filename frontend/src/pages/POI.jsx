@@ -3,7 +3,7 @@ import { Link, useSearchParams } from 'react-router-dom'
 import { MapPin, Package, ShoppingCart, Swords, ChevronDown, ChevronRight, Store, X } from 'lucide-react'
 import { useLootLocations, useAPI } from '../hooks/useAPI'
 import useGameVersion from '../hooks/useGameVersion'
-import { friendlyLocation, friendlyFaction, getLocationGroup } from '../lib/lootLocations'
+import { friendlyLocation, friendlyFaction, getLocationGroup, isTemplateLocation } from '../lib/lootLocations'
 import { friendlyShopName } from '../lib/shopNames'
 import { LOCATION_TREE, assignShopsToTree, countShopsInNode } from '../lib/locationHierarchy'
 import PageHeader from '../components/PageHeader'
@@ -274,13 +274,15 @@ export default function POI() {
   // Containers: grouped by location group
   const containerEntries = useMemo(() => {
     if (!data?.containers) return []
-    return data.containers.map((loc) => ({
-      rawKey: loc.key,
-      friendlyName: friendlyLocation(loc.key),
-      group: getLocationGroup(loc.key),
-      itemCount: loc.itemCount,
-      rarities: loc.rarities || {},
-    }))
+    return data.containers
+      .filter((loc) => !isTemplateLocation(loc.key))
+      .map((loc) => ({
+        rawKey: loc.key,
+        friendlyName: friendlyLocation(loc.key),
+        group: getLocationGroup(loc.key),
+        itemCount: loc.itemCount,
+        rarities: loc.rarities || {},
+      }))
   }, [data])
 
   // Shops (loot-system — kept for subtitle count)

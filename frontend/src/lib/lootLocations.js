@@ -202,6 +202,15 @@ export function friendlyLocation(raw) {
     }
     return `Distribution Centre \u2014 ${ROOM_NAMES[room] || toWords(room)}`
   }
+  // Plain MultiConfig without security suffix — collapse to room name
+  const dcMultiPlain = s.match(/^DistributionCentre_MultiConfig_(\w+)$/)
+  if (dcMultiPlain) {
+    const ROOM_NAMES = {
+      Cargoshop: 'Cargo Shop', Cargowing: 'Cargo Wing', Lobby: 'Lobby',
+      Shippingwing: 'Shipping Wing', SideRoad: 'Side Road', Storage: 'Storage', Warehouse: 'Warehouse',
+    }
+    return `Distribution Centre \u2014 ${ROOM_NAMES[dcMultiPlain[1]] || toWords(dcMultiPlain[1])}`
+  }
   // Plural form without room — "DistributionCentres_HighSecurity" / "100percent"
   const dcPlain = s.match(/^DistributionCentres?_(HighSecur[it]+y|MediumSecurity|LowSecurity|100percent)$/)
   if (dcPlain) return 'Distribution Centre'
@@ -240,6 +249,11 @@ export function friendlyLocation(raw) {
   // Ghost arena
   if (s.startsWith('GhostArena')) return 'Ghost Arena'
 
+  // Asteroid bases — strip "asteroidbases" prefix, clean up type
+  const abMatch = s.match(/^asteroidbases?\s*Asteroid\s*Base\s*(\w+)\s*(\d+)$/i)
+  if (abMatch) return `Asteroid Base (${abMatch[1]})`
+  if (/^asteroidbases?\b/i.test(s)) return s.replace(/^asteroidbases?\s*/i, '')
+
   // Generic fallback — convert to words
   return toWords(s) || raw
 }
@@ -255,6 +269,19 @@ export function friendlyFaction(raw) {
   if (!raw) return '?'
   if (NPC_FACTIONS[raw]) return NPC_FACTIONS[raw]
   return toWords(raw) || raw
+}
+
+/**
+ * Returns true if this location key is a template/config entry that should be hidden from user-facing views.
+ * These are game engine configuration identifiers, not actual in-game locations.
+ */
+export function isTemplateLocation(raw) {
+  if (!raw) return false
+  // "Distribution Centre Multi Config" entries are template definitions, not locations
+  if (/DistributionCentre_MultiConfig/i.test(raw)) return true
+  // Exact duplicate plural forms that alias the same content
+  if (/^DistributionCentres?_100percent$/i.test(raw)) return true
+  return false
 }
 
 // ── Container slug → star_map_locations slug bridge ──────────────────────────
