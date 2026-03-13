@@ -873,7 +873,22 @@ export async function getLootByUuid(db: D1Database, uuid: string, patchCode?: st
       (details as Record<string, unknown>).effects = effects.results;
       delete (details as Record<string, unknown>).uuid;
     }
-  } else if (item.harvestable_id) {
+  }
+
+  // Fallback: fetch consumable effects directly by loot_map UUID when consumable_id FK is null
+  // (medical pens exist in consumable_effects but not in the consumables table)
+  if (!details?.effects && (item.type === 'FPS_Consumable' || item.category === 'Consumable')) {
+    const effects = await db
+      .prepare("SELECT effect_key, magnitude, duration_seconds FROM consumable_effects WHERE consumable_uuid = ? AND game_version_id = (SELECT id FROM game_versions WHERE is_default = 1)")
+      .bind(uuid)
+      .all();
+    if (effects.results.length > 0) {
+      if (!details) details = { name: item.name as string, type: item.type as string, sub_type: item.sub_type as string, description: item.description as string };
+      (details as Record<string, unknown>).effects = effects.results;
+    }
+  }
+
+  if (item.harvestable_id) {
     details = await db
       .prepare("SELECT name, sub_type as type, description FROM harvestables WHERE id = ?")
       .bind(item.harvestable_id)
