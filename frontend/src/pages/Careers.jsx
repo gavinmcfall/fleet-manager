@@ -132,6 +132,7 @@ export default function Careers() {
 
     const careers = (data.careers || []).filter(
       (c) => !FILTERED_NAMES.some((f) => c.name.toLowerCase() === f.toLowerCase())
+        && (c.vehicle_count > 0 || (c.vehicles && c.vehicles.length > 0))
     )
     const roles = (data.roles || []).filter(
       (r) => !FILTERED_NAMES.some((f) => r.name.toLowerCase() === f.toLowerCase())

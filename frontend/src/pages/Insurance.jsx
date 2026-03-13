@@ -169,7 +169,7 @@ function InsuranceRow({ ship }) {
           </span>
         )}
         <InsuranceBadge isLifetime={ship.is_lifetime} label={ship.insurance_label || (ship.is_lifetime ? 'LTI' : 'Standard')} />
-        {ship.warbond && <span className="badge badge-warbond">WB</span>}
+        {!!ship.warbond && <span className="badge badge-warbond">WB</span>}
       </div>
     </div>
   )
