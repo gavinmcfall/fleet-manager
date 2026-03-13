@@ -862,9 +862,17 @@ export async function getLootByUuid(db: D1Database, uuid: string, patchCode?: st
       .first() as Record<string, unknown> | null;
   } else if (item.consumable_id) {
     details = await db
-      .prepare("SELECT name, type, sub_type, description FROM consumables WHERE id = ?")
+      .prepare("SELECT name, type, sub_type, description, uuid FROM consumables WHERE id = ?")
       .bind(item.consumable_id)
       .first() as Record<string, unknown> | null;
+    if (details?.uuid) {
+      const effects = await db
+        .prepare("SELECT effect_key, magnitude, duration_seconds FROM consumable_effects WHERE consumable_uuid = ? AND game_version_id = (SELECT id FROM game_versions WHERE is_default = 1)")
+        .bind(details.uuid as string)
+        .all();
+      (details as Record<string, unknown>).effects = effects.results;
+      delete (details as Record<string, unknown>).uuid;
+    }
   } else if (item.harvestable_id) {
     details = await db
       .prepare("SELECT name, sub_type as type, description FROM harvestables WHERE id = ?")

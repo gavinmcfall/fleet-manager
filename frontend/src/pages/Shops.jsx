@@ -41,7 +41,7 @@ function typeBadgeClass(shopType) {
 
 function formatPrice(price) {
   if (price == null || price === 0) return null
-  return price.toLocaleString()
+  return Math.round(price).toLocaleString()
 }
 
 /** Sort inventory: named items first (alpha), then UUID-only items by price desc */

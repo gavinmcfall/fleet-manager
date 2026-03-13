@@ -139,7 +139,7 @@ function OverviewTab({ ship }) {
             <SpecRow label="Size" value={ship.size_label} />
             <SpecRow label="Crew" value={crewValue} />
             <SpecRow label="Cargo" value={ship.cargo > 0 ? `${ship.cargo} SCU` : null} />
-            <SpecRow label="Vehicle Storage" value={ship.vehicle_inventory ? `${ship.vehicle_inventory} SCU` : null} />
+            <SpecRow label="Vehicle Storage" value={ship.vehicle_inventory ? `${(ship.vehicle_inventory / 1000000).toLocaleString(undefined, { maximumFractionDigits: 2 })} SCU` : null} />
             {/* Speed */}
             <SpecRow label="SCM Speed" value={ship.speed_scm ? `${ship.speed_scm} m/s` : null} />
             <SpecRow label="SCM Boost Back" value={ship.boost_speed_back ? `${ship.boost_speed_back} m/s` : null} />

@@ -205,7 +205,7 @@ export default function DetailPanel({ uuid, manufacturerName, collectionQty, onS
                     {item.rarity}
                   </span>
                 )}
-                {item.sub_type && (
+                {item.sub_type && item.sub_type !== 'UNDEFINED' && (
                   <span className="text-[10px] font-mono text-gray-400 bg-gray-800/60 px-1.5 py-0.5 rounded">
                     {item.sub_type}
                   </span>
@@ -302,8 +302,10 @@ export default function DetailPanel({ uuid, manufacturerName, collectionQty, onS
                 })
                 .filter(({ display }) => display)
 
+              const effects = Array.isArray(det.effects) ? det.effects : []
+              const hasEffects = effects.length > 0
               const hasStats = statsEntries.length > 0
-              if (!hasDescription && !hasType && !hasSubType && !hasSlot && !hasSize && !hasGrade && !hasStats) return null
+              if (!hasDescription && !hasType && !hasSubType && !hasSlot && !hasSize && !hasGrade && !hasStats && !hasEffects) return null
 
               return (
                 <div>
@@ -344,6 +346,18 @@ export default function DetailPanel({ uuid, manufacturerName, collectionQty, onS
                       <div key={k} className="flex gap-2">
                         <span className="text-gray-500 w-32 shrink-0">{label}</span>
                         <span className="text-gray-300">{display}</span>
+                      </div>
+                    ))}
+                    {hasEffects && effects.map((eff) => (
+                      <div key={eff.effect_key} className="flex gap-2">
+                        <span className="text-gray-500 w-32 shrink-0">
+                          {eff.effect_key.replace(/_/g, ' ').replace(/\b\w/g, c => c.toUpperCase())}
+                        </span>
+                        <span className="text-gray-300">
+                          {eff.magnitude != null ? eff.magnitude : ''}
+                          {eff.magnitude != null && eff.duration_seconds != null ? ' · ' : ''}
+                          {eff.duration_seconds != null ? `${eff.duration_seconds}s` : ''}
+                        </span>
                       </div>
                     ))}
                     {hasDescription && (
