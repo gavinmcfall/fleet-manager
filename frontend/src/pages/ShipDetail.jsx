@@ -1,7 +1,7 @@
 import React, { useState, useCallback } from 'react'
 import { useParams, useNavigate, useSearchParams } from 'react-router-dom'
 import {
-  ArrowLeft, ExternalLink,
+  ArrowLeft, ExternalLink, X,
   Rocket, Zap, Box, Palette, LayoutGrid, List,
 } from 'lucide-react'
 import { useShip, useShipLoadout, useShipPaints } from '../hooks/useAPI'
@@ -91,6 +91,220 @@ const PORT_TYPE_ICON = {
   salvage_head:   CrossSectionIcon,
   salvage_module: UtilityIcon,
   qed:            QEDIcon,
+}
+
+// ─── Component detail slideout ────────────────────────────────────────────────
+
+/** Stat definitions per port_type. Each entry: [key, label, formatter?] */
+const DETAIL_STATS = {
+  power: [
+    ['power_output', 'Power Output', formatPower],
+    ['overpower_performance', 'Overpower Performance'],
+    ['overclock_performance', 'Overclock Performance'],
+    ['overclock_threshold_min', 'Overclock Min'],
+    ['overclock_threshold_max', 'Overclock Max'],
+    ['thermal_output', 'Thermal Output'],
+  ],
+  shield: [
+    ['shield_hp', 'Shield HP', formatHP],
+    ['shield_regen', 'Regen Rate', (v) => `${v.toLocaleString(undefined, { maximumFractionDigits: 1 })}/s`],
+    ['regen_delay', 'Regen Delay', formatSeconds],
+    ['downed_regen_delay', 'Downed Regen Delay', formatSeconds],
+    ['resist_physical', 'Physical Resist', formatPercent],
+    ['resist_energy', 'Energy Resist', formatPercent],
+    ['resist_distortion', 'Distortion Resist', formatPercent],
+    ['resist_thermal', 'Thermal Resist', formatPercent],
+  ],
+  cooler: [
+    ['cooling_rate', 'Cooling Rate', (v) => `${v.toLocaleString(undefined, { maximumFractionDigits: 0 })}/s`],
+    ['max_temperature', 'Max Temp'],
+    ['overheat_temperature', 'Overheat Temp'],
+  ],
+  quantum_drive: [
+    ['quantum_speed', 'Speed', formatSpeed],
+    ['quantum_range', 'Range', (v) => `${(v / 1000).toLocaleString(undefined, { maximumFractionDigits: 0 })} km`],
+    ['fuel_rate', 'Fuel Rate'],
+    ['spool_time', 'Spool Time', formatSeconds],
+    ['cooldown_time', 'Cooldown', formatSeconds],
+    ['stage1_accel', 'Stage 1 Accel'],
+    ['stage2_accel', 'Stage 2 Accel'],
+  ],
+  weapon: [
+    ['dps', 'DPS', (v) => v.toLocaleString(undefined, { maximumFractionDigits: 1 })],
+    ['damage_per_shot', 'Damage / Shot', (v) => v.toLocaleString(undefined, { maximumFractionDigits: 1 })],
+    ['damage_type', 'Damage Type'],
+    ['rounds_per_minute', 'Fire Rate', (v) => `${v.toLocaleString(undefined, { maximumFractionDigits: 0 })} RPM`],
+    ['ammo_container_size', 'Ammo Capacity'],
+    ['projectile_speed', 'Projectile Speed', (v) => `${v.toLocaleString(undefined, { maximumFractionDigits: 0 })} m/s`],
+    ['effective_range', 'Effective Range', (v) => `${v.toLocaleString(undefined, { maximumFractionDigits: 0 })} m`],
+    ['fire_modes', 'Fire Modes'],
+    ['heat_per_shot', 'Heat / Shot'],
+    ['power_draw', 'Power Draw', formatPower],
+  ],
+  turret: [
+    ['rotation_speed', 'Rotation Speed', (v) => `${v}°/s`],
+    ['min_pitch', 'Min Pitch', (v) => `${v}°`],
+    ['max_pitch', 'Max Pitch', (v) => `${v}°`],
+    ['min_yaw', 'Min Yaw', (v) => `${v}°`],
+    ['max_yaw', 'Max Yaw', (v) => `${v}°`],
+    ['gimbal_type', 'Gimbal Type'],
+  ],
+  missile: [
+    ['damage_per_shot', 'Damage', (v) => v.toLocaleString(undefined, { maximumFractionDigits: 1 })],
+    ['damage_type', 'Damage Type'],
+  ],
+  sensor: [
+    ['radar_range', 'Radar Range', (v) => `${(v / 1000).toLocaleString(undefined, { maximumFractionDigits: 1 })} km`],
+    ['radar_angle', 'Radar Angle', (v) => `${v}°`],
+  ],
+  mining_laser: [
+    ['dps', 'DPS', (v) => v.toLocaleString(undefined, { maximumFractionDigits: 1 })],
+    ['power_draw', 'Power Draw', formatPower],
+    ['effective_range', 'Range', (v) => `${v.toLocaleString(undefined, { maximumFractionDigits: 0 })} m`],
+  ],
+  qed: [
+    ['qed_range', 'QED Range', (v) => `${(v / 1000).toLocaleString(undefined, { maximumFractionDigits: 1 })} km`],
+    ['qed_strength', 'QED Strength'],
+  ],
+}
+
+// Fallback: show all non-null numeric stats not already shown
+const COMMON_STATS = [
+  ['power_output', 'Power Output', formatPower],
+  ['thermal_output', 'Thermal Output'],
+  ['thrust_force', 'Thrust', (v) => `${v.toLocaleString(undefined, { maximumFractionDigits: 0 })} N`],
+  ['fuel_burn_rate', 'Fuel Burn Rate'],
+]
+
+function formatPercent(v) {
+  return `${(v * 100).toLocaleString(undefined, { maximumFractionDigits: 1 })}%`
+}
+
+function ComponentDetailPanel({ item, onClose }) {
+  if (!item) return null
+
+  const TypeIcon = PORT_TYPE_ICON[item.port_type]
+  const sz = item.component_size ?? (item.size_max > 0 ? item.size_max : null)
+
+  // Gather stats for this port_type
+  const statDefs = DETAIL_STATS[item.port_type] || COMMON_STATS
+  const stats = []
+  const shownKeys = new Set()
+
+  for (const [key, label, fmt] of statDefs) {
+    const val = item[key]
+    if (val != null && val !== 0 && val !== '') {
+      const display = fmt ? fmt(val) : String(val)
+      stats.push({ label, value: display })
+      shownKeys.add(key)
+    }
+  }
+
+  // Add common stats not already shown
+  if (item.port_type && DETAIL_STATS[item.port_type]) {
+    for (const [key, label, fmt] of COMMON_STATS) {
+      if (shownKeys.has(key)) continue
+      const val = item[key]
+      if (val != null && val !== 0 && val !== '') {
+        stats.push({ label, value: fmt ? fmt(val) : String(val) })
+      }
+    }
+  }
+
+  return (
+    <>
+      <div className="fixed inset-0 bg-black/60 z-40" onClick={onClose} />
+      <div className="fixed inset-y-0 right-0 w-full max-w-md bg-sc-bg border-l border-sc-border z-50 overflow-y-auto animate-slide-in-right">
+        {/* Header */}
+        <div className="sticky top-0 bg-sc-bg/95 backdrop-blur border-b border-sc-border z-10">
+          <div className="flex items-center justify-between p-4">
+            <div className="flex items-center gap-3 min-w-0">
+              {TypeIcon && <TypeIcon className="w-5 h-5 shrink-0 text-sc-accent" />}
+              <div className="min-w-0">
+                <h3 className="text-sm font-display font-semibold text-white truncate">
+                  {item.component_name || 'Empty Port'}
+                </h3>
+                <p className="text-xs text-gray-500">{item.category_label}</p>
+              </div>
+            </div>
+            <button onClick={onClose} className="btn-ghost p-1.5">
+              <X className="w-4 h-4" />
+            </button>
+          </div>
+        </div>
+
+        <div className="p-4 space-y-4">
+          {/* Identity badges */}
+          <div className="flex items-center gap-2 flex-wrap">
+            {sz != null && (
+              <span className="text-xs font-mono px-2 py-1 rounded border border-sc-accent/40 text-sc-accent bg-sc-accent/5">
+                Size {sz}
+              </span>
+            )}
+            {item.grade && (
+              <span className="text-xs font-mono px-2 py-1 rounded bg-sc-accent2/10 text-sc-accent2">
+                Grade {item.grade}
+              </span>
+            )}
+            {item.component_class && (
+              <span className="text-xs font-mono px-2 py-1 rounded bg-gray-800 text-gray-400">
+                {item.component_class}
+              </span>
+            )}
+            {item.port_type && (
+              <span className="text-xs font-mono px-2 py-1 rounded bg-gray-800 text-gray-500">
+                {item.port_type.replace(/_/g, ' ')}
+              </span>
+            )}
+          </div>
+
+          {item.manufacturer_name && (
+            <div className="text-xs text-sc-accent2 font-mono">{item.manufacturer_name}</div>
+          )}
+
+          {/* Stats */}
+          {stats.length > 0 ? (
+            <div className="panel">
+              <div className="panel-header">Stats</div>
+              <div className="p-4 space-y-0">
+                {stats.map((s) => (
+                  <div key={s.label} className="flex items-center justify-between py-1.5 border-b border-sc-border/30 last:border-0">
+                    <span className="text-xs font-mono text-gray-500 uppercase tracking-wider">{s.label}</span>
+                    <span className="text-sm font-mono text-white">{s.value}</span>
+                  </div>
+                ))}
+              </div>
+            </div>
+          ) : (
+            <div className="panel p-6 text-center text-gray-500 text-xs font-mono">
+              No detailed stats available
+            </div>
+          )}
+
+          {/* Port info */}
+          <div className="panel">
+            <div className="panel-header">Port Info</div>
+            <div className="p-4 space-y-0">
+              {item.port_name && (
+                <div className="flex items-center justify-between py-1.5 border-b border-sc-border/30 last:border-0">
+                  <span className="text-xs font-mono text-gray-500 uppercase tracking-wider">Port Name</span>
+                  <span className="text-sm font-mono text-white">{item.port_name}</span>
+                </div>
+              )}
+              {item.size_min != null && item.size_max != null && (
+                <div className="flex items-center justify-between py-1.5 border-b border-sc-border/30 last:border-0">
+                  <span className="text-xs font-mono text-gray-500 uppercase tracking-wider">Size Range</span>
+                  <span className="text-sm font-mono text-white">
+                    {item.size_min === item.size_max ? `S${item.size_min}` : `S${item.size_min} – S${item.size_max}`}
+                  </span>
+                </div>
+              )}
+            </div>
+          </div>
+        </div>
+      </div>
+    </>
+  )
 }
 
 // ─── Shared primitives ────────────────────────────────────────────────────────
@@ -223,7 +437,7 @@ function OverviewTab({ ship }) {
 
 // ─── Loadout ──────────────────────────────────────────────────────────────────
 
-function LoadoutItems({ items, emptyIcon: Icon, emptyMessage }) {
+function LoadoutItems({ items, emptyIcon: Icon, emptyMessage, onItemClick }) {
   if (!items || items.length === 0) {
     return (
       <div className="text-center py-16 text-gray-500">
@@ -274,7 +488,10 @@ function LoadoutItems({ items, emptyIcon: Icon, emptyMessage }) {
                 const isEmpty = !item.component_name
                 return (
                   <div key={i}>
-                    <div className={`flex items-center gap-3 px-4 py-3 ${isEmpty ? 'opacity-40' : ''}`}>
+                    <div
+                      className={`flex items-center gap-3 px-4 py-3 ${isEmpty ? 'opacity-40' : 'cursor-pointer hover:bg-white/[0.03] transition-colors'}`}
+                      onClick={() => !isEmpty && onItemClick?.(item)}
+                    >
                       <div className="shrink-0 w-10 h-10 rounded flex items-center justify-center font-mono font-bold text-sm border border-sc-accent/40 text-sc-accent bg-sc-accent/5">
                         {sz != null ? `S${sz}` : '—'}
                       </div>
@@ -315,7 +532,11 @@ function LoadoutItems({ items, emptyIcon: Icon, emptyMessage }) {
                     {weapons.map((w, wi) => {
                       const wsz = w.component_size ?? (w.size_max > 0 ? w.size_max : null)
                       return (
-                        <div key={wi} className="flex items-center gap-3 pl-10 pr-4 py-2.5 bg-black/20 border-t border-sc-border/10">
+                        <div
+                          key={wi}
+                          className="flex items-center gap-3 pl-10 pr-4 py-2.5 bg-black/20 border-t border-sc-border/10 cursor-pointer hover:bg-white/[0.03] transition-colors"
+                          onClick={() => onItemClick?.(w)}
+                        >
                           <div className="shrink-0 w-8 h-8 rounded flex items-center justify-center font-mono font-bold text-xs border border-sc-accent/30 text-sc-accent/70 bg-sc-accent/5">
                             {wsz != null ? `S${wsz}` : '—'}
                           </div>
@@ -355,18 +576,30 @@ function LoadoutItems({ items, emptyIcon: Icon, emptyMessage }) {
 
 function ComponentsTab({ slug }) {
   const { data: loadout, loading, error, refetch } = useShipLoadout(slug)
+  const [selected, setSelected] = useState(null)
   if (loading) return <LoadingState message="Loading components..." />
   if (error) return <ErrorState message={error} onRetry={refetch} />
   const items = (loadout || []).filter(r => COMPONENT_TYPES.has(r.port_type))
-  return <LoadoutItems items={items} emptyIcon={Box} emptyMessage="No component data available" />
+  return (
+    <>
+      <LoadoutItems items={items} emptyIcon={Box} emptyMessage="No component data available" onItemClick={setSelected} />
+      <ComponentDetailPanel item={selected} onClose={() => setSelected(null)} />
+    </>
+  )
 }
 
 function WeaponsTab({ slug }) {
   const { data: loadout, loading, error, refetch } = useShipLoadout(slug)
+  const [selected, setSelected] = useState(null)
   if (loading) return <LoadingState message="Loading weapons..." />
   if (error) return <ErrorState message={error} onRetry={refetch} />
   const items = (loadout || []).filter(r => WEAPON_TYPES.has(r.port_type))
-  return <LoadoutItems items={items} emptyIcon={Rocket} emptyMessage="No weapon hardpoints" />
+  return (
+    <>
+      <LoadoutItems items={items} emptyIcon={Rocket} emptyMessage="No weapon hardpoints" onItemClick={setSelected} />
+      <ComponentDetailPanel item={selected} onClose={() => setSelected(null)} />
+    </>
+  )
 }
 
 // ─── Paints tab ───────────────────────────────────────────────────────────────
