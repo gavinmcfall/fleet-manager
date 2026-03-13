@@ -192,8 +192,21 @@ export function friendlyLocation(raw) {
     return coMatch[2] ? `Colonial Outpost \u2014 ${coMatch[1]} (${coMatch[2]})` : base
   }
 
-  // Distribution centres
-  const dcMatch = s.match(/^DistributionCentres_(\w+)$/)
+  // Distribution centres — singular "DistributionCentre_MultiConfig_Room_Security"
+  const dcMulti = s.match(/^DistributionCentre_MultiConfig_(\w+?)_(High|Medium|Low|100percent)$/)
+  if (dcMulti) {
+    const room = dcMulti[1]
+    const ROOM_NAMES = {
+      Cargoshop: 'Cargo Shop', Cargowing: 'Cargo Wing', Lobby: 'Lobby',
+      Shippingwing: 'Shipping Wing', SideRoad: 'Side Road', Storage: 'Storage', Warehouse: 'Warehouse',
+    }
+    return `Distribution Centre \u2014 ${ROOM_NAMES[room] || toWords(room)}`
+  }
+  // Plural form without room — "DistributionCentres_HighSecurity" / "100percent"
+  const dcPlain = s.match(/^DistributionCentres?_(HighSecur[it]+y|MediumSecurity|LowSecurity|100percent)$/)
+  if (dcPlain) return 'Distribution Centre'
+  // Catch-all for any other DC variant
+  const dcMatch = s.match(/^DistributionCentres?_(\w+)$/)
   if (dcMatch) return `Distribution Centre (${toWords(dcMatch[1])})`
 
   // Rund station rooms
@@ -278,7 +291,7 @@ export function getLocationGroup(raw) {
 
   if (s.startsWith('Cave_') || s.startsWith('Loot_Caves_') || s === 'Caves') return 'cave'
   if (s.startsWith('ColonialOutpost') || s === 'DerelictOutpost' || s === 'TechOutpost') return 'outpost'
-  if (s.startsWith('DistributionCentres_') || s === 'DCDelving') return 'dc'
+  if (s.startsWith('DistributionCentre_') || s.startsWith('DistributionCentres_') || s === 'DCDelving') return 'dc'
   if (s === 'ASDDelving' || s.startsWith('ASDDelving_') || s === 'UGFs') return 'facility'
   if (s.startsWith('ContestedZone') || s.startsWith('GhostArena') || s === 'ContestedZones') return 'contested'
   if (s.startsWith('Station_') || s === 'Station') return 'station'

@@ -1,4 +1,4 @@
-import React, { useRef } from 'react'
+import React from 'react'
 import { User, Mail, AlertCircle, Check, Pencil, Upload, ImageOff } from 'lucide-react'
 import PanelSection from '../../components/PanelSection'
 

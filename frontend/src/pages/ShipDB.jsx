@@ -1,5 +1,5 @@
 import React, { useState, useMemo, useEffect, useRef } from 'react'
-import { Link } from 'react-router-dom'
+import { Link, useSearchParams } from 'react-router-dom'
 import { useShips } from '../hooks/useAPI'
 import { Database, ArrowUpDown, ChevronLeft, ChevronRight, ChevronsLeft, ChevronsRight } from 'lucide-react'
 import PageHeader from '../components/PageHeader'
@@ -14,7 +14,15 @@ const PAGE_SIZE = 30
 
 export default function ShipDB() {
   const { data: ships, loading, error, refetch } = useShips()
-  const [filter, setFilter] = useState('')
+  const [searchParams, setSearchParams] = useSearchParams()
+  const filter = searchParams.get('q') || ''
+  const setFilter = (val) => {
+    setSearchParams((prev) => {
+      const next = new URLSearchParams(prev)
+      if (val) { next.set('q', val) } else { next.delete('q') }
+      return next
+    }, { replace: true })
+  }
   const [mfrFilter, setMfrFilter] = useState('all')
   const [sizeFilter, setSizeFilter] = useState('all')
   const [classFilter, setClassFilter] = useState('all')

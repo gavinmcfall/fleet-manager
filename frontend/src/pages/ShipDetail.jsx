@@ -26,6 +26,56 @@ const TABS = [
 const COMPONENT_TYPES = new Set(['power', 'cooler', 'shield', 'quantum_drive', 'sensor', 'jump_drive'])
 const WEAPON_TYPES = new Set(['weapon', 'turret', 'missile', 'countermeasure', 'mining_laser', 'salvage_head', 'salvage_module', 'qed'])
 
+// ─── Component stat formatters ──────────────────────────────────────────────
+
+function formatPower(watts) {
+  if (watts >= 1000) return `${(watts / 1000).toLocaleString(undefined, { maximumFractionDigits: 1 })} kW`
+  return `${watts.toLocaleString(undefined, { maximumFractionDigits: 1 })} W`
+}
+
+function formatSpeed(cmPerSec) {
+  const kmPerSec = cmPerSec / 100000
+  if (kmPerSec >= 1000) return `${(kmPerSec / 1000).toLocaleString(undefined, { maximumFractionDigits: 2 })} Mm/s`
+  return `${kmPerSec.toLocaleString(undefined, { maximumFractionDigits: 1 })} km/s`
+}
+
+function formatSeconds(ms) {
+  return `${(ms / 1000).toLocaleString(undefined, { maximumFractionDigits: 1 })}s`
+}
+
+function formatHP(val) {
+  return val.toLocaleString(undefined, { maximumFractionDigits: 0 })
+}
+
+/** Returns an array of { label, value } for the given component, based on port_type */
+function getComponentStats(item) {
+  const stats = []
+  const add = (label, raw, fmt) => {
+    if (raw != null && raw !== 0) stats.push({ label, value: fmt ? fmt(raw) : String(raw) })
+  }
+
+  switch (item.port_type) {
+    case 'power':
+      add('Output', item.power_output, formatPower)
+      break
+    case 'shield':
+      add('HP', item.shield_hp, formatHP)
+      add('Regen', item.shield_regen, (v) => `${v.toLocaleString(undefined, { maximumFractionDigits: 0 })}/s`)
+      break
+    case 'cooler':
+      add('Cooling', item.cooling_rate, (v) => `${v.toLocaleString(undefined, { maximumFractionDigits: 0 })}/s`)
+      break
+    case 'quantum_drive':
+      add('Speed', item.quantum_speed, formatSpeed)
+      add('Spool', item.spool_time, formatSeconds)
+      add('Cooldown', item.cooldown_time, formatSeconds)
+      break
+    default:
+      break
+  }
+  return stats
+}
+
 const PORT_TYPE_ICON = {
   power:          PowerPlantIcon,
   cooler:         CoolerIcon,
@@ -139,7 +189,7 @@ function OverviewTab({ ship }) {
             <SpecRow label="Size" value={ship.size_label} />
             <SpecRow label="Crew" value={crewValue} />
             <SpecRow label="Cargo" value={ship.cargo > 0 ? `${ship.cargo} SCU` : null} />
-            <SpecRow label="Vehicle Storage" value={ship.vehicle_inventory ? `${(ship.vehicle_inventory / 1000000).toLocaleString(undefined, { maximumFractionDigits: 2 })} SCU` : null} />
+            <SpecRow label="Internal Storage" value={ship.vehicle_inventory ? `${(ship.vehicle_inventory / 1000000).toLocaleString(undefined, { maximumFractionDigits: 2 })} SCU` : null} />
             {/* Speed */}
             <SpecRow label="SCM Speed" value={ship.speed_scm ? `${ship.speed_scm} m/s` : null} />
             <SpecRow label="SCM Boost Back" value={ship.boost_speed_back ? `${ship.boost_speed_back} m/s` : null} />
@@ -244,6 +294,19 @@ function LoadoutItems({ items, emptyIcon: Icon, emptyMessage }) {
                             )}
                           </div>
                         )}
+                        {!isEmpty && (() => {
+                          const stats = getComponentStats(item)
+                          if (stats.length === 0) return null
+                          return (
+                            <div className="flex items-center gap-3 mt-1 flex-wrap">
+                              {stats.map((s) => (
+                                <span key={s.label} className="text-xs font-mono text-gray-400">
+                                  <span className="text-gray-600">{s.label}</span>{' '}{s.value}
+                                </span>
+                              ))}
+                            </div>
+                          )
+                        })()}
                       </div>
                       <div className="shrink-0 text-xs text-gray-500 text-right max-w-[160px]">
                         {item.manufacturer_name || ''}
