@@ -1,4 +1,4 @@
-import { ShoppingCart, Package, Swords, Skull, FileText } from 'lucide-react'
+import { ShoppingCart, Package, Swords, FileText } from 'lucide-react'
 import { friendlyShopName } from '../../lib/shopNames'
 import { friendlyLocation, friendlyFaction } from '../../lib/lootLocations'
 
@@ -46,7 +46,7 @@ export function resolveLocationEntry(entry, type) {
     const price = entry.buyPrice ? `${Math.round(entry.buyPrice).toLocaleString()} aUEC` : null
     return { label: friendlyShopName(rawShopKey), detail: price, probability: null, rawKey: rawShopKey, shopKey: true }
   }
-  if (type === 'npcs' || type === 'corpses') {
+  if (type === 'npcs') {
     const rawFaction = entry.faction || entry.actor || entry.name
     const faction = friendlyFaction(rawFaction)
     return {
@@ -84,7 +84,6 @@ export const SOURCE_DEFS = [
   { key: 'shops',     label: 'Shops',      jsonKey: 'shops_json',     icon: ShoppingCart },
   { key: 'containers', label: 'Containers', jsonKey: 'containers_json', icon: Package },
   { key: 'npcs',      label: 'NPCs',       jsonKey: 'npcs_json',      icon: Swords },
-  { key: 'corpses',   label: 'Corpses',    jsonKey: 'corpses_json',   icon: Skull },
   { key: 'contracts', label: 'Contracts',  jsonKey: 'contracts_json', icon: FileText },
 ]
 
@@ -199,7 +198,7 @@ export function getPrimarySource(item) {
   // Containers / NPCs / corpses — pick highest probability
   let best = null
   let bestProb = -1
-  for (const [key, jsonKey] of [['containers', 'containers_json'], ['npcs', 'npcs_json'], ['corpses', 'corpses_json']]) {
+  for (const [key, jsonKey] of [['containers', 'containers_json'], ['npcs', 'npcs_json']]) {
     const entries = parse(item[jsonKey])
     for (const e of entries) {
       const resolved = resolveLocationEntry(e, key)

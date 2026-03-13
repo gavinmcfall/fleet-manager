@@ -23,7 +23,6 @@ const LOOT_HAS_FLAGS = `
         CASE WHEN lm.containers_json NOT IN ('null','[]','') AND lm.containers_json IS NOT NULL THEN 1 ELSE 0 END as has_containers,
         CASE WHEN lm.shops_json     NOT IN ('null','[]','') AND lm.shops_json IS NOT NULL     THEN 1 ELSE 0 END as has_shops,
         CASE WHEN lm.npcs_json      NOT IN ('null','[]','') AND lm.npcs_json IS NOT NULL      THEN 1 ELSE 0 END as has_npcs,
-        CASE WHEN lm.corpses_json   NOT IN ('null','[]','') AND lm.corpses_json IS NOT NULL   THEN 1 ELSE 0 END as has_corpses,
         CASE WHEN lm.contracts_json NOT IN ('null','[]','') AND lm.contracts_json IS NOT NULL THEN 1 ELSE 0 END as has_contracts`;
 
 // --- Nullable helpers (mirror Go's nullableStr/nullableFloat/nullableInt) ---
@@ -736,7 +735,6 @@ export interface LootItem {
   has_containers: number;
   has_shops: number;
   has_npcs: number;
-  has_corpses: number;
   has_contracts: number;
   manufacturer_name: string | null;
 }
@@ -745,7 +743,6 @@ export interface WishlistItem extends LootItem {
   shops_json: string | null;
   containers_json: string | null;
   npcs_json: string | null;
-  corpses_json: string | null;
   contracts_json: string | null;
   wishlist_quantity: number;
 }
@@ -948,7 +945,7 @@ export async function getUserLootWishlist(db: D1Database, userId: string): Promi
       `SELECT lm.id, lm.uuid, lm.name, lm.type, lm.sub_type, lm.rarity,
         lm.category, lm.manufacturer_name,
         ${LOOT_HAS_FLAGS},
-        lm.shops_json, lm.containers_json, lm.npcs_json, lm.corpses_json, lm.contracts_json,
+        lm.shops_json, lm.containers_json, lm.npcs_json, lm.contracts_json,
         ulw.quantity as wishlist_quantity
       FROM user_loot_wishlist ulw
       JOIN loot_map lm ON lm.id = ulw.loot_map_id

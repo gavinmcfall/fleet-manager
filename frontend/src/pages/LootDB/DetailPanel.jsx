@@ -1,4 +1,4 @@
-import { X, ShoppingCart, Package, Swords, Skull, FileText, Plus, Bookmark, BookmarkPlus } from 'lucide-react'
+import { X, ShoppingCart, Package, Swords, FileText, Plus, Bookmark, BookmarkPlus } from 'lucide-react'
 import { useLootItem } from '../../hooks/useAPI'
 import useGameVersion from '../../hooks/useGameVersion'
 import { rarityStyle, CATEGORY_BADGE_STYLES, CATEGORY_LABELS, RESISTANCE_KEYS, effectiveCategory } from '../../lib/lootDisplay'
@@ -391,7 +391,6 @@ export default function DetailPanel({ uuid, manufacturerName, collectionQty, onS
                 { label: 'Shops',      icon: ShoppingCart, type: 'shops',      data: parsedJson('shops_json') },
                 { label: 'Containers', icon: Package,      type: 'containers', data: parsedJson('containers_json') },
                 { label: 'NPCs',       icon: Swords,       type: 'npcs',       data: parsedJson('npcs_json') },
-                { label: 'Corpses',    icon: Skull,        type: 'corpses',    data: parsedJson('corpses_json') },
                 { label: 'Contracts',  icon: FileText,     type: 'contracts',  data: parsedJson('contracts_json') },
               ]
               const hasAny = locationSections.some(s => s.data.length > 0)

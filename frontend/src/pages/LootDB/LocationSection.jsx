@@ -41,11 +41,11 @@ function LocationRow({ row, linkTo }) {
 export default function LocationSection({ label, icon: Icon, data, type }) {
   if (!data || !Array.isArray(data) || data.length === 0) return null
 
-  // Deduplicate: npcs/corpses key by faction+slot; others by label
+  // Deduplicate: npcs key by faction+slot; others by label
   const seen = new Map()
   for (const entry of data) {
     const row = resolveLocationEntry(entry, type)
-    const key = (type === 'npcs' || type === 'corpses')
+    const key = (type === 'npcs')
       ? `${row.label}|${row.detail || ''}`
       : row.label
     const existing = seen.get(key)
@@ -106,8 +106,8 @@ export default function LocationSection({ label, icon: Icon, data, type }) {
     )
   }
 
-  // Grouped rendering for npcs / corpses — group by faction
-  if (type === 'npcs' || type === 'corpses') {
+  // Grouped rendering for npcs — group by faction
+  if (type === 'npcs') {
     const factionMap = new Map()
     for (const row of rows) {
       const key = row.faction || row.label

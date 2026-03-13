@@ -1,7 +1,7 @@
 import React, { useState, useMemo, useCallback, useEffect } from 'react'
 import { useParams, useNavigate, useSearchParams } from 'react-router-dom'
 import {
-  Search, ShoppingCart, Package, Swords, Skull, FileText, MapPin,
+  Search, ShoppingCart, Package, Swords, FileText, MapPin,
   LayoutGrid, List, X, ChevronRight, ChevronDown, Check, Plus, Bookmark, BookmarkPlus,
   ArrowUpDown, ChevronsUpDown, ChevronsDownUp,
 } from 'lucide-react'
@@ -208,7 +208,6 @@ export default function LootDB() {
         if (sources.has('shops')     && i.has_shops)     return true
         if (sources.has('containers') && i.has_containers) return true
         if (sources.has('npcs')      && i.has_npcs)     return true
-        if (sources.has('corpses')   && i.has_corpses)  return true
         if (sources.has('contracts') && i.has_contracts) return true
         return false
       })
@@ -505,7 +504,6 @@ export default function LootDB() {
                   { key: 'shops', icon: ShoppingCart, label: 'Shops' },
                   { key: 'containers', icon: Package, label: 'Containers' },
                   { key: 'npcs', icon: Swords, label: 'NPCs' },
-                  { key: 'corpses', icon: Skull, label: 'Corpses' },
                   { key: 'contracts', icon: FileText, label: 'Contracts' },
                 ].map(({ key, icon: Icon, label }) => {
                   const active = sources.has(key)

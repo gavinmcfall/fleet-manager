@@ -3,7 +3,7 @@ import { rarityStyle, CATEGORY_BADGE_STYLES, CATEGORY_LABELS, effectiveCategory 
 import SourceIcons from './SourceIcons'
 import CollectionStepper from './CollectionStepper'
 
-const SOURCE_ICON = { shop: ShoppingCart, containers: MapPin, npcs: MapPin, corpses: MapPin, contract: MapPin }
+const SOURCE_ICON = { shop: ShoppingCart, containers: MapPin, npcs: MapPin, contract: MapPin }
 
 export default function WishlistRow({ item, primarySource, collectionQty, onSetCollectionQty, wishlistQty, onSetWishlistQty, onSelect }) {
   const eCat = effectiveCategory(item)
