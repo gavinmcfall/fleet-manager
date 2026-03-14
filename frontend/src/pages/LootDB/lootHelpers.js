@@ -56,6 +56,7 @@ export function resolveLocationEntry(entry, type) {
       probability: entry.probability ?? null,
       faction,
       rawKey: rawFaction,
+      actor: entry.actor || null,
       npcKey: true,
     }
   }

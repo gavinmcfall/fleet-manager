@@ -1,10 +1,17 @@
-import React, { useState } from 'react'
-import { useNPCLoadouts, useNPCFactionLoadouts } from '../hooks/useAPI'
+import React, { useState, useMemo, useCallback } from 'react'
+import { useSearchParams } from 'react-router-dom'
+import {
+  useNPCLoadouts, useNPCFactionLoadouts,
+  useLootCollection, useLootWishlist,
+  setLootCollectionQuantity, toggleLootWishlist,
+} from '../hooks/useAPI'
+import { useSession } from '../lib/auth-client'
 import PageHeader from '../components/PageHeader'
 import LoadingState from '../components/LoadingState'
 import ErrorState from '../components/ErrorState'
-import { Link } from 'react-router-dom'
 import { Users, ChevronDown, ChevronRight, ArrowLeft, Shield, Shirt, Crosshair, Wrench, Bug, Swords } from 'lucide-react'
+import { toWords } from '../lib/lootLocations'
+import DetailPanel from './LootDB/DetailPanel'
 
 const CATEGORY_ICONS = {
   armor: Shield,
@@ -64,34 +71,33 @@ function FactionCard({ faction, index, onClick }) {
   )
 }
 
-function LoadoutTree({ items }) {
+function LoadoutTree({ items, onSelectItem }) {
   if (!items || items.length === 0) return null
 
   // Build tree from flat items using parent_port
-  // Top-level = items whose parent_port doesn't match any other item's port_name
   const portNames = new Set(items.map(i => i.port_name))
   const topLevel = items.filter(i => !i.parent_port || !portNames.has(i.parent_port))
   const childrenOf = (portName) => items.filter(i => i.parent_port === portName)
 
   function renderItem(item, depth = 0) {
     const children = childrenOf(item.port_name)
-    const displayName = item.resolved_name || item.item_name
+    const displayName = item.resolved_name || toWords(item.item_name)
     const hasLootLink = item.loot_uuid
 
     return (
       <div key={`${item.port_name}-${item.item_name}`} style={{ marginLeft: depth * 16 }}>
         <div className="flex items-center gap-2 py-1">
           <span className="text-[10px] font-mono text-gray-600 uppercase shrink-0 w-24 truncate" title={item.port_name}>
-            {item.port_name.replace('Armor_', '').replace('wep_stocked_', 'Weapon ')}
+            {toWords(item.port_name.replace('Armor_', '').replace('wep_stocked_', 'Weapon '))}
           </span>
           {hasLootLink ? (
-            <Link
-              to={`/loot/${item.loot_uuid}`}
-              className="text-xs font-mono text-sc-accent hover:underline truncate"
+            <button
+              onClick={() => onSelectItem(item.loot_uuid, item.loot_item_id)}
+              className="text-xs font-mono text-sc-accent hover:underline truncate text-left"
               title={displayName}
             >
               {displayName}
-            </Link>
+            </button>
           ) : (
             <span className="text-xs font-mono text-gray-300 truncate" title={displayName}>
               {displayName}
@@ -99,7 +105,7 @@ function LoadoutTree({ items }) {
           )}
           {item.tag && (
             <span className="text-[9px] font-mono text-gray-600 shrink-0">
-              {item.tag.replace('Char_Armor_', '').replace('Char_', '').replace('WeaponPersonal', 'Weapon')}
+              {toWords(item.tag.replace('Char_Armor_', '').replace('Char_', '').replace('WeaponPersonal', 'Weapon'))}
             </span>
           )}
         </div>
@@ -115,8 +121,8 @@ function LoadoutTree({ items }) {
   )
 }
 
-function LoadoutCard({ loadout }) {
-  const [expanded, setExpanded] = useState(false)
+function LoadoutCard({ loadout, defaultExpanded, onSelectItem }) {
+  const [expanded, setExpanded] = useState(defaultExpanded)
   const categoryColor = CATEGORY_COLORS[loadout.category] || CATEGORY_COLORS.unknown
   const CategoryIcon = CATEGORY_ICONS[loadout.category] || Users
 
@@ -129,7 +135,7 @@ function LoadoutCard({ loadout }) {
         <CategoryIcon className="w-4 h-4 text-gray-500 shrink-0" />
         <div className="flex-1 min-w-0">
           <span className="text-sm font-mono text-gray-200 truncate block">
-            {loadout.loadout_name.replace(/_/g, ' ')}
+            {toWords(loadout.loadout_name)}
           </span>
         </div>
         <span className={`text-[10px] font-mono px-1.5 py-0.5 rounded border ${categoryColor}`}>
@@ -151,14 +157,14 @@ function LoadoutCard({ loadout }) {
       </button>
       {expanded && loadout.items && (
         <div className="border-t border-sc-border/30 bg-sc-bg/50">
-          <LoadoutTree items={loadout.items} />
+          <LoadoutTree items={loadout.items} onSelectItem={onSelectItem} />
         </div>
       )}
     </div>
   )
 }
 
-function FactionDetail({ factionCode, onBack }) {
+function FactionDetail({ factionCode, autoExpandLoadout, onBack, onSelectItem }) {
   const { data, loading, error, refetch } = useNPCFactionLoadouts(factionCode)
 
   if (loading) return <LoadingState message="Loading loadouts..." />
@@ -196,7 +202,12 @@ function FactionDetail({ factionCode, onBack }) {
           </h3>
           <div className="space-y-1">
             {catLoadouts.map((loadout) => (
-              <LoadoutCard key={loadout.id} loadout={loadout} />
+              <LoadoutCard
+                key={loadout.id}
+                loadout={loadout}
+                defaultExpanded={autoExpandLoadout ? loadout.loadout_name.toLowerCase() === autoExpandLoadout.toLowerCase() : false}
+                onSelectItem={onSelectItem}
+              />
             ))}
           </div>
         </div>
@@ -207,34 +218,104 @@ function FactionDetail({ factionCode, onBack }) {
 
 export default function NPCLoadouts() {
   const { data: factions, loading, error, refetch } = useNPCLoadouts()
-  const [selectedFaction, setSelectedFaction] = useState(null)
+  const [searchParams, setSearchParams] = useSearchParams()
+  const { data: session } = useSession()
+  const isAuthed = !!session?.user
+
+  const selectedFaction = searchParams.get('faction') || null
+  const autoExpandLoadout = searchParams.get('loadout') || null
+
+  // Detail panel state
+  const [detailUuid, setDetailUuid] = useState(null)
+  const [detailItemId, setDetailItemId] = useState(null)
+
+  // Collection & wishlist (same pattern as LootDB)
+  const { data: collectionIds, refetch: refetchCollection } = useLootCollection(isAuthed)
+  const { data: wishlistItems, refetch: refetchWishlist } = useLootWishlist(isAuthed)
+
+  const collected = useMemo(() => {
+    if (!collectionIds) return new Map()
+    return new Map(collectionIds.map(e => [e.loot_map_id, e.quantity]))
+  }, [collectionIds])
+
+  const wishlistIds = useMemo(
+    () => new Set(wishlistItems?.map(i => i.id) ?? []),
+    [wishlistItems]
+  )
+
+  const handleSelectItem = useCallback((uuid, itemId) => {
+    setDetailUuid(uuid)
+    setDetailItemId(itemId ?? null)
+  }, [])
+
+  const handleSetCollectionQty = useCallback(async (uuid, qty) => {
+    try {
+      await setLootCollectionQuantity(uuid, qty)
+      refetchCollection()
+    } catch { /* silent */ }
+  }, [refetchCollection])
+
+  const handleToggleWishlist = useCallback(async (uuid, isWishlisted) => {
+    try {
+      await toggleLootWishlist(uuid, isWishlisted)
+      refetchWishlist()
+    } catch { /* silent */ }
+  }, [refetchWishlist])
+
+  const setSelectedFaction = useCallback((code) => {
+    if (code) {
+      setSearchParams({ faction: code })
+    } else {
+      setSearchParams({})
+    }
+  }, [setSearchParams])
 
   if (loading) return <LoadingState message="Loading NPC factions..." />
   if (error) return <ErrorState message={error} onRetry={refetch} />
 
-  if (selectedFaction) {
-    return <FactionDetail factionCode={selectedFaction} onBack={() => setSelectedFaction(null)} />
-  }
-
   return (
-    <div className="space-y-4 animate-fade-in-up">
-      <PageHeader
-        title="NPC Loadouts"
-        subtitle="What gear do NPCs wear and carry, organized by faction"
-      />
-
-      <div className="glow-line" />
-
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-3">
-        {(factions || []).map((faction, i) => (
-          <FactionCard
-            key={faction.id}
-            faction={faction}
-            index={i}
-            onClick={() => setSelectedFaction(faction.code)}
+    <>
+      {selectedFaction ? (
+        <FactionDetail
+          factionCode={selectedFaction}
+          autoExpandLoadout={autoExpandLoadout}
+          onBack={() => setSelectedFaction(null)}
+          onSelectItem={handleSelectItem}
+        />
+      ) : (
+        <div className="space-y-4 animate-fade-in-up">
+          <PageHeader
+            title="NPC Loadouts"
+            subtitle="What gear do NPCs wear and carry, organized by faction"
           />
-        ))}
-      </div>
-    </div>
+
+          <div className="glow-line" />
+
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-3">
+            {(factions || []).map((faction, i) => (
+              <FactionCard
+                key={faction.id}
+                faction={faction}
+                index={i}
+                onClick={() => setSelectedFaction(faction.code)}
+              />
+            ))}
+          </div>
+        </div>
+      )}
+
+      {detailUuid && (
+        <DetailPanel
+          uuid={detailUuid}
+          manufacturerName={null}
+          collectionQty={collected.get(detailItemId) ?? 0}
+          onSetCollectionQty={handleSetCollectionQty}
+          wishlisted={wishlistIds.has(detailItemId)}
+          onToggleWishlist={handleToggleWishlist}
+          isAuthed={isAuthed}
+          onClose={() => { setDetailUuid(null); setDetailItemId(null) }}
+        />
+      )}
+    </>
   )
 }

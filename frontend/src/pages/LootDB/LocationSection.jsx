@@ -125,10 +125,11 @@ export default function LocationSection({ label, icon: Icon, data, type }) {
         <div className="space-y-3">
           {sortedFactions.map(([factionName, factionRows]) => {
             const rawFactionKey = factionRows[0]?.rawKey
+            const factionCode = rawFactionKey ? rawFactionKey.toLowerCase() : null
             return (
             <div key={factionName}>
-              {rawFactionKey ? (
-                <Link to={`/poi/npc/${encodeURIComponent(rawFactionKey)}`} className="text-[10px] font-display uppercase tracking-wider text-sc-accent hover:text-sc-accent/80 mb-1 pl-2 block transition-colors">
+              {factionCode ? (
+                <Link to={`/npc-loadouts?faction=${encodeURIComponent(factionCode)}`} className="text-[10px] font-display uppercase tracking-wider text-sc-accent hover:text-sc-accent/80 mb-1 pl-2 block transition-colors">
                   {factionName}
                 </Link>
               ) : (
@@ -137,14 +138,25 @@ export default function LocationSection({ label, icon: Icon, data, type }) {
                 </p>
               )}
               <div className="space-y-1">
-                {factionRows.map((row, i) => (
+                {factionRows.map((row, i) => {
+                  const rowLink = factionCode && row.actor
+                    ? `/npc-loadouts?faction=${encodeURIComponent(factionCode)}&loadout=${encodeURIComponent(row.actor)}`
+                    : null
+                  return (
                   <div key={i} className="flex items-center justify-between gap-2 pl-2 border-l border-sc-border">
-                    <span className="text-xs font-mono text-gray-300">{row.detail || '—'}</span>
+                    {rowLink ? (
+                      <Link to={rowLink} className="text-xs font-mono text-sc-accent hover:text-sc-accent/80 transition-colors">
+                        {row.detail || '—'}
+                      </Link>
+                    ) : (
+                      <span className="text-xs font-mono text-gray-300">{row.detail || '—'}</span>
+                    )}
                     {row.probability != null && (
                       <span className="text-[10px] font-mono text-gray-600">{(row.probability * 100).toFixed(1)}%</span>
                     )}
                   </div>
-                ))}
+                  )
+                })}
               </div>
             </div>
             )

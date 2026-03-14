@@ -151,7 +151,7 @@ const NPC_FACTIONS = {
  * @param {string} s
  * @returns {string}
  */
-function toWords(s) {
+export function toWords(s) {
   return s
     .replace(/[_/]+/g, ' ')
     .replace(/([a-z])([A-Z])/g, '$1 $2')
