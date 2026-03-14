@@ -1357,11 +1357,6 @@ function lootBaseQuery(patchCode?: string): { join: string; where: string; param
 }
 
 
-function parseJsonArray(val: string | null): unknown[] {
-  if (!val || val === "null" || val === "[]" || val === "") return [];
-  try { return JSON.parse(val) as unknown[]; } catch { return []; }
-}
-
 /**
  * Lightweight summary for the POI directory page.
  * Returns location keys + item counts + rarity distributions.
@@ -1371,9 +1366,8 @@ function parseJsonArray(val: string | null): unknown[] {
 export async function getLootLocationSummary(db: D1Database, patchCode?: string): Promise<LootLocationSummaryResult> {
   const lq = lootBaseQuery(patchCode);
 
-  // Build a SQL aggregation query for a single JSON source column.
-  // DISTINCT inside the subquery deduplicates uuid+location pairs so rarity
-  // counts reflect unique items, not JSON array entries.
+  // Uses json_each to extract location keys from JSON blobs in the DB,
+  // avoiding transfer of the large blobs to the Worker.
   function buildAggSql(jsonCol: string, keyExpr: string): string {
     return `SELECT loc_key as key, COUNT(*) as itemCount,
         SUM(CASE WHEN rarity = 'Common' THEN 1 ELSE 0 END) as r_Common,
@@ -1407,7 +1401,7 @@ export async function getLootLocationSummary(db: D1Database, patchCode?: string)
     "COALESCE(json_extract(je.value, '$.faction'), json_extract(je.value, '$.actor'), json_extract(je.value, '$.name'), '')",
   );
 
-  // Run all three queries in parallel — each takes ~5s on D1 but they overlap.
+  // Run all three in parallel
   const [containerRes, shopRes, npcRes] = await Promise.all([
     db.prepare(containerSql).bind(...lq.params).all<LocationAggRow>(),
     db.prepare(shopSql).bind(...lq.params).all<LocationAggRow>(),
@@ -1435,7 +1429,7 @@ export async function getLootLocationSummary(db: D1Database, patchCode?: string)
 
 /**
  * Full item list for a single location (POI detail page).
- * Uses LIKE pre-filter on the JSON column so D1 returns ~50-200 rows instead of 5000+.
+ * Direct indexed lookup on loot_item_locations junction table.
  */
 interface LocationItem {
   uuid: string;
@@ -1466,30 +1460,51 @@ export async function getLootLocationDetail(
     : locType === "shop" ? "shops_json"
     : "npcs_json";
 
-  // LIKE pre-filter: dramatically reduces rows. False positives are filtered in JS.
+  // Build the key extraction expression for json_extract
+  const keyExpr =
+    locType === "container"
+      ? "COALESCE(json_extract(je.value, '$.location'), json_extract(je.value, '$.locationTag'), '')"
+    : locType === "shop"
+      ? "COALESCE(json_extract(je.value, '$.shop'), json_extract(je.value, '$.name'), '')"
+    : "COALESCE(json_extract(je.value, '$.faction'), json_extract(je.value, '$.actor'), json_extract(je.value, '$.name'), '')";
+
+  // Container-specific columns
+  const extraCols =
+    locType === "container"
+      ? ", json_extract(je.value, '$.perContainer') as per_container, json_extract(je.value, '$.containerType') as container_type"
+    : locType === "shop"
+      ? ", json_extract(je.value, '$.buyPrice') as buy_price"
+    : ", json_extract(je.value, '$.probability') as probability, json_extract(je.value, '$.slot') as slot";
+
+  // LIKE pre-filter narrows the scan, json_each + json_extract does exact match in DB.
+  // No large JSON blobs are transferred to the Worker.
   const likePattern = `%${slug.replace(/%/g, "\\%").replace(/_/g, "\\_")}%`;
 
   const lq = lootBaseQuery(patchCode);
   const sql = `SELECT
-      lm.uuid, lm.name, lm.type, lm.sub_type, lm.rarity,
-      lm.${jsonCol} as target_json,
-      lm.category
+      lm.uuid, lm.name, lm.type, lm.sub_type, lm.rarity, lm.category
+      ${extraCols}
     FROM loot_map lm
     ${lq.join}
+    , json_each(lm.${jsonCol}) je
     WHERE ${lq.where}
-      AND lm.${jsonCol} IS NOT NULL
-      AND lm.${jsonCol} NOT IN ('null','[]','')
+      AND json_valid(lm.${jsonCol})
       AND lm.${jsonCol} LIKE ? ESCAPE '\\'
+      AND ${keyExpr} = ?
     ORDER BY lm.name`;
 
-  const result = await db.prepare(sql).bind(...lq.params, likePattern).all<{
+  const result = await db.prepare(sql).bind(...lq.params, likePattern, slug).all<{
     uuid: string;
     name: string;
     type: string | null;
     sub_type: string | null;
     rarity: string | null;
     category: string;
-    target_json: string | null;
+    per_container?: number | null;
+    container_type?: string | null;
+    buy_price?: number | null;
+    probability?: number | null;
+    slot?: string | null;
   }>();
 
   const items: LocationItem[] = [];
@@ -1497,19 +1512,6 @@ export async function getLootLocationDetail(
 
   for (const row of result.results) {
     if (seen.has(row.uuid)) continue;
-    const entries = parseJsonArray(row.target_json) as Array<Record<string, unknown>>;
-
-    // Find the entry that exactly matches the slug
-    let matched: Record<string, unknown> | undefined;
-    for (const e of entries) {
-      const key =
-        locType === "container" ? ((e.location || e.locationTag || "") as string)
-        : locType === "shop" ? ((e.shop || e.name || "") as string)
-        : ((e.faction || e.actor || e.name || "") as string);
-      if (key === slug) { matched = e; break; }
-    }
-    if (!matched) continue;
-
     seen.add(row.uuid);
     const item: LocationItem = {
       uuid: row.uuid,
@@ -1520,13 +1522,13 @@ export async function getLootLocationDetail(
       category: row.category,
     };
     if (locType === "container") {
-      if (matched.perContainer != null) item.perContainer = matched.perContainer as number;
-      if (matched.containerType != null) item.containerType = matched.containerType as string;
+      if (row.per_container != null) item.perContainer = row.per_container;
+      if (row.container_type != null) item.containerType = row.container_type;
     } else if (locType === "shop") {
-      if (matched.buyPrice != null) item.buyPrice = matched.buyPrice as number;
+      if (row.buy_price != null) item.buyPrice = row.buy_price;
     } else {
-      if (matched.probability != null) item.probability = matched.probability as number;
-      if (matched.slot != null) item.slot = matched.slot as string;
+      if (row.probability != null) item.probability = row.probability;
+      if (row.slot != null) item.slot = row.slot;
     }
     items.push(item);
   }
