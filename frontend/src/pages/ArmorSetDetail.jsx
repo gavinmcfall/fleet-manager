@@ -9,7 +9,7 @@ import ErrorState from '../components/ErrorState'
 import CollectionStepper from './LootDB/CollectionStepper'
 import LocationSection from './LootDB/LocationSection'
 import SourceIcons from './LootDB/SourceIcons'
-import { SOURCE_DEFS, parseJson } from './LootDB/lootHelpers'
+import { SOURCE_DEFS } from './LootDB/lootHelpers'
 import {
   RARITY_STYLES, CATEGORY_LABELS, CATEGORY_BADGE_STYLES,
   RESISTANCE_KEYS, RESISTANCE_LABELS,
@@ -137,8 +137,8 @@ function PieceLocations({ pieces }) {
   const piecesBySource = []
   for (const piece of pieces) {
     const sources = {}
-    for (const { key, jsonKey } of SOURCE_DEFS) {
-      const entries = parseJson(piece[jsonKey])
+    for (const { key } of SOURCE_DEFS) {
+      const entries = piece.locations?.[key] || []
       if (entries.length > 0) sources[key] = entries
     }
     if (Object.keys(sources).length === 0) continue

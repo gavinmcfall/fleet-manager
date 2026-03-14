@@ -20,10 +20,10 @@ import { VEHICLE_VERSION_JOIN } from "../lib/constants";
 // Reusable SQL fragment for SELECT clauses that compute boolean flags from JSON blob columns.
 // Each flag is 1 if the JSON column contains actual data, 0 otherwise.
 const LOOT_HAS_FLAGS = `
-        CASE WHEN lm.containers_json NOT IN ('null','[]','') AND lm.containers_json IS NOT NULL THEN 1 ELSE 0 END as has_containers,
-        CASE WHEN lm.shops_json     NOT IN ('null','[]','') AND lm.shops_json IS NOT NULL     THEN 1 ELSE 0 END as has_shops,
-        CASE WHEN lm.npcs_json      NOT IN ('null','[]','') AND lm.npcs_json IS NOT NULL      THEN 1 ELSE 0 END as has_npcs,
-        CASE WHEN lm.contracts_json NOT IN ('null','[]','') AND lm.contracts_json IS NOT NULL THEN 1 ELSE 0 END as has_contracts`;
+        EXISTS(SELECT 1 FROM loot_item_locations lil WHERE lil.loot_map_id = lm.id AND lil.source_type = 'container') as has_containers,
+        EXISTS(SELECT 1 FROM loot_item_locations lil WHERE lil.loot_map_id = lm.id AND lil.source_type = 'shop') as has_shops,
+        EXISTS(SELECT 1 FROM loot_item_locations lil WHERE lil.loot_map_id = lm.id AND lil.source_type = 'npc') as has_npcs,
+        EXISTS(SELECT 1 FROM loot_item_locations lil WHERE lil.loot_map_id = lm.id AND lil.source_type = 'contract') as has_contracts`;
 
 // --- Nullable helpers (mirror Go's nullableStr/nullableFloat/nullableInt) ---
 
@@ -740,10 +740,12 @@ export interface LootItem {
 }
 
 export interface WishlistItem extends LootItem {
-  shops_json: string | null;
-  containers_json: string | null;
-  npcs_json: string | null;
-  contracts_json: string | null;
+  locations?: {
+    containers: Record<string, unknown>[];
+    shops: Record<string, unknown>[];
+    npcs: Record<string, unknown>[];
+    contracts: Record<string, unknown>[];
+  };
   wishlist_quantity: number;
 }
 
@@ -925,7 +927,25 @@ export async function getLootByUuid(db: D1Database, uuid: string, patchCode?: st
       .first() as Record<string, unknown> | null;
   }
 
-  return { ...item, item_details: details };
+  // Fetch locations from junction table
+  const locations = await db.prepare(`
+    SELECT source_type, location_key, location_tag, container_type,
+      per_container, per_roll, rolls, loot_table,
+      buy_price, sell_price,
+      actor, faction, slot, probability,
+      contract_name, guild, reward_type, amount, weight
+    FROM loot_item_locations WHERE loot_map_id = ?
+    ORDER BY source_type, location_key
+  `).bind(item.id).all();
+
+  const locationsByType: Record<string, Record<string, unknown>[]> = { containers: [], shops: [], npcs: [], contracts: [] };
+  for (const loc of locations.results) {
+    const r = loc as Record<string, unknown>;
+    const key = (r.source_type as string) + 's'; // container→containers
+    if (locationsByType[key]) locationsByType[key].push(r);
+  }
+
+  return { ...item, locations: locationsByType, item_details: details };
 }
 
 export async function getUserLootCollection(db: D1Database, userId: string): Promise<CollectionEntry[]> {
@@ -963,7 +983,6 @@ export async function getUserLootWishlist(db: D1Database, userId: string): Promi
       `SELECT lm.id, lm.uuid, lm.name, lm.type, lm.sub_type, lm.rarity,
         lm.category, lm.manufacturer_name,
         ${LOOT_HAS_FLAGS},
-        lm.shops_json, lm.containers_json, lm.npcs_json, lm.contracts_json,
         ulw.quantity as wishlist_quantity
       FROM user_loot_wishlist ulw
       JOIN loot_map lm ON lm.id = ulw.loot_map_id
@@ -972,7 +991,40 @@ export async function getUserLootWishlist(db: D1Database, userId: string): Promi
     )
     .bind(userId)
     .all();
-  return result.results as unknown as WishlistItem[];
+
+  const items = result.results as unknown as (WishlistItem & { id: number })[];
+  if (items.length === 0) return items;
+
+  // Batch-fetch locations for all wishlist items
+  const ids = items.map(i => i.id);
+  const placeholders = ids.map(() => '?').join(',');
+  const locResult = await db.prepare(
+    `SELECT loot_map_id, source_type, location_key, location_tag, container_type,
+      per_container, per_roll, rolls, loot_table,
+      buy_price, sell_price,
+      actor, faction, slot, probability,
+      contract_name, guild, reward_type, amount, weight
+    FROM loot_item_locations WHERE loot_map_id IN (${placeholders})`
+  ).bind(...ids).all();
+
+  // Group locations by loot_map_id then source_type
+  type LocationsByType = { containers: Record<string, unknown>[]; shops: Record<string, unknown>[]; npcs: Record<string, unknown>[]; contracts: Record<string, unknown>[] };
+  const locMap = new Map<number, LocationsByType>();
+  for (const loc of locResult.results) {
+    const r = loc as Record<string, unknown>;
+    const mapId = r.loot_map_id as number;
+    if (!locMap.has(mapId)) locMap.set(mapId, { containers: [], shops: [], npcs: [], contracts: [] });
+    const byType = locMap.get(mapId)!;
+    const key = (r.source_type as string) + 's' as keyof LocationsByType;
+    if (byType[key]) byType[key].push(r);
+  }
+
+  // Attach locations to items
+  for (const item of items) {
+    item.locations = locMap.get(item.id) ?? { containers: [], shops: [], npcs: [], contracts: [] };
+  }
+
+  return items;
 }
 
 export async function addToLootWishlist(db: D1Database, userId: string, lootMapId: number): Promise<void> {
@@ -1134,13 +1186,36 @@ export async function getLootSetBySlug(
     }
   }
 
+  // Batch-fetch locations for all set pieces
+  const pieceIds = matchingItems.map(i => i.id as number);
+  const locMap = new Map<number, Record<string, Record<string, unknown>[]>>();
+  if (pieceIds.length > 0) {
+    const locPlaceholders = pieceIds.map(() => '?').join(',');
+    const locResult = await db.prepare(
+      `SELECT loot_map_id, source_type, location_key, location_tag, container_type,
+        per_container, buy_price, sell_price, actor, faction, slot, probability,
+        contract_name, guild
+      FROM loot_item_locations WHERE loot_map_id IN (${locPlaceholders})`
+    ).bind(...pieceIds).all();
+
+    for (const loc of locResult.results) {
+      const r = loc as Record<string, unknown>;
+      const mapId = r.loot_map_id as number;
+      if (!locMap.has(mapId)) locMap.set(mapId, { containers: [], shops: [], npcs: [], contracts: [] });
+      const byType = locMap.get(mapId)!;
+      const key = (r.source_type as string) + 's';
+      if (byType[key]) byType[key].push(r);
+    }
+  }
+
   const pieces = matchingItems.map((item) => {
     let details: Record<string, unknown> | null = null;
     if (item.fps_armour_id)
       details = detailMap.get(`armour:${item.fps_armour_id}`) ?? null;
     else if (item.fps_helmet_id)
       details = detailMap.get(`helmet:${item.fps_helmet_id}`) ?? null;
-    return { ...item, item_details: details };
+    const locations = locMap.get(item.id as number) ?? { containers: [], shops: [], npcs: [], contracts: [] };
+    return { ...item, item_details: details, locations };
   });
 
   return { setName, manufacturer, pieces };
@@ -1360,55 +1435,27 @@ function lootBaseQuery(patchCode?: string): { join: string; where: string; param
 /**
  * Lightweight summary for the POI directory page.
  * Returns location keys + item counts + rarity distributions.
- * Uses json_each() in SQL to aggregate server-side — avoids transferring
- * large JSON blobs to the Worker which caused CPU timeouts.
+ * Uses indexed loot_item_locations junction table — no JSON parsing.
  */
 export async function getLootLocationSummary(db: D1Database, patchCode?: string): Promise<LootLocationSummaryResult> {
   const lq = lootBaseQuery(patchCode);
 
-  // Uses json_each to extract location keys from JSON blobs in the DB,
-  // avoiding transfer of the large blobs to the Worker.
-  function buildAggSql(jsonCol: string, keyExpr: string): string {
-    return `SELECT loc_key as key, COUNT(*) as itemCount,
-        SUM(CASE WHEN rarity = 'Common' THEN 1 ELSE 0 END) as r_Common,
-        SUM(CASE WHEN rarity = 'Uncommon' THEN 1 ELSE 0 END) as r_Uncommon,
-        SUM(CASE WHEN rarity = 'Rare' THEN 1 ELSE 0 END) as r_Rare,
-        SUM(CASE WHEN rarity = 'Epic' THEN 1 ELSE 0 END) as r_Epic,
-        SUM(CASE WHEN rarity = 'Legendary' THEN 1 ELSE 0 END) as r_Legendary
-      FROM (
-        SELECT DISTINCT lm.uuid, COALESCE(lm.rarity, 'Common') as rarity,
-          ${keyExpr} as loc_key
-        FROM loot_map lm
-        ${lq.join}
-        , json_each(lm.${jsonCol}) je
-        WHERE ${lq.where}
-          AND json_valid(lm.${jsonCol})
-      )
-      WHERE loc_key != ''
-      GROUP BY loc_key`;
-  }
+  const sql = `SELECT lil.source_type, lil.location_key as key,
+      COUNT(DISTINCT lm.uuid) as itemCount,
+      SUM(CASE WHEN COALESCE(lm.rarity, 'Common') = 'Common' THEN 1 ELSE 0 END) as r_Common,
+      SUM(CASE WHEN lm.rarity = 'Uncommon' THEN 1 ELSE 0 END) as r_Uncommon,
+      SUM(CASE WHEN lm.rarity = 'Rare' THEN 1 ELSE 0 END) as r_Rare,
+      SUM(CASE WHEN lm.rarity = 'Epic' THEN 1 ELSE 0 END) as r_Epic,
+      SUM(CASE WHEN lm.rarity = 'Legendary' THEN 1 ELSE 0 END) as r_Legendary
+    FROM loot_map lm
+    ${lq.join}
+    JOIN loot_item_locations lil ON lil.loot_map_id = lm.id
+    WHERE ${lq.where} AND lil.location_key != ''
+    GROUP BY lil.source_type, lil.location_key`;
 
-  const containerSql = buildAggSql(
-    "containers_json",
-    "COALESCE(json_extract(je.value, '$.location'), json_extract(je.value, '$.locationTag'), '')",
-  );
-  const shopSql = buildAggSql(
-    "shops_json",
-    "COALESCE(json_extract(je.value, '$.shop'), json_extract(je.value, '$.name'), '')",
-  );
-  const npcSql = buildAggSql(
-    "npcs_json",
-    "COALESCE(json_extract(je.value, '$.faction'), json_extract(je.value, '$.actor'), json_extract(je.value, '$.name'), '')",
-  );
+  const result = await db.prepare(sql).bind(...lq.params).all<LocationAggRow & { source_type: string }>();
 
-  // Run all three in parallel
-  const [containerRes, shopRes, npcRes] = await Promise.all([
-    db.prepare(containerSql).bind(...lq.params).all<LocationAggRow>(),
-    db.prepare(shopSql).bind(...lq.params).all<LocationAggRow>(),
-    db.prepare(npcSql).bind(...lq.params).all<LocationAggRow>(),
-  ]);
-
-  function toSummaries(rows: LocationAggRow[]): LocationSummary[] {
+  function toSummaries(rows: (LocationAggRow & { source_type: string })[]): LocationSummary[] {
     return rows.map((r) => {
       const rarities: Record<string, number> = {};
       if (r.r_Common) rarities.Common = r.r_Common;
@@ -1420,10 +1467,17 @@ export async function getLootLocationSummary(db: D1Database, patchCode?: string)
     });
   }
 
+  const grouped = { containers: [] as (LocationAggRow & { source_type: string })[], shops: [] as (LocationAggRow & { source_type: string })[], npcs: [] as (LocationAggRow & { source_type: string })[] };
+  for (const row of result.results) {
+    if (row.source_type === 'container') grouped.containers.push(row);
+    else if (row.source_type === 'shop') grouped.shops.push(row);
+    else if (row.source_type === 'npc') grouped.npcs.push(row);
+  }
+
   return {
-    containers: toSummaries(containerRes.results),
-    shops: toSummaries(shopRes.results),
-    npcs: toSummaries(npcRes.results),
+    containers: toSummaries(grouped.containers),
+    shops: toSummaries(grouped.shops),
+    npcs: toSummaries(grouped.npcs),
   };
 }
 
@@ -1455,45 +1509,29 @@ export async function getLootLocationDetail(
   slug: string,
   patchCode?: string,
 ): Promise<LocationDetailResult> {
-  const jsonCol =
-    locType === "container" ? "containers_json"
-    : locType === "shop" ? "shops_json"
-    : "npcs_json";
+  const sourceType = locType; // 'container', 'shop', 'npc' — matches junction table values
 
-  // Build the key extraction expression for json_extract
-  const keyExpr =
-    locType === "container"
-      ? "COALESCE(json_extract(je.value, '$.location'), json_extract(je.value, '$.locationTag'), '')"
-    : locType === "shop"
-      ? "COALESCE(json_extract(je.value, '$.shop'), json_extract(je.value, '$.name'), '')"
-    : "COALESCE(json_extract(je.value, '$.faction'), json_extract(je.value, '$.actor'), json_extract(je.value, '$.name'), '')";
-
-  // Container-specific columns
+  // Source-specific columns from junction table
   const extraCols =
     locType === "container"
-      ? ", json_extract(je.value, '$.perContainer') as per_container, json_extract(je.value, '$.containerType') as container_type"
+      ? ", lil.per_container, lil.container_type"
     : locType === "shop"
-      ? ", json_extract(je.value, '$.buyPrice') as buy_price"
-    : ", json_extract(je.value, '$.probability') as probability, json_extract(je.value, '$.slot') as slot";
-
-  // LIKE pre-filter narrows the scan, json_each + json_extract does exact match in DB.
-  // No large JSON blobs are transferred to the Worker.
-  const likePattern = `%${slug.replace(/%/g, "\\%").replace(/_/g, "\\_")}%`;
+      ? ", lil.buy_price"
+    : ", lil.probability, lil.slot";
 
   const lq = lootBaseQuery(patchCode);
-  const sql = `SELECT
+  const sql = `SELECT DISTINCT
       lm.uuid, lm.name, lm.type, lm.sub_type, lm.rarity, lm.category
       ${extraCols}
     FROM loot_map lm
     ${lq.join}
-    , json_each(lm.${jsonCol}) je
+    JOIN loot_item_locations lil ON lil.loot_map_id = lm.id
     WHERE ${lq.where}
-      AND json_valid(lm.${jsonCol})
-      AND lm.${jsonCol} LIKE ? ESCAPE '\\'
-      AND ${keyExpr} = ?
+      AND lil.source_type = ?
+      AND lil.location_key = ?
     ORDER BY lm.name`;
 
-  const result = await db.prepare(sql).bind(...lq.params, likePattern, slug).all<{
+  const result = await db.prepare(sql).bind(...lq.params, sourceType, slug).all<{
     uuid: string;
     name: string;
     type: string | null;

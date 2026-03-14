@@ -206,10 +206,7 @@ export default function DetailPanel({ uuid, manufacturerName, collectionQty, onS
 
   if (!uuid) return null
 
-  const parsedJson = (key) => {
-    if (!item?.[key] || item[key] === 'null' || item[key] === '[]') return []
-    try { return JSON.parse(item[key]) } catch { return [] }
-  }
+  const locationData = (type) => item?.locations?.[type] || []
 
   const rs = item?.rarity ? rarityStyle(item.rarity) : null
   const eCat = item ? effectiveCategory(item) : ''
@@ -457,13 +454,13 @@ export default function DetailPanel({ uuid, manufacturerName, collectionQty, onS
               )
             })()}
 
-            {/* Where to find — parse JSON directly (has_* flags not present in detail response) */}
+            {/* Where to find — structured location data from API */}
             {(() => {
               const locationSections = [
-                { label: 'Shops',      icon: ShoppingCart, type: 'shops',      data: parsedJson('shops_json') },
-                { label: 'Containers', icon: Package,      type: 'containers', data: parsedJson('containers_json') },
-                { label: 'NPCs',       icon: Swords,       type: 'npcs',       data: parsedJson('npcs_json') },
-                { label: 'Contracts',  icon: FileText,     type: 'contracts',  data: parsedJson('contracts_json') },
+                { label: 'Shops',      icon: ShoppingCart, type: 'shops',      data: locationData('shops') },
+                { label: 'Containers', icon: Package,      type: 'containers', data: locationData('containers') },
+                { label: 'NPCs',       icon: Swords,       type: 'npcs',       data: locationData('npcs') },
+                { label: 'Contracts',  icon: FileText,     type: 'contracts',  data: locationData('contracts') },
               ]
               const hasAny = locationSections.some(s => s.data.length > 0)
               return hasAny ? (

@@ -58,13 +58,12 @@ Named `{table1}_{table2}` in alphabetical order:
 
 ## JSON Blob Columns
 
-Use `{field}_json TEXT` for structured data that doesn't need querying/filtering:
-```sql
-containers_json TEXT   -- JSON array of container refs
-shops_json      TEXT   -- JSON array of shop locations
-```
-Use sparingly — prefer proper columns for anything queried or filtered. **`stats_json` has been
-eliminated** (migrations 0092 + 0099). All stat data now lives in dedicated typed columns on each table.
+Use `{field}_json TEXT` for structured data that doesn't need querying/filtering.
+Use sparingly — prefer proper columns for anything queried or filtered.
+
+**Eliminated JSON blobs:**
+- `stats_json` — migrations 0092 + 0099. All stat data in typed columns.
+- `containers_json`, `shops_json`, `npcs_json`, `contracts_json` — migration 0115. Replaced by `loot_item_locations` junction table with indexed `source_type`/`location_key` columns.
 
 ---
 

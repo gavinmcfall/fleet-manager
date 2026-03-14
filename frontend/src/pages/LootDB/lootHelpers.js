@@ -42,11 +42,13 @@ export const PAGE_SIZE_LIST = 100
 export function resolveLocationEntry(entry, type) {
   if (typeof entry === 'string') return { label: entry, detail: null, probability: null }
   if (type === 'shops') {
-    const rawShopKey = entry.shop || entry.name || ''
+    // Junction table uses location_key; legacy used shop/name
+    const rawShopKey = entry.location_key || entry.shop || entry.name || ''
     return { label: friendlyShopName(rawShopKey), detail: 'Price unknown', probability: null, rawKey: rawShopKey, shopKey: true }
   }
   if (type === 'npcs') {
-    const rawFaction = entry.faction || entry.actor || entry.name
+    // Junction table: location_key=faction, actor, slot, probability
+    const rawFaction = entry.location_key || entry.faction || entry.actor || entry.name
     const faction = friendlyFaction(rawFaction)
     return {
       label: faction,
@@ -59,45 +61,36 @@ export function resolveLocationEntry(entry, type) {
   }
   if (type === 'contracts') {
     const guild = entry.guild || entry.contract || '?'
-    const contractRef = entry.contract || null
+    const contractRef = entry.contract_name || entry.contract || null
     return { label: guild, detail: null, probability: null, contractKey: true, contractRef }
   }
-  // containers, default
-  const rawKey = entry.location || entry.locationTag || ''
+  // containers, default — junction table: location_key, container_type, per_container
+  const rawKey = entry.location_key || entry.location || entry.locationTag || ''
   return {
-    label: entry.location ? friendlyLocation(entry.location) : (entry.locationTag || entry.name || '?'),
-    detail: entry.containerType || null,
-    probability: entry.perContainer ?? entry.probability ?? null,
+    label: rawKey ? friendlyLocation(rawKey) : (entry.location_tag || entry.name || '?'),
+    detail: entry.container_type || entry.containerType || null,
+    probability: entry.per_container ?? entry.perContainer ?? entry.probability ?? null,
     rawKey,
   }
 }
 
-// ── JSON parsing ─────────────────────────────────────────────────────────────
-export function parseJson(str) {
-  if (!str || str === 'null' || str === '[]') return []
-  try { return JSON.parse(str) || [] } catch { return [] }
-}
-
 // ── Shopping list aggregation ─────────────────────────────────────────────────
 export const SOURCE_DEFS = [
-  { key: 'shops',     label: 'Shops',      jsonKey: 'shops_json',     icon: ShoppingCart },
-  { key: 'containers', label: 'Containers', jsonKey: 'containers_json', icon: Package },
-  { key: 'npcs',      label: 'NPCs',       jsonKey: 'npcs_json',      icon: Swords },
-  { key: 'contracts', label: 'Contracts',  jsonKey: 'contracts_json', icon: FileText },
+  { key: 'shops',     label: 'Shops',      icon: ShoppingCart },
+  { key: 'containers', label: 'Containers', icon: Package },
+  { key: 'npcs',      label: 'NPCs',       icon: Swords },
+  { key: 'contracts', label: 'Contracts',  icon: FileText },
 ]
 
 export function buildShoppingList(wishlistItems) {
   if (!wishlistItems?.length) return {}
   const groups = {}
-  const parseJson = (str) => { try { return JSON.parse(str) || [] } catch { return [] } }
 
   wishlistItems.forEach(item => {
-    SOURCE_DEFS.forEach(({ key, label, jsonKey, icon }) => {
-      const entries = parseJson(item[jsonKey])
+    SOURCE_DEFS.forEach(({ key, label, icon }) => {
+      const entries = item.locations?.[key] || []
       if (!entries.length) return
       if (!groups[key]) groups[key] = { label, icon, locations: {} }
-      // Deduplicate locations within this item's JSON array (same location can appear
-      // many times — one per container/NPC instance — which would duplicate item names)
       const uniqueLocs = [...new Set(entries.map(e => resolveLocationEntry(e, key).label))]
       uniqueLocs.forEach(loc => {
         if (!groups[key].locations[loc]) groups[key].locations[loc] = []
@@ -180,20 +173,20 @@ export function groupWishlistItems(items) {
 // ── Primary source (best place to find an item) ─────────────────────────────
 // Priority: shops (guaranteed purchase) > highest-probability container/NPC/corpse > contracts
 export function getPrimarySource(item) {
-  const parse = (str) => { try { return JSON.parse(str) || [] } catch { return [] } }
+  const locs = item.locations || {}
 
   // Shops — pick first (prices are unreliable, so no sorting by price)
-  const shops = parse(item.shops_json)
+  const shops = locs.shops || []
   if (shops.length) {
     const entry = resolveLocationEntry(shops[0], 'shops')
     return { label: entry.label, type: 'shop', detail: null }
   }
 
-  // Containers / NPCs / corpses — pick highest probability
+  // Containers / NPCs — pick highest probability
   let best = null
   let bestProb = -1
-  for (const [key, jsonKey] of [['containers', 'containers_json'], ['npcs', 'npcs_json']]) {
-    const entries = parse(item[jsonKey])
+  for (const key of ['containers', 'npcs']) {
+    const entries = locs[key] || []
     for (const e of entries) {
       const resolved = resolveLocationEntry(e, key)
       const prob = resolved.probability ?? 0
@@ -206,7 +199,7 @@ export function getPrimarySource(item) {
   if (best) return best
 
   // Contracts fallback
-  const contracts = parse(item.contracts_json)
+  const contracts = locs.contracts || []
   if (contracts.length) {
     const entry = resolveLocationEntry(contracts[0], 'contracts')
     return { label: entry.label, type: 'contract', detail: null }
@@ -219,11 +212,10 @@ export function getPrimarySource(item) {
 export function groupWishlistByLocation(items) {
   if (!items?.length) return []
   const locMap = new Map() // locationLabel → { sourceType, sourceLabel, sourceIcon, itemNames: Set }
-  const parseJson = (str) => { try { return JSON.parse(str) || [] } catch { return [] } }
 
   for (const item of items) {
-    for (const { key, label, jsonKey, icon } of SOURCE_DEFS) {
-      const entries = parseJson(item[jsonKey])
+    for (const { key, label, icon } of SOURCE_DEFS) {
+      const entries = item.locations?.[key] || []
       if (!entries.length) continue
       const uniqueLocs = [...new Set(entries.map(e => resolveLocationEntry(e, key).label))]
       for (const loc of uniqueLocs) {
