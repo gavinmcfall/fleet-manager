@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react'
-import { RefreshCw, Globe, Play, AlertCircle, Ticket, Copy, Check, Database } from 'lucide-react'
+import { RefreshCw, Globe, Play, AlertCircle, Ticket, Copy, Check, Database, Trash2 } from 'lucide-react'
 import { useSyncStatus, triggerRSISync, triggerFullSync, setPreferences } from '../hooks/useAPI'
 import useTimezone from '../hooks/useTimezone'
 import useGameVersion from '../hooks/useGameVersion'
@@ -267,6 +267,79 @@ function DataVersionsPanel() {
   )
 }
 
+const CACHE_PREFIXES = [
+  { value: '',               label: 'All Cache' },
+  { value: 'gd:',            label: 'All Game Data' },
+  { value: 'gd:npc-loadout', label: 'NPC Loadouts' },
+  { value: 'gd:vehicles',    label: 'Vehicles' },
+  { value: 'gd:shops',       label: 'Shops' },
+  { value: 'gd:loot',        label: 'Loot' },
+  { value: 'gd:missions',    label: 'Missions' },
+  { value: 'gd:factions',    label: 'Factions' },
+  { value: 'gd:contracts',   label: 'Contracts' },
+]
+
+function CachePurgePanel() {
+  const [prefix, setPrefix] = useState('')
+  const [purging, setPurging] = useState(false)
+  const [result, setResult] = useState(null)
+
+  const handlePurge = async () => {
+    setPurging(true)
+    setResult(null)
+    try {
+      const body = prefix ? { prefix } : {}
+      const res = await fetch('/api/admin/cache/purge', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        credentials: 'same-origin',
+        body: JSON.stringify(body),
+      })
+      if (!res.ok) throw new Error('Purge failed')
+      const data = await res.json()
+      setResult({ type: 'success', message: `Purged ${data.deleted} key${data.deleted !== 1 ? 's' : ''}` })
+      setTimeout(() => setResult(null), 4000)
+    } catch (err) {
+      setResult({ type: 'error', message: err.message })
+    } finally {
+      setPurging(false)
+    }
+  }
+
+  return (
+    <PanelSection title="KV Cache" icon={Trash2}>
+      <div className="p-4 space-y-3">
+        <div className="flex items-center gap-2">
+          <select
+            value={prefix}
+            onChange={(e) => setPrefix(e.target.value)}
+            className="flex-1 px-3 py-2 bg-sc-darker border border-sc-border rounded text-sm text-gray-200 focus:outline-none focus:ring-1 focus:ring-sc-accent/50"
+          >
+            {CACHE_PREFIXES.map((p) => (
+              <option key={p.value} value={p.value}>
+                {p.label}{p.value ? ` (${p.value}*)` : ''}
+              </option>
+            ))}
+          </select>
+          <button
+            onClick={handlePurge}
+            disabled={purging}
+            className="btn-primary flex items-center gap-2 text-sm px-3 py-2 disabled:opacity-50"
+          >
+            <Trash2 className="w-3.5 h-3.5" />
+            {purging ? 'Purging...' : 'Purge'}
+          </button>
+        </div>
+        {result && (
+          <p className={`text-xs font-mono ${result.type === 'success' ? 'text-sc-success' : 'text-sc-danger'}`}>
+            {result.message}
+          </p>
+        )}
+      </div>
+    </PanelSection>
+  )
+}
+
 export default function Admin() {
   const { timezone } = useTimezone()
   const { data: syncHistory, loading, error, refetch } = useSyncStatus()
@@ -327,6 +400,9 @@ export default function Admin() {
 
       {/* Data Versions */}
       <DataVersionsPanel />
+
+      {/* KV Cache */}
+      <CachePurgePanel />
 
       {/* Invite Links */}
       <InvitePanel />
