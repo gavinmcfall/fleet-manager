@@ -89,6 +89,51 @@ const DIFFICULTY_TIERS = {
   '11_endgame_rare': 'Endgame Rare',
 }
 
+// Expand abbreviations and location shorthands in loadout names
+// Keys are title-case (input is normalized before matching)
+const ABBREVIATIONS = {
+  // Faction / org codes
+  'Adv': 'Advocacy', 'Bhg': 'Bounty Hunters Guild', 'Cfp': 'CFP',
+  'Ccc': "CC's Conversions", 'Tdd': 'TDD', 'Asd': 'ASD', 'Atc': 'ATC',
+  '9tails': 'Nine Tails', 'Ninetails': 'Nine Tails',
+  'Firerat': 'Fire Rat', 'Firerats': 'Fire Rats',
+  // Manufacturer codes
+  'Ksar': 'Kastak Arms', 'Srvl': 'Survival', 'Qrt': 'Quirinus',
+  'Thp': 'Tehachapi', 'Gys': 'Gyson', 'Grin': 'Greycat', 'Cds': 'CDS',
+  'Drn': 'Derion', 'Rsi': 'RSI', 'Hdtc': 'Hardin Tactical',
+  'Hdh': 'Habidash', 'Eld': 'Escar', 'Alb': 'Alejo Brothers',
+  'Dmc': 'DMC', 'Scu': 'SCU', 'Gsb': 'GSB', 'Fio': 'Fiore',
+  'Uba': 'UBA', 'Rrs': 'RRS', 'Vlk': 'Vanduul',
+  'Ruso': 'Ruso', 'Sasu': 'Sasu', 'Doom': 'Doom',
+  // Location names
+  'Newbabbage': 'New Babbage', 'Grimhex': 'GrimHEX',
+  'Area18': 'Area 18', 'Olisar': 'Port Olisar',
+  'Kel To': "Kel-To's", 'Teachs': "Teach's", 'Twyns': "Twyn's",
+  'Cov Rep': 'CovRep', 'Cousin Crows': "Cousin Crow's",
+  // Compound words
+  'Newmedium': 'New Medium', 'Nohelmet': 'No Helmet',
+  'Medunit': 'Med Unit', 'Offduty': 'Off-Duty',
+  'Roughready': 'Rough & Ready', 'Shatteredblade': 'Shattered Blade',
+  'Pyrolight': 'Pyro Light', 'Druglab': 'Drug Lab',
+  'Fleetweek': 'Fleet Week', 'Shokeeper': 'Shopkeeper',
+  'Shopkeep': 'Shopkeeper', 'Hotdog': 'Hot Dog',
+  'Barpatron': 'Bar Patron', 'Rentacop': 'Rent-a-Cop',
+  'Blacjac': 'BlacJac',
+  // Event / identifier codes
+  'Iae': 'IAE', 'Ff': 'FF', 'Lsm': 'LSM', 'Mmhc': 'MMHC',
+  'Ftl': 'FTL', 'Mt': 'microTech', 'Mv': 'MV', 'Fl': 'FL',
+  'Cvx': 'CVX', 'Fcs': 'FCS', 'Spv': 'SPV', 'Io': 'IO',
+  'Atv': 'ATV', 'Weps': 'Weapons',
+  // Misc
+  'Quasigrazer': 'Quasigrazer',
+}
+
+/** Normalize a word to title case: "HELLO" → "Hello", "hello" → "Hello" */
+function titleCase(word) {
+  if (word.length === 0) return word
+  return word[0].toUpperCase() + word.slice(1).toLowerCase()
+}
+
 function formatLoadoutName(raw) {
   // Check difficulty tier pattern: "02_veryeasy_01" or "02_veryeasy_01_weps"
   for (const [prefix, label] of Object.entries(DIFFICULTY_TIERS)) {
@@ -106,11 +151,8 @@ function formatLoadoutName(raw) {
       return `${label} ${toWords(rest.replace(/^_/, ''))}`
     }
   }
-  // Named patterns: "890Jump_Chef_01" → "890 Jump Chef #01"
-  // "9tails_new_light_01" → "9 Tails New Light #01"
-  // "AdvocacyAgent_01" → "Advocacy Agent #01"
-  // "m_adv_AgentFlightsuit" → "Adv Agent Flightsuit (M)"
-  // Gender prefix
+
+  // Gender prefix: "m_adv_AgentFlightsuit" → "adv_AgentFlightsuit" + suffix
   let name = raw
   let genderSuffix = ''
   if (/^[mf]_/.test(name)) {
@@ -121,37 +163,27 @@ function formatLoadoutName(raw) {
   // Convert to words and clean up
   let display = toWords(name)
 
+  // Collapse trailing numeric segments: "01 01 01" or "01 01 15y" → remove, keep last as variant
+  display = display.replace(/(\s\d{2}\w?){2,}$/, (m) => {
+    const parts = m.trim().split(/\s+/)
+    const last = parts[parts.length - 1]
+    return last === '01' ? '' : ` (Variant ${last})`
+  })
+
   // Pull trailing number as variant: "Agent 01" → "Agent #01"
   display = display.replace(/\s(\d{1,3})$/, ' #$1')
 
-  // Capitalize first letter of each word
-  display = display.replace(/\b[a-z]/g, c => c.toUpperCase())
+  // Title-case each word (normalizes ALL_CAPS and lowercase for consistent abbreviation matching)
+  display = display.replace(/\b[a-zA-Z][a-zA-Z]*\b/g, w => {
+    // Preserve numbers and mixed alphanumeric like "890Jump"
+    if (/\d/.test(w)) return w
+    return titleCase(w)
+  })
 
-  // Expand common abbreviations used in loadout identifiers
-  const ABBREVIATIONS = {
-    'Adv': 'Advocacy', 'Asd': 'ASD', 'Atc': 'ATC', 'Bhg': 'Bounty Hunter',
-    'Cfp': 'CFP', 'Ccc': "CC's Conversions", 'Tdd': 'TDD',
-    'Io': 'IO', 'Blacjac': 'BlacJac', '9Tails': 'Nine Tails',
-    '9tails': 'Nine Tails', 'Newmedium': 'New Medium',
-    'Weps': 'Weapons', 'Nohelmet': 'No Helmet', 'No Helmet': 'No Helmet',
-    'Medunit': 'Med Unit', 'Offduty': 'Off-Duty',
-    'Newbabbage': 'New Babbage', 'Grimhex': 'GrimHEX',
-    'Roughready': 'Rough & Ready', 'Shatteredblade': 'Shattered Blade',
-    'Vlk': 'Vanduul', 'Quasigrazer': 'Quasigrazer',
-    'Uba': 'UBA', 'Rrs': 'RRS', 'Ksar': 'Kastak Arms',
-    'Srvl': 'Survival', 'Qrt': 'Quirinus', 'Thp': 'Tehachapi',
-    'Gys': 'Gyson', 'Grin': 'Greycat', 'Cds': 'CDS',
-    'Drn': 'Derion', 'Rsi': 'RSI', 'Hdtc': 'Hardin Tactical',
-    'Hdh': 'Habidash', 'Eld': 'Escar', 'Alb': 'Alejo Brothers',
-    'Dmc': 'DMC', 'Scu': 'SCU', 'Gsb': 'GSB', 'Fio': 'Fiore',
-    'Ninetails': 'Nine Tails', 'Pyrolight': 'Pyro Light',
-    'Firerat': 'Fire Rat', 'Druglab': 'Drug Lab',
-    'Fleetweek': 'Fleet Week', 'Shokeeper': 'Shopkeeper',
-    'Shopkeep': 'Shopkeeper',
-  }
-
+  // Expand abbreviations (keys are title-case to match normalized input)
   for (const [abbr, full] of Object.entries(ABBREVIATIONS)) {
-    display = display.replace(new RegExp(`\\b${abbr}\\b`, 'g'), full)
+    const escaped = abbr.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
+    display = display.replace(new RegExp(`\\b${escaped}\\b`, 'g'), full)
   }
 
   return display + genderSuffix
