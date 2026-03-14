@@ -20,6 +20,11 @@ database_name = "sc-companion"
 database_id = "56875a7e-0ebd-4455-887d-5d1e1afdb416"
 migrations_dir = "src/db/migrations"
 
+# KV namespace for caching game data responses
+[[kv_namespaces]]
+binding = "SC_BRIDGE_CACHE"
+id = "35af54120ef94b829284d4c2e6279d53"
+
 # R2 bucket for user avatar uploads
 [[r2_buckets]]
 binding = "AVATARS"
@@ -60,6 +65,10 @@ binding = "DB"
 database_name = "sc-companion-staging"
 database_id = "6c6a387b-362f-4dda-88dc-b441b6dc268f"
 migrations_dir = "src/db/migrations"
+
+[[env.staging.kv_namespaces]]
+binding = "SC_BRIDGE_CACHE"
+id = "3311ae8618fa4fb8a3a941fba05f4eb0"
 
 [[env.staging.r2_buckets]]
 binding = "AVATARS"

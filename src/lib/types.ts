@@ -7,6 +7,7 @@ export interface Env {
   DB: D1Database;
   ASSETS: Fetcher;
   AVATARS: R2Bucket;
+  SC_BRIDGE_CACHE: KVNamespace;
   RSI_API_ENABLED: string;
   RSI_BASE_URL: string;
   RSI_RATE_LIMIT: string;
