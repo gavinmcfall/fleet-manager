@@ -146,6 +146,54 @@ const ALWAYS_SHOW_STATS = {
   helmet:  ['ir_emission', 'em_emission'],
 }
 
+/** Human-readable labels for consumable effect keys from DataCore. */
+const EFFECT_LABELS = {
+  Health: 'Health',
+  Hunger: 'Hunger',
+  Thirst: 'Thirst',
+  Oxygen: 'Oxygen',
+  Hydrating: 'Hydrating',
+  Dehydrating: 'Dehydrating',
+  Energizing: 'Energizing',
+  Stun: 'Stun',
+  Slam: 'Slam',
+  BloodDrugLevel: 'Drug Level',
+  BodyRadiation: 'Radiation',
+  CognitiveBoost: 'Cognitive Boost',
+  CognitiveImpair: 'Cognitive Impair',
+  Atrophic: 'Atrophic',
+  Hypertrophic: 'Hypertrophic',
+  HyperMetabolic: 'Hyper Metabolic',
+  HypoMetabolic: 'Hypo Metabolic',
+  RadiationAntidote: 'Rad Antidote',
+  DrugDurationMultiplier: 'Drug Duration',
+  OverdoseRevival: 'OD Revival',
+  OverdoseRevivalBDLDecay: 'OD BDL Decay',
+  // Mask effects — boolean flags (magnitude null = active)
+  StunRecoveryMask: 'Stun Recovery',
+  MoveSpeedMask: 'Move Speed',
+  WeaponSwayMask: 'Weapon Sway',
+  ADSEnterMask: 'ADS Speed',
+  ArmsLockMask: 'Arms Lock',
+  StaminaPoolMask: 'Stamina Pool',
+  StaminaRegenMask: 'Stamina Regen',
+  ImpactResistanceKnockdownMask: 'Knockdown Resist',
+  ImpactResistanceStaggerMask: 'Stagger Resist',
+  ImpactResistanceTwitchMask: 'Twitch Resist',
+  ImpactResistanceFlinchMask: 'Flinch Resist',
+  BloodVisionMask: 'Blood Vision',
+  BlurredVisionMask: 'Blurred Vision',
+  DoubleVisionMask: 'Double Vision',
+  HurtLocomotionMask: 'Hurt Movement',
+  DrunkLocomotionMask: 'Drunk Movement',
+  DrunkManoeuvringMask: 'Drunk Manoeuvring',
+  TraversalLockMask: 'Traversal Lock',
+  TraversalLockProneMask: 'Prone Lock',
+  PainGruntMask: 'Pain Grunt',
+  MuffledAudioInjuryMask: 'Muffled Audio',
+  WheezingAudioMask: 'Wheezing Audio',
+}
+
 export default function DetailPanel({ uuid, manufacturerName, collectionQty, onSetCollectionQty, wishlisted, onToggleWishlist, isAuthed, onClose }) {
   const { activeCode } = useGameVersion()
   const { data: item, loading } = useLootItem(uuid, activeCode)
@@ -362,19 +410,24 @@ export default function DetailPanel({ uuid, manufacturerName, collectionQty, onS
                         <span className="text-gray-300">{display}</span>
                       </div>
                     ))}
-                    {hasEffects && effects.map((eff) => (
-                      <div key={eff.effect_key} className="flex gap-2">
-                        <span className="text-gray-500 w-32 shrink-0">
-                          {eff.effect_key.replace(/_/g, ' ').replace(/\b\w/g, c => c.toUpperCase())}
-                        </span>
-                        <span className="text-gray-300">
-                          {eff.magnitude != null ? eff.magnitude : ''}
-                          {eff.magnitude != null && eff.duration_seconds != null ? ' · ' : ''}
-                          {eff.duration_seconds != null ? `${eff.duration_seconds}s` : ''}
-                          {eff.magnitude == null && eff.duration_seconds == null ? 'Active' : ''}
-                        </span>
-                      </div>
-                    ))}
+                    {hasEffects && (
+                      <>
+                        <p className="text-[10px] font-display uppercase tracking-wider text-gray-500 mt-3 mb-1">Effects</p>
+                        {effects.map((eff) => (
+                          <div key={eff.effect_key} className="flex justify-between gap-2">
+                            <span className="text-gray-500 truncate">
+                              {EFFECT_LABELS[eff.effect_key] || eff.effect_key.replace(/([A-Z])/g, ' $1').trim()}
+                            </span>
+                            <span className="text-gray-300 shrink-0 text-right">
+                              {eff.magnitude != null ? eff.magnitude : ''}
+                              {eff.magnitude != null && eff.duration_seconds != null ? ' · ' : ''}
+                              {eff.duration_seconds != null ? `${eff.duration_seconds}s` : ''}
+                              {eff.magnitude == null && eff.duration_seconds == null ? 'Active' : ''}
+                            </span>
+                          </div>
+                        ))}
+                      </>
+                    )}
                     {hasDescription && (
                       <p className="text-gray-400 text-[11px] leading-relaxed whitespace-pre-wrap pt-1">
                         {decodeMojibake(det.description.replace(/\\n/g, '\n'))}

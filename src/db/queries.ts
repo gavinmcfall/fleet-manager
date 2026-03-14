@@ -1282,12 +1282,14 @@ export async function getVehiclesNeedingCFUpload(
 
 // --- Loot by-location aggregation (POI feature) ---
 
-interface LootSummaryRow {
-  uuid: string;
-  rarity: string | null;
-  containers_json: string | null;
-  shops_json: string | null;
-  npcs_json: string | null;
+interface LocationAggRow {
+  key: string;
+  itemCount: number;
+  r_Common: number;
+  r_Uncommon: number;
+  r_Rare: number;
+  r_Epic: number;
+  r_Legendary: number;
 }
 
 interface LocationSummary {
@@ -1344,80 +1346,72 @@ function parseJsonArray(val: string | null): unknown[] {
 
 /**
  * Lightweight summary for the POI directory page.
- * Returns location keys + item counts + rarity distributions — no item arrays.
- * Paginated D1 reads but tiny response (~20KB).
+ * Returns location keys + item counts + rarity distributions.
+ * Uses json_each() in SQL to aggregate server-side — avoids transferring
+ * large JSON blobs to the Worker which caused CPU timeouts.
  */
 export async function getLootLocationSummary(db: D1Database, patchCode?: string): Promise<LootLocationSummaryResult> {
-  const PAGE_SIZE = 500;
   const lq = lootBaseQuery(patchCode);
-  const sql = `SELECT lm.uuid, lm.rarity, lm.containers_json, lm.shops_json, lm.npcs_json
-    FROM loot_map lm
-    ${lq.join}
-    WHERE ${lq.where}
-      AND (
-        (lm.containers_json IS NOT NULL AND lm.containers_json NOT IN ('null','[]',''))
-        OR (lm.shops_json IS NOT NULL AND lm.shops_json NOT IN ('null','[]',''))
-        OR (lm.npcs_json IS NOT NULL AND lm.npcs_json NOT IN ('null','[]',''))
+
+  // Build a SQL aggregation query for a single JSON source column.
+  // DISTINCT inside the subquery deduplicates uuid+location pairs so rarity
+  // counts reflect unique items, not JSON array entries.
+  function buildAggSql(jsonCol: string, keyExpr: string): string {
+    return `SELECT loc_key as key, COUNT(*) as itemCount,
+        SUM(CASE WHEN rarity = 'Common' THEN 1 ELSE 0 END) as r_Common,
+        SUM(CASE WHEN rarity = 'Uncommon' THEN 1 ELSE 0 END) as r_Uncommon,
+        SUM(CASE WHEN rarity = 'Rare' THEN 1 ELSE 0 END) as r_Rare,
+        SUM(CASE WHEN rarity = 'Epic' THEN 1 ELSE 0 END) as r_Epic,
+        SUM(CASE WHEN rarity = 'Legendary' THEN 1 ELSE 0 END) as r_Legendary
+      FROM (
+        SELECT DISTINCT lm.uuid, COALESCE(lm.rarity, 'Common') as rarity,
+          ${keyExpr} as loc_key
+        FROM loot_map lm
+        ${lq.join}
+        , json_each(lm.${jsonCol}) je
+        WHERE ${lq.where}
+          AND json_valid(lm.${jsonCol})
       )
-    ORDER BY lm.id
-    LIMIT ? OFFSET ?`;
-
-  // key → { uuids: Set, rarities: Record<string, number> }
-  const containerAcc: Record<string, { uuids: Set<string>; rarities: Record<string, number> }> = {};
-  const shopAcc: Record<string, { uuids: Set<string>; rarities: Record<string, number> }> = {};
-  const npcAcc: Record<string, { uuids: Set<string>; rarities: Record<string, number> }> = {};
-
-  function addToAcc(
-    acc: Record<string, { uuids: Set<string>; rarities: Record<string, number> }>,
-    key: string,
-    uuid: string,
-    rarity: string | null,
-  ) {
-    if (!acc[key]) acc[key] = { uuids: new Set(), rarities: {} };
-    const bucket = acc[key];
-    if (bucket.uuids.has(uuid)) return;
-    bucket.uuids.add(uuid);
-    const r = rarity || "Common";
-    bucket.rarities[r] = (bucket.rarities[r] || 0) + 1;
+      WHERE loc_key != ''
+      GROUP BY loc_key`;
   }
 
-  let offset = 0;
-  while (true) {
-    const result = await db.prepare(sql).bind(...lq.params, PAGE_SIZE, offset).all<LootSummaryRow>();
-    const rows = result.results;
-    if (rows.length === 0) break;
+  const containerSql = buildAggSql(
+    "containers_json",
+    "COALESCE(json_extract(je.value, '$.location'), json_extract(je.value, '$.locationTag'), '')",
+  );
+  const shopSql = buildAggSql(
+    "shops_json",
+    "COALESCE(json_extract(je.value, '$.shop'), json_extract(je.value, '$.name'), '')",
+  );
+  const npcSql = buildAggSql(
+    "npcs_json",
+    "COALESCE(json_extract(je.value, '$.faction'), json_extract(je.value, '$.actor'), json_extract(je.value, '$.name'), '')",
+  );
 
-    for (const row of rows) {
-      for (const e of parseJsonArray(row.containers_json) as Array<Record<string, unknown>>) {
-        const k = (e.location || e.locationTag || "") as string;
-        if (k) addToAcc(containerAcc, k, row.uuid, row.rarity);
-      }
-      for (const e of parseJsonArray(row.shops_json) as Array<Record<string, unknown>>) {
-        const k = (e.shop || e.name || "") as string;
-        if (k) addToAcc(shopAcc, k, row.uuid, row.rarity);
-      }
-      for (const e of parseJsonArray(row.npcs_json) as Array<Record<string, unknown>>) {
-        const k = (e.faction || e.actor || e.name || "") as string;
-        if (k) addToAcc(npcAcc, k, row.uuid, row.rarity);
-      }
-    }
+  // Run all three queries in parallel — each takes ~5s on D1 but they overlap.
+  const [containerRes, shopRes, npcRes] = await Promise.all([
+    db.prepare(containerSql).bind(...lq.params).all<LocationAggRow>(),
+    db.prepare(shopSql).bind(...lq.params).all<LocationAggRow>(),
+    db.prepare(npcSql).bind(...lq.params).all<LocationAggRow>(),
+  ]);
 
-    if (rows.length < PAGE_SIZE) break;
-    offset += PAGE_SIZE;
-  }
-
-  function toSummaries(acc: Record<string, { uuids: Set<string>; rarities: Record<string, number> }>): LocationSummary[] {
-    return Object.entries(acc).map(([key, { uuids, rarities }]) => ({
-      key,
-      itemCount: uuids.size,
-      rarities,
-    }));
+  function toSummaries(rows: LocationAggRow[]): LocationSummary[] {
+    return rows.map((r) => {
+      const rarities: Record<string, number> = {};
+      if (r.r_Common) rarities.Common = r.r_Common;
+      if (r.r_Uncommon) rarities.Uncommon = r.r_Uncommon;
+      if (r.r_Rare) rarities.Rare = r.r_Rare;
+      if (r.r_Epic) rarities.Epic = r.r_Epic;
+      if (r.r_Legendary) rarities.Legendary = r.r_Legendary;
+      return { key: r.key, itemCount: r.itemCount, rarities };
+    });
   }
 
   return {
-    containers: toSummaries(containerAcc),
-    shops: toSummaries(shopAcc),
-    npcs: toSummaries(npcAcc),
+    containers: toSummaries(containerRes.results),
+    shops: toSummaries(shopRes.results),
+    npcs: toSummaries(npcRes.results),
   };
 }
 
