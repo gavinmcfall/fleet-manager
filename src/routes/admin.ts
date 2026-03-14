@@ -6,6 +6,7 @@ import { getVehiclesNeedingCFUpload, setVehicleCFImagesID } from "../db/queries"
 import { concurrentMap } from "../lib/utils";
 import { validate } from "../lib/validation";
 import { VEHICLE_VERSION_JOIN } from "../lib/constants";
+import { purgeByPrefix } from "../lib/cache";
 
 /**
  * /api/admin/* — Admin-only management endpoints (super_admin required)
@@ -157,7 +158,11 @@ export function adminRoutes() {
       c.env.DB.prepare("UPDATE game_versions SET is_default = 1 WHERE code = ?").bind(code),
     ]);
 
-    return c.json({ code: version.code, channel: version.channel, is_default: 1 });
+    // Purge all cached data — version change invalidates everything
+    const kv = c.env.SC_BRIDGE_CACHE;
+    const purgeResult = await purgeByPrefix(kv);
+
+    return c.json({ code: version.code, channel: version.channel, is_default: 1, cache_purged: purgeResult.deleted });
   });
 
   /**
@@ -186,6 +191,24 @@ export function adminRoutes() {
       .prepare("SELECT token, created_at, used_at FROM invite_tokens ORDER BY created_at DESC")
       .all<{ token: string; created_at: string; used_at: string | null }>();
     return c.json(rows.results ?? []);
+  });
+
+  /**
+   * POST /api/admin/cache/purge
+   *
+   * Purge KV cache. Optional body: { prefix: string } to purge by prefix.
+   * Without prefix, purges all cached keys.
+   * Returns { deleted: number }
+   */
+  routes.post("/cache/purge",
+    validate("json", z.object({
+      prefix: z.string().max(200).optional(),
+    }).optional()),
+    async (c) => {
+    const body = c.req.valid("json");
+    const kv = c.env.SC_BRIDGE_CACHE;
+    const result = await purgeByPrefix(kv, body?.prefix);
+    return c.json(result);
   });
 
   return routes;

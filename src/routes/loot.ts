@@ -19,6 +19,7 @@ import {
   getLootSetBySlug,
 } from "../db/queries";
 import { validate } from "../lib/validation";
+import { cachedJson, resolveVersionId } from "../lib/cache";
 
 // Auth middleware — reused for collection and wishlist sub-paths
 async function requireUser(c: Context<HonoEnv>, next: Next): Promise<Response | void> {
@@ -34,12 +35,12 @@ export function lootRoutes() {
 
   // GET /api/loot — all items (public), no JSON blobs
   // ?patch=4.7.0-live.XXXXXXX to browse a specific patch; defaults to is_default patch
-  // Cache-Control: public, max-age=300 (CDN caches 5 min)
   app.get("/", async (c) => {
     const patch = c.req.query("patch");
-    const items = await getLootItems(c.env.DB, patch);
-    c.header("Cache-Control", "public, max-age=300");
-    return c.json(items);
+    const versionId = await resolveVersionId(c.env.DB, patch);
+    return cachedJson(c, `loot:items:${versionId}`, () =>
+      getLootItems(c.env.DB, patch),
+    );
   });
 
   // Auth middleware for collection and wishlist
@@ -169,9 +170,10 @@ export function lootRoutes() {
   // GET /api/loot/locations — lightweight summary for POI directory (public)
   app.get("/locations", async (c) => {
     const patch = c.req.query("patch");
-    const data = await getLootLocationSummary(c.env.DB, patch);
-    c.header("Cache-Control", "public, max-age=300");
-    return c.json(data);
+    const versionId = await resolveVersionId(c.env.DB, patch);
+    return cachedJson(c, `loot:loc-summary:${versionId}`, () =>
+      getLootLocationSummary(c.env.DB, patch),
+    );
   });
 
   // GET /api/loot/locations/:type/:slug — items for a single location (public)
@@ -182,52 +184,55 @@ export function lootRoutes() {
     }
     const slug = decodeURIComponent(c.req.param("slug"));
     const patch = c.req.query("patch");
-    const data = await getLootLocationDetail(c.env.DB, type, slug, patch);
-    c.header("Cache-Control", "public, max-age=300");
-    return c.json(data);
+    const versionId = await resolveVersionId(c.env.DB, patch);
+    return cachedJson(c, `loot:loc-detail:${versionId}:${type}:${slug}`, () =>
+      getLootLocationDetail(c.env.DB, type, slug, patch),
+    );
   });
 
   // GET /api/loot/sets — list all armor sets (public)
   app.get("/sets", async (c) => {
     const patch = c.req.query("patch");
-    const sets = await getLootSets(c.env.DB, patch);
-    c.header("Cache-Control", "public, max-age=300");
-    return c.json(sets);
+    const versionId = await resolveVersionId(c.env.DB, patch);
+    return cachedJson(c, `loot:sets:${versionId}`, () =>
+      getLootSets(c.env.DB, patch),
+    );
   });
 
   // GET /api/loot/sets/:setSlug — full set detail with pieces, stats, locations (public)
   app.get("/sets/:setSlug", async (c) => {
     const setSlug = c.req.param("setSlug");
     const patch = c.req.query("patch");
-    const set = await getLootSetBySlug(c.env.DB, setSlug, patch);
-    if (!set) return c.json({ error: "Set not found" }, 404);
+    const versionId = await resolveVersionId(c.env.DB, patch);
+    return cachedJson(c, `loot:set-detail:${versionId}:${setSlug}`, async () => {
+      const set = await getLootSetBySlug(c.env.DB, setSlug, patch);
+      if (!set) return null;
 
-    // Look up contracts that award this set
-    const rewardTexts = SET_SLUG_REWARD_TEXTS[setSlug];
-    let awardingContracts: { id: number; title: string; giver_slug: string }[] = [];
-    if (rewardTexts && rewardTexts.length > 0) {
-      const placeholders = rewardTexts.map(() => "?").join(",");
-      const result = await c.env.DB
-        .prepare(`SELECT id, title, giver_slug FROM contracts WHERE reward_text IN (${placeholders})`)
-        .bind(...rewardTexts)
-        .all<{ id: number; title: string; giver_slug: string }>();
-      awardingContracts = result.results ?? [];
-    }
+      const rewardTexts = SET_SLUG_REWARD_TEXTS[setSlug];
+      let awardingContracts: { id: number; title: string; giver_slug: string }[] = [];
+      if (rewardTexts && rewardTexts.length > 0) {
+        const placeholders = rewardTexts.map(() => "?").join(",");
+        const result = await c.env.DB
+          .prepare(`SELECT id, title, giver_slug FROM contracts WHERE reward_text IN (${placeholders})`)
+          .bind(...rewardTexts)
+          .all<{ id: number; title: string; giver_slug: string }>();
+        awardingContracts = result.results ?? [];
+      }
 
-    c.header("Cache-Control", "public, max-age=300");
-    return c.json({ ...set, awardingContracts });
+      return { ...set, awardingContracts };
+    });
   });
 
-  // GET /api/loot/:uuid — full detail + location JSON (public)
+  // GET /api/loot/:uuid — full detail + location data (public)
   // ?patch=4.7.0-live.XXXXXXX to browse a specific patch; defaults to is_default patch
   // Must be last to avoid matching /collection and /wishlist
   app.get("/:uuid", async (c) => {
     const uuid = c.req.param("uuid");
     const patch = c.req.query("patch");
-    const item = await getLootByUuid(c.env.DB, uuid, patch);
-    if (!item) return c.json({ error: "Item not found" }, 404);
-    c.header("Cache-Control", "public, max-age=300");
-    return c.json(item);
+    const versionId = await resolveVersionId(c.env.DB, patch);
+    return cachedJson(c, `loot:detail:${versionId}:${uuid}`, () =>
+      getLootByUuid(c.env.DB, uuid, patch),
+    );
   });
 
   return app;

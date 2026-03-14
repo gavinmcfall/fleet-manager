@@ -22,6 +22,7 @@ import { gamedataRoutes } from "./routes/gamedata";
 import { validateEncryptionKey } from "./lib/crypto";
 import { logEvent } from "./lib/logger";
 import { VEHICLE_VERSION_JOIN } from "./lib/constants";
+import { cachedJson, resolveVersionId } from "./lib/cache";
 
 const app = new Hono<HonoEnv>();
 
@@ -77,10 +78,12 @@ app.use("*", async (c, next) => {
   c.header("Referrer-Policy", "strict-origin-when-cross-origin");
 });
 
-// Prevent CDN caching of API responses
+// Default: prevent CDN caching of API responses (route handlers can override)
 app.use("/api/*", async (c, next) => {
   await next();
-  c.header("Cache-Control", "no-store");
+  if (!c.res.headers.has("Cache-Control")) {
+    c.header("Cache-Control", "no-store");
+  }
 });
 
 // CORS — strict same-origin in production, localhost in dev
@@ -310,8 +313,10 @@ app.get("/api/status", async (c) => {
 app.get("/api/ships/:slug/loadout", async (c) => {
   const slug = c.req.param("slug");
   const db = c.env.DB;
-  const loadout = await getShipLoadout(db, slug);
-  return c.json(loadout);
+  const versionId = await resolveVersionId(db);
+  return cachedJson(c, `ships:loadout:${versionId}:${slug}`, () =>
+    getShipLoadout(db, slug),
+  );
 });
 
 // Mount route groups — matches Go router URL structure exactly

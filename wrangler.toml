@@ -23,7 +23,7 @@ migrations_dir = "src/db/migrations"
 # KV namespace for caching game data responses
 [[kv_namespaces]]
 binding = "SC_BRIDGE_CACHE"
-id = "35af54120ef94b829284d4c2e6279d53"
+id = "f32ab2f5bd2a4fc496cd21fa63995f7a"
 
 # R2 bucket for user avatar uploads
 [[r2_buckets]]
@@ -68,7 +68,7 @@ migrations_dir = "src/db/migrations"
 
 [[env.staging.kv_namespaces]]
 binding = "SC_BRIDGE_CACHE"
-id = "3311ae8618fa4fb8a3a941fba05f4eb0"
+id = "e89a9f2cb05d444b8585c2b5ed851390"
 
 [[env.staging.r2_buckets]]
 binding = "AVATARS"
