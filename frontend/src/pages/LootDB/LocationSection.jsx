@@ -1,5 +1,5 @@
 import { Link } from 'react-router-dom'
-import { getLocationGroup } from '../../lib/lootLocations'
+import { getLocationGroup, toWords } from '../../lib/lootLocations'
 import { resolveLocationEntry } from './lootHelpers'
 
 const LOCATION_GROUP_CONFIG = {
@@ -106,14 +106,30 @@ export default function LocationSection({ label, icon: Icon, data, type }) {
     )
   }
 
-  // Grouped rendering for npcs — group by faction
+  // Grouped rendering for npcs — group by faction, deduplicate by actor
   if (type === 'npcs') {
     const factionMap = new Map()
     for (const row of rows) {
       const key = row.faction || row.label
-      if (!factionMap.has(key)) factionMap.set(key, [])
-      factionMap.get(key).push(row)
+      if (!factionMap.has(key)) factionMap.set(key, { rows: [], factionCode: null })
+      const bucket = factionMap.get(key)
+      bucket.rows.push(row)
+      // Prefer factionCode from loadout data
+      if (row.factionCode) bucket.factionCode = row.factionCode
+      if (!bucket.factionCode && row.rawKey) bucket.factionCode = row.rawKey.toLowerCase()
     }
+
+    // Deduplicate NPC rows by actor name within each faction
+    for (const [, bucket] of factionMap) {
+      const seen = new Set()
+      bucket.rows = bucket.rows.filter(row => {
+        const actorKey = row.actor || row.detail || '—'
+        if (seen.has(actorKey)) return false
+        seen.add(actorKey)
+        return true
+      })
+    }
+
     const sortedFactions = [...factionMap.entries()].sort(([a], [b]) => a.localeCompare(b))
 
     return (
@@ -123,10 +139,7 @@ export default function LocationSection({ label, icon: Icon, data, type }) {
           <span className="text-[10px] font-display uppercase tracking-wider text-gray-400">{label}</span>
         </div>
         <div className="space-y-3">
-          {sortedFactions.map(([factionName, factionRows]) => {
-            const rawFactionKey = factionRows[0]?.rawKey
-            const factionCode = rawFactionKey ? rawFactionKey.toLowerCase() : null
-            return (
+          {sortedFactions.map(([factionName, { rows: factionRows, factionCode }]) => (
             <div key={factionName}>
               {factionCode ? (
                 <Link to={`/npc-loadouts?faction=${encodeURIComponent(factionCode)}`} className="text-[10px] font-display uppercase tracking-wider text-sc-accent hover:text-sc-accent/80 mb-1 pl-2 block transition-colors">
@@ -139,6 +152,7 @@ export default function LocationSection({ label, icon: Icon, data, type }) {
               )}
               <div className="space-y-1">
                 {factionRows.map((row, i) => {
+                  const actorDisplay = row.actor ? toWords(row.actor).replace(/\b[a-z]/g, c => c.toUpperCase()).replace(/\s(\d{1,3})$/, ' #$1') : null
                   const rowLink = factionCode && row.actor
                     ? `/npc-loadouts?faction=${encodeURIComponent(factionCode)}&loadout=${encodeURIComponent(row.actor)}`
                     : null
@@ -146,10 +160,10 @@ export default function LocationSection({ label, icon: Icon, data, type }) {
                   <div key={i} className="flex items-center justify-between gap-2 pl-2 border-l border-sc-border">
                     {rowLink ? (
                       <Link to={rowLink} className="text-xs font-mono text-sc-accent hover:text-sc-accent/80 transition-colors">
-                        {row.detail || '—'}
+                        {actorDisplay || row.detail || '—'}
                       </Link>
                     ) : (
-                      <span className="text-xs font-mono text-gray-300">{row.detail || '—'}</span>
+                      <span className="text-xs font-mono text-gray-300">{actorDisplay || row.detail || '—'}</span>
                     )}
                     {row.probability != null && (
                       <span className="text-[10px] font-mono text-gray-600">{(row.probability * 100).toFixed(1)}%</span>
@@ -159,8 +173,7 @@ export default function LocationSection({ label, icon: Icon, data, type }) {
                 })}
               </div>
             </div>
-            )
-          })}
+          ))}
         </div>
       </div>
     )

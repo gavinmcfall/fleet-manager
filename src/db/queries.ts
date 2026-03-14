@@ -945,6 +945,38 @@ export async function getLootByUuid(db: D1Database, uuid: string, patchCode?: st
     if (locationsByType[key]) locationsByType[key].push(r);
   }
 
+  // Enrich with NPC loadout data — which NPCs wear/carry this item
+  const className = item.class_name as string;
+  if (className) {
+    const itemName = className.replace(/^EntityClassDefinition\./, '');
+    const npcLoadouts = await db.prepare(`
+      SELECT nl.loadout_name, nf.name as faction_name, nf.code as faction_code,
+             nli.port_name, nli.tag
+      FROM npc_loadout_items nli
+      JOIN npc_loadouts nl ON nl.id = nli.loadout_id
+      JOIN npc_factions nf ON nf.id = nl.faction_id
+      WHERE nli.item_name = ?
+        AND nl.game_version_id = (SELECT id FROM game_versions WHERE is_default = 1)
+      ORDER BY nf.name, nl.loadout_name
+    `).bind(itemName).all();
+
+    if (npcLoadouts.results.length > 0) {
+      for (const npc of npcLoadouts.results) {
+        const r = npc as Record<string, unknown>;
+        locationsByType.npcs.push({
+          source_type: 'npc',
+          location_key: r.faction_name,
+          actor: r.loadout_name,
+          faction: r.faction_name,
+          faction_code: r.faction_code,
+          slot: r.port_name,
+          probability: null,
+          from_loadout: true,
+        });
+      }
+    }
+  }
+
   return { ...item, locations: locationsByType, item_details: details };
 }
 

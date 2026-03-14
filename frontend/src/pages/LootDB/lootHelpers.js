@@ -57,6 +57,8 @@ export function resolveLocationEntry(entry, type) {
       faction,
       rawKey: rawFaction,
       actor: entry.actor || null,
+      factionCode: entry.faction_code || null,
+      fromLoadout: entry.from_loadout || false,
       npcKey: true,
     }
   }

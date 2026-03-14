@@ -261,8 +261,9 @@ function LoadoutTree({ items, onSelectItem }) {
 
   function renderItem(item, depth = 0) {
     const children = childrenOf(item.port_name)
-    const displayName = item.resolved_name || buildFallbackName(item)
-    const hasLootLink = item.loot_uuid
+    const isPlaceholder = item.resolved_name && /PLACEHOLDER|UNINITIALIZED/i.test(item.resolved_name)
+    const displayName = (item.resolved_name && !isPlaceholder) ? item.resolved_name : buildFallbackName(item)
+    const hasLootLink = item.loot_uuid && !isPlaceholder
 
     return (
       <div key={`${item.port_name}-${item.item_name}`} style={{ marginLeft: depth * 16 }}>
