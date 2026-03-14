@@ -43,8 +43,7 @@ export function resolveLocationEntry(entry, type) {
   if (typeof entry === 'string') return { label: entry, detail: null, probability: null }
   if (type === 'shops') {
     const rawShopKey = entry.shop || entry.name || ''
-    const price = entry.buyPrice ? `${Math.round(entry.buyPrice).toLocaleString()} aUEC` : null
-    return { label: friendlyShopName(rawShopKey), detail: price, probability: null, rawKey: rawShopKey, shopKey: true }
+    return { label: friendlyShopName(rawShopKey), detail: 'Price unknown', probability: null, rawKey: rawShopKey, shopKey: true }
   }
   if (type === 'npcs') {
     const rawFaction = entry.faction || entry.actor || entry.name
@@ -183,16 +182,11 @@ export function groupWishlistItems(items) {
 export function getPrimarySource(item) {
   const parse = (str) => { try { return JSON.parse(str) || [] } catch { return [] } }
 
-  // Shops are guaranteed — pick cheapest
+  // Shops — pick first (prices are unreliable, so no sorting by price)
   const shops = parse(item.shops_json)
   if (shops.length) {
-    const best = shops.reduce((a, b) => {
-      const pa = a.buyPrice ?? Infinity
-      const pb = b.buyPrice ?? Infinity
-      return pa <= pb ? a : b
-    })
-    const entry = resolveLocationEntry(best, 'shops')
-    return { label: entry.label, type: 'shop', detail: entry.detail }
+    const entry = resolveLocationEntry(shops[0], 'shops')
+    return { label: entry.label, type: 'shop', detail: null }
   }
 
   // Containers / NPCs / corpses — pick highest probability
