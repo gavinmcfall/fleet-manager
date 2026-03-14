@@ -479,6 +479,39 @@ export function gamedataRoutes<E extends HonoEnv>() {
     })
   })
 
+  // Item name patterns for body/system items — excluded from counts and display
+  const HIDDEN_ITEM_SQL = `
+    AND nli.item_name NOT LIKE 'Head\\_%' ESCAPE '\\'
+    AND nli.item_name NOT LIKE 'Hair\\_%' ESCAPE '\\'
+    AND nli.item_name NOT LIKE 'm\\_body\\_%' ESCAPE '\\'
+    AND nli.item_name NOT LIKE 'f\\_body\\_%' ESCAPE '\\'
+    AND nli.item_name NOT LIKE 'PU\\_Protos\\_%' ESCAPE '\\'
+    AND nli.item_name NOT LIKE 'PU\\_Head\\_%' ESCAPE '\\'
+    AND nli.item_name NOT LIKE 'collector\\_body%' ESCAPE '\\'
+    AND nli.item_name NOT LIKE 'collector\\_head%' ESCAPE '\\'
+    AND nli.item_name NOT LIKE 'collector\\_teeth%' ESCAPE '\\'
+    AND nli.item_name NOT LIKE 'collector\\_eyes%' ESCAPE '\\'
+    AND nli.item_name NOT LIKE 'MobiGlas%'
+    AND nli.item_name NOT LIKE 'PersonalMobiGlas%'
+    AND nli.item_name NOT LIKE 'Tattoo\\_Var\\_%' ESCAPE '\\'
+    AND nli.item_name NOT LIKE 'Color\\_Var\\_%' ESCAPE '\\'
+    AND nli.item_name NOT LIKE 'Skin\\_Var\\_%' ESCAPE '\\'
+    AND nli.item_name NOT LIKE 'Shared\\_Brows%' ESCAPE '\\'
+    AND nli.item_name NOT LIKE 'FPS\\_Default%' ESCAPE '\\'
+    AND nli.item_name NOT LIKE 'MineableRock\\_%' ESCAPE '\\'
+    AND nli.item_name NOT LIKE 'harvestable\\_%' ESCAPE '\\'
+    AND nli.item_name NOT LIKE 'invisible\\_%' ESCAPE '\\'
+  `
+
+  // Hidden tags for body/cosmetic items
+  const HIDDEN_TAGS_SQL = `
+    AND (nli.tag IS NULL OR nli.tag NOT IN (
+      'Char_Body', 'Char_Body(Male)', 'Char_Body(Female)',
+      'Char_Accessory_Head', 'Char_Accessory_Head(Vanduul)',
+      'Char_Accessory_Eyes'
+    ))
+  `
+
   // GET /api/gamedata/npc-loadouts — list all factions with loadout counts
   app.get("/npc-loadouts", async (c) => {
     const db = c.env.DB
@@ -487,14 +520,16 @@ export function gamedataRoutes<E extends HonoEnv>() {
       const { results: factions } = await db
         .prepare(
           `SELECT f.id, f.code, f.name,
-             COUNT(DISTINCT nl.id) as loadout_count,
+             COUNT(DISTINCT CASE WHEN nli.id IS NOT NULL THEN nl.id END) as loadout_count,
              COUNT(DISTINCT nli.id) as item_count
            FROM npc_factions f
            LEFT JOIN npc_loadouts nl ON nl.faction_id = f.id
              AND nl.game_version_id = ${DEFAULT_VERSION_SUBQUERY}
            LEFT JOIN npc_loadout_items nli ON nli.loadout_id = nl.id
+             ${HIDDEN_ITEM_SQL}
+             ${HIDDEN_TAGS_SQL}
            GROUP BY f.id
-           HAVING loadout_count > 0
+           HAVING item_count > 0
            ORDER BY f.name`,
         )
         .all()
@@ -502,12 +537,14 @@ export function gamedataRoutes<E extends HonoEnv>() {
     })
   })
 
-  // GET /api/gamedata/npc-loadouts/:faction — loadouts for a faction with nested items
+  // GET /api/gamedata/npc-loadouts/:faction — paginated loadouts for a faction with nested items
   app.get("/npc-loadouts/:faction", async (c) => {
     const factionCode = c.req.param("faction")
+    const page = Math.max(1, parseInt(c.req.query("page") || "1", 10))
+    const perPage = Math.min(100, Math.max(1, parseInt(c.req.query("per_page") || "50", 10)))
     const db = c.env.DB
     const versionId = await resolveVersionId(db)
-    return cachedJson(c, `gd:npc-loadout:${versionId}:${factionCode}`, async () => {
+    return cachedJson(c, `gd:npc-loadout:${versionId}:${factionCode}:p${page}:pp${perPage}`, async () => {
       const faction = await db
         .prepare("SELECT * FROM npc_factions WHERE code = ? LIMIT 1")
         .bind(factionCode)
@@ -515,20 +552,51 @@ export function gamedataRoutes<E extends HonoEnv>() {
 
       if (!faction) return null
 
+      // Count total visible loadouts (those with at least one non-hidden item)
+      const countRow = await db
+        .prepare(
+          `SELECT COUNT(*) as total FROM npc_loadouts nl
+           WHERE nl.faction_id = ?
+             AND nl.game_version_id = ${DEFAULT_VERSION_SUBQUERY}
+             AND EXISTS (
+               SELECT 1 FROM npc_loadout_items nli
+               WHERE nli.loadout_id = nl.id
+                 ${HIDDEN_ITEM_SQL}
+                 ${HIDDEN_TAGS_SQL}
+             )`,
+        )
+        .bind(faction.id)
+        .first<{ total: number }>()
+
+      const totalLoadouts = countRow?.total ?? 0
+      const totalPages = Math.ceil(totalLoadouts / perPage)
+      const offset = (page - 1) * perPage
+
+      // Fetch paginated loadouts — only those with visible items
       const { results: loadouts } = await db
         .prepare(
           `SELECT nl.*
            FROM npc_loadouts nl
            WHERE nl.faction_id = ?
              AND nl.game_version_id = ${DEFAULT_VERSION_SUBQUERY}
-           ORDER BY nl.category, nl.sub_category, nl.loadout_name`,
+             AND EXISTS (
+               SELECT 1 FROM npc_loadout_items nli
+               WHERE nli.loadout_id = nl.id
+                 ${HIDDEN_ITEM_SQL}
+                 ${HIDDEN_TAGS_SQL}
+             )
+           ORDER BY nl.category, nl.sub_category, nl.loadout_name
+           LIMIT ? OFFSET ?`,
         )
-        .bind(faction.id)
+        .bind(faction.id, perPage, offset)
         .all()
 
       let items: Record<string, unknown>[] = []
 
       if (loadouts.length > 0) {
+        // Build placeholders for the current page's loadout IDs
+        const loadoutIds = loadouts.map((l) => l.id as number)
+        const placeholders = loadoutIds.map(() => "?").join(",")
         const { results } = await db
           .prepare(
             `SELECT nli.*, lm.name as resolved_name, lm.uuid as loot_uuid, lm.id as loot_item_id,
@@ -541,14 +609,10 @@ export function gamedataRoutes<E extends HonoEnv>() {
                     THEN SUBSTR(nli.item_name, 1, INSTR(nli.item_name, '_') - 1)
                     ELSE '' END)
                AND m.code != ''
-             WHERE nli.loadout_id IN (
-               SELECT nl.id FROM npc_loadouts nl
-               WHERE nl.faction_id = ?
-                 AND nl.game_version_id = ${DEFAULT_VERSION_SUBQUERY}
-             )
+             WHERE nli.loadout_id IN (${placeholders})
              ORDER BY nli.loadout_id, nli.id`,
           )
-          .bind(faction.id)
+          .bind(...loadoutIds)
           .all()
         items = results
       }
@@ -565,7 +629,14 @@ export function gamedataRoutes<E extends HonoEnv>() {
         items: itemsByLoadout.get(loadout.id as number) ?? [],
       }))
 
-      return { faction, loadouts: loadoutsWithItems }
+      return {
+        faction,
+        loadouts: loadoutsWithItems,
+        page,
+        perPage,
+        totalLoadouts,
+        totalPages,
+      }
     })
   })
 

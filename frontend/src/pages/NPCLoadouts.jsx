@@ -9,7 +9,7 @@ import { useSession } from '../lib/auth-client'
 import PageHeader from '../components/PageHeader'
 import LoadingState from '../components/LoadingState'
 import ErrorState from '../components/ErrorState'
-import { Users, ChevronDown, ChevronRight, ArrowLeft, Shield, Shirt, Crosshair, Wrench, Bug, Swords } from 'lucide-react'
+import { Users, ChevronDown, ChevronRight, ChevronLeft, ArrowLeft, Shield, Shirt, Crosshair, Wrench, Bug, Swords } from 'lucide-react'
 import { toWords } from '../lib/lootLocations'
 import DetailPanel from './LootDB/DetailPanel'
 
@@ -312,26 +312,82 @@ function LoadoutCard({ loadout, defaultExpanded, onSelectItem }) {
   )
 }
 
+function PaginationControls({ page, totalPages, totalLoadouts, onPageChange }) {
+  if (totalPages <= 1) return null
+
+  // Build page number range: show current ± 2, plus first/last
+  const pages = []
+  for (let i = 1; i <= totalPages; i++) {
+    if (i === 1 || i === totalPages || (i >= page - 2 && i <= page + 2)) {
+      pages.push(i)
+    } else if (pages[pages.length - 1] !== '...') {
+      pages.push('...')
+    }
+  }
+
+  return (
+    <div className="flex items-center justify-between">
+      <span className="text-xs font-mono text-gray-500">
+        {totalLoadouts} loadouts · page {page} of {totalPages}
+      </span>
+      <div className="flex items-center gap-1">
+        <button
+          onClick={() => onPageChange(page - 1)}
+          disabled={page <= 1}
+          className="btn-ghost p-1.5 disabled:opacity-30 disabled:cursor-not-allowed"
+        >
+          <ChevronLeft className="w-3.5 h-3.5" />
+        </button>
+        {pages.map((p, i) =>
+          p === '...' ? (
+            <span key={`ellipsis-${i}`} className="text-xs text-gray-600 px-1">…</span>
+          ) : (
+            <button
+              key={p}
+              onClick={() => onPageChange(p)}
+              className={`text-xs font-mono px-2 py-1 rounded transition-colors ${
+                p === page
+                  ? 'bg-sc-accent/20 text-sc-accent'
+                  : 'text-gray-500 hover:text-gray-300 hover:bg-white/[0.04]'
+              }`}
+            >
+              {p}
+            </button>
+          ),
+        )}
+        <button
+          onClick={() => onPageChange(page + 1)}
+          disabled={page >= totalPages}
+          className="btn-ghost p-1.5 disabled:opacity-30 disabled:cursor-not-allowed"
+        >
+          <ChevronRight className="w-3.5 h-3.5" />
+        </button>
+      </div>
+    </div>
+  )
+}
+
 function FactionDetail({ factionCode, autoExpandLoadout, onBack, onSelectItem }) {
-  const { data, loading, error, refetch } = useNPCFactionLoadouts(factionCode)
+  const [page, setPage] = useState(1)
+  const { data, loading, error, refetch } = useNPCFactionLoadouts(factionCode, page)
 
   if (loading) return <LoadingState message="Loading loadouts..." />
   if (error) return <ErrorState message={error} onRetry={refetch} />
   if (!data) return null
 
-  const { faction, loadouts } = data
+  const { faction, loadouts, totalLoadouts, totalPages } = data
 
-  // Filter out loadouts with zero visible items (e.g. body-only loadouts like "The Collector")
-  const visibleLoadouts = loadouts.filter(loadout =>
-    loadout.items?.some(i => !isHiddenItem(i))
-  )
-
-  // Group loadouts by category
+  // Group loadouts by category (backend already filters hidden-only loadouts)
   const grouped = {}
-  for (const loadout of visibleLoadouts) {
+  for (const loadout of loadouts) {
     const cat = loadout.category || 'unknown'
     if (!grouped[cat]) grouped[cat] = []
     grouped[cat].push(loadout)
+  }
+
+  const handlePageChange = (newPage) => {
+    setPage(newPage)
+    window.scrollTo({ top: 0, behavior: 'smooth' })
   }
 
   return (
@@ -342,8 +398,15 @@ function FactionDetail({ factionCode, autoExpandLoadout, onBack, onSelectItem })
           All Factions
         </button>
         <h2 className="font-display font-bold text-xl tracking-wider text-white">{faction.name}</h2>
-        <span className="text-xs font-mono text-gray-500">{visibleLoadouts.length} loadouts</span>
+        <span className="text-xs font-mono text-gray-500">{totalLoadouts} loadouts</span>
       </div>
+
+      <PaginationControls
+        page={page}
+        totalPages={totalPages}
+        totalLoadouts={totalLoadouts}
+        onPageChange={handlePageChange}
+      />
 
       <div className="glow-line" />
 
@@ -365,6 +428,13 @@ function FactionDetail({ factionCode, autoExpandLoadout, onBack, onSelectItem })
           </div>
         </div>
       ))}
+
+      <PaginationControls
+        page={page}
+        totalPages={totalPages}
+        totalLoadouts={totalLoadouts}
+        onPageChange={handlePageChange}
+      />
     </div>
   )
 }

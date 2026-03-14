@@ -81,8 +81,11 @@ export function useNPCLoadouts() {
   return useAPI('/gamedata/npc-loadouts')
 }
 
-export function useNPCFactionLoadouts(factionCode) {
-  return useAPI(factionCode ? `/gamedata/npc-loadouts/${factionCode}` : null, { skip: !factionCode })
+export function useNPCFactionLoadouts(factionCode, page = 1, perPage = 50) {
+  return useAPI(
+    factionCode ? `/gamedata/npc-loadouts/${factionCode}?page=${page}&per_page=${perPage}` : null,
+    { skip: !factionCode },
+  )
 }
 
 export function usePaints() {
