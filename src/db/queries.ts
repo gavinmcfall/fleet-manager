@@ -829,7 +829,17 @@ export async function getLootByUuid(db: D1Database, uuid: string, patchCode?: st
 
   if (item.fps_weapon_id) {
     details = await db
-      .prepare("SELECT name, sub_type as type, size, description, rounds_per_minute, fire_modes, burst_count, ammo_capacity, zoom_factor, item_port_count, damage, damage_type, projectile_speed, effective_range, dps FROM fps_weapons WHERE id = ?")
+      .prepare(`SELECT fw.name, fw.sub_type as type, fw.size, fw.description,
+        fw.rounds_per_minute, fw.fire_modes, fw.burst_count, fw.ammo_capacity,
+        fw.zoom_factor, fw.item_port_count, fw.damage, fw.damage_type,
+        fw.projectile_speed, fw.effective_range, fw.dps,
+        COALESCE(fa.display_name, fa.name) as magazine_name, fa.magazine_capacity as magazine_size,
+        mag_lm.uuid as magazine_loot_uuid
+        FROM fps_weapons fw
+        LEFT JOIN fps_ammo_types fa ON fa.uuid = fw.magazine_uuid
+          AND fa.game_version_id = (SELECT id FROM game_versions WHERE is_default = 1)
+        LEFT JOIN loot_map mag_lm ON mag_lm.uuid = fw.magazine_uuid AND mag_lm.removed = 0
+        WHERE fw.id = ?`)
       .bind(item.fps_weapon_id)
       .first() as Record<string, unknown> | null;
   } else if (item.fps_armour_id) {

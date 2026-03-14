@@ -1,4 +1,5 @@
 import { X, ShoppingCart, Package, Swords, FileText, Plus, Bookmark, BookmarkPlus } from 'lucide-react'
+import { Link } from 'react-router-dom'
 import { useLootItem } from '../../hooks/useAPI'
 import useGameVersion from '../../hooks/useGameVersion'
 import { rarityStyle, CATEGORY_BADGE_STYLES, CATEGORY_LABELS, RESISTANCE_KEYS, effectiveCategory } from '../../lib/lootDisplay'
@@ -134,6 +135,7 @@ const STAT_ORDER = [
 const STAT_HIDDEN = new Set([
   'name', 'type', 'sub_type', 'slot', 'size', 'grade', 'description', 'id',
   'burst_count',  // merged into fire_modes display
+  'magazine_name', 'magazine_size', 'magazine_loot_uuid',  // rendered in Magazine section
 ])
 
 /** Keys where the stored value is a multiplier (1.0 = base); display as % of base. */
@@ -410,6 +412,19 @@ export default function DetailPanel({ uuid, manufacturerName, collectionQty, onS
                         <span className="text-gray-300">{display}</span>
                       </div>
                     ))}
+                    {det.magazine_name && (
+                      <div className="flex gap-2">
+                        <span className="text-gray-500 w-32 shrink-0">Magazine</span>
+                        <span className="text-gray-300">
+                          {det.magazine_loot_uuid ? (
+                            <Link to={`/loot/${det.magazine_loot_uuid}`} className="text-sc-accent hover:text-sc-accent/80 transition-colors">
+                              {det.magazine_name}
+                            </Link>
+                          ) : det.magazine_name}
+                          {det.magazine_size != null && ` (${det.magazine_size} rds)`}
+                        </span>
+                      </div>
+                    )}
                     {hasEffects && (
                       <>
                         <p className="text-[10px] font-display uppercase tracking-wider text-gray-500 mt-3 mb-1">Effects</p>
