@@ -172,7 +172,7 @@ export function friendlyLocation(raw) {
   let s = raw
 
   // Strip path prefixes
-  s = s.replace(/^caves\//, '').replace(/^contestedzones\//, '')
+  s = s.replace(/^caves\//, '').replace(/^contestedzones\//, '').replace(/^asteroidbases\//, '')
 
   // Cave with moon + quality → "Moon — Cave (Quality)"
   const caveMatch = s.match(/^Cave_(\w+)_(Poor|Medium|Rich)$/)
@@ -249,10 +249,10 @@ export function friendlyLocation(raw) {
   // Ghost arena
   if (s.startsWith('GhostArena')) return 'Ghost Arena'
 
-  // Asteroid bases — strip "asteroidbases" prefix, clean up type
-  const abMatch = s.match(/^asteroidbases?\s*Asteroid\s*Base\s*(\w+)\s*(\d+)$/i)
+  // Asteroid bases — after prefix strip, handle "AsteroidBase_Type_NNN"
+  const abMatch = s.match(/^AsteroidBase[_\s]+(\w+?)[_\s]+(\d+)$/i)
   if (abMatch) return `Asteroid Base (${abMatch[1]})`
-  if (/^asteroidbases?\b/i.test(s)) return s.replace(/^asteroidbases?\s*/i, '')
+  if (/^AsteroidBase/i.test(s)) return toWords(s)
 
   // Generic fallback — convert to words
   return toWords(s) || raw
@@ -314,8 +314,9 @@ export function getLocationGroup(raw) {
   if (!raw) return 'generic'
 
   // Strip path prefix
-  const s = raw.replace(/^caves\//, '').replace(/^contestedzones\//, '')
+  const s = raw.replace(/^caves\//, '').replace(/^contestedzones\//, '').replace(/^asteroidbases\//, '')
 
+  if (s.startsWith('AsteroidBase')) return 'named'
   if (s.startsWith('Cave_') || s.startsWith('Loot_Caves_') || s === 'Caves') return 'cave'
   if (s.startsWith('ColonialOutpost') || s === 'DerelictOutpost' || s === 'TechOutpost') return 'outpost'
   if (s.startsWith('DistributionCentre_') || s.startsWith('DistributionCentres_') || s === 'DCDelving') return 'dc'

@@ -1438,22 +1438,29 @@ function lootBaseQuery(patchCode?: string): { join: string; where: string; param
  * Uses indexed loot_item_locations junction table — no JSON parsing.
  */
 export async function getLootLocationSummary(db: D1Database, patchCode?: string): Promise<LootLocationSummaryResult> {
-  const lq = lootBaseQuery(patchCode);
+  // Optimized: filter directly on junction table's game_version_id instead of
+  // expensive MAX(game_version_id) correlated subquery. The junction table already
+  // stores version_id per row, so we can skip the UUID-dedup pattern.
+  const versionCap = patchCode
+    ? `(SELECT id FROM game_versions WHERE code = ?)`
+    : `(SELECT id FROM game_versions WHERE is_default = 1)`;
+  const params = patchCode ? [patchCode] : [];
 
   const sql = `SELECT lil.source_type, lil.location_key as key,
-      COUNT(DISTINCT lm.uuid) as itemCount,
+      COUNT(DISTINCT lil.loot_map_id) as itemCount,
       SUM(CASE WHEN COALESCE(lm.rarity, 'Common') = 'Common' THEN 1 ELSE 0 END) as r_Common,
       SUM(CASE WHEN lm.rarity = 'Uncommon' THEN 1 ELSE 0 END) as r_Uncommon,
       SUM(CASE WHEN lm.rarity = 'Rare' THEN 1 ELSE 0 END) as r_Rare,
       SUM(CASE WHEN lm.rarity = 'Epic' THEN 1 ELSE 0 END) as r_Epic,
       SUM(CASE WHEN lm.rarity = 'Legendary' THEN 1 ELSE 0 END) as r_Legendary
-    FROM loot_map lm
-    ${lq.join}
-    JOIN loot_item_locations lil ON lil.loot_map_id = lm.id
-    WHERE ${lq.where} AND lil.location_key != ''
+    FROM loot_item_locations lil
+    JOIN loot_map lm ON lm.id = lil.loot_map_id
+    WHERE lil.game_version_id = ${versionCap}
+      AND lil.location_key != ''
+      AND ${LOOT_EXCLUSION_FILTER}
     GROUP BY lil.source_type, lil.location_key`;
 
-  const result = await db.prepare(sql).bind(...lq.params).all<LocationAggRow & { source_type: string }>();
+  const result = await db.prepare(sql).bind(...params).all<LocationAggRow & { source_type: string }>();
 
   function toSummaries(rows: (LocationAggRow & { source_type: string })[]): LocationSummary[] {
     return rows.map((r) => {
@@ -1519,19 +1526,24 @@ export async function getLootLocationDetail(
       ? ", lil.buy_price"
     : ", lil.probability, lil.slot";
 
-  const lq = lootBaseQuery(patchCode);
+  // Optimized: filter on junction table's game_version_id directly
+  const versionCap = patchCode
+    ? `(SELECT id FROM game_versions WHERE code = ?)`
+    : `(SELECT id FROM game_versions WHERE is_default = 1)`;
+  const versionParams = patchCode ? [patchCode] : [];
+
   const sql = `SELECT DISTINCT
       lm.uuid, lm.name, lm.type, lm.sub_type, lm.rarity, lm.category
       ${extraCols}
-    FROM loot_map lm
-    ${lq.join}
-    JOIN loot_item_locations lil ON lil.loot_map_id = lm.id
-    WHERE ${lq.where}
+    FROM loot_item_locations lil
+    JOIN loot_map lm ON lm.id = lil.loot_map_id
+    WHERE lil.game_version_id = ${versionCap}
       AND lil.source_type = ?
       AND lil.location_key = ?
+      AND ${LOOT_EXCLUSION_FILTER}
     ORDER BY lm.name`;
 
-  const result = await db.prepare(sql).bind(...lq.params, sourceType, slug).all<{
+  const result = await db.prepare(sql).bind(...versionParams, sourceType, slug).all<{
     uuid: string;
     name: string;
     type: string | null;

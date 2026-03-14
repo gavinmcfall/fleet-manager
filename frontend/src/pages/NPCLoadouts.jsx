@@ -68,7 +68,9 @@ function LoadoutTree({ items }) {
   if (!items || items.length === 0) return null
 
   // Build tree from flat items using parent_port
-  const topLevel = items.filter(i => !i.parent_port)
+  // Top-level = items whose parent_port doesn't match any other item's port_name
+  const portNames = new Set(items.map(i => i.port_name))
+  const topLevel = items.filter(i => !i.parent_port || !portNames.has(i.parent_port))
   const childrenOf = (portName) => items.filter(i => i.parent_port === portName)
 
   function renderItem(item, depth = 0) {
