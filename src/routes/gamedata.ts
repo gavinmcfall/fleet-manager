@@ -432,6 +432,126 @@ export function gamedataRoutes<E extends HonoEnv>() {
     return c.json({ location, shops: nestInventoryUnderShops(shops, inventory) })
   })
 
+  // GET /api/gamedata/weapon-racks — vehicle weapon racks grouped by vehicle
+  app.get("/weapon-racks", async (c) => {
+    const db = c.env.DB
+
+    const { results } = await db
+      .prepare(
+        `SELECT wr.*, v.name as vehicle_name, v.slug as vehicle_slug,
+           m.name as manufacturer_name, m.code as manufacturer_code
+         FROM vehicle_weapon_racks wr
+         LEFT JOIN vehicles v ON v.id = wr.vehicle_id
+         LEFT JOIN manufacturers m ON m.id = v.manufacturer_id
+         WHERE wr.game_version_id = ${DEFAULT_VERSION_SUBQUERY}
+         ORDER BY v.name, wr.rack_label`,
+      )
+      .all()
+
+    return c.json(results)
+  })
+
+  // GET /api/gamedata/suit-lockers — vehicle suit lockers grouped by vehicle
+  app.get("/suit-lockers", async (c) => {
+    const db = c.env.DB
+
+    const { results } = await db
+      .prepare(
+        `SELECT sl.*, v.name as vehicle_name, v.slug as vehicle_slug,
+           m.name as manufacturer_name, m.code as manufacturer_code
+         FROM vehicle_suit_lockers sl
+         LEFT JOIN vehicles v ON v.id = sl.vehicle_id
+         LEFT JOIN manufacturers m ON m.id = v.manufacturer_id
+         WHERE sl.game_version_id = ${DEFAULT_VERSION_SUBQUERY}
+         ORDER BY v.name, sl.locker_label`,
+      )
+      .all()
+
+    return c.json(results)
+  })
+
+  // GET /api/gamedata/npc-loadouts — list all factions with loadout counts
+  app.get("/npc-loadouts", async (c) => {
+    const db = c.env.DB
+
+    const { results: factions } = await db
+      .prepare(
+        `SELECT f.id, f.code, f.name,
+           COUNT(DISTINCT nl.id) as loadout_count,
+           COUNT(DISTINCT nli.id) as item_count
+         FROM npc_factions f
+         LEFT JOIN npc_loadouts nl ON nl.faction_id = f.id
+           AND nl.game_version_id = ${DEFAULT_VERSION_SUBQUERY}
+         LEFT JOIN npc_loadout_items nli ON nli.loadout_id = nl.id
+         GROUP BY f.id
+         HAVING loadout_count > 0
+         ORDER BY f.name`,
+      )
+      .all()
+
+    return c.json(factions)
+  })
+
+  // GET /api/gamedata/npc-loadouts/:faction — loadouts for a faction with nested items
+  app.get("/npc-loadouts/:faction", async (c) => {
+    const factionCode = c.req.param("faction")
+    const db = c.env.DB
+
+    const faction = await db
+      .prepare("SELECT * FROM npc_factions WHERE code = ? LIMIT 1")
+      .bind(factionCode)
+      .first()
+
+    if (!faction) {
+      return c.json({ error: "Faction not found" }, 404)
+    }
+
+    const { results: loadouts } = await db
+      .prepare(
+        `SELECT nl.*
+         FROM npc_loadouts nl
+         WHERE nl.faction_id = ?
+           AND nl.game_version_id = ${DEFAULT_VERSION_SUBQUERY}
+         ORDER BY nl.category, nl.sub_category, nl.loadout_name`,
+      )
+      .bind(faction.id)
+      .all()
+
+    const loadoutIds = loadouts.map((l) => l.id as number)
+    let items: Record<string, unknown>[] = []
+
+    if (loadoutIds.length > 0) {
+      const placeholders = loadoutIds.map(() => "?").join(",")
+      const { results } = await db
+        .prepare(
+          `SELECT nli.*, lm.name as resolved_name, lm.uuid as loot_uuid
+           FROM npc_loadout_items nli
+           LEFT JOIN loot_map lm ON LOWER(lm.class_name) = LOWER(nli.item_name)
+             AND lm.game_version_id = ${DEFAULT_VERSION_SUBQUERY}
+           WHERE nli.loadout_id IN (${placeholders})
+           ORDER BY nli.loadout_id, nli.id`,
+        )
+        .bind(...loadoutIds)
+        .all()
+      items = results
+    }
+
+    // Nest items under loadouts
+    const itemsByLoadout = new Map<number, typeof items>()
+    for (const item of items) {
+      const loadoutId = item.loadout_id as number
+      if (!itemsByLoadout.has(loadoutId)) itemsByLoadout.set(loadoutId, [])
+      itemsByLoadout.get(loadoutId)!.push(item)
+    }
+
+    const loadoutsWithItems = loadouts.map((loadout) => ({
+      ...loadout,
+      items: itemsByLoadout.get(loadout.id as number) ?? [],
+    }))
+
+    return c.json({ faction, loadouts: loadoutsWithItems })
+  })
+
   // GET /api/gamedata/missions — mission types + givers with faction/location data
   app.get("/missions", async (c) => {
     const db = c.env.DB

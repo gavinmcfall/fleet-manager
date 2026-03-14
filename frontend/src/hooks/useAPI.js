@@ -69,6 +69,22 @@ export function useShipPaints(slug) {
   return useAPI(slug ? `/paints/ship/${slug}` : null, { skip: !slug })
 }
 
+export function useWeaponRacks() {
+  return useAPI('/gamedata/weapon-racks')
+}
+
+export function useSuitLockers() {
+  return useAPI('/gamedata/suit-lockers')
+}
+
+export function useNPCLoadouts() {
+  return useAPI('/gamedata/npc-loadouts')
+}
+
+export function useNPCFactionLoadouts(factionCode) {
+  return useAPI(factionCode ? `/gamedata/npc-loadouts/${factionCode}` : null, { skip: !factionCode })
+}
+
 export function usePaints() {
   return useAPI('/paints')
 }

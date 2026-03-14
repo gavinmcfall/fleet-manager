@@ -4,7 +4,7 @@ import {
   ArrowLeft, ExternalLink, X,
   Rocket, Zap, Box, Palette, LayoutGrid, List,
 } from 'lucide-react'
-import { useShip, useShipLoadout, useShipPaints } from '../hooks/useAPI'
+import { useShip, useShipLoadout, useShipPaints, useWeaponRacks, useSuitLockers } from '../hooks/useAPI'
 import ShipImage from '../components/ShipImage'
 import StatusBadge from '../components/StatusBadge'
 import LoadingState from '../components/LoadingState'
@@ -19,6 +19,7 @@ const TABS = [
   { id: 'overview', label: 'Overview' },
   { id: 'components', label: 'Components' },
   { id: 'weapons', label: 'Weapons' },
+  { id: 'interior', label: 'Interior' },
   { id: 'performance', label: 'Performance' },
   { id: 'paints', label: 'Paints' },
 ]
@@ -688,6 +689,83 @@ function PaintsTab({ slug }) {
   )
 }
 
+// ─── Interior ────────────────────────────────────────────────────────────────
+
+function InteriorTab({ ship }) {
+  const { data: allRacks, loading: racksLoading } = useWeaponRacks()
+  const { data: allLockers, loading: lockersLoading } = useSuitLockers()
+
+  const loading = racksLoading || lockersLoading
+
+  // Filter to this ship's data
+  const racks = (allRacks || []).filter(r => r.vehicle_slug === ship.slug)
+  const lockers = (allLockers || []).filter(l => l.vehicle_slug === ship.slug)
+
+  if (loading) return <LoadingState message="Loading interior data..." />
+
+  if (racks.length === 0 && lockers.length === 0) {
+    return (
+      <div className="text-center py-16 text-gray-500">
+        <Box className="w-10 h-10 mx-auto mb-3 text-gray-600" />
+        <p className="text-sm">No interior storage data available</p>
+      </div>
+    )
+  }
+
+  const totalRackSlots = racks.reduce((sum, r) => sum + (r.total_ports || 0), 0)
+  const totalRifleSlots = racks.reduce((sum, r) => sum + (r.rifle_ports || 0), 0)
+  const totalPistolSlots = racks.reduce((sum, r) => sum + (r.pistol_ports || 0), 0)
+
+  return (
+    <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+      {racks.length > 0 && (
+        <div className="panel">
+          <div className="panel-header">Weapon Racks</div>
+          <div className="p-4 space-y-0">
+            <SpecRow label="Total Racks" value={String(racks.length)} />
+            <SpecRow label="Total Weapon Slots" value={String(totalRackSlots)} />
+            <SpecRow label="Rifle Slots (Sz 2-4)" value={totalRifleSlots > 0 ? String(totalRifleSlots) : null} />
+            <SpecRow label="Pistol Slots (Sz 0-1)" value={totalPistolSlots > 0 ? String(totalPistolSlots) : null} />
+          </div>
+          <div className="border-t border-sc-border/30">
+            <div className="divide-y divide-sc-border/20">
+              {racks.map((rack) => (
+                <div key={rack.id} className="px-4 py-3">
+                  <p className="text-sm font-mono text-gray-200">{rack.rack_label}</p>
+                  <div className="flex gap-4 mt-1">
+                    <span className="text-xs text-gray-500">{rack.total_ports} slots</span>
+                    {rack.rifle_ports > 0 && <span className="text-xs text-gray-500">{rack.rifle_ports} rifle</span>}
+                    {rack.pistol_ports > 0 && <span className="text-xs text-gray-500">{rack.pistol_ports} pistol</span>}
+                    <span className="text-xs text-gray-600">Sz {rack.min_size}–{rack.max_size}</span>
+                  </div>
+                </div>
+              ))}
+            </div>
+          </div>
+        </div>
+      )}
+
+      {lockers.length > 0 && (
+        <div className="panel">
+          <div className="panel-header">Suit Lockers</div>
+          <div className="p-4 space-y-0">
+            <SpecRow label="Total Lockers" value={String(lockers.length)} />
+          </div>
+          <div className="border-t border-sc-border/30">
+            <div className="divide-y divide-sc-border/20">
+              {lockers.map((locker) => (
+                <div key={locker.id} className="px-4 py-3">
+                  <p className="text-sm font-mono text-gray-200">{locker.locker_label}</p>
+                </div>
+              ))}
+            </div>
+          </div>
+        </div>
+      )}
+    </div>
+  )
+}
+
 // ─── Performance ──────────────────────────────────────────────────────────────
 
 function PerformanceTab({ ship }) {
@@ -753,7 +831,7 @@ function PerformanceTab({ ship }) {
 export default function ShipDetail() {
   const { slug } = useParams()
   const navigate = useNavigate()
-  const VALID_TABS = ['overview', 'components', 'weapons', 'performance', 'paints']
+  const VALID_TABS = ['overview', 'components', 'weapons', 'interior', 'performance', 'paints']
   const [searchParams, setSearchParams] = useSearchParams()
   const tabParam = searchParams.get('tab')
   const activeTab = VALID_TABS.includes(tabParam) ? tabParam : 'overview'
@@ -839,6 +917,7 @@ export default function ShipDetail() {
       {activeTab === 'overview' && <OverviewTab ship={ship} />}
       {activeTab === 'components' && <ComponentsTab slug={slug} />}
       {activeTab === 'weapons' && <WeaponsTab slug={slug} />}
+      {activeTab === 'interior' && <InteriorTab ship={ship} />}
       {activeTab === 'performance' && <PerformanceTab ship={ship} />}
       {activeTab === 'paints' && <PaintsTab slug={slug} />}
     </div>

@@ -46,6 +46,7 @@ const MiningGuide = lazy(() => import('./pages/MiningGuide'))
 const Careers = lazy(() => import('./pages/Careers'))
 const Reputation = lazy(() => import('./pages/Reputation'))
 const LawSystem = lazy(() => import('./pages/LawSystem'))
+const NPCLoadouts = lazy(() => import('./pages/NPCLoadouts'))
 const NotFound = lazy(() => import('./pages/NotFound'))
 
 const publicNavItems = [
@@ -64,6 +65,7 @@ const authNavItems = [
       { to: '/shops', icon: ShoppingCart, label: 'Shops' },
       { to: '/trade', icon: TrendingUp, label: 'Trade' },
       { to: '/mining', icon: Hammer, label: 'Mining Guide' },
+      { to: '/npc-loadouts', icon: Users, label: 'NPC Loadouts' },
     ],
   },
   {
@@ -565,6 +567,7 @@ export default function App() {
                       <Route path="/careers" element={<RequireAuth><Careers /></RequireAuth>} />
                       <Route path="/reputation" element={<RequireAuth><Reputation /></RequireAuth>} />
                       <Route path="/law" element={<RequireAuth><LawSystem /></RequireAuth>} />
+                      <Route path="/npc-loadouts" element={<RequireAuth><NPCLoadouts /></RequireAuth>} />
                       <Route path="/fleet" element={<RequireAuth><FleetTable /></RequireAuth>} />
                       <Route path="/insurance" element={<RequireAuth><Insurance /></RequireAuth>} />
                       <Route path="/analysis" element={<RequireAuth><Analysis /></RequireAuth>} />
