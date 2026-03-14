@@ -882,6 +882,14 @@ export async function getLootByUuid(db: D1Database, uuid: string, patchCode?: st
     }
   }
 
+  // Fallback: magazines have no FK from loot_map — match by UUID to fps_ammo_types
+  if (!details && item.sub_type === 'Magazine') {
+    details = await db
+      .prepare("SELECT COALESCE(display_name, name) as name, caliber, damage_per_round, damage_type, projectile_speed, magazine_capacity FROM fps_ammo_types WHERE uuid = ? AND game_version_id = (SELECT id FROM game_versions WHERE is_default = 1)")
+      .bind(uuid)
+      .first() as Record<string, unknown> | null;
+  }
+
   // Fallback: fetch consumable effects directly by loot_map UUID when consumable_id FK is null
   // (medical pens exist in consumable_effects but not in the consumables table)
   if (!details?.effects && (item.type === 'FPS_Consumable' || item.category === 'Consumable')) {

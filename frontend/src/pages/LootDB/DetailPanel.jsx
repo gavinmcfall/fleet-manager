@@ -45,6 +45,10 @@ const STAT_LABELS = {
   effective_range:       'Effective Range',
   dps:                   'DPS',
   zoom_factor:           'Zoom',
+  // Magazine / ammo
+  caliber:               'Caliber',
+  damage_per_round:      'Damage / Round',
+  magazine_capacity:     'Capacity',
   // Helmet / armour damage resistances (multiplier: lower = more resistant)
   resist_physical:       'Physical Resist',
   resist_energy:         'Energy Resist',
