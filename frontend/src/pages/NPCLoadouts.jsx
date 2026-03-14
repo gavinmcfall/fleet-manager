@@ -222,8 +222,8 @@ function LoadoutTree({ items, onSelectItem }) {
               {displayName}
             </button>
           ) : (
-            <span className="text-xs font-mono text-gray-300 truncate" title={displayName}>
-              {displayName}
+            <span className="text-xs font-mono text-gray-500 truncate" title={item.item_name}>
+              Unknown <span className="text-[10px] text-gray-600">({buildFallbackName(item)})</span>
             </span>
           )}
           {item.tag && (
