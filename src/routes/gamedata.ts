@@ -535,7 +535,7 @@ export function gamedataRoutes<E extends HonoEnv>() {
           .prepare(
             `SELECT nli.*, lm.name as resolved_name, lm.uuid as loot_uuid, lm.id as loot_item_id
              FROM npc_loadout_items nli
-             LEFT JOIN loot_map lm ON LOWER(lm.class_name) = LOWER(nli.item_name)
+             LEFT JOIN loot_map lm ON LOWER(lm.class_name) = LOWER('EntityClassDefinition.' || nli.item_name)
                AND lm.game_version_id = ${DEFAULT_VERSION_SUBQUERY}
              WHERE nli.loadout_id IN (${placeholders})
              ORDER BY nli.loadout_id, nli.id`,
