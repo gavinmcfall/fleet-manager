@@ -1,4 +1,4 @@
-import { describe, it, expect, beforeAll, beforeEach } from "vitest";
+import { describe, it, expect, beforeAll } from "vitest";
 import { env } from "cloudflare:test";
 import { setupTestDatabase } from "./apply-migrations";
 import { createTestUser, createAdminUser, seedVehicle } from "./helpers";
@@ -663,7 +663,7 @@ describe("GDPR — User Deletion Cascade", () => {
       }
 
       // Every table with a user_id column must be in USER_TABLES or USER_TABLES_NO_CASCADE
-      const tracked = new Set([...USER_TABLES, ...USER_TABLES_NO_CASCADE]);
+      const tracked = new Set<string>([...USER_TABLES, ...USER_TABLES_NO_CASCADE]);
       const untracked = tablesWithUserId.filter((t) => !tracked.has(t));
 
       expect(

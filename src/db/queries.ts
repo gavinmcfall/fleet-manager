@@ -1409,28 +1409,6 @@ const LOOT_EXCLUSION_FILTER = `lm.removed = 0
     'Currency','MobiGlas'
   )`;
 
-/**
- * Returns { join, where, params } for "latest as of" queries used by location endpoints.
- * The version cap is parameterized to prevent SQL injection.
- * Callers must prepend `params` before their own bind values.
- */
-function lootBaseQuery(patchCode?: string): { join: string; where: string; params: unknown[] } {
-  const versionCap = patchCode
-    ? `(SELECT id FROM game_versions WHERE code = ?)`
-    : `(SELECT id FROM game_versions WHERE is_default = 1)`;
-  return {
-    join: `INNER JOIN (
-      SELECT uuid, MAX(game_version_id) as latest_gv
-      FROM loot_map
-      WHERE game_version_id <= ${versionCap}
-        AND removed = 0
-      GROUP BY uuid
-    ) _lv ON lm.uuid = _lv.uuid AND lm.game_version_id = _lv.latest_gv`,
-    where: LOOT_EXCLUSION_FILTER,
-    params: patchCode ? [patchCode] : [],
-  };
-}
-
 
 /**
  * Lightweight summary for the POI directory page.
