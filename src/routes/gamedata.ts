@@ -526,27 +526,29 @@ export function gamedataRoutes<E extends HonoEnv>() {
         .bind(faction.id)
         .all()
 
-      const loadoutIds = loadouts.map((l) => l.id as number)
       let items: Record<string, unknown>[] = []
 
-      if (loadoutIds.length > 0) {
-        const placeholders = loadoutIds.map(() => "?").join(",")
+      if (loadouts.length > 0) {
         const { results } = await db
           .prepare(
             `SELECT nli.*, lm.name as resolved_name, lm.uuid as loot_uuid, lm.id as loot_item_id,
                     m.name as manufacturer_name
              FROM npc_loadout_items nli
-             LEFT JOIN loot_map lm ON LOWER(lm.class_name) = LOWER('EntityClassDefinition.' || nli.item_name)
+             LEFT JOIN loot_map lm ON lm.class_name = 'EntityClassDefinition.' || nli.item_name
                AND lm.game_version_id = ${DEFAULT_VERSION_SUBQUERY}
              LEFT JOIN manufacturers m ON UPPER(m.code) = UPPER(
                CASE WHEN INSTR(nli.item_name, '_') > 0
                     THEN SUBSTR(nli.item_name, 1, INSTR(nli.item_name, '_') - 1)
                     ELSE '' END)
                AND m.code != ''
-             WHERE nli.loadout_id IN (${placeholders})
+             WHERE nli.loadout_id IN (
+               SELECT nl.id FROM npc_loadouts nl
+               WHERE nl.faction_id = ?
+                 AND nl.game_version_id = ${DEFAULT_VERSION_SUBQUERY}
+             )
              ORDER BY nli.loadout_id, nli.id`,
           )
-          .bind(...loadoutIds)
+          .bind(faction.id)
           .all()
         items = results
       }

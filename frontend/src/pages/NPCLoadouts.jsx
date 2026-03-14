@@ -78,12 +78,15 @@ const DIFFICULTY_TIERS = {
   '03_easy': 'Easy',
   '04_medium': 'Medium',
   '05_mediumrare': 'Medium-Rare',
+  '06_hard': 'Hard',
   '06_wellDone': 'Well Done',
   '06_welldone': 'Well Done',
   '07_hard': 'Hard',
+  '07_veryhard': 'Very Hard',
   '08_veryhard': 'Very Hard',
   '09_super': 'Super',
   '10_endgame': 'Endgame',
+  '11_endgame_rare': 'Endgame Rare',
 }
 
 function formatLoadoutName(raw) {
@@ -124,10 +127,32 @@ function formatLoadoutName(raw) {
   // Capitalize first letter of each word
   display = display.replace(/\b[a-z]/g, c => c.toUpperCase())
 
-  // Clean up common abbreviations and patterns
-  display = display.replace(/\bWeps\b/g, 'Weapons')
-  display = display.replace(/\bNohelmet\b/gi, 'No Helmet')
-  display = display.replace(/\bNo helmet\b/g, 'No Helmet')
+  // Expand common abbreviations used in loadout identifiers
+  const ABBREVIATIONS = {
+    'Adv': 'Advocacy', 'Asd': 'ASD', 'Atc': 'ATC', 'Bhg': 'Bounty Hunter',
+    'Cfp': 'CFP', 'Ccc': "CC's Conversions", 'Tdd': 'TDD',
+    'Io': 'IO', 'Blacjac': 'BlacJac', '9Tails': 'Nine Tails',
+    '9tails': 'Nine Tails', 'Newmedium': 'New Medium',
+    'Weps': 'Weapons', 'Nohelmet': 'No Helmet', 'No Helmet': 'No Helmet',
+    'Medunit': 'Med Unit', 'Offduty': 'Off-Duty',
+    'Newbabbage': 'New Babbage', 'Grimhex': 'GrimHEX',
+    'Roughready': 'Rough & Ready', 'Shatteredblade': 'Shattered Blade',
+    'Vlk': 'Vanduul', 'Quasigrazer': 'Quasigrazer',
+    'Uba': 'UBA', 'Rrs': 'RRS', 'Ksar': 'Kastak Arms',
+    'Srvl': 'Survival', 'Qrt': 'Quirinus', 'Thp': 'Tehachapi',
+    'Gys': 'Gyson', 'Grin': 'Greycat', 'Cds': 'CDS',
+    'Drn': 'Derion', 'Rsi': 'RSI', 'Hdtc': 'Hardin Tactical',
+    'Hdh': 'Habidash', 'Eld': 'Escar', 'Alb': 'Alejo Brothers',
+    'Dmc': 'DMC', 'Scu': 'SCU', 'Gsb': 'GSB', 'Fio': 'Fiore',
+    'Ninetails': 'Nine Tails', 'Pyrolight': 'Pyro Light',
+    'Firerat': 'Fire Rat', 'Druglab': 'Drug Lab',
+    'Fleetweek': 'Fleet Week', 'Shokeeper': 'Shopkeeper',
+    'Shopkeep': 'Shopkeeper',
+  }
+
+  for (const [abbr, full] of Object.entries(ABBREVIATIONS)) {
+    display = display.replace(new RegExp(`\\b${abbr}\\b`, 'g'), full)
+  }
 
   return display + genderSuffix
 }
@@ -296,9 +321,14 @@ function FactionDetail({ factionCode, autoExpandLoadout, onBack, onSelectItem })
 
   const { faction, loadouts } = data
 
+  // Filter out loadouts with zero visible items (e.g. body-only loadouts like "The Collector")
+  const visibleLoadouts = loadouts.filter(loadout =>
+    loadout.items?.some(i => !isHiddenItem(i))
+  )
+
   // Group loadouts by category
   const grouped = {}
-  for (const loadout of loadouts) {
+  for (const loadout of visibleLoadouts) {
     const cat = loadout.category || 'unknown'
     if (!grouped[cat]) grouped[cat] = []
     grouped[cat].push(loadout)
@@ -312,7 +342,7 @@ function FactionDetail({ factionCode, autoExpandLoadout, onBack, onSelectItem })
           All Factions
         </button>
         <h2 className="font-display font-bold text-xl tracking-wider text-white">{faction.name}</h2>
-        <span className="text-xs font-mono text-gray-500">{loadouts.length} loadouts</span>
+        <span className="text-xs font-mono text-gray-500">{visibleLoadouts.length} loadouts</span>
       </div>
 
       <div className="glow-line" />
