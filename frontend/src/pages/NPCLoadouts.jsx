@@ -13,6 +13,82 @@ import { Users, ChevronDown, ChevronRight, ArrowLeft, Shield, Shirt, Crosshair, 
 import { toWords } from '../lib/lootLocations'
 import DetailPanel from './LootDB/DetailPanel'
 
+// Tags for cosmetic/body items that aren't real gear — filter from display
+const HIDDEN_TAGS = new Set([
+  'Char_Body', 'Char_Body(Male)', 'Char_Body(Female)',
+  'Char_Accessory_Head', 'Char_Accessory_Head(Vanduul)',
+  'Char_Accessory_Eyes',
+])
+// Item name patterns for body parts that lack tags
+const BODY_ITEM_PATTERNS = /^(Head_|Hair_|m_body_|f_body_|PU_Protos_Head|collector_body|collector_head|collector_teeth|collector_eyes)/i
+
+function isBodyItem(item) {
+  if (item.tag && HIDDEN_TAGS.has(item.tag)) return true
+  if (BODY_ITEM_PATTERNS.test(item.item_name)) return true
+  return false
+}
+
+// ── Loadout name formatter ──────────────────────────────────────────────────
+const DIFFICULTY_TIERS = {
+  '01_tutorial': 'Tutorial',
+  '02_veryeasy': 'Very Easy',
+  '03_easy': 'Easy',
+  '04_medium': 'Medium',
+  '05_mediumrare': 'Medium-Rare',
+  '06_wellDone': 'Well Done',
+  '06_welldone': 'Well Done',
+  '07_hard': 'Hard',
+  '08_veryhard': 'Very Hard',
+  '09_super': 'Super',
+  '10_endgame': 'Endgame',
+}
+
+function formatLoadoutName(raw) {
+  // Check difficulty tier pattern: "02_veryeasy_01" or "02_veryeasy_01_weps"
+  for (const [prefix, label] of Object.entries(DIFFICULTY_TIERS)) {
+    if (raw.toLowerCase().startsWith(prefix.toLowerCase())) {
+      const rest = raw.slice(prefix.length)
+      const variantMatch = rest.match(/^_(\d+)(?:_weps(?:_(\d+))?)?$/)
+      if (variantMatch) {
+        const variant = variantMatch[1]
+        const wepVariant = variantMatch[2]
+        if (rest.includes('_weps')) {
+          return `${label} #${variant} — Weapons${wepVariant ? ` (${wepVariant})` : ''}`
+        }
+        return `${label} #${variant}`
+      }
+      return `${label} ${toWords(rest.replace(/^_/, ''))}`
+    }
+  }
+  // Named patterns: "890Jump_Chef_01" → "890 Jump Chef #01"
+  // "9tails_new_light_01" → "9 Tails New Light #01"
+  // "AdvocacyAgent_01" → "Advocacy Agent #01"
+  // "m_adv_AgentFlightsuit" → "Adv Agent Flightsuit (M)"
+  // Gender prefix
+  let name = raw
+  let genderSuffix = ''
+  if (/^[mf]_/.test(name)) {
+    genderSuffix = name[0] === 'm' ? ' (M)' : ' (F)'
+    name = name.slice(2)
+  }
+
+  // Convert to words and clean up
+  let display = toWords(name)
+
+  // Pull trailing number as variant: "Agent 01" → "Agent #01"
+  display = display.replace(/\s(\d{1,3})$/, ' #$1')
+
+  // Capitalize first letter of each word
+  display = display.replace(/\b[a-z]/g, c => c.toUpperCase())
+
+  // Clean up common abbreviations and patterns
+  display = display.replace(/\bWeps\b/g, 'Weapons')
+  display = display.replace(/\bNohelmet\b/gi, 'No Helmet')
+  display = display.replace(/\bNo helmet\b/g, 'No Helmet')
+
+  return display + genderSuffix
+}
+
 const CATEGORY_ICONS = {
   armor: Shield,
   clothing: Shirt,
@@ -74,10 +150,14 @@ function FactionCard({ faction, index, onClick }) {
 function LoadoutTree({ items, onSelectItem }) {
   if (!items || items.length === 0) return null
 
+  // Filter out body/cosmetic items
+  const gearItems = items.filter(i => !isBodyItem(i))
+  if (gearItems.length === 0) return null
+
   // Build tree from flat items using parent_port
-  const portNames = new Set(items.map(i => i.port_name))
-  const topLevel = items.filter(i => !i.parent_port || !portNames.has(i.parent_port))
-  const childrenOf = (portName) => items.filter(i => i.parent_port === portName)
+  const portNames = new Set(gearItems.map(i => i.port_name))
+  const topLevel = gearItems.filter(i => !i.parent_port || !portNames.has(i.parent_port))
+  const childrenOf = (portName) => gearItems.filter(i => i.parent_port === portName)
 
   function renderItem(item, depth = 0) {
     const children = childrenOf(item.port_name)
@@ -135,7 +215,7 @@ function LoadoutCard({ loadout, defaultExpanded, onSelectItem }) {
         <CategoryIcon className="w-4 h-4 text-gray-500 shrink-0" />
         <div className="flex-1 min-w-0">
           <span className="text-sm font-mono text-gray-200 truncate block">
-            {toWords(loadout.loadout_name)}
+            {formatLoadoutName(loadout.loadout_name)}
           </span>
         </div>
         <span className={`text-[10px] font-mono px-1.5 py-0.5 rounded border ${categoryColor}`}>
@@ -147,7 +227,7 @@ function LoadoutCard({ loadout, defaultExpanded, onSelectItem }) {
           </span>
         )}
         <span className="text-[10px] font-mono text-gray-600">
-          {loadout.items?.length || 0} items
+          {(loadout.items?.filter(i => !isBodyItem(i))?.length || 0)} items
         </span>
         {expanded ? (
           <ChevronDown className="w-3.5 h-3.5 text-gray-500 shrink-0" />
