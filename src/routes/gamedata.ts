@@ -533,10 +533,16 @@ export function gamedataRoutes<E extends HonoEnv>() {
         const placeholders = loadoutIds.map(() => "?").join(",")
         const { results } = await db
           .prepare(
-            `SELECT nli.*, lm.name as resolved_name, lm.uuid as loot_uuid, lm.id as loot_item_id
+            `SELECT nli.*, lm.name as resolved_name, lm.uuid as loot_uuid, lm.id as loot_item_id,
+                    m.name as manufacturer_name
              FROM npc_loadout_items nli
              LEFT JOIN loot_map lm ON LOWER(lm.class_name) = LOWER('EntityClassDefinition.' || nli.item_name)
                AND lm.game_version_id = ${DEFAULT_VERSION_SUBQUERY}
+             LEFT JOIN manufacturers m ON UPPER(m.code) = UPPER(
+               CASE WHEN INSTR(nli.item_name, '_') > 0
+                    THEN SUBSTR(nli.item_name, 1, INSTR(nli.item_name, '_') - 1)
+                    ELSE '' END)
+               AND m.code != ''
              WHERE nli.loadout_id IN (${placeholders})
              ORDER BY nli.loadout_id, nli.id`,
           )

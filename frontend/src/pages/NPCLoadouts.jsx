@@ -19,13 +19,56 @@ const HIDDEN_TAGS = new Set([
   'Char_Accessory_Head', 'Char_Accessory_Head(Vanduul)',
   'Char_Accessory_Eyes',
 ])
-// Item name patterns for body parts that lack tags
-const BODY_ITEM_PATTERNS = /^(Head_|Hair_|m_body_|f_body_|PU_Protos_Head|collector_body|collector_head|collector_teeth|collector_eyes)/i
+// Item name patterns for body parts and system items that aren't real gear
+const HIDDEN_ITEM_PATTERNS = /^(Head_|Hair_|m_body_|f_body_|PU_Protos_|PU_Head_|collector_body|collector_head|collector_teeth|collector_eyes|MobiGlas|PersonalMobiGlas|Tattoo_Var_|Color_Var_|Skin_Var_|Shared_Brows|FPS_Default|MineableRock_|harvestable_|invisible_)/i
 
-function isBodyItem(item) {
+function isHiddenItem(item) {
   if (item.tag && HIDDEN_TAGS.has(item.tag)) return true
-  if (BODY_ITEM_PATTERNS.test(item.item_name)) return true
+  if (HIDDEN_ITEM_PATTERNS.test(item.item_name)) return true
   return false
+}
+
+// Fallback manufacturer names for prefixes that don't exactly match manufacturer codes
+const PREFIX_OVERRIDES = {
+  behr: 'Behring',
+  srvl: 'Survival',
+  sc: 'Star Citizen',
+  female: '',
+  pu: '',
+}
+
+/** Build a friendly display name for items without a loot_map match */
+function buildFallbackName(item) {
+  const prefix = item.item_name.split('_')[0].toLowerCase()
+  const mfr = item.manufacturer_name || PREFIX_OVERRIDES[prefix]
+  let name = item.item_name
+
+  // Strip known non-gear prefixes (faction/role labels, not manufacturers)
+  if (/^(outlaw|slaver|clothing|female|pu)_/i.test(name)) {
+    name = name.replace(/^(outlaw|slaver|clothing|female|pu)_/i, '')
+  }
+  // Strip manufacturer prefix if we resolved a manufacturer name
+  else if (mfr) {
+    if (prefix.length <= 5) name = name.slice(prefix.length + 1)
+  }
+
+  // Clean up with toWords, then capitalize
+  let display = toWords(name)
+  // Collapse trailing numeric segments: "undersuit 01 01 01" → "Undersuit (Variant 01)"
+  // SC item pattern: type_series_variant_color — only last segment is meaningful color variant
+  display = display.replace(/(\s\d{2}){2,}$/, (m) => {
+    const parts = m.trim().split(/\s+/)
+    const last = parts[parts.length - 1]
+    return last === '01' ? '' : ` (Variant ${last})`
+  })
+  display = display.replace(/\b[a-z]/g, c => c.toUpperCase())
+
+  // Prefix with manufacturer if available
+  if (mfr && mfr !== 'Unknown' && mfr !== '') {
+    display = `${mfr} ${display}`
+  }
+
+  return display
 }
 
 // ── Loadout name formatter ──────────────────────────────────────────────────
@@ -151,7 +194,7 @@ function LoadoutTree({ items, onSelectItem }) {
   if (!items || items.length === 0) return null
 
   // Filter out body/cosmetic items
-  const gearItems = items.filter(i => !isBodyItem(i))
+  const gearItems = items.filter(i => !isHiddenItem(i))
   if (gearItems.length === 0) return null
 
   // Build tree from flat items using parent_port
@@ -161,7 +204,7 @@ function LoadoutTree({ items, onSelectItem }) {
 
   function renderItem(item, depth = 0) {
     const children = childrenOf(item.port_name)
-    const displayName = item.resolved_name || toWords(item.item_name)
+    const displayName = item.resolved_name || buildFallbackName(item)
     const hasLootLink = item.loot_uuid
 
     return (
@@ -227,7 +270,7 @@ function LoadoutCard({ loadout, defaultExpanded, onSelectItem }) {
           </span>
         )}
         <span className="text-[10px] font-mono text-gray-600">
-          {(loadout.items?.filter(i => !isBodyItem(i))?.length || 0)} items
+          {(loadout.items?.filter(i => !isHiddenItem(i))?.length || 0)} items
         </span>
         {expanded ? (
           <ChevronDown className="w-3.5 h-3.5 text-gray-500 shrink-0" />
