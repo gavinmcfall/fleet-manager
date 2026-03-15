@@ -11,6 +11,7 @@ import LoadingState from '../components/LoadingState'
 import ErrorState from '../components/ErrorState'
 import { Users, ChevronDown, ChevronRight, ChevronLeft, ArrowLeft, Shield, Shirt, Crosshair, Wrench, Bug, Swords } from 'lucide-react'
 import { toWords } from '../lib/lootLocations'
+import { formatLoadoutName } from '../lib/npcNames'
 import DetailPanel from './LootDB/DetailPanel'
 
 // Tags for cosmetic/body items that aren't real gear — filter from display
@@ -20,7 +21,7 @@ const HIDDEN_TAGS = new Set([
   'Char_Accessory_Eyes',
 ])
 // Item name patterns for body parts and system items that aren't real gear
-const HIDDEN_ITEM_PATTERNS = /^(Head_|Hair_|m_body_|f_body_|PU_Protos_|PU_Head_|collector_body|collector_head|collector_teeth|collector_eyes|MobiGlas|PersonalMobiGlas|Tattoo_Var_|Color_Var_|Skin_Var_|Shared_Brows|FPS_Default|MineableRock_|harvestable_|invisible_)/i
+const HIDDEN_ITEM_PATTERNS = /^(Head_|Hair_|m_body_|f_body_|PU_Protos_|PU_Head_|collector_body|collector_head|collector_teeth|collector_eyes|MobiGlas|PersonalMobiGlas|Tattoo_Var_|Color_Var_|Skin_Var_|Female_Skin_Var_|Shared_Brows|FPS_Default|MineableRock_|harvestable_|invisible_|clothing_undersuit$)/i
 
 function isHiddenItem(item) {
   if (item.tag && HIDDEN_TAGS.has(item.tag)) return true
@@ -69,124 +70,6 @@ function buildFallbackName(item) {
   }
 
   return display
-}
-
-// ── Loadout name formatter ──────────────────────────────────────────────────
-const DIFFICULTY_TIERS = {
-  '01_tutorial': 'Tutorial',
-  '02_veryeasy': 'Very Easy',
-  '03_easy': 'Easy',
-  '04_medium': 'Medium',
-  '05_mediumrare': 'Medium-Rare',
-  '06_hard': 'Hard',
-  '06_wellDone': 'Well Done',
-  '06_welldone': 'Well Done',
-  '07_hard': 'Hard',
-  '07_veryhard': 'Very Hard',
-  '08_veryhard': 'Very Hard',
-  '09_super': 'Super',
-  '10_endgame': 'Endgame',
-  '11_endgame_rare': 'Endgame Rare',
-}
-
-// Expand abbreviations and location shorthands in loadout names
-// Keys are title-case (input is normalized before matching)
-const ABBREVIATIONS = {
-  // Faction / org codes
-  'Adv': 'Advocacy', 'Bhg': 'Bounty Hunters Guild', 'Cfp': 'CFP',
-  'Ccc': "CC's Conversions", 'Tdd': 'TDD', 'Asd': 'ASD', 'Atc': 'ATC',
-  '9tails': 'Nine Tails', 'Ninetails': 'Nine Tails',
-  'Firerat': 'Fire Rat', 'Firerats': 'Fire Rats',
-  // Manufacturer codes
-  'Ksar': 'Kastak Arms', 'Srvl': 'Survival', 'Qrt': 'Quirinus',
-  'Thp': 'Tehachapi', 'Gys': 'Gyson', 'Grin': 'Greycat', 'Cds': 'CDS',
-  'Drn': 'Derion', 'Rsi': 'RSI', 'Hdtc': 'Hardin Tactical',
-  'Hdh': 'Habidash', 'Eld': 'Escar', 'Alb': 'Alejo Brothers',
-  'Dmc': 'DMC', 'Scu': 'SCU', 'Gsb': 'GSB', 'Fio': 'Fiore',
-  'Uba': 'UBA', 'Rrs': 'RRS', 'Vlk': 'Vanduul',
-  'Ruso': 'Ruso', 'Sasu': 'Sasu', 'Doom': 'Doom',
-  // Location names
-  'Newbabbage': 'New Babbage', 'Grimhex': 'GrimHEX',
-  'Area18': 'Area 18', 'Olisar': 'Port Olisar',
-  'Kel To': "Kel-To's", 'Teachs': "Teach's", 'Twyns': "Twyn's",
-  'Cov Rep': 'CovRep', 'Cousin Crows': "Cousin Crow's",
-  // Compound words
-  'Newmedium': 'New Medium', 'Nohelmet': 'No Helmet',
-  'Medunit': 'Med Unit', 'Offduty': 'Off-Duty',
-  'Roughready': 'Rough & Ready', 'Shatteredblade': 'Shattered Blade',
-  'Pyrolight': 'Pyro Light', 'Druglab': 'Drug Lab',
-  'Fleetweek': 'Fleet Week', 'Shokeeper': 'Shopkeeper',
-  'Shopkeep': 'Shopkeeper', 'Hotdog': 'Hot Dog',
-  'Barpatron': 'Bar Patron', 'Rentacop': 'Rent-a-Cop',
-  'Blacjac': 'BlacJac',
-  // Event / identifier codes
-  'Iae': 'IAE', 'Ff': 'FF', 'Lsm': 'LSM', 'Mmhc': 'MMHC',
-  'Ftl': 'FTL', 'Mt': 'microTech', 'Mv': 'MV', 'Fl': 'FL',
-  'Cvx': 'CVX', 'Fcs': 'FCS', 'Spv': 'SPV', 'Io': 'IO',
-  'Atv': 'ATV', 'Weps': 'Weapons',
-  // Misc
-  'Quasigrazer': 'Quasigrazer',
-}
-
-/** Normalize a word to title case: "HELLO" → "Hello", "hello" → "Hello" */
-function titleCase(word) {
-  if (word.length === 0) return word
-  return word[0].toUpperCase() + word.slice(1).toLowerCase()
-}
-
-function formatLoadoutName(raw) {
-  // Check difficulty tier pattern: "02_veryeasy_01" or "02_veryeasy_01_weps"
-  for (const [prefix, label] of Object.entries(DIFFICULTY_TIERS)) {
-    if (raw.toLowerCase().startsWith(prefix.toLowerCase())) {
-      const rest = raw.slice(prefix.length)
-      const variantMatch = rest.match(/^_(\d+)(?:_weps(?:_(\d+))?)?$/)
-      if (variantMatch) {
-        const variant = variantMatch[1]
-        const wepVariant = variantMatch[2]
-        if (rest.includes('_weps')) {
-          return `${label} #${variant} — Weapons${wepVariant ? ` (${wepVariant})` : ''}`
-        }
-        return `${label} #${variant}`
-      }
-      return `${label} ${toWords(rest.replace(/^_/, ''))}`
-    }
-  }
-
-  // Gender prefix: "m_adv_AgentFlightsuit" → "adv_AgentFlightsuit" + suffix
-  let name = raw
-  let genderSuffix = ''
-  if (/^[mf]_/.test(name)) {
-    genderSuffix = name[0] === 'm' ? ' (M)' : ' (F)'
-    name = name.slice(2)
-  }
-
-  // Convert to words and clean up
-  let display = toWords(name)
-
-  // Collapse trailing numeric segments: "01 01 01" or "01 01 15y" → remove, keep last as variant
-  display = display.replace(/(\s\d{2}\w?){2,}$/, (m) => {
-    const parts = m.trim().split(/\s+/)
-    const last = parts[parts.length - 1]
-    return last === '01' ? '' : ` (Variant ${last})`
-  })
-
-  // Pull trailing number as variant: "Agent 01" → "Agent #01"
-  display = display.replace(/\s(\d{1,3})$/, ' #$1')
-
-  // Title-case each word (normalizes ALL_CAPS and lowercase for consistent abbreviation matching)
-  display = display.replace(/\b[a-zA-Z][a-zA-Z]*\b/g, w => {
-    // Preserve numbers and mixed alphanumeric like "890Jump"
-    if (/\d/.test(w)) return w
-    return titleCase(w)
-  })
-
-  // Expand abbreviations (keys are title-case to match normalized input)
-  for (const [abbr, full] of Object.entries(ABBREVIATIONS)) {
-    const escaped = abbr.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
-    display = display.replace(new RegExp(`\\b${escaped}\\b`, 'g'), full)
-  }
-
-  return display + genderSuffix
 }
 
 const CATEGORY_ICONS = {
@@ -280,8 +163,8 @@ function LoadoutTree({ items, onSelectItem }) {
               {displayName}
             </button>
           ) : (
-            <span className="text-xs font-mono text-gray-500 truncate" title={item.item_name}>
-              Unknown <span className="text-[10px] text-gray-600">({buildFallbackName(item)})</span>
+            <span className="text-xs font-mono text-gray-300 truncate" title={item.item_name}>
+              {displayName}
             </span>
           )}
           {item.tag && (

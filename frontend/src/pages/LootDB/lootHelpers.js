@@ -47,9 +47,14 @@ export function resolveLocationEntry(entry, type) {
     return { label: friendlyShopName(rawShopKey), detail: 'Price unknown', probability: null, rawKey: rawShopKey, shopKey: true }
   }
   if (type === 'npcs') {
-    // Junction table: location_key=faction, actor, slot, probability
+    // Junction table: location_key=faction, actor, slot, probability, spawn_locations
     const rawFaction = entry.location_key || entry.faction || entry.actor || entry.name
     const faction = friendlyFaction(rawFaction)
+    // Parse spawn_locations — JSON string from DB or array from loadout enrichment
+    let spawnLocations = entry.spawn_locations || entry.spawnLocations || null
+    if (typeof spawnLocations === 'string') {
+      try { spawnLocations = JSON.parse(spawnLocations) } catch { spawnLocations = null }
+    }
     return {
       label: faction,
       detail: entry.slot || null,
@@ -59,6 +64,7 @@ export function resolveLocationEntry(entry, type) {
       actor: entry.actor || null,
       factionCode: entry.faction_code || null,
       fromLoadout: entry.from_loadout || false,
+      spawnLocations: Array.isArray(spawnLocations) && spawnLocations.length > 0 ? spawnLocations : null,
       npcKey: true,
     }
   }

@@ -932,7 +932,7 @@ export async function getLootByUuid(db: D1Database, uuid: string, patchCode?: st
     SELECT source_type, location_key, location_tag, container_type,
       per_container, per_roll, rolls, loot_table,
       buy_price, sell_price,
-      actor, faction, slot, probability,
+      actor, faction, slot, probability, spawn_locations,
       contract_name, guild, reward_type, amount, weight
     FROM loot_item_locations WHERE loot_map_id = ?
     ORDER BY source_type, location_key

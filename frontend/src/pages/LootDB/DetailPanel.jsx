@@ -1,4 +1,4 @@
-import { X, ShoppingCart, Package, Swords, FileText, Plus, Bookmark, BookmarkPlus } from 'lucide-react'
+import { X, ShoppingCart, Package, FileText, Plus, Bookmark, BookmarkPlus } from 'lucide-react'
 import { Link } from 'react-router-dom'
 import { useLootItem } from '../../hooks/useAPI'
 import useGameVersion from '../../hooks/useGameVersion'
@@ -456,19 +456,19 @@ export default function DetailPanel({ uuid, manufacturerName, collectionQty, onS
 
             {/* Where to find — structured location data from API */}
             {(() => {
+              const npcEntries = locationData('npcs')
               const locationSections = [
                 { label: 'Shops',      icon: ShoppingCart, type: 'shops',      data: locationData('shops') },
-                { label: 'Containers', icon: Package,      type: 'containers', data: locationData('containers') },
-                { label: 'NPCs',       icon: Swords,       type: 'npcs',       data: locationData('npcs') },
+                { label: 'Containers', icon: Package,      type: 'containers', data: locationData('containers'), npcData: npcEntries },
                 { label: 'Contracts',  icon: FileText,     type: 'contracts',  data: locationData('contracts') },
               ]
-              const hasAny = locationSections.some(s => s.data.length > 0)
+              const hasAny = locationSections.some(s => s.data.length > 0) || npcEntries.length > 0
               return hasAny ? (
                 <div>
                   <p className="text-[10px] font-display uppercase tracking-wider text-gray-500 mb-3">Where to Find</p>
                   <div className="space-y-4">
-                    {locationSections.map(({ label, icon, data, type }) => (
-                      <LocationSection key={label} label={label} icon={icon} data={data} type={type} />
+                    {locationSections.map(({ label, icon, data, type, npcData }) => (
+                      <LocationSection key={label} label={label} icon={icon} data={data} type={type} npcData={npcData} />
                     ))}
                   </div>
                 </div>

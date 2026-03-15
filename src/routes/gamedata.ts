@@ -479,38 +479,6 @@ export function gamedataRoutes<E extends HonoEnv>() {
     })
   })
 
-  // Item name patterns for body/system items — excluded from counts and display
-  const HIDDEN_ITEM_SQL = `
-    AND nli.item_name NOT LIKE 'Head\\_%' ESCAPE '\\'
-    AND nli.item_name NOT LIKE 'Hair\\_%' ESCAPE '\\'
-    AND nli.item_name NOT LIKE 'm\\_body\\_%' ESCAPE '\\'
-    AND nli.item_name NOT LIKE 'f\\_body\\_%' ESCAPE '\\'
-    AND nli.item_name NOT LIKE 'PU\\_Protos\\_%' ESCAPE '\\'
-    AND nli.item_name NOT LIKE 'PU\\_Head\\_%' ESCAPE '\\'
-    AND nli.item_name NOT LIKE 'collector\\_body%' ESCAPE '\\'
-    AND nli.item_name NOT LIKE 'collector\\_head%' ESCAPE '\\'
-    AND nli.item_name NOT LIKE 'collector\\_teeth%' ESCAPE '\\'
-    AND nli.item_name NOT LIKE 'collector\\_eyes%' ESCAPE '\\'
-    AND nli.item_name NOT LIKE 'MobiGlas%'
-    AND nli.item_name NOT LIKE 'PersonalMobiGlas%'
-    AND nli.item_name NOT LIKE 'Tattoo\\_Var\\_%' ESCAPE '\\'
-    AND nli.item_name NOT LIKE 'Color\\_Var\\_%' ESCAPE '\\'
-    AND nli.item_name NOT LIKE 'Skin\\_Var\\_%' ESCAPE '\\'
-    AND nli.item_name NOT LIKE 'Shared\\_Brows%' ESCAPE '\\'
-    AND nli.item_name NOT LIKE 'FPS\\_Default%' ESCAPE '\\'
-    AND nli.item_name NOT LIKE 'MineableRock\\_%' ESCAPE '\\'
-    AND nli.item_name NOT LIKE 'harvestable\\_%' ESCAPE '\\'
-    AND nli.item_name NOT LIKE 'invisible\\_%' ESCAPE '\\'
-  `
-
-  // Hidden tags for body/cosmetic items
-  const HIDDEN_TAGS_SQL = `
-    AND (nli.tag IS NULL OR nli.tag NOT IN (
-      'Char_Body', 'Char_Body(Male)', 'Char_Body(Female)',
-      'Char_Accessory_Head', 'Char_Accessory_Head(Vanduul)',
-      'Char_Accessory_Eyes'
-    ))
-  `
 
   // GET /api/gamedata/npc-loadouts — list all factions with loadout counts
   app.get("/npc-loadouts", async (c) => {
@@ -520,14 +488,12 @@ export function gamedataRoutes<E extends HonoEnv>() {
       const { results: factions } = await db
         .prepare(
           `SELECT f.id, f.code, f.name,
-             COUNT(DISTINCT CASE WHEN nli.id IS NOT NULL THEN nl.id END) as loadout_count,
-             COUNT(DISTINCT nli.id) as item_count
+             COUNT(nl.id) as loadout_count,
+             SUM(nl.visible_item_count) as item_count
            FROM npc_factions f
-           LEFT JOIN npc_loadouts nl ON nl.faction_id = f.id
+           JOIN npc_loadouts nl ON nl.faction_id = f.id
              AND nl.game_version_id = ${DEFAULT_VERSION_SUBQUERY}
-           LEFT JOIN npc_loadout_items nli ON nli.loadout_id = nl.id
-             ${HIDDEN_ITEM_SQL}
-             ${HIDDEN_TAGS_SQL}
+             AND nl.visible_item_count > 0
            GROUP BY f.id
            HAVING item_count > 0
            ORDER BY f.name`,
@@ -558,12 +524,7 @@ export function gamedataRoutes<E extends HonoEnv>() {
           `SELECT COUNT(*) as total FROM npc_loadouts nl
            WHERE nl.faction_id = ?
              AND nl.game_version_id = ${DEFAULT_VERSION_SUBQUERY}
-             AND EXISTS (
-               SELECT 1 FROM npc_loadout_items nli
-               WHERE nli.loadout_id = nl.id
-                 ${HIDDEN_ITEM_SQL}
-                 ${HIDDEN_TAGS_SQL}
-             )`,
+             AND nl.visible_item_count > 0`,
         )
         .bind(faction.id)
         .first<{ total: number }>()
@@ -579,12 +540,7 @@ export function gamedataRoutes<E extends HonoEnv>() {
            FROM npc_loadouts nl
            WHERE nl.faction_id = ?
              AND nl.game_version_id = ${DEFAULT_VERSION_SUBQUERY}
-             AND EXISTS (
-               SELECT 1 FROM npc_loadout_items nli
-               WHERE nli.loadout_id = nl.id
-                 ${HIDDEN_ITEM_SQL}
-                 ${HIDDEN_TAGS_SQL}
-             )
+             AND nl.visible_item_count > 0
            ORDER BY nl.category, nl.sub_category, nl.loadout_name
            LIMIT ? OFFSET ?`,
         )
@@ -599,17 +555,10 @@ export function gamedataRoutes<E extends HonoEnv>() {
         const placeholders = loadoutIds.map(() => "?").join(",")
         const { results } = await db
           .prepare(
-            `SELECT nli.*, lm.name as resolved_name, lm.uuid as loot_uuid, lm.id as loot_item_id,
-                    m.name as manufacturer_name
+            `SELECT nli.*, nli.loot_map_uuid as loot_uuid
              FROM npc_loadout_items nli
-             LEFT JOIN loot_map lm ON lm.class_name = 'EntityClassDefinition.' || nli.item_name
-               AND lm.game_version_id = ${DEFAULT_VERSION_SUBQUERY}
-             LEFT JOIN manufacturers m ON UPPER(m.code) = UPPER(
-               CASE WHEN INSTR(nli.item_name, '_') > 0
-                    THEN SUBSTR(nli.item_name, 1, INSTR(nli.item_name, '_') - 1)
-                    ELSE '' END)
-               AND m.code != ''
              WHERE nli.loadout_id IN (${placeholders})
+               AND nli.is_hidden = 0
              ORDER BY nli.loadout_id, nli.id`,
           )
           .bind(...loadoutIds)
