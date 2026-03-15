@@ -26,6 +26,7 @@ const EVENT_TYPE_IDS: Record<string, number> = {
   account_suspended: 17,
   account_banned: 18,
   account_reinstated: 19,
+  hangar_synced: 20,
 };
 
 export async function logUserChange(

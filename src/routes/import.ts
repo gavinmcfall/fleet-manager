@@ -1,14 +1,20 @@
 import { Hono } from "hono";
 import type { HonoEnv, HangarXplorEntry } from "../lib/types";
+import { getAuthUser } from "../lib/types";
 import { slugFromShipCode, slugFromName, compactSlug } from "../lib/slug";
 import { loadInsuranceTypes } from "../db/queries";
 import { logEvent } from "../lib/logger";
 import { logUserChange } from "../lib/change-history";
-import { validate, HangarXplorImportSchema } from "../lib/validation";
+import { validate, HangarXplorImportSchema, HangarSyncPayloadSchema } from "../lib/validation";
 import { VEHICLE_VERSION_CAP } from "../lib/constants";
+import {
+  preloadVehicleMap,
+  findVehicleSlugLocal,
+  executeFleetSwap,
+} from "../lib/fleet-import";
 
 /**
- * /api/import/* — HangarXplor import
+ * /api/import/* — HangarXplor import + hangar-sync extension
  *
  * Preloads vehicle slug map to avoid per-entry DB queries.
  * Uses db.batch() for transactional delete+insert (all-or-nothing).
@@ -134,26 +140,8 @@ export function importRoutes() {
       console.log(`[import] Created ${stubStmts.length} stub vehicles: ${stubSlugs.join(", ")}`);
     }
 
-    // Insert-then-swap: insert all new entries first, then delete old ones.
-    // This avoids data loss if a batch fails partway through — old entries remain
-    // until all new entries are confirmed. IDs are AUTOINCREMENT so new entries
-    // always have higher IDs than existing ones.
-    const maxRow = await db
-      .prepare("SELECT MAX(id) as max_id FROM user_fleet WHERE user_id = ?")
-      .bind(userID)
-      .first<{ max_id: number | null }>();
-    const maxExistingId = maxRow?.max_id ?? 0;
-
-    // Insert new entries in D1-safe chunks (max 1000 statements per batch)
-    for (let i = 0; i < insertStmts.length; i += 1000) {
-      await db.batch(insertStmts.slice(i, i + 1000));
-    }
-
-    // All inserts succeeded — delete old entries
-    await db
-      .prepare("DELETE FROM user_fleet WHERE user_id = ? AND id <= ?")
-      .bind(userID, maxExistingId)
-      .run();
+    // Insert-then-swap using shared helper
+    await executeFleetSwap(db, userID, insertStmts);
     const imported = insertStmts.length;
 
     console.log(`[import] HangarXplor import complete: ${imported}/${entries.length}`);
@@ -174,74 +162,269 @@ export function importRoutes() {
     });
   });
 
-  return routes;
-}
+  // POST /api/import/hangar-sync — import from SC Bridge extension (RSI hangar sync)
+  routes.post("/hangar-sync", validate("json", HangarSyncPayloadSchema), async (c) => {
+    const db = c.env.DB;
+    const userID = getAuthUser(c).id;
 
-// --- Preloaded vehicle map for in-memory slug matching ---
+    const payload = c.req.valid("json");
 
-interface VehicleMap {
-  slugToID: Map<string, number>;
-  nameToSlug: Map<string, string>;
-  compactToSlug: Map<string, string>;
-}
-
-async function preloadVehicleMap(db: D1Database): Promise<VehicleMap> {
-  const result = await db
-    .prepare(`SELECT v.id, v.slug, v.name FROM vehicles v
-      INNER JOIN (
-        SELECT slug, MAX(game_version_id) as latest_gv
-        FROM vehicles
-        WHERE ${VEHICLE_VERSION_CAP}
-        GROUP BY slug
-      ) _vv ON v.slug = _vv.slug AND v.game_version_id = _vv.latest_gv`)
-    .all();
-
-  const slugToID = new Map<string, number>();
-  const nameToSlug = new Map<string, string>();
-  const compactToSlug = new Map<string, string>();
-
-  for (const row of result.results) {
-    const r = row as { id: number; slug: string; name: string };
-    slugToID.set(r.slug, r.id);
-    nameToSlug.set(r.name.toLowerCase(), r.slug);
-    compactToSlug.set(compactSlug(r.slug), r.slug);
-  }
-
-  return { slugToID, nameToSlug, compactToSlug };
-}
-
-function findVehicleSlugLocal(
-  map: VehicleMap,
-  candidateSlugs: string[],
-  displayName: string,
-): string | null {
-  // Try exact slug matches
-  for (const slug of candidateSlugs) {
-    if (!slug) continue;
-    if (map.slugToID.has(slug)) return slug;
-  }
-
-  // Try name match
-  if (displayName) {
-    const found = map.nameToSlug.get(displayName.toLowerCase());
-    if (found) return found;
-  }
-
-  // Try compact match
-  for (const slug of candidateSlugs) {
-    if (!slug) continue;
-    const compact = compactSlug(slug);
-    const found = map.compactToSlug.get(compact);
-    if (found) return found;
-  }
-
-  // Try prefix match
-  for (const slug of candidateSlugs) {
-    if (!slug || slug.length < 3) continue;
-    for (const [existingSlug] of map.slugToID) {
-      if (existingSlug.startsWith(slug)) return existingSlug;
+    // Rate limit: reject if synced within last 5 minutes
+    const existingProfile = await db
+      .prepare("SELECT synced_at FROM user_rsi_profiles WHERE user_id = ?")
+      .bind(userID)
+      .first<{ synced_at: string }>();
+    if (existingProfile) {
+      const lastSync = new Date(existingProfile.synced_at + "Z").getTime();
+      const now = Date.now();
+      if (now - lastSync < 5 * 60 * 1000) {
+        return c.json({ error: "Sync rate limited — please wait 5 minutes between syncs" }, 429);
+      }
     }
-  }
 
-  return null;
+    // --- Fleet import ---
+    const vehicleMap = await preloadVehicleMap(db);
+    const insuranceMap = await loadInsuranceTypes(db);
+
+    const insertStmts: D1PreparedStatement[] = [];
+    const stubStmts: D1PreparedStatement[] = [];
+    const stubSlugs: string[] = [];
+
+    for (const pledge of payload.pledges) {
+      const shipItems = pledge.items.filter((item) => item.kind === "Ship");
+
+      for (const item of shipItems) {
+        const displayName = item.title;
+
+        // Generate slug candidates from item title and manufacturer code
+        const nameSlug = slugFromName(displayName);
+        const codeSlug = item.manufacturerCode
+          ? slugFromShipCode(`${item.manufacturerCode}_${displayName.replace(/\s+/g, "_")}`)
+          : nameSlug;
+        const compactCode = compactSlug(codeSlug);
+        const compactName = compactSlug(nameSlug);
+
+        const candidates = [codeSlug, nameSlug, compactCode, compactName];
+        let matchedSlug = findVehicleSlugLocal(vehicleMap, candidates, displayName);
+        if (!matchedSlug) {
+          matchedSlug = codeSlug;
+          if (!vehicleMap.slugToID.has(matchedSlug)) {
+            stubStmts.push(
+              db
+                .prepare(
+                  `INSERT INTO vehicles (slug, name, game_version_id, updated_at)
+                  VALUES (?, ?, (SELECT id FROM game_versions WHERE is_default = 1), datetime('now'))
+                  ON CONFLICT(slug, game_version_id) DO UPDATE SET name=excluded.name, updated_at=excluded.updated_at`,
+                )
+                .bind(matchedSlug, displayName),
+            );
+            stubSlugs.push(matchedSlug);
+            // Add to map so we don't create duplicate stubs
+            vehicleMap.slugToID.set(matchedSlug, -1);
+          }
+        }
+
+        // Insurance: LTI if pledge has it, otherwise unknown
+        let insuranceTypeID: number | null = null;
+        if (pledge.hasLti) {
+          insuranceTypeID = insuranceMap.get("lti") ?? null;
+        } else {
+          insuranceTypeID = insuranceMap.get("unknown") ?? null;
+        }
+
+        // Custom name from extension data
+        const customName = item.customName || null;
+
+        // Format pledge cost from cents
+        const pledgeCost = pledge.valueCents
+          ? `$${(pledge.valueCents / 100).toFixed(2)}`
+          : pledge.value || null;
+
+        insertStmts.push(
+          db
+            .prepare(
+              `INSERT INTO user_fleet (user_id, vehicle_id, insurance_type_id, warbond, is_loaner,
+                pledge_id, pledge_name, pledge_cost, pledge_date, custom_name, imported_at)
+              VALUES (?, (SELECT id FROM vehicles WHERE slug = ? AND ${VEHICLE_VERSION_CAP} ORDER BY game_version_id DESC LIMIT 1), ?, ?, ?,
+                ?, ?, ?, ?, ?, datetime('now'))`,
+            )
+            .bind(
+              userID,
+              matchedSlug,
+              insuranceTypeID,
+              pledge.isWarbond ? 1 : 0,
+              0,
+              String(pledge.id),
+              pledge.name || null,
+              pledgeCost,
+              pledge.date || null,
+              customName,
+            ),
+        );
+      }
+    }
+
+    // Create stub vehicles if needed
+    if (stubStmts.length > 0) {
+      for (let i = 0; i < stubStmts.length; i += 100) {
+        await db.batch(stubStmts.slice(i, i + 100));
+      }
+      console.log(`[hangar-sync] Created ${stubStmts.length} stub vehicles: ${stubSlugs.join(", ")}`);
+    }
+
+    // Fleet swap
+    if (insertStmts.length > 0) {
+      await executeFleetSwap(db, userID, insertStmts);
+    }
+    const imported = insertStmts.length;
+
+    // --- Profile upsert ---
+    let hasProfile = false;
+    if (payload.account) {
+      const acct = payload.account;
+      await db
+        .prepare(
+          `INSERT INTO user_rsi_profiles (user_id, rsi_handle, rsi_displayname, avatar_url,
+            enlisted_since, country, concierge_level, subscriber_type, subscriber_frequency,
+            store_credit_cents, uec_balance, rec_balance, referral_code, has_game_package,
+            orgs_json, badges_json, featured_badges_json, synced_at)
+          VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, datetime('now'))
+          ON CONFLICT(user_id) DO UPDATE SET
+            rsi_handle = excluded.rsi_handle,
+            rsi_displayname = excluded.rsi_displayname,
+            avatar_url = excluded.avatar_url,
+            enlisted_since = excluded.enlisted_since,
+            country = excluded.country,
+            concierge_level = excluded.concierge_level,
+            subscriber_type = excluded.subscriber_type,
+            subscriber_frequency = excluded.subscriber_frequency,
+            store_credit_cents = excluded.store_credit_cents,
+            uec_balance = excluded.uec_balance,
+            rec_balance = excluded.rec_balance,
+            referral_code = excluded.referral_code,
+            has_game_package = excluded.has_game_package,
+            orgs_json = excluded.orgs_json,
+            badges_json = excluded.badges_json,
+            featured_badges_json = excluded.featured_badges_json,
+            synced_at = excluded.synced_at`,
+        )
+        .bind(
+          userID,
+          acct.nickname || null,
+          acct.displayname || null,
+          acct.avatar_url || null,
+          acct.enlisted_since || null,
+          acct.country || null,
+          acct.concierge_level || null,
+          acct.subscriber_type || null,
+          acct.subscriber_frequency || null,
+          acct.store_credit_cents ?? null,
+          acct.uec_balance ?? null,
+          acct.rec_balance ?? null,
+          acct.referral_code || null,
+          acct.has_game_package ? 1 : 0,
+          acct.orgs ? JSON.stringify(acct.orgs) : null,
+          acct.all_badges ? JSON.stringify(acct.all_badges) : null,
+          acct.featured_badges ? JSON.stringify(acct.featured_badges) : null,
+        )
+        .run();
+      hasProfile = true;
+    }
+
+    // --- Buy-back pledges: DELETE + INSERT ---
+    let buybackCount = 0;
+    if (payload.buyback_pledges.length > 0) {
+      await db
+        .prepare("DELETE FROM user_buyback_pledges WHERE user_id = ?")
+        .bind(userID)
+        .run();
+
+      const bbStmts: D1PreparedStatement[] = [];
+      for (const bb of payload.buyback_pledges) {
+        bbStmts.push(
+          db
+            .prepare(
+              `INSERT INTO user_buyback_pledges (user_id, rsi_pledge_id, name, value_cents, date,
+                is_credit_reclaimable, items_json, synced_at)
+              VALUES (?, ?, ?, ?, ?, ?, ?, datetime('now'))`,
+            )
+            .bind(
+              userID,
+              bb.id,
+              bb.name,
+              bb.value_cents ?? null,
+              bb.date_parsed || bb.date || null,
+              bb.is_credit_reclaimable ? 1 : 0,
+              bb.items.length > 0 ? JSON.stringify(bb.items) : null,
+            ),
+        );
+      }
+
+      for (let i = 0; i < bbStmts.length; i += 1000) {
+        await db.batch(bbStmts.slice(i, i + 1000));
+      }
+      buybackCount = bbStmts.length;
+    }
+
+    // --- Upgrades: DELETE + INSERT ---
+    let upgradeCount = 0;
+    if (payload.upgrades.length > 0) {
+      await db
+        .prepare("DELETE FROM user_pledge_upgrades WHERE user_id = ?")
+        .bind(userID)
+        .run();
+
+      const ugStmts: D1PreparedStatement[] = [];
+      for (const ug of payload.upgrades) {
+        ugStmts.push(
+          db
+            .prepare(
+              `INSERT INTO user_pledge_upgrades (user_id, rsi_pledge_id, name, applied_at, new_value, synced_at)
+              VALUES (?, ?, ?, ?, ?, datetime('now'))`,
+            )
+            .bind(
+              userID,
+              ug.pledge_id,
+              ug.name,
+              ug.applied_at || null,
+              ug.new_value || null,
+            ),
+        );
+      }
+
+      for (let i = 0; i < ugStmts.length; i += 1000) {
+        await db.batch(ugStmts.slice(i, i + 1000));
+      }
+      upgradeCount = ugStmts.length;
+    }
+
+    // --- Log change history ---
+    console.log(`[hangar-sync] Sync complete: ${imported} ships, ${buybackCount} buyback, ${upgradeCount} upgrades`);
+    logEvent("hangar_sync", {
+      imported,
+      buyback_count: buybackCount,
+      upgrade_count: upgradeCount,
+      has_profile: hasProfile,
+      extension_version: payload.sync_meta.extension_version,
+    });
+    await logUserChange(db, userID, "hangar_synced", {
+      metadata: {
+        vehicle_count: imported,
+        buyback_count: buybackCount,
+        upgrade_count: upgradeCount,
+        extension_version: payload.sync_meta.extension_version,
+      },
+      ipAddress: c.req.header("cf-connecting-ip") ?? c.req.header("x-forwarded-for"),
+    });
+
+    return c.json({
+      imported,
+      buyback_count: buybackCount,
+      upgrade_count: upgradeCount,
+      has_profile: hasProfile,
+      message: "Hangar sync complete",
+    });
+  });
+
+  return routes;
 }

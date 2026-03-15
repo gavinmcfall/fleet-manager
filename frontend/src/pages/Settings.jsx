@@ -1,12 +1,13 @@
 import React, { useState, useEffect } from 'react'
-import { useLLMConfig, setLLMConfig, testLLMConnection } from '../hooks/useAPI'
-import { Settings as SettingsIcon, Key, CheckCircle, XCircle, Loader, Trash2, Eye, EyeOff, Type, Globe } from 'lucide-react'
+import { useLLMConfig, setLLMConfig, testLLMConnection, usePreferences, setPreferences } from '../hooks/useAPI'
+import { Settings as SettingsIcon, Key, CheckCircle, XCircle, Loader, Trash2, Eye, EyeOff, Type, Globe, RefreshCw, AlertCircle, Plug } from 'lucide-react'
 import PageHeader from '../components/PageHeader'
 import PanelSection from '../components/PanelSection'
 import FilterSelect from '../components/FilterSelect'
 import ConfirmDialog from '../components/ConfirmDialog'
 import useFontPreference from '../hooks/useFontPreference'
 import useTimezone from '../hooks/useTimezone'
+import useHangarSync from '../hooks/useHangarSync'
 import { formatDate } from '../lib/dates'
 
 const FONT_OPTIONS = [
@@ -24,6 +25,8 @@ export default function Settings() {
   const [tzSearch, setTzSearch] = useState('')
   const [tzDropdownOpen, setTzDropdownOpen] = useState(false)
   const { data: config, refetch } = useLLMConfig()
+  const sync = useHangarSync()
+  const { data: preferences, refetch: refetchPrefs } = usePreferences()
   const [provider, setProvider] = useState('')
   const [apiKey, setAPIKey] = useState('')
   const [model, setModel] = useState('')
@@ -111,6 +114,31 @@ export default function Settings() {
     })
   }
 
+  const handleSyncClick = () => {
+    if (preferences?.sync_consent) {
+      sync.startSync()
+      return
+    }
+
+    setConfirmDialog({
+      open: true,
+      title: 'Hangar Sync — Data Consent',
+      message: 'SC Bridge Sync will collect your RSI hangar data including ships, insurance details, buy-back pledges, CCU/upgrade history, and basic account info (handle, UEE record). This data is sent only to SC Bridge and stored in your account. No data is shared with third parties.',
+      variant: 'info',
+      confirmLabel: 'Approve & Sync',
+      onConfirm: async () => {
+        setConfirmDialog({ open: false })
+        try {
+          await setPreferences({ sync_consent: new Date().toISOString() })
+          refetchPrefs()
+          sync.startSync()
+        } catch (err) {
+          showNotification('Failed to save consent: ' + err.message, 'error')
+        }
+      },
+    })
+  }
+
   return (
     <div className="space-y-6 animate-fade-in-up">
       <PageHeader
@@ -130,6 +158,89 @@ export default function Settings() {
           {notification.msg}
         </div>
       )}
+
+      <PanelSection title="Hangar Sync" icon={RefreshCw}>
+        <div className="p-5 space-y-4">
+          <p className="text-sm text-gray-400">
+            Sync your RSI hangar directly to SC Bridge using the browser extension.
+            Ships, insurance, buy-back pledges, upgrade history, and account info.
+          </p>
+
+          {sync.status === 'detecting' && (
+            <div className="flex items-center gap-2 text-sm text-gray-400">
+              <Loader className="w-4 h-4 animate-spin" />
+              Checking for extension...
+            </div>
+          )}
+
+          {sync.status === 'no-extension' && (
+            <div className="p-4 rounded bg-amber-500/10 border border-amber-500/20 space-y-3">
+              <div className="flex items-center gap-2 text-sm text-amber-400">
+                <Plug className="w-4 h-4" />
+                SC Bridge Sync extension not detected
+              </div>
+              <p className="text-xs text-gray-400">
+                Install the extension to sync your hangar data directly from RSI.
+              </p>
+              <button onClick={sync.detect} className="text-xs text-sc-accent hover:underline">
+                Retry detection
+              </button>
+            </div>
+          )}
+
+          {(sync.status === 'ready' || sync.status === 'complete' || sync.status === 'error') && (
+            <div className="space-y-3">
+              {sync.extensionVersion && (
+                <div className="text-xs text-gray-500">
+                  Extension v{sync.extensionVersion} detected
+                </div>
+              )}
+
+              <button
+                onClick={handleSyncClick}
+                disabled={sync.status === 'collecting' || sync.status === 'uploading'}
+                className="btn-primary flex items-center gap-2"
+              >
+                <RefreshCw className="w-4 h-4" />
+                Sync Now
+              </button>
+
+              {sync.status === 'complete' && sync.result && (
+                <div className="p-3 rounded bg-sc-success/10 border border-sc-success/20 text-sm text-sc-success flex items-center gap-2">
+                  <CheckCircle className="w-4 h-4" />
+                  Synced {sync.result.imported} ships, {sync.result.buyback_count} buy-back pledges, {sync.result.upgrade_count} upgrades
+                </div>
+              )}
+
+              {sync.status === 'error' && (
+                <div className="p-3 rounded bg-sc-danger/10 border border-sc-danger/20 space-y-2">
+                  <div className="text-sm text-sc-danger flex items-center gap-2">
+                    <AlertCircle className="w-4 h-4" />
+                    {sync.error}
+                  </div>
+                  <button onClick={sync.retry} className="text-xs text-sc-accent hover:underline">
+                    Retry
+                  </button>
+                </div>
+              )}
+            </div>
+          )}
+
+          {(sync.status === 'collecting' || sync.status === 'uploading') && (
+            <div className="p-4 rounded bg-sc-accent/10 border border-sc-accent/20 space-y-2">
+              <div className="flex items-center gap-2 text-sm text-sc-accent">
+                <Loader className="w-4 h-4 animate-spin" />
+                {sync.status === 'collecting' ? 'Collecting data from RSI...' : 'Saving to SC Bridge...'}
+              </div>
+              <p className="text-xs text-gray-400">
+                {sync.status === 'collecting'
+                  ? 'The extension is gathering your hangar data. This may take a minute.'
+                  : 'Uploading your data to SC Bridge...'}
+              </p>
+            </div>
+          )}
+        </div>
+      </PanelSection>
 
       <PanelSection title="Display" icon={Type}>
         <div className="p-5 space-y-4">
