@@ -164,6 +164,7 @@ export function importRoutes() {
 
   // POST /api/import/hangar-sync — import from SC Bridge extension (RSI hangar sync)
   routes.post("/hangar-sync", validate("json", HangarSyncPayloadSchema), async (c) => {
+   try {
     const db = c.env.DB;
     const userID = getAuthUser(c).id;
 
@@ -424,6 +425,10 @@ export function importRoutes() {
       has_profile: hasProfile,
       message: "Hangar sync complete",
     });
+   } catch (err) {
+    console.error("[hangar-sync] Unhandled error:", err instanceof Error ? err.message : err, err instanceof Error ? err.stack : "");
+    return c.json({ error: err instanceof Error ? err.message : "Sync failed" }, 500);
+   }
   });
 
   return routes;

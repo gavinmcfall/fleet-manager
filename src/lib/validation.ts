@@ -67,139 +67,92 @@ export const HangarXplorImportSchema = z
   .max(2000, "Import limited to 2000 entries");
 
 // --- Hangar Sync Schemas (RSI extension) ---
+// These schemas are intentionally lenient (.passthrough()) because the RSI data
+// comes from HTML scraping and varies between pledges. Extra/missing fields are normal.
 
 /** RSI pledge item schema */
 const RsiPledgeItemSchema = z.object({
-  title: z.string(),
-  kind: z.string().nullable(),
+  title: z.string().default(""),
+  kind: z.string().nullable().optional().default(null),
   manufacturer: z.string().optional(),
   manufacturerCode: z.string().optional(),
   image: z.string().optional(),
   customName: z.string().optional(),
   serial: z.string().optional(),
   isNameable: z.boolean().optional(),
-});
-
-/** RSI upgrade data embedded in upgrade pledges */
-const RsiUpgradeDataSchema = z.object({
-  id: z.number(),
-  name: z.string(),
-  upgrade_type: z.string(),
-  upgrade_value: z.string().nullable(),
-  match_items: z.array(z.object({ id: z.number(), name: z.string() })),
-  target_items: z.array(z.object({ id: z.number(), name: z.string() })),
-}).nullable();
+}).passthrough();
 
 /** Named ship schema */
 const NamedShipSchema = z.object({
   membership_id: z.number(),
   default_name: z.string(),
   custom_name: z.string(),
-});
+}).passthrough();
 
 /** RSI pledge schema */
 const RsiPledgeSchema = z.object({
   id: z.number(),
-  name: z.string(),
-  value: z.string(),
-  valueCents: z.number(),
-  configurationValue: z.string(),
-  currency: z.string(),
-  date: z.string(),
-  isUpgraded: z.boolean(),
-  isReclaimable: z.boolean(),
-  isGiftable: z.boolean(),
-  hasUpgradeLog: z.boolean(),
-  availability: z.string(),
-  items: z.array(RsiPledgeItemSchema),
-  nameableShips: z.array(NamedShipSchema).nullable(),
-  nameReservations: z.record(z.string(), z.string()).nullable(),
-  upgradeData: RsiUpgradeDataSchema,
-  pledgeImage: z.string().nullable(),
-  hasLti: z.boolean(),
-  isWarbond: z.boolean(),
-  isReward: z.boolean(),
-});
+  name: z.string().default(""),
+  value: z.string().default("$0.00"),
+  valueCents: z.number().default(0),
+  configurationValue: z.string().optional().default(""),
+  currency: z.string().optional().default(""),
+  date: z.string().default(""),
+  isUpgraded: z.boolean().default(false),
+  isReclaimable: z.boolean().default(false),
+  isGiftable: z.boolean().default(false),
+  hasUpgradeLog: z.boolean().default(false),
+  availability: z.string().optional().default(""),
+  items: z.array(RsiPledgeItemSchema).default([]),
+  nameableShips: z.array(NamedShipSchema).nullable().optional().default(null),
+  nameReservations: z.record(z.string(), z.string()).nullable().optional().default(null),
+  upgradeData: z.unknown().nullable().optional().default(null),
+  pledgeImage: z.string().nullable().optional().default(null),
+  hasLti: z.boolean().default(false),
+  isWarbond: z.boolean().default(false),
+  isReward: z.boolean().default(false),
+}).passthrough();
 
 /** RSI buy-back pledge */
 const RsiBuyBackPledgeSchema = z.object({
   id: z.number(),
-  name: z.string(),
-  value: z.string(),
+  name: z.string().default(""),
+  value: z.string().default("$0.00"),
   value_cents: z.number().optional(),
-  date: z.string(),
+  date: z.string().default(""),
   date_parsed: z.string().optional(),
-  items: z.array(RsiPledgeItemSchema),
-  is_credit_reclaimable: z.boolean(),
+  items: z.array(RsiPledgeItemSchema).default([]),
+  is_credit_reclaimable: z.boolean().default(false),
   token_cost: z.number().optional(),
-});
+}).passthrough();
 
 /** RSI upgrade entry */
 const RsiUpgradeSchema = z.object({
   pledge_id: z.number(),
-  name: z.string(),
-  applied_at: z.string(),
-  new_value: z.string(),
-});
+  name: z.string().default(""),
+  applied_at: z.string().default(""),
+  new_value: z.string().default(""),
+}).passthrough();
 
-/** RSI account info */
+/** RSI account info — very lenient since RSI dashboard data varies */
 const RsiAccountInfoSchema = z.object({
-  nickname: z.string(),
-  displayname: z.string(),
-  avatar_url: z.string().optional(),
-  enlisted_since: z.string().optional(),
-  country: z.string().optional(),
-  concierge_level: z.string().optional(),
-  concierge_next_level: z.string().optional(),
-  concierge_progress: z.number().optional(),
-  subscriber_type: z.string().optional(),
-  subscriber_frequency: z.string().optional(),
-  store_credit_cents: z.number().optional(),
-  uec_balance: z.number().optional(),
-  rec_balance: z.number().optional(),
-  org: z.object({
-    name: z.string(),
-    sid: z.string(),
-    image: z.string().optional(),
-    url: z.string().optional(),
-    rank: z.string().optional(),
-    is_primary: z.boolean().optional(),
-    members: z.string().optional(),
-  }).optional(),
-  orgs: z.array(z.object({
-    name: z.string(),
-    sid: z.string(),
-    image: z.string().optional(),
-    url: z.string().optional(),
-    rank: z.string().optional(),
-    is_primary: z.boolean().optional(),
-    members: z.string().optional(),
-  })).optional(),
-  featured_badges: z.array(z.object({
-    title: z.string(),
-    image_url: z.string(),
-    org_url: z.string().optional(),
-  })).optional(),
-  all_badges: z.record(z.string(), z.string()).optional(),
-  referral_code: z.string().optional(),
-  has_game_package: z.boolean().optional(),
-  is_subscriber: z.boolean().optional(),
-  email: z.string().optional(),
-}).nullable();
+  nickname: z.string().default(""),
+  displayname: z.string().default(""),
+}).passthrough().nullable();
 
 /** Full hangar sync payload from extension */
 export const HangarSyncPayloadSchema = z.object({
-  pledges: z.array(RsiPledgeSchema).max(2000),
-  buyback_pledges: z.array(RsiBuyBackPledgeSchema).max(1000),
-  upgrades: z.array(RsiUpgradeSchema).max(5000),
-  account: RsiAccountInfoSchema,
-  named_ships: z.array(NamedShipSchema).max(500),
+  pledges: z.array(RsiPledgeSchema).max(2000).default([]),
+  buyback_pledges: z.array(RsiBuyBackPledgeSchema).max(1000).default([]),
+  upgrades: z.array(RsiUpgradeSchema).max(5000).default([]),
+  account: RsiAccountInfoSchema.optional().default(null),
+  named_ships: z.array(NamedShipSchema).max(500).default([]),
   sync_meta: z.object({
-    extension_version: z.string(),
-    synced_at: z.string(),
-    pledge_count: z.number(),
-    buyback_count: z.number(),
-    ship_count: z.number(),
-    item_count: z.number(),
-  }),
-});
+    extension_version: z.string().default("unknown"),
+    synced_at: z.string().default(""),
+    pledge_count: z.number().default(0),
+    buyback_count: z.number().default(0),
+    ship_count: z.number().default(0),
+    item_count: z.number().default(0),
+  }).passthrough(),
+}).passthrough();
