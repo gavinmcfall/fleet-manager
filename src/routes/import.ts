@@ -225,7 +225,8 @@ export function importRoutes() {
           }
         }
 
-        // Insurance: check pledge items for Insurance kind, then fall back to hasLti flag
+        // Insurance: parse from pledge items with kind=Insurance
+        // Titles are like "Lifetime Insurance", "120 Month Insurance", "6 Month Insurance"
         let insuranceTypeID: number | null = null;
         const insuranceItem = pledge.items.find(
           (i: { kind?: string | null; title?: string }) => i.kind === "Insurance",
@@ -233,20 +234,17 @@ export function importRoutes() {
         const insTitle = (insuranceItem?.title ?? "").toLowerCase();
         if (pledge.hasLti || insTitle.includes("lifetime") || insTitle.includes("lti")) {
           insuranceTypeID = insuranceMap.get("lti") ?? null;
-        } else if (insTitle.includes("120")) {
-          insuranceTypeID = insuranceMap.get("120_month") ?? null;
-        } else if (insTitle.includes("72")) {
-          insuranceTypeID = insuranceMap.get("72_month") ?? null;
-        } else if (insTitle.includes("6 month") || insTitle.includes("6-month")) {
-          insuranceTypeID = insuranceMap.get("6_month") ?? null;
-        } else if (insTitle.includes("3 month") || insTitle.includes("3-month")) {
-          insuranceTypeID = insuranceMap.get("3_month") ?? null;
-        } else if (insTitle.includes("standard") || insTitle.includes("month")) {
-          insuranceTypeID = insuranceMap.get("standard") ?? null;
         } else if (insTitle) {
-          insuranceTypeID = insuranceMap.get("unknown") ?? null;
+          // Parse "N Month Insurance" → N_month key
+          const monthMatch = insTitle.match(/(\d+)\s*month/);
+          if (monthMatch) {
+            insuranceTypeID = insuranceMap.get(`${monthMatch[1]}_month`) ?? insuranceMap.get("unknown") ?? null;
+          } else {
+            insuranceTypeID = insuranceMap.get("unknown") ?? null;
+          }
         } else {
-          insuranceTypeID = insuranceMap.get("unknown") ?? null;
+          // No insurance item in pledge — no insurance
+          insuranceTypeID = null;
         }
 
         // Custom name from extension data
