@@ -78,10 +78,10 @@ export default function Analysis() {
           <Rocket className="w-16 h-16 mx-auto mb-4 text-sc-accent/60" />
           <h2 className="font-display font-bold text-2xl text-white mb-2">No Ships Detected</h2>
           <p className="text-gray-400 text-base mb-6 max-w-md mx-auto">
-            Import your hangar from HangarXplor to see fleet analysis, insurance coverage, and gap detection.
+            Sync your RSI hangar to see fleet analysis, insurance coverage, and gap detection.
           </p>
-          <Link to="/import" className="btn-primary inline-flex items-center gap-2">
-            <Rocket className="w-4 h-4" /> Import Your Fleet
+          <Link to="/settings" className="btn-primary inline-flex items-center gap-2">
+            <Rocket className="w-4 h-4" /> Sync Your Fleet
           </Link>
         </div>
       </div>

@@ -23,7 +23,7 @@ export default function Privacy() {
               <li><strong className="text-gray-300">Account data</strong> — email, display name, and password hash (for email/password accounts)</li>
               <li><strong className="text-gray-300">OAuth profile data</strong> — name, email, avatar URL, provider IDs, and tokens from social login providers (Google, GitHub, Discord, Twitch)</li>
               <li><strong className="text-gray-300">Session data</strong> — IP address, user-agent, and session tokens (7-day expiry)</li>
-              <li><strong className="text-gray-300">Fleet data</strong> — imported from HangarXplor browser extension: pledge IDs, costs, dates, insurance types, and custom ship names</li>
+              <li><strong className="text-gray-300">Fleet data</strong> — synced from RSI via SC Bridge Sync extension: pledge IDs, costs, dates, insurance types, custom ship names, buy-back pledges, upgrade history, and account profile</li>
               <li><strong className="text-gray-300">LLM API keys</strong> — your own API keys for AI analysis features, encrypted with AES-256-GCM at rest</li>
               <li><strong className="text-gray-300">AI analysis text</strong> — fleet analysis reports generated using your API keys</li>
             </ul>

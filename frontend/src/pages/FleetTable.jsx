@@ -196,9 +196,9 @@ export default function FleetTable() {
                         <div className="flex flex-col items-center gap-3 text-center">
                           <Rocket className="w-10 h-10 text-gray-500" />
                           <p className="text-gray-400 text-sm">Your fleet is empty</p>
-                          <p className="text-gray-500 text-xs max-w-sm">Import your hangar from HangarXplor to start tracking your ships, insurance, and pledges.</p>
-                          <a href="/import" className="btn-primary text-xs inline-flex items-center gap-1.5">
-                            <Upload className="w-3.5 h-3.5" /> Import Fleet
+                          <p className="text-gray-500 text-xs max-w-sm">Sync your hangar from Settings to start tracking your ships, insurance, and pledges.</p>
+                          <a href="/settings" className="btn-primary text-xs inline-flex items-center gap-1.5">
+                            <Upload className="w-3.5 h-3.5" /> Sync Fleet
                           </a>
                         </div>
                       ) : (
