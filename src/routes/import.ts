@@ -225,10 +225,26 @@ export function importRoutes() {
           }
         }
 
-        // Insurance: LTI if pledge has it, otherwise unknown
+        // Insurance: check pledge items for Insurance kind, then fall back to hasLti flag
         let insuranceTypeID: number | null = null;
-        if (pledge.hasLti) {
+        const insuranceItem = pledge.items.find(
+          (i: { kind?: string | null; title?: string }) => i.kind === "Insurance",
+        );
+        const insTitle = (insuranceItem?.title ?? "").toLowerCase();
+        if (pledge.hasLti || insTitle.includes("lifetime") || insTitle.includes("lti")) {
           insuranceTypeID = insuranceMap.get("lti") ?? null;
+        } else if (insTitle.includes("120")) {
+          insuranceTypeID = insuranceMap.get("120_month") ?? null;
+        } else if (insTitle.includes("72")) {
+          insuranceTypeID = insuranceMap.get("72_month") ?? null;
+        } else if (insTitle.includes("6 month") || insTitle.includes("6-month")) {
+          insuranceTypeID = insuranceMap.get("6_month") ?? null;
+        } else if (insTitle.includes("3 month") || insTitle.includes("3-month")) {
+          insuranceTypeID = insuranceMap.get("3_month") ?? null;
+        } else if (insTitle.includes("standard") || insTitle.includes("month")) {
+          insuranceTypeID = insuranceMap.get("standard") ?? null;
+        } else if (insTitle) {
+          insuranceTypeID = insuranceMap.get("unknown") ?? null;
         } else {
           insuranceTypeID = insuranceMap.get("unknown") ?? null;
         }
