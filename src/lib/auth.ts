@@ -135,7 +135,15 @@ export function createAuth(env: Env) {
         enabled: true,
       },
     },
-    trustedOrigins: [env.BETTER_AUTH_URL],
+    trustedOrigins: (request) => {
+      const origins: string[] = [env.BETTER_AUTH_URL];
+      // Allow browser extension origins (SC Bridge Sync)
+      const reqOrigin = request?.headers?.get("Origin") ?? "";
+      if (reqOrigin.startsWith("chrome-extension://") || reqOrigin.startsWith("moz-extension://")) {
+        origins.push(reqOrigin);
+      }
+      return origins;
+    },
     socialProviders: {
       ...(env.GOOGLE_CLIENT_ID && env.GOOGLE_CLIENT_SECRET
         ? {

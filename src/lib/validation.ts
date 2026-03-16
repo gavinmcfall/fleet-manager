@@ -44,21 +44,21 @@ export const LLMProvider = z.enum(["anthropic", "openai", "google"]);
 
 /** HangarXplor import entry schema */
 export const HangarXplorEntrySchema = z.object({
-  unidentified: z.string().optional(),
-  ship_code: z.string().min(1, "ship_code is required"),
-  ship_name: z.string().optional(),
-  manufacturer_code: z.string().min(1, "manufacturer_code is required"),
-  manufacturer_name: z.string().min(1, "manufacturer_name is required"),
-  lookup: z.string().optional(),
+  unidentified: z.string().max(200).optional(),
+  ship_code: z.string().min(1, "ship_code is required").max(200),
+  ship_name: z.string().max(200).optional(),
+  manufacturer_code: z.string().min(1, "manufacturer_code is required").max(10),
+  manufacturer_name: z.string().min(1, "manufacturer_name is required").max(200),
+  lookup: z.string().max(200).optional(),
   lti: z.boolean(),
-  insurance: z.string().optional(),
-  name: z.string().min(1, "name is required"),
+  insurance: z.string().max(100).optional(),
+  name: z.string().min(1, "name is required").max(200),
   warbond: z.boolean(),
-  entity_type: z.string().min(1, "entity_type is required"),
-  pledge_id: z.string(),
-  pledge_name: z.string(),
-  pledge_date: z.string(),
-  pledge_cost: z.string(),
+  entity_type: z.string().min(1, "entity_type is required").max(50),
+  pledge_id: z.string().max(50),
+  pledge_name: z.string().max(200),
+  pledge_date: z.string().max(50),
+  pledge_cost: z.string().max(30),
 });
 
 /** Import body: array of HangarXplor entries, max 2000 */
@@ -67,47 +67,50 @@ export const HangarXplorImportSchema = z
   .max(2000, "Import limited to 2000 entries");
 
 // --- Hangar Sync Schemas (RSI extension) ---
-// These schemas are intentionally lenient (.passthrough()) because the RSI data
-// comes from HTML scraping and varies between pledges. Extra/missing fields are normal.
+// String length caps prevent payload-stuffing DoS. .passthrough() kept because RSI
+// scraped data varies between pledges — extra fields are normal but we cap known ones.
+
+/** Max string lengths for sync payload fields */
+const STR = { short: 200, medium: 500, url: 2000, json: 10000 } as const;
 
 /** RSI pledge item schema */
 const RsiPledgeItemSchema = z.object({
-  title: z.string().default(""),
-  kind: z.string().nullable().optional().default(null),
-  manufacturer: z.string().optional(),
-  manufacturerCode: z.string().optional(),
-  image: z.string().optional(),
-  customName: z.string().optional(),
-  serial: z.string().optional(),
+  title: z.string().max(STR.short).default(""),
+  kind: z.string().max(50).nullable().optional().default(null),
+  manufacturer: z.string().max(STR.short).optional(),
+  manufacturerCode: z.string().max(10).optional(),
+  image: z.string().max(STR.url).optional(),
+  customName: z.string().max(STR.short).optional(),
+  serial: z.string().max(100).optional(),
   isNameable: z.boolean().optional(),
 }).passthrough();
 
 /** Named ship schema */
 const NamedShipSchema = z.object({
   membership_id: z.number(),
-  default_name: z.string(),
-  custom_name: z.string(),
+  default_name: z.string().max(STR.short),
+  custom_name: z.string().max(STR.short),
 }).passthrough();
 
 /** RSI pledge schema */
 const RsiPledgeSchema = z.object({
   id: z.number(),
-  name: z.string().default(""),
-  value: z.string().default("$0.00"),
-  valueCents: z.number().default(0),
-  configurationValue: z.string().optional().default(""),
-  currency: z.string().optional().default(""),
-  date: z.string().default(""),
+  name: z.string().max(STR.short).default(""),
+  value: z.string().max(30).default("$0.00"),
+  valueCents: z.number().int().min(0).max(1_000_000_00).default(0),
+  configurationValue: z.string().max(30).optional().default(""),
+  currency: z.string().max(10).optional().default(""),
+  date: z.string().max(50).default(""),
   isUpgraded: z.boolean().default(false),
   isReclaimable: z.boolean().default(false),
   isGiftable: z.boolean().default(false),
   hasUpgradeLog: z.boolean().default(false),
-  availability: z.string().optional().default(""),
-  items: z.array(RsiPledgeItemSchema).default([]),
-  nameableShips: z.array(NamedShipSchema).nullable().optional().default(null),
-  nameReservations: z.record(z.string(), z.string()).nullable().optional().default(null),
+  availability: z.string().max(50).optional().default(""),
+  items: z.array(RsiPledgeItemSchema).max(50).default([]),
+  nameableShips: z.array(NamedShipSchema).max(20).nullable().optional().default(null),
+  nameReservations: z.record(z.string().max(50), z.string().max(STR.short)).nullable().optional().default(null),
   upgradeData: z.unknown().nullable().optional().default(null),
-  pledgeImage: z.string().nullable().optional().default(null),
+  pledgeImage: z.string().max(STR.url).nullable().optional().default(null),
   hasLti: z.boolean().default(false),
   isWarbond: z.boolean().default(false),
   isReward: z.boolean().default(false),
@@ -116,29 +119,51 @@ const RsiPledgeSchema = z.object({
 /** RSI buy-back pledge */
 const RsiBuyBackPledgeSchema = z.object({
   id: z.number(),
-  name: z.string().default(""),
-  value: z.string().default("$0.00"),
-  value_cents: z.number().optional(),
-  date: z.string().default(""),
-  date_parsed: z.string().optional(),
-  items: z.array(RsiPledgeItemSchema).default([]),
+  name: z.string().max(STR.short).default(""),
+  value: z.string().max(30).default("$0.00"),
+  value_cents: z.number().int().min(0).max(1_000_000_00).optional(),
+  date: z.string().max(50).default(""),
+  date_parsed: z.string().max(50).optional(),
+  items: z.array(RsiPledgeItemSchema).max(50).default([]),
   is_credit_reclaimable: z.boolean().default(false),
-  token_cost: z.number().optional(),
+  token_cost: z.number().min(0).max(100_000).optional(),
 }).passthrough();
 
 /** RSI upgrade entry */
 const RsiUpgradeSchema = z.object({
   pledge_id: z.number(),
-  name: z.string().default(""),
-  applied_at: z.string().default(""),
-  new_value: z.string().default(""),
+  name: z.string().max(STR.short).default(""),
+  applied_at: z.string().max(50).default(""),
+  new_value: z.string().max(30).default(""),
 }).passthrough();
 
-/** RSI account info — very lenient since RSI dashboard data varies */
+/** RSI account info — lenient since RSI dashboard data varies, but capped */
 const RsiAccountInfoSchema = z.object({
-  nickname: z.string().default(""),
-  displayname: z.string().default(""),
+  nickname: z.string().max(100).default(""),
+  displayname: z.string().max(100).default(""),
+  avatar_url: z.string().max(STR.url).optional(),
+  enlisted_since: z.string().max(50).optional(),
+  country: z.string().max(100).optional(),
+  concierge_level: z.string().max(50).nullable().optional(),
+  subscriber_type: z.string().max(50).nullable().optional(),
+  subscriber_frequency: z.string().max(50).nullable().optional(),
+  store_credit_cents: z.number().int().min(0).max(100_000_000).nullable().optional(),
+  uec_balance: z.number().min(0).nullable().optional(),
+  rec_balance: z.number().min(0).nullable().optional(),
+  referral_code: z.string().max(50).nullable().optional(),
+  has_game_package: z.boolean().optional(),
+  orgs: z.array(z.object({}).passthrough()).max(20).nullable().optional(),
+  all_badges: z.array(z.object({}).passthrough()).max(500).nullable().optional(),
+  featured_badges: z.array(z.object({}).passthrough()).max(20).nullable().optional(),
 }).passthrough().nullable();
+
+/** Anomaly thresholds — payloads exceeding these are logged but still processed */
+export const SYNC_ANOMALY_THRESHOLDS = {
+  /** Max pledges before flagging as anomalous */
+  pledgeCount: 500,
+  /** Max total fleet value in cents before flagging */
+  fleetValueCents: 50_000_00,
+} as const;
 
 /** Full hangar sync payload from extension */
 export const HangarSyncPayloadSchema = z.object({
@@ -148,11 +173,11 @@ export const HangarSyncPayloadSchema = z.object({
   account: RsiAccountInfoSchema.optional().default(null),
   named_ships: z.array(NamedShipSchema).max(500).default([]),
   sync_meta: z.object({
-    extension_version: z.string().default("unknown"),
-    synced_at: z.string().default(""),
-    pledge_count: z.number().default(0),
-    buyback_count: z.number().default(0),
-    ship_count: z.number().default(0),
-    item_count: z.number().default(0),
+    extension_version: z.string().max(20).default("unknown"),
+    synced_at: z.string().max(50).default(""),
+    pledge_count: z.number().int().min(0).max(10000).default(0),
+    buyback_count: z.number().int().min(0).max(10000).default(0),
+    ship_count: z.number().int().min(0).max(10000).default(0),
+    item_count: z.number().int().min(0).max(50000).default(0),
   }).passthrough(),
 }).passthrough();

@@ -5,7 +5,7 @@ import { slugFromShipCode, slugFromName, compactSlug } from "../lib/slug";
 import { loadInsuranceTypes } from "../db/queries";
 import { logEvent } from "../lib/logger";
 import { logUserChange } from "../lib/change-history";
-import { validate, HangarXplorImportSchema, HangarSyncPayloadSchema } from "../lib/validation";
+import { validate, HangarXplorImportSchema, HangarSyncPayloadSchema, SYNC_ANOMALY_THRESHOLDS } from "../lib/validation";
 import { VEHICLE_VERSION_CAP } from "../lib/constants";
 import {
   preloadVehicleMap,
@@ -167,6 +167,7 @@ export function importRoutes() {
    try {
     const db = c.env.DB;
     const userID = getAuthUser(c).id;
+    const clientIP = c.req.header("cf-connecting-ip") ?? c.req.header("x-forwarded-for") ?? "unknown";
 
     const payload = c.req.valid("json");
 
@@ -183,13 +184,30 @@ export function importRoutes() {
       }
     }
 
+    // --- Anomaly detection ---
+    const totalFleetValueCents = payload.pledges.reduce(
+      (sum: number, p: { valueCents?: number }) => sum + (p.valueCents ?? 0), 0,
+    );
+    const isAnomalous =
+      payload.pledges.length > SYNC_ANOMALY_THRESHOLDS.pledgeCount ||
+      totalFleetValueCents > SYNC_ANOMALY_THRESHOLDS.fleetValueCents;
+    if (isAnomalous) {
+      logEvent("hangar_sync_anomaly", {
+        user_id: userID,
+        ip: clientIP,
+        pledge_count: payload.pledges.length,
+        fleet_value_cents: totalFleetValueCents,
+        extension_version: payload.sync_meta.extension_version,
+      });
+      console.warn(`[hangar-sync] ANOMALY: user=${userID} pledges=${payload.pledges.length} value=$${(totalFleetValueCents / 100).toFixed(2)}`);
+    }
+
     // --- Fleet import ---
     const vehicleMap = await preloadVehicleMap(db);
     const insuranceMap = await loadInsuranceTypes(db);
 
     const insertStmts: D1PreparedStatement[] = [];
-    const stubStmts: D1PreparedStatement[] = [];
-    const stubSlugs: string[] = [];
+    const skippedItems: string[] = [];
 
     for (const pledge of payload.pledges) {
       const shipItems = pledge.items.filter((item) => item.kind === "Ship");
@@ -206,23 +224,12 @@ export function importRoutes() {
         const compactName = compactSlug(nameSlug);
 
         const candidates = [codeSlug, nameSlug, compactCode, compactName];
-        let matchedSlug = findVehicleSlugLocal(vehicleMap, candidates, displayName);
+        const matchedSlug = findVehicleSlugLocal(vehicleMap, candidates, displayName);
         if (!matchedSlug) {
-          matchedSlug = codeSlug;
-          if (!vehicleMap.slugToID.has(matchedSlug)) {
-            stubStmts.push(
-              db
-                .prepare(
-                  `INSERT INTO vehicles (slug, name, game_version_id, updated_at)
-                  VALUES (?, ?, (SELECT id FROM game_versions WHERE is_default = 1), datetime('now'))
-                  ON CONFLICT(slug, game_version_id) DO UPDATE SET name=excluded.name, updated_at=excluded.updated_at`,
-                )
-                .bind(matchedSlug, displayName),
-            );
-            stubSlugs.push(matchedSlug);
-            // Add to map so we don't create duplicate stubs
-            vehicleMap.slugToID.set(matchedSlug, -1);
-          }
+          // No known vehicle match — skip instead of creating a stub.
+          // Stubs from user-supplied data risk polluting the shared vehicles table.
+          skippedItems.push(displayName);
+          continue;
         }
 
         // Insurance: parse from pledge items with kind=Insurance
@@ -279,12 +286,14 @@ export function importRoutes() {
       }
     }
 
-    // Create stub vehicles if needed
-    if (stubStmts.length > 0) {
-      for (let i = 0; i < stubStmts.length; i += 100) {
-        await db.batch(stubStmts.slice(i, i + 100));
-      }
-      console.log(`[hangar-sync] Created ${stubStmts.length} stub vehicles: ${stubSlugs.join(", ")}`);
+    // Log unmatched items so we can add them to the vehicles table via extraction scripts
+    if (skippedItems.length > 0) {
+      console.warn(`[hangar-sync] Skipped ${skippedItems.length} unmatched items: ${skippedItems.slice(0, 20).join(", ")}`);
+      logEvent("hangar_sync_unmatched", {
+        user_id: userID,
+        count: skippedItems.length,
+        items: skippedItems.slice(0, 50),
+      });
     }
 
     // Fleet swap
@@ -387,26 +396,31 @@ export function importRoutes() {
     const upgradeCount = payload.upgrades.length;
 
     // --- Log change history ---
-    console.log(`[hangar-sync] Sync complete: ${imported} ships, ${buybackCount} buyback, ${upgradeCount} upgrades`);
+    console.log(`[hangar-sync] Sync complete: ${imported} ships, ${skippedItems.length} skipped, ${buybackCount} buyback, ${upgradeCount} upgrades`);
     logEvent("hangar_sync", {
       imported,
+      skipped: skippedItems.length,
       buyback_count: buybackCount,
       upgrade_count: upgradeCount,
       has_profile: hasProfile,
+      anomalous: isAnomalous,
       extension_version: payload.sync_meta.extension_version,
     });
     await logUserChange(db, userID, "hangar_synced", {
       metadata: {
         vehicle_count: imported,
+        skipped_count: skippedItems.length,
         buyback_count: buybackCount,
         upgrade_count: upgradeCount,
         extension_version: payload.sync_meta.extension_version,
       },
-      ipAddress: c.req.header("cf-connecting-ip") ?? c.req.header("x-forwarded-for"),
+      ipAddress: clientIP,
     });
 
     return c.json({
       imported,
+      skipped: skippedItems.length,
+      skipped_items: skippedItems.slice(0, 20),
       buyback_count: buybackCount,
       upgrade_count: upgradeCount,
       has_profile: hasProfile,

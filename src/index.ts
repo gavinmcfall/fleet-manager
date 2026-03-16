@@ -86,12 +86,16 @@ app.use("/api/*", async (c, next) => {
   }
 });
 
-// CORS — strict same-origin in production, localhost in dev
+// CORS — strict same-origin in production, localhost in dev, chrome-extension:// for SC Bridge Sync
 app.use("/api/*", async (c, next) => {
   const origin = c.req.header("Origin") || "";
   const host = c.req.header("Host") || "";
   if (!origin) return cors({ origin: `https://${host}` })(c, next);
   try {
+    // Allow browser extension origins (chrome-extension://, moz-extension://)
+    if (origin.startsWith("chrome-extension://") || origin.startsWith("moz-extension://")) {
+      return cors({ origin, credentials: true })(c, next);
+    }
     const originHost = new URL(origin).hostname;
     const isSameOrigin = originHost === host || originHost === host.split(":")[0];
     const isLocalDev = (originHost === "localhost" || originHost === "127.0.0.1") && c.env.ENVIRONMENT === "development";
