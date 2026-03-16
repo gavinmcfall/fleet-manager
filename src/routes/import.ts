@@ -380,11 +380,12 @@ export function importRoutes() {
         ugStmts.push(
           db
             .prepare(
-              `INSERT INTO user_pledge_upgrades (user_id, rsi_pledge_id, name, applied_at, new_value, synced_at)
-              VALUES (?, ?, ?, ?, ?, datetime('now'))`,
+              `INSERT INTO user_pledge_upgrades (user_id, user_pledge_id, upgrade_rsi_pledge_id, upgrade_name, applied_at, new_value)
+              VALUES (?, ?, ?, ?, ?, ?)`,
             )
             .bind(
               userID,
+              ug.pledge_id,
               ug.pledge_id,
               ug.name,
               ug.applied_at || null,
