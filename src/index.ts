@@ -384,6 +384,13 @@ async function runScheduledSync(cron: string, env: Env): Promise<void> {
       logEvent("cron_trigger", { schedule: cron, task: "rsi_images" });
       await triggerRSISync(env);
       break;
+    case "0 4 * * *": {
+      console.log("[cron] Fleetyards production status sync");
+      logEvent("cron_trigger", { schedule: cron, task: "fleetyards_status" });
+      const { syncProductionStatuses } = await import("./sync/fleetyards");
+      await syncProductionStatuses(env.DB);
+      break;
+    }
     default:
       console.warn(`[cron] Unknown schedule: ${cron}`);
   }

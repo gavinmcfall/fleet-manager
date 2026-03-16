@@ -35,6 +35,7 @@ bucket_name = "sc-bridge-avatars"
 crons = [
   "30 3 * * *",  # session cleanup
   "45 3 * * *",  # RSI API images (ships + paints)
+  "0 4 * * *",   # Fleetyards production status sync
 ]
 
 # Environment variables (non-secret defaults)
