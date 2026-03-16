@@ -1,13 +1,11 @@
-import React, { useState, useEffect } from 'react'
-import { Link, useNavigate, useSearchParams } from 'react-router-dom'
+import React, { useState } from 'react'
+import { Link, useNavigate } from 'react-router-dom'
 import { signUp } from '../lib/auth-client'
-import { Rocket, Mail, Lock, User, AlertCircle, Ticket } from 'lucide-react'
+import { Rocket, Mail, Lock, User, AlertCircle } from 'lucide-react'
 import SocialLoginButtons from '../components/SocialLoginButtons'
 
 export default function Register() {
   const navigate = useNavigate()
-  const [searchParams] = useSearchParams()
-  const inviteToken = searchParams.get('invite')
 
   const [name, setName] = useState('')
   const [email, setEmail] = useState('')
@@ -16,21 +14,6 @@ export default function Register() {
   const [error, setError] = useState('')
   const [loading, setLoading] = useState(false)
   const [agreedToTerms, setAgreedToTerms] = useState(false)
-  const [inviteValid, setInviteValid] = useState(null) // null = checking, true/false = result
-
-  useEffect(() => {
-    if (!inviteToken) {
-      navigate('/login', { replace: true })
-      return
-    }
-    fetch(`/api/invites/validate?token=${encodeURIComponent(inviteToken)}`)
-      .then((r) => r.json())
-      .then((data) => {
-        if (!data.valid) navigate('/login', { replace: true })
-        else setInviteValid(true)
-      })
-      .catch(() => navigate('/login', { replace: true }))
-  }, [inviteToken])
 
   const handleSubmit = async (e) => {
     e.preventDefault()
@@ -49,22 +32,10 @@ export default function Register() {
     setLoading(true)
 
     try {
-      const result = await signUp.email({
-        name,
-        email,
-        password,
-        fetchOptions: {
-          headers: { 'x-invite-token': inviteToken },
-        },
-      })
+      const result = await signUp.email({ name, email, password })
 
       if (result.error) {
-        const code = result.error.code
-        if (code === 'INVITE_INVALID' || code === 'INVITE_REQUIRED') {
-          setError('This invite link is no longer valid. Please request a new one.')
-        } else {
-          setError(result.error.message || 'Registration failed')
-        }
+        setError(result.error.message || 'Registration failed')
       } else {
         navigate('/verify-email', { replace: true, state: { email } })
       }
@@ -75,10 +46,6 @@ export default function Register() {
     }
   }
 
-  // Checking invite validity — show nothing until redirect or valid state resolves
-  if (!inviteValid) return null
-
-  // Valid invite — show signup form
   return (
     <div className="min-h-screen flex items-center justify-center bg-sc-darker">
       <div className="w-full max-w-md px-6">
@@ -93,11 +60,6 @@ export default function Register() {
         </div>
 
         <div className="panel p-8">
-          <div className="flex items-center justify-center gap-2 mb-5">
-            <Ticket className="w-4 h-4 text-sc-success" />
-            <span className="text-xs font-mono text-sc-success uppercase tracking-wider">You've been invited</span>
-          </div>
-
           <h2 className="font-display font-bold text-lg text-white mb-6 text-center">Create Account</h2>
 
           {error && (

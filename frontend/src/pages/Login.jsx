@@ -134,9 +134,10 @@ export default function Login() {
               {loading ? 'Signing in...' : 'Sign In'}
             </button>
 
-            <div className="flex items-center justify-center gap-2 mt-3">
-              <span className="w-1.5 h-1.5 rounded-full bg-sc-accent animate-pulse shrink-0" />
-              <span className="text-xs font-mono text-sc-accent tracking-wider">Registration is by invitation only</span>
+            <div className="text-center mt-3">
+              <Link to="/register" className="text-xs font-mono text-sc-accent hover:text-sc-accent/80 transition-colors tracking-wider">
+                New here? Create an account
+              </Link>
             </div>
           </form>
 
