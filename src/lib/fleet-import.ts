@@ -63,12 +63,28 @@ export function findVehicleSlugLocal(
     if (found) return found;
   }
 
-  // Try prefix match
+  // Try prefix match — existing slug starts with candidate
   for (const slug of candidateSlugs) {
     if (!slug || slug.length < 3) continue;
     for (const [existingSlug] of map.slugToID) {
       if (existingSlug.startsWith(slug)) return existingSlug;
     }
+  }
+
+  // Try reverse prefix — candidate starts with existing slug (handles verbose RSI names
+  // like "Carrack Expedition with Pisces Expedition" matching "carrack-expedition",
+  // or "Idris-P Frigate" matching "idris-p")
+  for (const slug of candidateSlugs) {
+    if (!slug || slug.length < 3) continue;
+    let bestMatch: string | null = null;
+    let bestLen = 0;
+    for (const [existingSlug] of map.slugToID) {
+      if (slug.startsWith(existingSlug) && existingSlug.length > bestLen) {
+        bestMatch = existingSlug;
+        bestLen = existingSlug.length;
+      }
+    }
+    if (bestMatch) return bestMatch;
   }
 
   return null;
