@@ -1,5 +1,5 @@
 import React, { useState, Suspense, lazy } from 'react'
-import { Routes, Route, NavLink, useLocation, useNavigate, useSearchParams } from 'react-router-dom'
+import { Routes, Route, NavLink, useLocation, useNavigate } from 'react-router-dom'
 import { Rocket, BarChart3, Shield, Upload, RefreshCw, Database, Settings as SettingsIcon, ChevronDown, ChevronRight, ChevronLeft, History, Menu, X, LogOut, LogIn, User, Wrench, Users, Building2, FileText, Search, MapPin, Palette, ShoppingCart, Hammer, Briefcase, Star, Scale, Crosshair, BookOpen, Layers, TrendingUp } from 'lucide-react'
 import LoadingState from './components/LoadingState'
 import ErrorBoundary from './components/ErrorBoundary'
@@ -47,7 +47,6 @@ const Careers = lazy(() => import('./pages/Careers'))
 const Reputation = lazy(() => import('./pages/Reputation'))
 const LawSystem = lazy(() => import('./pages/LawSystem'))
 const NPCLoadouts = lazy(() => import('./pages/NPCLoadouts'))
-const DesignPreview = lazy(() => import('./pages/DesignPreview'))
 const NotFound = lazy(() => import('./pages/NotFound'))
 
 const publicNavItems = [
@@ -439,16 +438,6 @@ function ImpersonationBanner() {
   )
 }
 
-function DesignPreviewGate({ children }) {
-  const location = useLocation()
-  const [searchParams] = useSearchParams()
-  const design = searchParams.get('design')
-  if (location.pathname === '/' && design) {
-    return <Suspense fallback={<LoadingState fullScreen />}><DesignPreview /></Suspense>
-  }
-  return children
-}
-
 export default function App() {
   useFontPreference()
   const [expandedMenu, setExpandedMenu] = useState('My Fleet')
@@ -468,7 +457,6 @@ export default function App() {
   return (
     <TimezoneProvider>
     <GameVersionProvider>
-    <DesignPreviewGate>
     <Routes>
       {/* Public auth routes — no sidebar */}
       <Route path="/login" element={<Login />} />
@@ -602,7 +590,6 @@ export default function App() {
         }
       />
     </Routes>
-    </DesignPreviewGate>
     </GameVersionProvider>
     </TimezoneProvider>
   )
