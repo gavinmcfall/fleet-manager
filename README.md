@@ -1,24 +1,66 @@
 # SC Bridge
 
-A Star Citizen companion app — fleet management, ship database, loot tracking, and game reference data. Live at [scbridge.app](https://scbridge.app).
+A Star Citizen companion web app — fleet management, hangar sync, ship database, insurance tracking, loot data, and game reference. Live at [scbridge.app](https://scbridge.app).
+
+![Dashboard](screenshots/dashboard.png)
+
+## Features
+
+### Fleet Management
+Track your ships, custom names, insurance types, pledge costs, and production status. Synced directly from your RSI hangar.
+
+![Fleet](screenshots/fleet.png)
+
+### Hangar Sync
+Sync your RSI hangar to SC Bridge with the [SC Bridge Sync](https://github.com/SC-Bridge/sc-bridge-sync) browser extension. Ships, insurance, buy-back pledges, upgrade history, and account info — collected automatically from the RSI website.
+
+![Sync & Import](screenshots/sync-import.png)
+
+### Ship Database
+Browse all Star Citizen ships with specs, components, weapons, paints, loadouts, and performance data.
+
+![Ship Detail](screenshots/ship-detail-idris.png)
+
+### Insurance Tracker
+Dashboard showing LTI vs timed insurance coverage, pledge history, and at-risk ships.
+
+![Insurance](screenshots/insurance.png)
+
+### Loot Database
+Browse in-game loot with location data, rarity, and NPC drop sources.
+
+![Loot Database](screenshots/loot-db.png)
+
+### NPC Loadouts
+What gear NPCs wear and carry, organized by faction.
+
+![NPC Loadouts](screenshots/npc-loadouts.png)
+
+### More
+- **Fleet Analysis** — AI-powered gap detection, redundancy analysis, role distribution
+- **Org Support** — org fleets with visibility controls (public / org / officers / private)
+- **Game Reference** — shops, trade commodities, factions, laws, reputation, careers, missions
 
 ## Tech Stack
 
 - **Backend**: Cloudflare Worker (TypeScript), [Hono](https://hono.dev) framework
-- **Database**: Cloudflare D1 (`sc-companion`), [Kysely](https://kysely.dev) query builder
-- **Auth**: [Better Auth](https://www.better-auth.com) v1.4.18
-- **Frontend**: React SPA, [Vite](https://vitejs.dev), Tailwind CSS
-- **Storage**: Cloudflare R2 (avatar uploads), Workers Assets (SPA serving)
-- **CI/CD**: GitHub Actions → `wrangler deploy` on push to `main`
+- **Database**: Cloudflare D1 (SQLite), 121 migrations
+- **Auth**: [Better Auth](https://www.better-auth.com) with email, Google, Discord, GitHub, Twitch
+- **Frontend**: React SPA, [Vite](https://vitejs.dev), Tailwind CSS, Recharts
+- **Extension**: WXT browser extension (Chrome + Firefox) for RSI hangar sync
+- **Caching**: Cloudflare Workers KV (25 game-data endpoints)
+- **Storage**: Cloudflare R2 (avatars), Workers Assets (SPA)
+- **CI/CD**: GitHub Actions → `wrangler deploy` on push to `main` or `staging`
 
-## Features
+## Data Sources
 
-- **Fleet Management** — track owned ships, custom names, insurance, and pledge data
-- **Ship Database** — searchable/filterable browser of all Star Citizen ships with specs, pricing, and production status
-- **Insurance Tracker** — LTI vs timed insurance dashboard with pledge history
-- **Fleet Analysis** — gap detection, redundancy analysis, role distribution
-- **HangarXplor Import** — upload JSON exports from the HangarXplor browser extension
-- **Org Support** — org fleets with visibility controls (public / org / officers / private)
+| Source | What | When |
+|--------|------|------|
+| RSI hangar (via extension) | Fleet, insurance, pledges, buy-back, upgrades, account | User-triggered sync |
+| HangarXplor JSON | Fleet import (legacy fallback) | User-triggered upload |
+| RSI GraphQL API | Ship + paint images | Nightly cron (3:45 AM) |
+| Fleetyards API | Production status sync | Nightly cron (4:00 AM) |
+| DataCore p4k extraction | Components, FPS gear, loot map, NPC loadouts | Manual extraction scripts |
 
 ## Development
 
@@ -26,7 +68,7 @@ A Star Citizen companion app — fleet management, ship database, loot tracking,
 
 - Node.js 22+
 - Wrangler CLI (`npm install -g wrangler`)
-- Cloudflare account (for D1 and R2)
+- Cloudflare account (for D1, R2, KV)
 
 ### Local Dev
 
@@ -35,73 +77,32 @@ npm install
 npm run dev          # Vite dev server + Worker via miniflare
 ```
 
-The Vite dev server proxies `/api/*` to the local Worker automatically.
-
-### Build
+### Build & Deploy
 
 ```bash
 npm run build        # Build frontend + bundle Worker
-```
-
-### Deploy
-
-```bash
 npm run deploy       # wrangler deploy (requires CLOUDFLARE_API_TOKEN)
 ```
 
-Or push to `main` — GitHub Actions deploys automatically.
+Push to `main` deploys to production. Push to `staging` deploys to staging.
 
-## Database
-
-D1 database: `sc-companion` (Oceania region)
-
-### Migrations
+### Database Migrations
 
 ```bash
-# Apply pending migrations to remote D1
 source ~/.secrets
 npx wrangler d1 migrations apply sc-companion --remote
-
-# Apply locally (for development)
-npm run db:migrate:local
 ```
 
-Migrations live in `src/db/migrations/`. See `src/db/CONVENTIONS.md` for naming
-conventions and schema design rules.
+Migrations in `src/db/migrations/`. Conventions in `src/db/CONVENTIONS.md`.
 
-### Current Schema (SC 4.6.0)
+## Environments
 
-46 tables including: `vehicles`, `vehicle_components`, `fps_weapons`, `fps_armour`,
-`fps_attachments`, `fps_utilities`, `fps_helmets`, `fps_clothing`, `consumables`,
-`harvestables`, `props`, `loot_map`, `orgs`, `org_members`, `user_fleet`.
-
-Last applied migration: `0028_loot_map_props_fk.sql`
-
-## Data Sync
-
-Nightly cron triggers (defined in `wrangler.toml`) keep ship and item data current:
-
-| Time (UTC) | What |
-|------------|------|
-| 03:30 | session cleanup + scunpacked paint metadata |
-| 03:45 | RSI API paint images |
-
-Manual sync is available via the admin panel or `POST /api/sync/*` endpoints.
-
-## Infrastructure
-
-- **Worker name**: `sc-bridge`
-- **Account**: NERDZ Cloudflare account
-- **Domain**: `scbridge.app` (proxied via Cloudflare)
-- **R2 bucket**: `sc-bridge-avatars`
-- **Observability**: Structured logs + OTEL traces → Grafana Cloud / New Relic
-
-## Game Data Extraction
-
-Ship specs, component stats, loot data, and item tables are populated from
-Star Citizen game files using the extraction scripts in
-`/home/gavin/scbridge/tools/scripts/`. See that repo's
-[README](../scbridge/tools/scripts/README.md) for the full workflow.
+| | Production | Staging |
+|-|-----------|---------|
+| **URL** | scbridge.app | staging.scbridge.app |
+| **Worker** | sc-bridge | sc-bridge-staging |
+| **D1** | sc-companion | sc-companion-staging |
+| **Deploy** | push to `main` | push to `staging` |
 
 ## License
 
