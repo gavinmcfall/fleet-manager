@@ -3,6 +3,15 @@ import { useState, useEffect, useCallback, useRef } from 'react'
 const ALLOWED_SOURCE = 'sc-bridge-sync'
 const DETECT_TIMEOUT = 2000 // ms to wait for pong
 
+/** Default sync categories — all enabled */
+export const SYNC_CATEGORIES = {
+  fleet: { key: 'fleet', label: 'Fleet & Pledges', description: 'Ships, vehicles, insurance, skins, and pledge details', default: true },
+  buyback: { key: 'buyback', label: 'Buy-Back Pledges', description: 'Melted pledges available for reclaim', default: true },
+  upgrades: { key: 'upgrades', label: 'Upgrade History', description: 'CCU chains and applied upgrades per pledge', default: true },
+  account: { key: 'account', label: 'Account Info', description: 'Concierge level, subscriber status, org, balances', default: true },
+  shipNames: { key: 'shipNames', label: 'Custom Ship Names', description: 'Your named ships (e.g. Jean-Luc, James Holden)', default: true },
+}
+
 export default function useHangarSync() {
   const [status, setStatus] = useState('idle') // idle | detecting | ready | no-extension | collecting | uploading | complete | error
   const [error, setError] = useState(null)
@@ -11,6 +20,7 @@ export default function useHangarSync() {
   const listenerRef = useRef(null)
   const timeoutRef = useRef(null)
   const statusRef = useRef(status)
+  const categoriesRef = useRef(null)
 
   // Keep statusRef in sync so timeout callbacks see current value
   useEffect(() => {
@@ -59,10 +69,11 @@ export default function useHangarSync() {
   // Detect on mount
   useEffect(() => { detect() }, [detect])
 
-  // Start sync
-  const startSync = useCallback(() => {
+  // Start sync — accepts optional categories map { fleet: true, buyback: false, ... }
+  const startSync = useCallback((categories) => {
     if (statusRef.current !== 'ready' && statusRef.current !== 'complete' && statusRef.current !== 'error') return
 
+    categoriesRef.current = categories || null
     setStatus('collecting')
     setError(null)
     setResult(null)
@@ -84,6 +95,17 @@ export default function useHangarSync() {
           return
         }
 
+        // Filter payload based on selected categories
+        const payload = event.data.payload
+        const cats = categoriesRef.current
+        if (cats && payload) {
+          if (cats.fleet === false) payload.pledges = []
+          if (cats.buyback === false) payload.buyback_pledges = []
+          if (cats.upgrades === false) payload.upgrades = []
+          if (cats.account === false) payload.account = null
+          if (cats.shipNames === false) payload.named_ships = []
+        }
+
         // Upload to our API
         setStatus('uploading')
         try {
@@ -91,7 +113,7 @@ export default function useHangarSync() {
             method: 'POST',
             credentials: 'same-origin',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify(event.data.payload),
+            body: JSON.stringify(payload),
           })
 
           if (res.status === 401) {

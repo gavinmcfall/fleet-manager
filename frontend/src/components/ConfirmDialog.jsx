@@ -7,7 +7,7 @@ const VARIANTS = {
   info: { icon: Info, iconColor: 'text-sc-accent2', confirmClass: 'btn-primary' },
 }
 
-export default function ConfirmDialog({ open, onConfirm, onCancel, title, message, confirmLabel = 'Confirm', variant = 'danger' }) {
+export default function ConfirmDialog({ open, onConfirm, onCancel, title, message, children, confirmLabel = 'Confirm', variant = 'danger' }) {
   const dialogRef = useRef(null)
   const cfg = VARIANTS[variant] || VARIANTS.danger
   const Icon = cfg.icon
@@ -45,7 +45,7 @@ export default function ConfirmDialog({ open, onConfirm, onCancel, title, messag
           <Icon className={`w-5 h-5 ${cfg.iconColor} shrink-0 mt-0.5`} aria-hidden="true" />
           <div>
             <h3 id="confirm-dialog-title" className="font-display font-semibold text-white text-base">{title}</h3>
-            <p id="confirm-dialog-message" className="text-sm text-gray-400 mt-1">{message}</p>
+            {children || <p id="confirm-dialog-message" className="text-sm text-gray-400 mt-1">{message}</p>}
           </div>
         </div>
         <div className="flex justify-end gap-3">

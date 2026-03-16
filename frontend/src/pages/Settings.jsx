@@ -7,7 +7,7 @@ import FilterSelect from '../components/FilterSelect'
 import ConfirmDialog from '../components/ConfirmDialog'
 import useFontPreference from '../hooks/useFontPreference'
 import useTimezone from '../hooks/useTimezone'
-import useHangarSync from '../hooks/useHangarSync'
+import useHangarSync, { SYNC_CATEGORIES } from '../hooks/useHangarSync'
 import { formatDate } from '../lib/dates'
 
 const FONT_OPTIONS = [
@@ -38,6 +38,9 @@ export default function Settings() {
   const [showApiKey, setShowApiKey] = useState(false)
   const [notification, setNotification] = useState(null)
   const [confirmDialog, setConfirmDialog] = useState({ open: false })
+  const [syncCategories, setSyncCategories] = useState(() =>
+    Object.fromEntries(Object.entries(SYNC_CATEGORIES).map(([k, v]) => [k, v.default]))
+  )
 
   useEffect(() => {
     if (config) {
@@ -115,25 +118,25 @@ export default function Settings() {
   }
 
   const handleSyncClick = () => {
-    if (preferences?.sync_consent) {
-      sync.startSync()
-      return
-    }
+    // Reset categories to defaults each time the dialog opens
+    setSyncCategories(Object.fromEntries(Object.entries(SYNC_CATEGORIES).map(([k, v]) => [k, v.default])))
 
     setConfirmDialog({
       open: true,
-      title: 'Hangar Sync — Data Consent',
-      message: 'SC Bridge Sync will collect your RSI hangar data including ships, insurance details, buy-back pledges, CCU/upgrade history, and basic account info (handle, UEE record). This data is sent only to SC Bridge and stored in your account. No data is shared with third parties.',
+      title: 'Hangar Sync',
+      message: 'sync-categories',
       variant: 'info',
-      confirmLabel: 'Approve & Sync',
+      confirmLabel: 'Sync Now',
       onConfirm: async () => {
         setConfirmDialog({ open: false })
         try {
-          await setPreferences({ sync_consent: new Date().toISOString() })
-          refetchPrefs()
-          sync.startSync()
+          if (!preferences?.sync_consent) {
+            await setPreferences({ sync_consent: new Date().toISOString() })
+            refetchPrefs()
+          }
+          sync.startSync(syncCategories)
         } catch (err) {
-          showNotification('Failed to save consent: ' + err.message, 'error')
+          showNotification('Failed to start sync: ' + err.message, 'error')
         }
       },
     })
@@ -490,10 +493,41 @@ export default function Settings() {
         onConfirm={confirmDialog.onConfirm || (() => {})}
         onCancel={() => setConfirmDialog({ open: false })}
         title={confirmDialog.title}
-        message={confirmDialog.message}
+        message={confirmDialog.message !== 'sync-categories' ? confirmDialog.message : undefined}
         confirmLabel={confirmDialog.confirmLabel}
         variant={confirmDialog.variant}
-      />
+      >
+        {confirmDialog.message === 'sync-categories' && (
+          <div className="mt-2 space-y-3">
+            <p className="text-sm text-gray-400">
+              Choose which data to sync from your RSI account. Data is stored in your SC Bridge account only.
+            </p>
+            <div className="space-y-1.5">
+              {Object.entries(SYNC_CATEGORIES).map(([key, cat]) => (
+                <label
+                  key={key}
+                  className={`flex items-start gap-3 p-2.5 rounded border cursor-pointer transition-colors ${
+                    syncCategories[key]
+                      ? 'border-sc-accent/40 bg-sc-accent/5'
+                      : 'border-sc-border/50 opacity-60'
+                  }`}
+                >
+                  <input
+                    type="checkbox"
+                    checked={syncCategories[key]}
+                    onChange={(e) => setSyncCategories(prev => ({ ...prev, [key]: e.target.checked }))}
+                    className="mt-0.5 accent-sc-accent"
+                  />
+                  <div className="flex-1 min-w-0">
+                    <div className="text-sm text-white font-medium">{cat.label}</div>
+                    <div className="text-xs text-gray-500">{cat.description}</div>
+                  </div>
+                </label>
+              ))}
+            </div>
+          </div>
+        )}
+      </ConfirmDialog>
     </div>
   )
 }
