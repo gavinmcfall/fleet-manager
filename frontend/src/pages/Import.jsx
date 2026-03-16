@@ -322,25 +322,42 @@ export default function Import() {
             The SC Bridge Sync extension connects to your RSI account and sends hangar data to SC Bridge.
           </p>
           <div className="space-y-3">
-            <div className="flex items-center justify-between p-3 rounded border border-sc-border">
+            <a
+              href="https://chromewebstore.google.com/detail/sc-bridge-sync/gcokkoamjodagagbojhkimfbjjpdfefi"
+              target="_blank"
+              rel="noopener noreferrer"
+              className="flex items-center justify-between p-3 rounded border border-sc-border hover:border-sc-accent/30 transition-colors group"
+            >
               <div className="flex items-center gap-3">
-                <ExternalLink className="w-4 h-4 text-gray-500" />
-                <span className="text-sm text-gray-300">Chrome Web Store</span>
+                <svg className="w-5 h-5" viewBox="0 0 24 24" fill="none"><circle cx="12" cy="12" r="10" stroke="#4285F4" strokeWidth="1.5"/><circle cx="12" cy="12" r="4" fill="#4285F4"/><path d="M12 2a10 10 0 0 1 8.66 5H12" stroke="#EA4335" strokeWidth="1.5"/><path d="M3.34 7l5 8.66L12 8" stroke="#FBBC05" strokeWidth="1.5"/><path d="M20.66 7L15.66 15.66H22" stroke="#34A853" strokeWidth="1.5"/></svg>
+                <span className="text-sm text-gray-300 group-hover:text-white transition-colors">Chrome Web Store</span>
               </div>
-              <span className="text-xs font-mono px-2 py-0.5 rounded bg-amber-500/10 border border-amber-500/20 text-amber-400">Coming Soon</span>
-            </div>
-            <div className="flex items-center justify-between p-3 rounded border border-sc-border">
+              <span className="text-xs font-mono px-2 py-0.5 rounded bg-amber-500/10 border border-amber-500/20 text-amber-400">Pending Review</span>
+            </a>
+            <a
+              href="https://addons.mozilla.org/en-US/firefox/addon/sc-bridge-sync/"
+              target="_blank"
+              rel="noopener noreferrer"
+              className="flex items-center justify-between p-3 rounded border border-sc-border hover:border-sc-accent/30 transition-colors group"
+            >
               <div className="flex items-center gap-3">
-                <ExternalLink className="w-4 h-4 text-gray-500" />
-                <span className="text-sm text-gray-300">Firefox Add-ons</span>
+                <svg className="w-5 h-5" viewBox="0 0 24 24" fill="none"><path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2z" fill="#FF7139"/><path d="M18.5 8.5c-.5-1.5-2-3-3.5-3.5.5 1 .5 2 0 3-1-2-3-3-5-3 2 2 2 4 1 6-1-1-1-3-1-3-1 2-1 4 0 6 .5 1 1.5 2 3 2.5 2 .5 4-.5 5-2 .5-1 .5-2 0-3-.5-.5-1-.5-1.5 0 .5-1 0-2-.5-2.5l-.5-.5z" fill="#FFE0C1"/></svg>
+                <span className="text-sm text-gray-300 group-hover:text-white transition-colors">Firefox Add-ons</span>
               </div>
-              <span className="text-xs font-mono px-2 py-0.5 rounded bg-amber-500/10 border border-amber-500/20 text-amber-400">Coming Soon</span>
-            </div>
-            <div className="p-3 rounded bg-white/5 border border-sc-border">
-              <p className="text-xs text-gray-500">
-                Manual install instructions will be available here once the extension is released.
-              </p>
-            </div>
+              <span className="text-xs font-mono px-2 py-0.5 rounded bg-amber-500/10 border border-amber-500/20 text-amber-400">Pending Review</span>
+            </a>
+            <a
+              href="https://microsoftedge.microsoft.com/addons/detail/sc-bridge-sync/"
+              target="_blank"
+              rel="noopener noreferrer"
+              className="flex items-center justify-between p-3 rounded border border-sc-border hover:border-sc-accent/30 transition-colors group"
+            >
+              <div className="flex items-center gap-3">
+                <svg className="w-5 h-5" viewBox="0 0 24 24" fill="none"><path d="M12 2C6.48 2 2 6.48 2 12c0 4.84 3.44 8.87 8 9.8V14h-2v-2h2V9.5C10 7.57 11.57 6 13.5 6H16v2h-2c-.55 0-1 .45-1 1v3h3l-.5 2H13v7.95C18.05 21.45 22 17.19 22 12c0-5.52-4.48-10-10-10z" fill="#0078D4"/></svg>
+                <span className="text-sm text-gray-300 group-hover:text-white transition-colors">Microsoft Edge Add-ons</span>
+              </div>
+              <span className="text-xs font-mono px-2 py-0.5 rounded bg-amber-500/10 border border-amber-500/20 text-amber-400">Pending Review</span>
+            </a>
           </div>
         </div>
       </PanelSection>
