@@ -11,6 +11,22 @@ import InsuranceBadge from '../components/InsuranceBadge'
 import ShipImage from '../components/ShipImage'
 import ShipDetailPanel from '../components/ShipDetailPanel'
 
+/** Parse pledge_cost string (e.g. "$290.00", "$0.00 USD", "¤15,000 UEC") into a display value and numeric sort value. */
+function parsePledgeCost(raw) {
+  if (!raw) return { display: '-', numeric: 0 }
+  const str = raw.trim()
+  // UEC purchases — not a real dollar pledge
+  if (str.includes('¤') || str.toUpperCase().includes('UEC')) return { display: '-', numeric: 0 }
+  // Extract dollar amount: "$290.00" or "$0.00 USD"
+  const match = str.match(/\$\s*([\d,]+(?:\.\d+)?)/)
+  if (!match) return { display: '-', numeric: 0 }
+  const num = parseFloat(match[1].replace(/,/g, ''))
+  if (!num || num === 0) return { display: '-', numeric: 0 }
+  // Format with commas, drop cents
+  const formatted = `$${Math.round(num).toLocaleString('en-US')}`
+  return { display: formatted, numeric: num }
+}
+
 const VISIBILITY_OPTIONS = [
   { value: 'private', label: 'Private' },
   { value: 'org', label: 'Org' },
@@ -69,7 +85,7 @@ export default function FleetTable() {
         case 'vehicle_name': va = a.vehicle_name; vb = b.vehicle_name; break
         case 'size': va = a.size_label || ''; vb = b.size_label || ''; break
         case 'focus': va = a.focus || ''; vb = b.focus || ''; break
-        case 'pledge': va = a.pledge_price || 0; vb = b.pledge_price || 0; break
+        case 'pledge': va = parsePledgeCost(a.pledge_cost).numeric; vb = parsePledgeCost(b.pledge_cost).numeric; break
         default: va = a.vehicle_name; vb = b.vehicle_name
       }
       if (typeof va === 'string') {
@@ -236,7 +252,7 @@ export default function FleetTable() {
                       </td>
                       <td className="table-cell text-gray-400">{v.focus || '-'}</td>
                       <td className="table-cell font-mono text-gray-400">
-                        {v.pledge_price ? `$${v.pledge_price}` : '-'}
+                        {parsePledgeCost(v.pledge_cost).display}
                       </td>
                       <td className="table-cell">
                         <InsuranceBadge isLifetime={v.is_lifetime} label={v.insurance_label} />

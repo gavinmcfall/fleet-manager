@@ -3,8 +3,6 @@ import { useState, useEffect, useCallback, useRef } from 'react'
 const ALLOWED_SOURCE = 'sc-bridge-sync'
 const DETECT_TIMEOUT = 3000 // ms to wait for pong
 
-const log = (...args) => console.log('[HangarSync]', ...args)
-
 /** Default sync categories — all enabled */
 export const SYNC_CATEGORIES = {
   fleet: { key: 'fleet', label: 'Fleet & Pledges', description: 'Ships, vehicles, insurance, skins, and pledge details', default: true },
@@ -35,21 +33,7 @@ export default function useHangarSync() {
     }
   }, [])
 
-  // Global message logger — shows ALL postMessage traffic during detection
-  useEffect(() => {
-    const debugHandler = (event) => {
-      // Log everything that comes through postMessage
-      if (event.data && typeof event.data === 'object' && event.data.type) {
-        log('postMessage received:', event.data.type, 'source:', event.data.source, 'origin:', event.origin, 'full:', event.data)
-      }
-    }
-    window.addEventListener('message', debugHandler)
-    log('Debug message listener installed')
-    return () => window.removeEventListener('message', debugHandler)
-  }, [])
-
   const detect = useCallback(() => {
-    log('detect() called — sending SCBRIDGE_PING')
     setStatus('detecting')
     setError(null)
 
@@ -57,9 +41,7 @@ export default function useHangarSync() {
 
     const handler = (event) => {
       if (event.data?.source !== ALLOWED_SOURCE) return
-      log('Got message from extension:', event.data.type, event.data)
       if (event.data?.type === 'SCBRIDGE_PONG') {
-        log('PONG received! Version:', event.data.version)
         setStatus('ready')
         setExtensionVersion(event.data.version || null)
         if (timeoutRef.current) clearTimeout(timeoutRef.current)
@@ -69,12 +51,16 @@ export default function useHangarSync() {
     listenerRef.current = handler
     window.addEventListener('message', handler)
 
+    // Send multiple PINGs — bridge content script may not be injected yet on first load
     window.postMessage({ type: 'SCBRIDGE_PING', source: 'scbridge-app' }, '*')
-    log('PING sent via postMessage')
+    const pingInterval = setInterval(() => {
+      if (statusRef.current !== 'detecting') { clearInterval(pingInterval); return }
+      window.postMessage({ type: 'SCBRIDGE_PING', source: 'scbridge-app' }, '*')
+    }, 500)
 
     timeoutRef.current = setTimeout(() => {
+      clearInterval(pingInterval)
       if (statusRef.current === 'detecting') {
-        log('Detection timeout — no PONG received after', DETECT_TIMEOUT, 'ms')
         setStatus('no-extension')
       }
     }, DETECT_TIMEOUT)
@@ -85,7 +71,6 @@ export default function useHangarSync() {
   const startSync = useCallback((categories) => {
     if (statusRef.current !== 'ready' && statusRef.current !== 'complete' && statusRef.current !== 'error') return
 
-    log('startSync() called with categories:', categories)
     categoriesRef.current = categories || null
     setStatus('collecting')
     setError(null)
@@ -97,7 +82,6 @@ export default function useHangarSync() {
       if (event.data?.source !== ALLOWED_SOURCE) return
 
       if (event.data?.type === 'SCBRIDGE_SYNC_RESPONSE') {
-        log('SYNC_RESPONSE received:', event.data.success, event.data.error || '')
         window.removeEventListener('message', handler)
         listenerRef.current = null
         if (timeoutRef.current) clearTimeout(timeoutRef.current)
@@ -119,7 +103,6 @@ export default function useHangarSync() {
         }
 
         setStatus('uploading')
-        log('Uploading payload to API...', payload ? `${payload.pledges?.length} pledges` : 'null')
         try {
           const res = await fetch('/api/import/hangar-sync', {
             method: 'POST',
@@ -139,11 +122,9 @@ export default function useHangarSync() {
           }
 
           const data = await res.json()
-          log('API response:', data)
           setResult(data)
           setStatus('complete')
         } catch (err) {
-          log('API error:', err.message)
           setError(err.message)
           setStatus('error')
         }
@@ -154,11 +135,9 @@ export default function useHangarSync() {
     window.addEventListener('message', handler)
 
     window.postMessage({ type: 'SCBRIDGE_SYNC_REQUEST', source: 'scbridge-app' }, '*')
-    log('SYNC_REQUEST sent via postMessage')
 
     timeoutRef.current = setTimeout(() => {
       if (statusRef.current === 'collecting') {
-        log('Sync timeout — no response after 3 minutes')
         setError('Sync timed out — the extension took too long to respond')
         setStatus('error')
         if (listenerRef.current) {
