@@ -155,21 +155,21 @@ function InsuranceRow({ ship }) {
           </div>
         )}
       </div>
-      <div className="flex items-center gap-3 flex-wrap">
+      <div className="flex items-center gap-3 shrink-0">
         {ship.pledge_cost && (
-          <span className="flex items-center gap-1 text-xs font-mono text-gray-400">
+          <span className="flex items-center gap-1 text-xs font-mono text-gray-400 w-24">
             <DollarSign className="w-3 h-3" />
             {ship.pledge_cost}
           </span>
         )}
         {ship.pledge_date && (
-          <span className="flex items-center gap-1 text-xs font-mono text-gray-500">
+          <span className="flex items-center gap-1 text-xs font-mono text-gray-500 w-40 justify-end">
             <Calendar className="w-3 h-3" />
             {ship.pledge_date}
           </span>
         )}
-        <InsuranceBadge isLifetime={ship.is_lifetime} label={ship.insurance_label || (ship.is_lifetime ? 'LTI' : 'Standard')} />
         {!!ship.warbond && <span className="badge badge-warbond">WB</span>}
+        <InsuranceBadge isLifetime={ship.is_lifetime} label={ship.insurance_label || (ship.is_lifetime ? 'LTI' : 'Standard')} />
       </div>
     </div>
   )
