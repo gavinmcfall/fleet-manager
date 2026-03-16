@@ -236,7 +236,7 @@ export function importRoutes() {
           insuranceTypeID = insuranceMap.get("lti") ?? null;
         } else if (insTitle) {
           // Parse "N Month Insurance" → N_month key
-          const monthMatch = insTitle.match(/(\d+)\s*month/);
+          const monthMatch = insTitle.match(/(\d+)[\s-]*month/);
           if (monthMatch) {
             insuranceTypeID = insuranceMap.get(`${monthMatch[1]}_month`) ?? insuranceMap.get("unknown") ?? null;
           } else {
