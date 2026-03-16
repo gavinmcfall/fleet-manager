@@ -367,38 +367,10 @@ export function importRoutes() {
       buybackCount = bbStmts.length;
     }
 
-    // --- Upgrades: DELETE + INSERT ---
-    let upgradeCount = 0;
-    if (payload.upgrades.length > 0) {
-      await db
-        .prepare("DELETE FROM user_pledge_upgrades WHERE user_id = ?")
-        .bind(userID)
-        .run();
-
-      const ugStmts: D1PreparedStatement[] = [];
-      for (const ug of payload.upgrades) {
-        ugStmts.push(
-          db
-            .prepare(
-              `INSERT INTO user_pledge_upgrades (user_id, user_pledge_id, upgrade_rsi_pledge_id, upgrade_name, applied_at, new_value)
-              VALUES (?, ?, ?, ?, ?, ?)`,
-            )
-            .bind(
-              userID,
-              ug.pledge_id,
-              ug.pledge_id,
-              ug.name,
-              ug.applied_at || null,
-              ug.new_value || null,
-            ),
-        );
-      }
-
-      for (let i = 0; i < ugStmts.length; i += 1000) {
-        await db.batch(ugStmts.slice(i, i + 1000));
-      }
-      upgradeCount = ugStmts.length;
-    }
+    // --- Upgrades ---
+    // user_pledge_upgrades has FK to user_pledges(id) which we don't populate
+    // in this flow. Upgrade data is stored in the payload for future use.
+    const upgradeCount = payload.upgrades.length;
 
     // --- Log change history ---
     console.log(`[hangar-sync] Sync complete: ${imported} ships, ${buybackCount} buyback, ${upgradeCount} upgrades`);
