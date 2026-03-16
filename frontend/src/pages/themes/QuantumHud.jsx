@@ -12,18 +12,20 @@ import {
 } from 'lucide-react'
 
 const CYAN = '#00d4ff'
-const CYAN_DIM = '#006680'
-const CYAN_FAINT = 'rgba(0, 212, 255, 0.05)'
+const CYAN_MID = '#0099bb'
+const CYAN_FAINT = 'rgba(0, 212, 255, 0.06)'
 const CYAN_GLOW = 'rgba(0, 212, 255, 0.3)'
-const VIOLET = '#a78bfa'
-const GREEN = '#00e890'
+const VIOLET = '#b49dff'
+const GREEN = '#2eeaa0'
 const PINK = '#ff6b9d'
-const BG = '#020208'
-const BG_SIDEBAR = '#04040c'
-const BORDER = 'rgba(0, 212, 255, 0.08)'
-const BORDER_STRONG = 'rgba(0, 212, 255, 0.15)'
-const TEXT = '#7888a0'
-const TEXT_BRIGHT = '#c8d8e8'
+const BG = '#0b1020'
+const BG_SIDEBAR = '#080e1a'
+const BG_PANEL = '#0e1528'
+const BORDER = 'rgba(0, 212, 255, 0.12)'
+const BORDER_STRONG = 'rgba(0, 212, 255, 0.22)'
+const TEXT = '#9cb0c8'
+const TEXT_BRIGHT = '#dce8f0'
+const LABEL = '#5a8aaa'
 
 const HEADING_FONT = "'Orbitron', sans-serif"
 const BODY_FONT = "'Exo 2', sans-serif"
@@ -33,9 +35,9 @@ const GOOGLE_FONT = 'https://fonts.googleapis.com/css2?family=Orbitron:wght@500;
 const CHART_COLORS = [CYAN, VIOLET, GREEN, PINK, '#4e9eff', '#ffb347', '#36d399', '#818cf8']
 
 const TOOLTIP_STYLE = {
-  contentStyle: { background: 'rgba(4,4,12,0.95)', border: `1px solid ${CYAN_DIM}`, borderRadius: 0, boxShadow: `0 0 20px rgba(0, 212, 255, 0.15)` },
-  labelStyle: { color: TEXT, fontFamily: MONO_FONT, fontSize: 12 },
-  itemStyle: { color: TEXT_BRIGHT, fontFamily: MONO_FONT, fontSize: 12 },
+  contentStyle: { background: 'rgba(8,14,26,0.95)', border: `1px solid ${CYAN_MID}`, borderRadius: 0, boxShadow: `0 0 20px rgba(0, 212, 255, 0.15)` },
+  labelStyle: { color: TEXT, fontFamily: MONO_FONT, fontSize: 13 },
+  itemStyle: { color: TEXT_BRIGHT, fontFamily: MONO_FONT, fontSize: 13 },
 }
 
 const SIDEBAR_NAV = [
@@ -72,7 +74,7 @@ const SIDEBAR_NAV = [
 ]
 
 // SVG corner bracket decoration
-function Brackets({ color = CYAN_DIM, size = 16 }) {
+function Brackets({ color = LABEL, size = 16 }) {
   return (
     <svg style={{ position: 'absolute', inset: 0, width: '100%', height: '100%', pointerEvents: 'none' }} viewBox="0 0 100 100" preserveAspectRatio="none">
       <polyline points={`0,${size} 0,0 ${size},0`} fill="none" stroke={color} strokeWidth="0.5" vectorEffect="non-scaling-stroke" />
@@ -87,20 +89,20 @@ function HudPanel({ label, children, delay = 0, style = {} }) {
   return (
     <div style={{
       position: 'relative',
-      background: CYAN_FAINT,
-      padding: '16px 18px',
+      background: BG_PANEL,
+      padding: '18px 20px',
       animation: `hud-scan-in 0.5s ease-out ${delay}ms both`,
       ...style,
     }}>
-      <Brackets color={CYAN_DIM} />
+      <Brackets color={CYAN_MID} />
       {label && (
         <div style={{
           fontFamily: BODY_FONT,
-          fontSize: 11,
+          fontSize: 13,
           fontWeight: 600,
-          letterSpacing: '0.15em',
-          color: CYAN_DIM,
-          marginBottom: 10,
+          letterSpacing: '0.12em',
+          color: LABEL,
+          marginBottom: 12,
           textTransform: 'uppercase',
         }}>
           {label}
@@ -119,18 +121,18 @@ function StatBlock({ label, value, unit, color = TEXT_BRIGHT, delay = 0 }) {
     }}>
       <div style={{
         fontFamily: BODY_FONT,
-        fontSize: 11,
+        fontSize: 13,
         fontWeight: 500,
-        letterSpacing: '0.15em',
-        color: CYAN_DIM,
-        marginBottom: 6,
+        letterSpacing: '0.12em',
+        color: LABEL,
+        marginBottom: 8,
         textTransform: 'uppercase',
       }}>
         {label}
       </div>
       <div style={{
         fontFamily: HEADING_FONT,
-        fontSize: 26,
+        fontSize: 30,
         fontWeight: 700,
         color,
         lineHeight: 1,
@@ -141,9 +143,9 @@ function StatBlock({ label, value, unit, color = TEXT_BRIGHT, delay = 0 }) {
       {unit && (
         <div style={{
           fontFamily: MONO_FONT,
-          fontSize: 11,
+          fontSize: 13,
           color: TEXT,
-          marginTop: 4,
+          marginTop: 5,
         }}>
           {unit}
         </div>
@@ -262,35 +264,35 @@ function ExpandedSidebar({ onCollapse }) {
     }}>
       {/* Brand */}
       <div style={{
-        padding: '14px 16px',
+        padding: '16px 16px',
         borderBottom: `1px solid ${BORDER}`,
       }}>
         <div style={{
           fontFamily: HEADING_FONT,
           fontWeight: 700,
-          fontSize: 14,
+          fontSize: 15,
           letterSpacing: '0.12em',
           color: CYAN,
           display: 'flex',
           alignItems: 'center',
           gap: 8,
         }}>
-          <Rocket style={{ width: 16, height: 16 }} />
+          <Rocket style={{ width: 18, height: 18 }} />
           SC BRIDGE
         </div>
         <div style={{
-          fontFamily: MONO_FONT,
-          fontSize: 10,
+          fontFamily: BODY_FONT,
+          fontSize: 11,
           color: TEXT,
           marginTop: 4,
-          letterSpacing: '0.1em',
+          letterSpacing: '0.08em',
         }}>
-          STAR CITIZEN COMPANION
+          Star Citizen Companion
         </div>
         <div style={{
           fontFamily: MONO_FONT,
-          fontSize: 10,
-          color: CYAN_DIM,
+          fontSize: 11,
+          color: LABEL,
           marginTop: 2,
         }}>
           4.0.2-LIVE
@@ -298,7 +300,7 @@ function ExpandedSidebar({ onCollapse }) {
       </div>
 
       {/* Nav */}
-      <div style={{ flex: 1, padding: '8px 6px', overflowY: 'auto' }}>
+      <div style={{ flex: 1, padding: '10px 8px', overflowY: 'auto' }}>
         {SIDEBAR_NAV.map((item) => {
           if (item.group) {
             const GroupIcon = item.icon
@@ -313,30 +315,30 @@ function ExpandedSidebar({ onCollapse }) {
                     display: 'flex',
                     alignItems: 'center',
                     gap: 10,
-                    padding: '8px 10px',
+                    padding: '9px 12px',
                     border: 'none',
                     background: 'transparent',
                     color: isGroupActive && !isOpen ? CYAN : TEXT,
                     fontFamily: BODY_FONT,
-                    fontSize: 11,
+                    fontSize: 13,
                     fontWeight: 600,
-                    letterSpacing: '0.1em',
+                    letterSpacing: '0.06em',
                     textTransform: 'uppercase',
                     cursor: 'pointer',
                     textAlign: 'left',
                   }}
                 >
-                  <GroupIcon style={{ width: 14, height: 14 }} />
+                  <GroupIcon style={{ width: 16, height: 16 }} />
                   <span style={{ flex: 1 }}>{item.group}</span>
                   {isOpen
-                    ? <ChevronDown style={{ width: 12, height: 12 }} />
-                    : <ChevronRight style={{ width: 12, height: 12 }} />
+                    ? <ChevronDown style={{ width: 14, height: 14 }} />
+                    : <ChevronRight style={{ width: 14, height: 14 }} />
                   }
                 </button>
                 {isOpen && (
                   <div style={{
-                    marginLeft: 14,
-                    paddingLeft: 10,
+                    marginLeft: 16,
+                    paddingLeft: 12,
                     borderLeft: `1px solid ${BORDER}`,
                   }}>
                     {item.items.map(sub => {
@@ -347,18 +349,18 @@ function ExpandedSidebar({ onCollapse }) {
                           style={{
                             display: 'flex',
                             alignItems: 'center',
-                            gap: 8,
-                            padding: '6px 10px',
+                            gap: 9,
+                            padding: '7px 12px',
                             fontFamily: BODY_FONT,
-                            fontSize: 12,
+                            fontSize: 13,
                             color: sub.active ? CYAN : TEXT,
                             cursor: 'default',
                             borderLeft: sub.active ? `2px solid ${CYAN}` : '2px solid transparent',
-                            marginLeft: -11,
-                            paddingLeft: 19,
+                            marginLeft: -13,
+                            paddingLeft: 22,
                           }}
                         >
-                          <SubIcon style={{ width: 13, height: 13 }} />
+                          <SubIcon style={{ width: 15, height: 15 }} />
                           {sub.label}
                         </div>
                       )
@@ -377,19 +379,19 @@ function ExpandedSidebar({ onCollapse }) {
                 display: 'flex',
                 alignItems: 'center',
                 gap: 10,
-                padding: '8px 10px',
+                padding: '9px 12px',
                 fontFamily: BODY_FONT,
-                fontSize: 12,
+                fontSize: 13,
                 fontWeight: item.active ? 600 : 400,
                 color: item.active ? CYAN : TEXT,
                 cursor: 'default',
                 background: item.active ? CYAN_FAINT : 'transparent',
                 borderLeft: item.active ? `2px solid ${CYAN}` : '2px solid transparent',
-                letterSpacing: '0.06em',
+                letterSpacing: '0.04em',
                 textTransform: 'uppercase',
               }}
             >
-              <Icon style={{ width: 14, height: 14 }} />
+              <Icon style={{ width: 16, height: 16 }} />
               {item.label}
             </div>
           )
@@ -397,23 +399,23 @@ function ExpandedSidebar({ onCollapse }) {
       </div>
 
       {/* User */}
-      <div style={{ padding: '10px 12px', borderTop: `1px solid ${BORDER}` }}>
+      <div style={{ padding: '12px 14px', borderTop: `1px solid ${BORDER}` }}>
         <div style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '4px 4px' }}>
-          <User style={{ width: 14, height: 14, color: TEXT }} />
-          <span style={{ fontFamily: BODY_FONT, fontSize: 12, color: TEXT }}>NZVengeance</span>
+          <User style={{ width: 16, height: 16, color: TEXT }} />
+          <span style={{ fontFamily: BODY_FONT, fontSize: 13, color: TEXT }}>NZVengeance</span>
           <div style={{ flex: 1 }} />
-          <LogOut style={{ width: 13, height: 13, color: TEXT }} />
+          <LogOut style={{ width: 15, height: 15, color: TEXT }} />
         </div>
       </div>
 
       {/* Footer */}
       <div style={{
-        padding: '8px 12px',
+        padding: '10px 14px',
         borderTop: `1px solid ${BORDER}`,
         textAlign: 'center',
       }}>
-        <span style={{ fontFamily: MONO_FONT, fontSize: 10, color: CYAN_DIM, letterSpacing: '0.1em' }}>
-          v2.0.0 &middot; NZVengeance
+        <span style={{ fontFamily: MONO_FONT, fontSize: 11, color: LABEL, letterSpacing: '0.08em' }}>
+          v2.0.0
         </span>
       </div>
 
@@ -480,7 +482,7 @@ export default function QuantumHud({ mock }) {
           inset: 0;
           pointer-events: none;
           z-index: 0;
-          background: radial-gradient(ellipse at center, transparent 50%, rgba(0, 0, 0, 0.6) 100%);
+          background: radial-gradient(ellipse at center, transparent 60%, rgba(0, 0, 0, 0.3) 100%);
         }
         @keyframes hud-scan-in {
           from { opacity: 0; transform: translateX(-12px); }
@@ -537,10 +539,10 @@ export default function QuantumHud({ mock }) {
           alignItems: 'center',
           marginBottom: 28,
           fontFamily: MONO_FONT,
-          fontSize: 12,
+          fontSize: 14,
         }}>
           <div style={{ color: TEXT }}>
-            <span style={{ color: CYAN_DIM }}>SYS</span>
+            <span style={{ color: LABEL }}>SYS</span>
             <span style={{ color: 'rgba(0,212,255,0.2)', margin: '0 8px' }}>//</span>
             <span style={{ color: CYAN }}>FLEET OVERVIEW</span>
           </div>
@@ -568,10 +570,10 @@ export default function QuantumHud({ mock }) {
 
           <div style={{
             fontFamily: BODY_FONT,
-            fontSize: 12,
+            fontSize: 14,
             fontWeight: 500,
-            letterSpacing: '0.25em',
-            color: CYAN_DIM,
+            letterSpacing: '0.2em',
+            color: LABEL,
             marginBottom: 10,
             textTransform: 'uppercase',
           }}>
@@ -590,10 +592,10 @@ export default function QuantumHud({ mock }) {
           </div>
           <div style={{
             fontFamily: MONO_FONT,
-            fontSize: 13,
+            fontSize: 15,
             color: TEXT,
-            marginTop: 10,
-            letterSpacing: '0.1em',
+            marginTop: 12,
+            letterSpacing: '0.08em',
           }}>
             {mock.ships} SHIPS PLEDGED &middot; {mock.cargo.toLocaleString()} SCU CARGO CAPACITY
           </div>
@@ -644,12 +646,12 @@ export default function QuantumHud({ mock }) {
                 </PieChart>
               </ResponsiveContainer>
             </div>
-            <div style={{ display: 'flex', flexWrap: 'wrap', gap: '4px 14px', marginTop: 8 }}>
+            <div style={{ display: 'flex', flexWrap: 'wrap', gap: '6px 16px', marginTop: 10 }}>
               {sizeData.map((d, i) => (
-                <div key={d.name} style={{ display: 'flex', alignItems: 'center', gap: 5, fontSize: 11, fontFamily: MONO_FONT }}>
-                  <div style={{ width: 6, height: 6, background: CHART_COLORS[i], borderRadius: 1 }} />
+                <div key={d.name} style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 13, fontFamily: MONO_FONT }}>
+                  <div style={{ width: 8, height: 8, background: CHART_COLORS[i], borderRadius: 1 }} />
                   <span style={{ color: TEXT }}>{d.name}</span>
-                  <span style={{ color: TEXT_BRIGHT }}>{d.value}</span>
+                  <span style={{ color: TEXT_BRIGHT, fontWeight: 500 }}>{d.value}</span>
                 </div>
               ))}
             </div>
@@ -663,7 +665,7 @@ export default function QuantumHud({ mock }) {
                   <PolarGrid stroke="rgba(0, 212, 255, 0.1)" />
                   <PolarAngleAxis
                     dataKey="subject"
-                    tick={{ fill: TEXT, fontSize: 10, fontFamily: MONO_FONT }}
+                    tick={{ fill: TEXT_BRIGHT, fontSize: 12, fontFamily: MONO_FONT }}
                   />
                   <PolarRadiusAxis
                     angle={90}
@@ -687,32 +689,34 @@ export default function QuantumHud({ mock }) {
           {/* Fleet health + system status */}
           <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
             <HudPanel label="FLEET HEALTH" delay={600}>
-              <div style={{ marginBottom: 16 }}>
-                <div style={{ display: 'flex', justifyContent: 'space-between', fontFamily: MONO_FONT, fontSize: 11, marginBottom: 6 }}>
-                  <span style={{ color: VIOLET }}>LTI COVERAGE</span>
-                  <span style={{ color: TEXT }}>{mock.ltiCount}/{mock.ships}</span>
+              <div style={{ marginBottom: 18 }}>
+                <div style={{ display: 'flex', justifyContent: 'space-between', fontFamily: MONO_FONT, fontSize: 13, marginBottom: 8 }}>
+                  <span style={{ color: VIOLET }}>LTI Coverage</span>
+                  <span style={{ color: TEXT_BRIGHT }}>{mock.ltiCount}/{mock.ships}</span>
                 </div>
-                <div style={{ height: 4, background: 'rgba(167, 139, 250, 0.1)' }}>
+                <div style={{ height: 6, background: 'rgba(180, 157, 255, 0.1)', borderRadius: 1 }}>
                   <div style={{
                     height: '100%',
                     width: `${ltiPct}%`,
                     background: `linear-gradient(90deg, ${VIOLET}, ${VIOLET}cc)`,
                     boxShadow: `0 0 8px ${VIOLET}40`,
+                    borderRadius: 1,
                     transition: 'width 0.8s ease',
                   }} />
                 </div>
               </div>
               <div>
-                <div style={{ display: 'flex', justifyContent: 'space-between', fontFamily: MONO_FONT, fontSize: 11, marginBottom: 6 }}>
-                  <span style={{ color: GREEN }}>FLIGHT READY</span>
-                  <span style={{ color: TEXT }}>{mock.flightReady}/{mock.ships}</span>
+                <div style={{ display: 'flex', justifyContent: 'space-between', fontFamily: MONO_FONT, fontSize: 13, marginBottom: 8 }}>
+                  <span style={{ color: GREEN }}>Flight Ready</span>
+                  <span style={{ color: TEXT_BRIGHT }}>{mock.flightReady}/{mock.ships}</span>
                 </div>
-                <div style={{ height: 4, background: 'rgba(0, 232, 144, 0.1)' }}>
+                <div style={{ height: 6, background: 'rgba(46, 234, 160, 0.1)', borderRadius: 1 }}>
                   <div style={{
                     height: '100%',
                     width: `${readyPct}%`,
                     background: `linear-gradient(90deg, ${GREEN}, ${GREEN}cc)`,
                     boxShadow: `0 0 8px ${GREEN}40`,
+                    borderRadius: 1,
                     transition: 'width 0.8s ease',
                   }} />
                 </div>
@@ -721,17 +725,17 @@ export default function QuantumHud({ mock }) {
 
             <HudPanel label="SYSTEM STATUS" delay={800}>
               {[
-                { label: 'HANGAR SYNC', status: 'NOMINAL', color: GREEN },
-                { label: 'INSURANCE DB', status: 'NOMINAL', color: GREEN },
+                { label: 'Hangar Sync', status: 'NOMINAL', color: GREEN },
+                { label: 'Insurance DB', status: 'NOMINAL', color: GREEN },
                 { label: 'RSI API', status: 'CONNECTED', color: GREEN },
-                { label: 'GAME DATA', status: '4.0.2', color: CYAN },
+                { label: 'Game Data', status: '4.0.2', color: CYAN },
               ].map(item => (
                 <div key={item.label} style={{
                   display: 'flex',
                   justifyContent: 'space-between',
                   fontFamily: MONO_FONT,
-                  fontSize: 11,
-                  padding: '5px 0',
+                  fontSize: 13,
+                  padding: '6px 0',
                 }}>
                   <span style={{ color: TEXT }}>{item.label}</span>
                   <span style={{ color: item.color }}>{item.status}</span>
