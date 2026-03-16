@@ -1,5 +1,5 @@
 import React, { useState, useMemo, useEffect, useCallback } from 'react'
-import { useSearchParams } from 'react-router-dom'
+import { useSearchParams, useNavigate } from 'react-router-dom'
 import { useFleet, useUserOrgs, updateShipVisibility } from '../hooks/useAPI'
 import { ArrowUpDown, SearchX, Rocket, Upload } from 'lucide-react'
 import PageHeader from '../components/PageHeader'
@@ -8,21 +8,18 @@ import ErrorState from '../components/ErrorState'
 import FilterSelect from '../components/FilterSelect'
 import SearchInput from '../components/SearchInput'
 import InsuranceBadge from '../components/InsuranceBadge'
+import StatusBadge from '../components/StatusBadge'
 import ShipImage from '../components/ShipImage'
-import ShipDetailPanel from '../components/ShipDetailPanel'
 
 /** Parse pledge_cost string (e.g. "$290.00", "$0.00 USD", "¤15,000 UEC") into a display value and numeric sort value. */
 function parsePledgeCost(raw) {
   if (!raw) return { display: '-', numeric: 0 }
   const str = raw.trim()
-  // UEC purchases — not a real dollar pledge
   if (str.includes('¤') || str.toUpperCase().includes('UEC')) return { display: '-', numeric: 0 }
-  // Extract dollar amount: "$290.00" or "$0.00 USD"
   const match = str.match(/\$\s*([\d,]+(?:\.\d+)?)/)
   if (!match) return { display: '-', numeric: 0 }
   const num = parseFloat(match[1].replace(/,/g, ''))
   if (!num || num === 0) return { display: '-', numeric: 0 }
-  // Format with commas, drop cents
   const formatted = `$${Math.round(num).toLocaleString('en-US')}`
   return { display: formatted, numeric: num }
 }
@@ -38,19 +35,11 @@ export default function FleetTable() {
   const { data: fleet, loading, error, refetch } = useFleet()
   const { data: orgsData } = useUserOrgs()
   const [searchParams, setSearchParams] = useSearchParams()
+  const navigate = useNavigate()
   const [sortKey, setSortKey] = useState('vehicle_name')
   const [sortDir, setSortDir] = useState('asc')
   const [filter, setFilter] = useState('')
   const [sizeFilter, setSizeFilter] = useState('all')
-
-  const selectedId = searchParams.get('ship') ? Number(searchParams.get('ship')) : null
-  const setSelectedId = useCallback((id) => {
-    setSearchParams((prev) => {
-      if (id == null) { prev.delete('ship'); return prev }
-      prev.set('ship', String(id))
-      return prev
-    }, { replace: true })
-  }, [setSearchParams])
 
   const inOrgs = !!(orgsData?.orgs?.length > 0)
 
@@ -98,11 +87,6 @@ export default function FleetTable() {
     return items
   }, [fleet, filter, sizeFilter, sortKey, sortDir])
 
-  // Reset selection when filters change
-  useEffect(() => {
-    setSelectedId(null)
-  }, [filter, sizeFilter])
-
   const toggleSort = (key) => {
     if (sortKey === key) {
       setSortDir(sortDir === 'asc' ? 'desc' : 'asc')
@@ -116,20 +100,6 @@ export default function FleetTable() {
     setFilter('')
     setSizeFilter('all')
   }
-
-  const selectedShip = selectedId != null ? sorted.find((v) => (v.id || v.vehicle_id) === selectedId) : null
-
-  // Close detail panel on Escape
-  const handleKeyDown = useCallback((e) => {
-    if (e.key === 'Escape' && selectedId != null) {
-      setSelectedId(null)
-    }
-  }, [selectedId])
-
-  useEffect(() => {
-    document.addEventListener('keydown', handleKeyDown)
-    return () => document.removeEventListener('keydown', handleKeyDown)
-  }, [handleKeyDown])
 
   if (loading) return <LoadingState message="Loading fleet..." />
   if (error) return <ErrorState message={error} onRetry={refetch} />
@@ -156,154 +126,140 @@ export default function FleetTable() {
         />
       </div>
 
-      <div className="fleet-layout">
-        {/* Master: Ship List */}
-        <div className="panel overflow-hidden">
-          <div className="overflow-x-auto">
-            <table className="w-full">
-              <caption className="sr-only">Your fleet ships — click a row to see details</caption>
-              <thead>
-                <tr className="bg-sc-darker/50">
-                  {[
-                    { key: 'vehicle_name', label: 'Ship' },
-                    { key: 'size', label: 'Size' },
-                    { key: 'focus', label: 'Role' },
-                    { key: 'pledge', label: 'Pledge $' },
-                  ].map(({ key, label }) => (
-                    <th
-                      key={key}
-                      scope="col"
-                      className="table-header cursor-pointer hover:text-gray-300 select-none"
-                      onClick={() => toggleSort(key)}
-                      aria-sort={sortKey === key ? (sortDir === 'asc' ? 'ascending' : 'descending') : undefined}
-                    >
-                      <span className="flex items-center gap-1">
-                        {label}
-                        <ArrowUpDown className={`w-3 h-3 ${sortKey === key ? 'text-sc-accent' : 'text-gray-500'}`} aria-hidden="true" />
-                      </span>
-                    </th>
-                  ))}
-                  <th scope="col" className="table-header">Insurance</th>
-                  {inOrgs && <th scope="col" className="table-header">Visibility</th>}
-                  {inOrgs && <th scope="col" className="table-header">Ops</th>}
+      <div className="panel overflow-hidden">
+        <div className="overflow-x-auto">
+          <table className="w-full">
+            <caption className="sr-only">Your fleet ships — click a row to view ship details</caption>
+            <thead>
+              <tr className="bg-sc-darker/50">
+                {[
+                  { key: 'vehicle_name', label: 'Ship' },
+                  { key: 'size', label: 'Size' },
+                  { key: 'focus', label: 'Role' },
+                  { key: 'pledge', label: 'Pledge' },
+                ].map(({ key, label }) => (
+                  <th
+                    key={key}
+                    scope="col"
+                    className="table-header cursor-pointer hover:text-gray-300 select-none whitespace-nowrap"
+                    onClick={() => toggleSort(key)}
+                    aria-sort={sortKey === key ? (sortDir === 'asc' ? 'ascending' : 'descending') : undefined}
+                  >
+                    <span className="flex items-center gap-1">
+                      {label}
+                      <ArrowUpDown className={`w-3 h-3 ${sortKey === key ? 'text-sc-accent' : 'text-gray-500'}`} aria-hidden="true" />
+                    </span>
+                  </th>
+                ))}
+                <th scope="col" className="table-header whitespace-nowrap">Status</th>
+                <th scope="col" className="table-header whitespace-nowrap">Insurance</th>
+                {inOrgs && <th scope="col" className="table-header">Visibility</th>}
+                {inOrgs && <th scope="col" className="table-header">Ops</th>}
+              </tr>
+            </thead>
+            <tbody>
+              {sorted.length === 0 ? (
+                <tr>
+                  <td colSpan={inOrgs ? 8 : 6} className="py-12">
+                    {fleet && fleet.length === 0 ? (
+                      <div className="flex flex-col items-center gap-3 text-center">
+                        <Rocket className="w-10 h-10 text-gray-500" />
+                        <p className="text-gray-400 text-sm">Your fleet is empty</p>
+                        <p className="text-gray-500 text-xs max-w-sm">Sync your hangar from Settings to start tracking your ships, insurance, and pledges.</p>
+                        <a href="/settings" className="btn-primary text-xs inline-flex items-center gap-1.5">
+                          <Upload className="w-3.5 h-3.5" /> Sync Fleet
+                        </a>
+                      </div>
+                    ) : (
+                      <div className="flex flex-col items-center gap-3 text-center">
+                        <SearchX className="w-10 h-10 text-gray-500" />
+                        <p className="text-gray-500 text-sm">No ships match your filters</p>
+                        <button onClick={clearFilters} className="btn-secondary text-xs">
+                          Clear Filters
+                        </button>
+                      </div>
+                    )}
+                  </td>
                 </tr>
-              </thead>
-              <tbody>
-                {sorted.length === 0 ? (
-                  <tr>
-                    <td colSpan={inOrgs ? 7 : 5} className="py-12">
-                      {fleet && fleet.length === 0 ? (
-                        <div className="flex flex-col items-center gap-3 text-center">
-                          <Rocket className="w-10 h-10 text-gray-500" />
-                          <p className="text-gray-400 text-sm">Your fleet is empty</p>
-                          <p className="text-gray-500 text-xs max-w-sm">Sync your hangar from Settings to start tracking your ships, insurance, and pledges.</p>
-                          <a href="/settings" className="btn-primary text-xs inline-flex items-center gap-1.5">
-                            <Upload className="w-3.5 h-3.5" /> Sync Fleet
-                          </a>
+              ) : (
+                sorted.map((v, i) => {
+                  const rowId = v.id || v.vehicle_id
+                  return (
+                  <tr
+                    key={rowId || i}
+                    className="cursor-pointer transition-colors hover:bg-white/[0.03]"
+                    onClick={() => navigate(`/ships/${v.vehicle_slug}`)}
+                    tabIndex={0}
+                    role="row"
+                    aria-label={`View details for ${v.vehicle_name}${v.custom_name ? ` "${v.custom_name}"` : ''}`}
+                  >
+                    <td className="table-cell">
+                      <div className="flex items-center gap-3">
+                        <ShipImage
+                          src={v.image_url}
+                          alt={v.vehicle_name}
+                          aspectRatio="thumbnail-lg"
+                          className="rounded border border-sc-border/50 shrink-0"
+                        />
+                        <div>
+                          <span className="font-medium text-white">{v.vehicle_name}</span>
+                          {v.custom_name && (
+                            <span className="block text-xs text-sc-accent italic">"{v.custom_name}"</span>
+                          )}
                         </div>
-                      ) : (
-                        <div className="flex flex-col items-center gap-3 text-center">
-                          <SearchX className="w-10 h-10 text-gray-500" />
-                          <p className="text-gray-500 text-sm">No ships match your filters</p>
-                          <button onClick={clearFilters} className="btn-secondary text-xs">
-                            Clear Filters
-                          </button>
-                        </div>
-                      )}
+                      </div>
                     </td>
+                    <td className="table-cell">
+                      <span className="badge badge-size">{v.size_label || '?'}</span>
+                    </td>
+                    <td className="table-cell text-gray-400">{v.focus || '-'}</td>
+                    <td className="table-cell font-mono text-gray-400">
+                      {parsePledgeCost(v.pledge_cost).display}
+                    </td>
+                    <td className="table-cell">
+                      <StatusBadge status={v.production_status} size="sm" />
+                    </td>
+                    <td className="table-cell">
+                      <InsuranceBadge isLifetime={v.is_lifetime} label={v.insurance_label} />
+                    </td>
+                    {inOrgs && (
+                      <td className="table-cell" onClick={(e) => e.stopPropagation()}>
+                        <select
+                          value={v.org_visibility || 'private'}
+                          onChange={async (e) => {
+                            await updateShipVisibility(v.id, { org_visibility: e.target.value }).catch(() => {})
+                            refetch()
+                          }}
+                          className="text-xs bg-sc-darker border border-sc-border rounded px-1 py-0.5 text-gray-300 focus:outline-none focus:border-sc-accent"
+                          title="Org visibility for this ship"
+                        >
+                          {VISIBILITY_OPTIONS.map((o) => (
+                            <option key={o.value} value={o.value}>{o.label}</option>
+                          ))}
+                        </select>
+                      </td>
+                    )}
+                    {inOrgs && (
+                      <td className="table-cell" onClick={(e) => e.stopPropagation()}>
+                        <input
+                          type="checkbox"
+                          checked={!!v.available_for_ops}
+                          onChange={async (e) => {
+                            await updateShipVisibility(v.id, { available_for_ops: e.target.checked }).catch(() => {})
+                            refetch()
+                          }}
+                          title="Available for ops"
+                          className="accent-sc-accent cursor-pointer"
+                        />
+                      </td>
+                    )}
                   </tr>
-                ) : (
-                  sorted.map((v, i) => {
-                    const rowId = v.id || v.vehicle_id
-                    const isSelected = selectedId === rowId
-                    return (
-                    <tr
-                      key={rowId || i}
-                      className={`cursor-pointer transition-colors hover:bg-white/[0.03] ${isSelected ? 'fleet-row-selected' : ''}`}
-                      onClick={() => setSelectedId(rowId)}
-                      onKeyDown={(e) => {
-                        if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); setSelectedId(rowId) }
-                        if (e.key === 'ArrowDown') { e.preventDefault(); const next = e.currentTarget.nextElementSibling; if (next) next.focus() }
-                        if (e.key === 'ArrowUp') { e.preventDefault(); const prev = e.currentTarget.previousElementSibling; if (prev) prev.focus() }
-                      }}
-                      tabIndex={0}
-                      role="row"
-                      aria-selected={isSelected}
-                      aria-label={`View details for ${v.vehicle_name}${v.custom_name ? ` "${v.custom_name}"` : ''}`}
-                    >
-                      <td className="table-cell">
-                        <div className="flex items-center gap-3">
-                          <ShipImage
-                            src={v.image_url}
-                            alt={v.vehicle_name}
-                            aspectRatio="thumbnail"
-                            className="rounded border border-sc-border/50 shrink-0"
-                          />
-                          <div>
-                            <span className="font-medium text-white">{v.vehicle_name}</span>
-                            {v.custom_name && (
-                              <span className="block text-xs text-gray-500 italic">"{v.custom_name}"</span>
-                            )}
-                          </div>
-                        </div>
-                      </td>
-                      <td className="table-cell">
-                        <span className="badge badge-size">{v.size_label || '?'}</span>
-                      </td>
-                      <td className="table-cell text-gray-400">{v.focus || '-'}</td>
-                      <td className="table-cell font-mono text-gray-400">
-                        {parsePledgeCost(v.pledge_cost).display}
-                      </td>
-                      <td className="table-cell">
-                        <InsuranceBadge isLifetime={v.is_lifetime} label={v.insurance_label} />
-                      </td>
-                      {inOrgs && (
-                        <td className="table-cell" onClick={(e) => e.stopPropagation()}>
-                          <select
-                            value={v.org_visibility || 'private'}
-                            onChange={async (e) => {
-                              await updateShipVisibility(v.id, { org_visibility: e.target.value }).catch(() => {})
-                              refetch()
-                            }}
-                            className="text-xs bg-sc-darker border border-sc-border rounded px-1 py-0.5 text-gray-300 focus:outline-none focus:border-sc-accent"
-                            title="Org visibility for this ship"
-                          >
-                            {VISIBILITY_OPTIONS.map((o) => (
-                              <option key={o.value} value={o.value}>{o.label}</option>
-                            ))}
-                          </select>
-                        </td>
-                      )}
-                      {inOrgs && (
-                        <td className="table-cell" onClick={(e) => e.stopPropagation()}>
-                          <input
-                            type="checkbox"
-                            checked={!!v.available_for_ops}
-                            onChange={async (e) => {
-                              await updateShipVisibility(v.id, { available_for_ops: e.target.checked }).catch(() => {})
-                              refetch()
-                            }}
-                            title="Available for ops"
-                            className="accent-sc-accent cursor-pointer"
-                          />
-                        </td>
-                      )}
-                    </tr>
-                    )
-                  })
-                )}
-              </tbody>
-            </table>
-          </div>
+                  )
+                })
+              )}
+            </tbody>
+          </table>
         </div>
-
-        {/* Detail: Ship Info Panel */}
-        {selectedShip && (
-          <ShipDetailPanel
-            ship={selectedShip}
-            onClose={() => setSelectedId(null)}
-          />
-        )}
       </div>
     </div>
   )

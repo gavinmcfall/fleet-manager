@@ -1,9 +1,16 @@
 import { X } from 'lucide-react'
 import ShipImage from './ShipImage'
 import InsuranceBadge from './InsuranceBadge'
+import StatusBadge from './StatusBadge'
 
 export default function ShipDetailPanel({ ship, onClose }) {
   if (!ship) return null
+
+  // Parse pledge cost for display
+  const rawCost = ship.pledge_cost || ''
+  const costMatch = rawCost.match(/\$\s*([\d,]+(?:\.\d+)?)/)
+  const costNum = costMatch ? parseFloat(costMatch[1].replace(/,/g, '')) : 0
+  const pledgeDisplay = costNum > 0 ? `$${Math.round(costNum).toLocaleString('en-US')}` : null
 
   const specs = [
     { label: 'Role', value: ship.focus },
@@ -64,10 +71,10 @@ export default function ShipDetailPanel({ ship, onClose }) {
 
       {/* Pledge & Insurance */}
       <div className="px-5 py-4 space-y-3">
-        {ship.pledge_price != null && (
+        {pledgeDisplay && (
           <div className="flex justify-between items-center">
             <span className="text-xs font-mono uppercase tracking-wider text-gray-500">Pledge</span>
-            <span className="text-sm font-mono text-sc-accent font-semibold">${ship.pledge_price}</span>
+            <span className="text-sm font-mono text-sc-accent font-semibold">{pledgeDisplay}</span>
           </div>
         )}
         {ship.pledge_date && (
@@ -89,7 +96,7 @@ export default function ShipDetailPanel({ ship, onClose }) {
         {ship.production_status && (
           <div className="flex justify-between items-center">
             <span className="text-xs font-mono uppercase tracking-wider text-gray-500">Status</span>
-            <span className="text-sm font-mono text-gray-400">{ship.production_status}</span>
+            <StatusBadge status={ship.production_status} size="sm" />
           </div>
         )}
       </div>

@@ -5,6 +5,7 @@ const ASPECT_CLASSES = {
   landscape: 'aspect-video',
   square: 'aspect-square',
   thumbnail: 'w-20 h-12',
+  'thumbnail-lg': 'w-28 h-16',
 }
 
 // Build a chain of URLs to try in order, deduplicating adjacent identical values.
@@ -39,7 +40,7 @@ export default function ShipImage({ src, fallbackSrc, baseSrc, alt, aspectRatio 
   }
 
   const aspectClass = ASPECT_CLASSES[aspectRatio] || ASPECT_CLASSES.landscape
-  const isFixedSize = aspectRatio === 'thumbnail'
+  const isFixedSize = aspectRatio === 'thumbnail' || aspectRatio === 'thumbnail-lg'
 
   return (
     <div className={`relative overflow-hidden bg-sc-darker/50 ${isFixedSize ? aspectClass : `w-full ${aspectClass}`} ${className}`}>
