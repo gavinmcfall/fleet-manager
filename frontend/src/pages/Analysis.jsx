@@ -80,7 +80,7 @@ export default function Analysis() {
           <p className="text-gray-400 text-base mb-6 max-w-md mx-auto">
             Sync your RSI hangar to see fleet analysis, insurance coverage, and gap detection.
           </p>
-          <Link to="/settings" className="btn-primary inline-flex items-center gap-2">
+          <Link to="/sync-import" className="btn-primary inline-flex items-center gap-2">
             <Rocket className="w-4 h-4" /> Sync Your Fleet
           </Link>
         </div>

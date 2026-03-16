@@ -76,7 +76,7 @@ export default function Dashboard() {
           <p className="text-gray-400 text-base mb-6 max-w-md mx-auto">
             Sync your RSI hangar to unlock fleet tracking, insurance monitoring, and AI-powered gap analysis.
           </p>
-          <Link to="/settings" className="btn-primary inline-flex items-center gap-2">
+          <Link to="/sync-import" className="btn-primary inline-flex items-center gap-2">
             <Rocket className="w-4 h-4" /> Sync Your Fleet
           </Link>
         </div>
@@ -85,7 +85,7 @@ export default function Dashboard() {
         <div className="panel p-6">
           <h3 className="font-display text-sm font-semibold text-white mb-4 uppercase tracking-wider">Getting Started</h3>
           <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-            <Link to="/settings" className="flex items-start gap-3 p-4 rounded bg-sc-darker/50 border border-sc-border hover:border-sc-accent/30 transition-colors group">
+            <Link to="/sync-import" className="flex items-start gap-3 p-4 rounded bg-sc-darker/50 border border-sc-border hover:border-sc-accent/30 transition-colors group">
               <span className="w-7 h-7 rounded-full bg-sc-accent/10 text-sc-accent flex items-center justify-center shrink-0 text-xs font-bold group-hover:bg-sc-accent/20 transition-colors">1</span>
               <div>
                 <p className="text-sm font-medium text-gray-200">Sync Your Hangar</p>

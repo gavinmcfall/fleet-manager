@@ -83,7 +83,7 @@ const authNavItems = [
           { to: '/analysis/history', icon: History, label: 'History' },
         ],
       },
-      { to: '/import', icon: Upload, label: 'Sync & Import' },
+      { to: '/sync-import', icon: Upload, label: 'Sync & Import' },
     ],
   },
   {
@@ -572,7 +572,7 @@ export default function App() {
                       <Route path="/insurance" element={<RequireAuth><Insurance /></RequireAuth>} />
                       <Route path="/analysis" element={<RequireAuth><Analysis /></RequireAuth>} />
                       <Route path="/analysis/history" element={<RequireAuth><AnalysisHistory /></RequireAuth>} />
-                      <Route path="/import" element={<RequireAuth><Import /></RequireAuth>} />
+                      <Route path="/sync-import" element={<RequireAuth><Import /></RequireAuth>} />
                       <Route path="/settings" element={<RequireAuth><Settings /></RequireAuth>} />
                       <Route path="/account" element={<RequireAuth><Account /></RequireAuth>} />
                       <Route path="/admin" element={<RequireAuth><Admin /></RequireAuth>} />

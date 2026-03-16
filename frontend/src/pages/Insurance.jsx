@@ -120,7 +120,7 @@ export default function Insurance() {
             Insurance Unknown ({unknown.length})
           </div>
           <p className="px-5 py-2 text-xs text-gray-500">
-            Sync your hangar from Settings to populate insurance info for these ships.
+            Sync your hangar from Sync & Import to populate insurance info for these ships.
           </p>
           <div className="divide-y divide-sc-border/50">
             {unknown.map((ship, i) => (
