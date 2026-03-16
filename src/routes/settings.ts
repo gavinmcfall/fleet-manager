@@ -206,5 +206,65 @@ export function settingsRoutes() {
     return c.json({ message: "Preferences saved" });
   });
 
+  // DELETE /api/settings/sync-data — remove all synced RSI data
+  routes.delete("/sync-data", async (c) => {
+    const db = c.env.DB;
+    const userID = getAuthUser(c).id;
+    const ipAddress = c.req.header("cf-connecting-ip") ?? c.req.header("x-forwarded-for");
+
+    // Count what we're about to delete for the response
+    const [fleetCount, buybackCount, profileExists] = await Promise.all([
+      db.prepare("SELECT COUNT(*) as cnt FROM user_fleet WHERE user_id = ?").bind(userID).first<{ cnt: number }>(),
+      db.prepare("SELECT COUNT(*) as cnt FROM user_buyback_pledges WHERE user_id = ?").bind(userID).first<{ cnt: number }>(),
+      db.prepare("SELECT 1 FROM user_rsi_profiles WHERE user_id = ?").bind(userID).first(),
+    ]);
+
+    // Delete all synced data in a batch
+    await db.batch([
+      db.prepare("DELETE FROM user_fleet WHERE user_id = ?").bind(userID),
+      db.prepare("DELETE FROM user_buyback_pledges WHERE user_id = ?").bind(userID),
+      db.prepare("DELETE FROM user_rsi_profiles WHERE user_id = ?").bind(userID),
+      db.prepare("DELETE FROM user_settings WHERE user_id = ? AND key = 'sync_consent'").bind(userID),
+    ]);
+
+    await logUserChange(db, userID, "sync_data_deleted", {
+      metadata: {
+        fleet_deleted: fleetCount?.cnt ?? 0,
+        buyback_deleted: buybackCount?.cnt ?? 0,
+        profile_deleted: !!profileExists,
+      },
+      ipAddress,
+    });
+
+    return c.json({
+      message: "All synced data deleted",
+      fleet_deleted: fleetCount?.cnt ?? 0,
+      buyback_deleted: buybackCount?.cnt ?? 0,
+      profile_deleted: !!profileExists,
+    });
+  });
+
+  // GET /api/settings/sync-status — what synced data exists for this user
+  routes.get("/sync-status", async (c) => {
+    const db = c.env.DB;
+    const userID = getAuthUser(c).id;
+
+    const [fleetCount, buybackCount, profile, consentSetting] = await Promise.all([
+      db.prepare("SELECT COUNT(*) as cnt FROM user_fleet WHERE user_id = ?").bind(userID).first<{ cnt: number }>(),
+      db.prepare("SELECT COUNT(*) as cnt FROM user_buyback_pledges WHERE user_id = ?").bind(userID).first<{ cnt: number }>(),
+      db.prepare("SELECT synced_at FROM user_rsi_profiles WHERE user_id = ?").bind(userID).first<{ synced_at: string }>(),
+      db.prepare("SELECT value FROM user_settings WHERE user_id = ? AND key = 'sync_consent'").bind(userID).first<{ value: string }>(),
+    ]);
+
+    return c.json({
+      has_data: (fleetCount?.cnt ?? 0) > 0 || (buybackCount?.cnt ?? 0) > 0 || !!profile,
+      fleet_count: fleetCount?.cnt ?? 0,
+      buyback_count: buybackCount?.cnt ?? 0,
+      has_profile: !!profile,
+      last_synced: profile?.synced_at ?? null,
+      consent_given: consentSetting?.value ?? null,
+    });
+  });
+
   return routes;
 }

@@ -126,6 +126,15 @@ export async function setPreferences(prefs) {
   return putJSON('/settings/preferences', prefs)
 }
 
+// Sync data management
+export function useUserSyncStatus() {
+  return useAPI('/settings/sync-status')
+}
+
+export async function deleteSyncData() {
+  return apiFetch('DELETE', '/settings/sync-data')
+}
+
 // LLM Configuration
 export function useLLMConfig() {
   return useAPI('/settings/llm-config')

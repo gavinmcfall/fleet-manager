@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react'
-import { useLLMConfig, setLLMConfig, testLLMConnection, usePreferences, setPreferences } from '../hooks/useAPI'
-import { Settings as SettingsIcon, Key, CheckCircle, XCircle, Loader, Trash2, Eye, EyeOff, Type, Globe, RefreshCw, AlertCircle, Plug } from 'lucide-react'
+import { useLLMConfig, setLLMConfig, testLLMConnection, usePreferences, setPreferences, useUserSyncStatus, deleteSyncData } from '../hooks/useAPI'
+import { Settings as SettingsIcon, Key, CheckCircle, XCircle, Loader, Trash2, Eye, EyeOff, Type, Globe, RefreshCw, AlertCircle, Plug, Shield, Database } from 'lucide-react'
 import PageHeader from '../components/PageHeader'
 import PanelSection from '../components/PanelSection'
 import FilterSelect from '../components/FilterSelect'
@@ -27,6 +27,7 @@ export default function Settings() {
   const { data: config, refetch } = useLLMConfig()
   const sync = useHangarSync()
   const { data: preferences, refetch: refetchPrefs } = usePreferences()
+  const { data: syncStatus, refetch: refetchSyncStatus } = useUserSyncStatus()
   const [provider, setProvider] = useState('')
   const [apiKey, setAPIKey] = useState('')
   const [model, setModel] = useState('')
@@ -241,6 +242,73 @@ export default function Settings() {
                   : 'Uploading your data to SC Bridge...'}
               </p>
             </div>
+          )}
+        </div>
+      </PanelSection>
+
+      <PanelSection title="Sync Data" icon={Database}>
+        <div className="p-5 space-y-4">
+          {syncStatus?.has_data ? (
+            <>
+              <div className="space-y-2">
+                <div className="flex items-center justify-between text-sm">
+                  <span className="text-gray-400">Fleet ships</span>
+                  <span className="text-white font-mono">{syncStatus.fleet_count}</span>
+                </div>
+                <div className="flex items-center justify-between text-sm">
+                  <span className="text-gray-400">Buy-back pledges</span>
+                  <span className="text-white font-mono">{syncStatus.buyback_count}</span>
+                </div>
+                <div className="flex items-center justify-between text-sm">
+                  <span className="text-gray-400">RSI profile</span>
+                  <span className="text-white font-mono">{syncStatus.has_profile ? 'Yes' : 'No'}</span>
+                </div>
+                {syncStatus.last_synced && (
+                  <div className="flex items-center justify-between text-sm">
+                    <span className="text-gray-400">Last synced</span>
+                    <span className="text-white font-mono text-xs">{formatDate(syncStatus.last_synced)}</span>
+                  </div>
+                )}
+                {syncStatus.consent_given && (
+                  <div className="flex items-center justify-between text-sm">
+                    <span className="text-gray-400">Consent given</span>
+                    <span className="text-white font-mono text-xs">{formatDate(syncStatus.consent_given)}</span>
+                  </div>
+                )}
+              </div>
+
+              <button
+                onClick={() => setConfirmDialog({
+                  open: true,
+                  title: 'Delete All Synced Data',
+                  message: `This will permanently remove all data synced from RSI:\n\n• ${syncStatus.fleet_count} fleet ship${syncStatus.fleet_count !== 1 ? 's' : ''}\n• ${syncStatus.buyback_count} buy-back pledge${syncStatus.buyback_count !== 1 ? 's' : ''}\n• RSI profile data\n• Sync consent\n\nThis cannot be undone. You can re-sync at any time.`,
+                  variant: 'danger',
+                  confirmLabel: 'Delete All Synced Data',
+                  onConfirm: async () => {
+                    setConfirmDialog({ open: false })
+                    try {
+                      const result = await deleteSyncData()
+                      refetchSyncStatus()
+                      refetchPrefs()
+                      showNotification(
+                        `Deleted ${result.fleet_deleted} ships, ${result.buyback_deleted} buy-back pledges${result.profile_deleted ? ', and RSI profile' : ''}`,
+                        'success'
+                      )
+                    } catch (err) {
+                      showNotification('Failed to delete sync data: ' + err.message, 'error')
+                    }
+                  },
+                })}
+                className="w-full flex items-center justify-center gap-2 px-4 py-2 rounded border-2 border-sc-danger/30 text-sc-danger hover:bg-sc-danger/10 transition-colors text-sm font-medium"
+              >
+                <Trash2 className="w-3.5 h-3.5" />
+                Delete All Synced Data
+              </button>
+            </>
+          ) : (
+            <p className="text-sm text-gray-500">
+              No synced data. Use the Hangar Sync above to import your RSI hangar.
+            </p>
           )}
         </div>
       </PanelSection>
