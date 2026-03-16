@@ -1,13 +1,12 @@
 import React, { useState, useEffect } from 'react'
-import { useLLMConfig, setLLMConfig, testLLMConnection, usePreferences, setPreferences, useUserSyncStatus, deleteSyncData } from '../hooks/useAPI'
-import { Settings as SettingsIcon, Key, CheckCircle, XCircle, Loader, Trash2, Eye, EyeOff, Type, Globe, RefreshCw, AlertCircle, Plug, Shield, Database } from 'lucide-react'
+import { useLLMConfig, setLLMConfig, testLLMConnection, usePreferences } from '../hooks/useAPI'
+import { Settings as SettingsIcon, Key, CheckCircle, XCircle, Loader, Trash2, Eye, EyeOff, Type, Globe, Shield } from 'lucide-react'
 import PageHeader from '../components/PageHeader'
 import PanelSection from '../components/PanelSection'
 import FilterSelect from '../components/FilterSelect'
 import ConfirmDialog from '../components/ConfirmDialog'
 import useFontPreference from '../hooks/useFontPreference'
 import useTimezone from '../hooks/useTimezone'
-import useHangarSync, { SYNC_CATEGORIES } from '../hooks/useHangarSync'
 import { formatDate } from '../lib/dates'
 
 const FONT_OPTIONS = [
@@ -25,9 +24,7 @@ export default function Settings() {
   const [tzSearch, setTzSearch] = useState('')
   const [tzDropdownOpen, setTzDropdownOpen] = useState(false)
   const { data: config, refetch } = useLLMConfig()
-  const sync = useHangarSync()
   const { data: preferences, refetch: refetchPrefs } = usePreferences()
-  const { data: syncStatus, refetch: refetchSyncStatus } = useUserSyncStatus()
   const [provider, setProvider] = useState('')
   const [apiKey, setAPIKey] = useState('')
   const [model, setModel] = useState('')
@@ -39,9 +36,6 @@ export default function Settings() {
   const [showApiKey, setShowApiKey] = useState(false)
   const [notification, setNotification] = useState(null)
   const [confirmDialog, setConfirmDialog] = useState({ open: false })
-  const [syncCategories, setSyncCategories] = useState(() =>
-    Object.fromEntries(Object.entries(SYNC_CATEGORIES).map(([k, v]) => [k, v.default]))
-  )
 
   useEffect(() => {
     if (config) {
@@ -118,31 +112,6 @@ export default function Settings() {
     })
   }
 
-  const handleSyncClick = () => {
-    // Reset categories to defaults each time the dialog opens
-    setSyncCategories(Object.fromEntries(Object.entries(SYNC_CATEGORIES).map(([k, v]) => [k, v.default])))
-
-    setConfirmDialog({
-      open: true,
-      title: 'Hangar Sync',
-      message: 'sync-categories',
-      variant: 'info',
-      confirmLabel: 'Sync Now',
-      onConfirm: async () => {
-        setConfirmDialog({ open: false })
-        try {
-          if (!preferences?.sync_consent) {
-            await setPreferences({ sync_consent: new Date().toISOString() })
-            refetchPrefs()
-          }
-          sync.startSync(syncCategories)
-        } catch (err) {
-          showNotification('Failed to start sync: ' + err.message, 'error')
-        }
-      },
-    })
-  }
-
   return (
     <div className="space-y-6 animate-fade-in-up">
       <PageHeader
@@ -162,156 +131,6 @@ export default function Settings() {
           {notification.msg}
         </div>
       )}
-
-      <PanelSection title="Hangar Sync" icon={RefreshCw}>
-        <div className="p-5 space-y-4">
-          <p className="text-sm text-gray-400">
-            Sync your RSI hangar directly to SC Bridge using the browser extension.
-            Ships, insurance, buy-back pledges, upgrade history, and account info.
-          </p>
-
-          {sync.status === 'detecting' && (
-            <div className="flex items-center gap-2 text-sm text-gray-400">
-              <Loader className="w-4 h-4 animate-spin" />
-              Checking for extension...
-            </div>
-          )}
-
-          {sync.status === 'no-extension' && (
-            <div className="p-4 rounded bg-amber-500/10 border border-amber-500/20 space-y-3">
-              <div className="flex items-center gap-2 text-sm text-amber-400">
-                <Plug className="w-4 h-4" />
-                SC Bridge Sync extension not detected
-              </div>
-              <p className="text-xs text-gray-400">
-                Install the extension to sync your hangar data directly from RSI.
-              </p>
-              <button onClick={sync.detect} className="text-xs text-sc-accent hover:underline">
-                Retry detection
-              </button>
-            </div>
-          )}
-
-          {(sync.status === 'ready' || sync.status === 'complete' || sync.status === 'error') && (
-            <div className="space-y-3">
-              {sync.extensionVersion && (
-                <div className="text-xs text-gray-500">
-                  Extension v{sync.extensionVersion} detected
-                </div>
-              )}
-
-              <button
-                onClick={handleSyncClick}
-                disabled={sync.status === 'collecting' || sync.status === 'uploading'}
-                className="btn-primary flex items-center gap-2"
-              >
-                <RefreshCw className="w-4 h-4" />
-                Sync Now
-              </button>
-
-              {sync.status === 'complete' && sync.result && (
-                <div className="p-3 rounded bg-sc-success/10 border border-sc-success/20 text-sm text-sc-success flex items-center gap-2">
-                  <CheckCircle className="w-4 h-4" />
-                  Synced {sync.result.imported} ships, {sync.result.buyback_count} buy-back pledges, {sync.result.upgrade_count} upgrades
-                </div>
-              )}
-
-              {sync.status === 'error' && (
-                <div className="p-3 rounded bg-sc-danger/10 border border-sc-danger/20 space-y-2">
-                  <div className="text-sm text-sc-danger flex items-center gap-2">
-                    <AlertCircle className="w-4 h-4" />
-                    {sync.error}
-                  </div>
-                  <button onClick={sync.retry} className="text-xs text-sc-accent hover:underline">
-                    Retry
-                  </button>
-                </div>
-              )}
-            </div>
-          )}
-
-          {(sync.status === 'collecting' || sync.status === 'uploading') && (
-            <div className="p-4 rounded bg-sc-accent/10 border border-sc-accent/20 space-y-2">
-              <div className="flex items-center gap-2 text-sm text-sc-accent">
-                <Loader className="w-4 h-4 animate-spin" />
-                {sync.status === 'collecting' ? 'Collecting data from RSI...' : 'Saving to SC Bridge...'}
-              </div>
-              <p className="text-xs text-gray-400">
-                {sync.status === 'collecting'
-                  ? 'The extension is gathering your hangar data. This may take a minute.'
-                  : 'Uploading your data to SC Bridge...'}
-              </p>
-            </div>
-          )}
-        </div>
-      </PanelSection>
-
-      <PanelSection title="Sync Data" icon={Database}>
-        <div className="p-5 space-y-4">
-          {syncStatus?.has_data ? (
-            <>
-              <div className="space-y-2">
-                <div className="flex items-center justify-between text-sm">
-                  <span className="text-gray-400">Fleet ships</span>
-                  <span className="text-white font-mono">{syncStatus.fleet_count}</span>
-                </div>
-                <div className="flex items-center justify-between text-sm">
-                  <span className="text-gray-400">Buy-back pledges</span>
-                  <span className="text-white font-mono">{syncStatus.buyback_count}</span>
-                </div>
-                <div className="flex items-center justify-between text-sm">
-                  <span className="text-gray-400">RSI profile</span>
-                  <span className="text-white font-mono">{syncStatus.has_profile ? 'Yes' : 'No'}</span>
-                </div>
-                {syncStatus.last_synced && (
-                  <div className="flex items-center justify-between text-sm">
-                    <span className="text-gray-400">Last synced</span>
-                    <span className="text-white font-mono text-xs">{formatDate(syncStatus.last_synced)}</span>
-                  </div>
-                )}
-                {syncStatus.consent_given && (
-                  <div className="flex items-center justify-between text-sm">
-                    <span className="text-gray-400">Consent given</span>
-                    <span className="text-white font-mono text-xs">{formatDate(syncStatus.consent_given)}</span>
-                  </div>
-                )}
-              </div>
-
-              <button
-                onClick={() => setConfirmDialog({
-                  open: true,
-                  title: 'Delete All Synced Data',
-                  message: `This will permanently remove all data synced from RSI:\n\n• ${syncStatus.fleet_count} fleet ship${syncStatus.fleet_count !== 1 ? 's' : ''}\n• ${syncStatus.buyback_count} buy-back pledge${syncStatus.buyback_count !== 1 ? 's' : ''}\n• RSI profile data\n• Sync consent\n\nThis cannot be undone. You can re-sync at any time.`,
-                  variant: 'danger',
-                  confirmLabel: 'Delete All Synced Data',
-                  onConfirm: async () => {
-                    setConfirmDialog({ open: false })
-                    try {
-                      const result = await deleteSyncData()
-                      refetchSyncStatus()
-                      refetchPrefs()
-                      showNotification(
-                        `Deleted ${result.fleet_deleted} ships, ${result.buyback_deleted} buy-back pledges${result.profile_deleted ? ', and RSI profile' : ''}`,
-                        'success'
-                      )
-                    } catch (err) {
-                      showNotification('Failed to delete sync data: ' + err.message, 'error')
-                    }
-                  },
-                })}
-                className="w-full flex items-center justify-center gap-2 px-4 py-2 rounded border-2 border-sc-danger/30 text-sc-danger hover:bg-sc-danger/10 transition-colors text-sm font-medium"
-              >
-                <Trash2 className="w-3.5 h-3.5" />
-                Delete All Synced Data
-              </button>
-            </>
-          ) : (
-            <p className="text-sm text-gray-500">
-              No synced data. Use the Hangar Sync above to import your RSI hangar.
-            </p>
-          )}
-        </div>
-      </PanelSection>
 
       <PanelSection title="Display" icon={Type}>
         <div className="p-5 space-y-4">
@@ -561,41 +380,10 @@ export default function Settings() {
         onConfirm={confirmDialog.onConfirm || (() => {})}
         onCancel={() => setConfirmDialog({ open: false })}
         title={confirmDialog.title}
-        message={confirmDialog.message !== 'sync-categories' ? confirmDialog.message : undefined}
+        message={confirmDialog.message}
         confirmLabel={confirmDialog.confirmLabel}
         variant={confirmDialog.variant}
-      >
-        {confirmDialog.message === 'sync-categories' && (
-          <div className="mt-2 space-y-3">
-            <p className="text-sm text-gray-400">
-              Choose which data to sync from your RSI account. Data is stored in your SC Bridge account only.
-            </p>
-            <div className="space-y-1.5">
-              {Object.entries(SYNC_CATEGORIES).map(([key, cat]) => (
-                <label
-                  key={key}
-                  className={`flex items-start gap-3 p-2.5 rounded border cursor-pointer transition-colors ${
-                    syncCategories[key]
-                      ? 'border-sc-accent/40 bg-sc-accent/5'
-                      : 'border-sc-border/50 opacity-60'
-                  }`}
-                >
-                  <input
-                    type="checkbox"
-                    checked={syncCategories[key]}
-                    onChange={(e) => setSyncCategories(prev => ({ ...prev, [key]: e.target.checked }))}
-                    className="mt-0.5 accent-sc-accent"
-                  />
-                  <div className="flex-1 min-w-0">
-                    <div className="text-sm text-white font-medium">{cat.label}</div>
-                    <div className="text-xs text-gray-500">{cat.description}</div>
-                  </div>
-                </label>
-              ))}
-            </div>
-          </div>
-        )}
-      </ConfirmDialog>
+      />
     </div>
   )
 }

@@ -1,21 +1,62 @@
 import React, { useState, useRef } from 'react'
-import { useStatus, importHangarXplor } from '../hooks/useAPI'
-import { Upload, FileJson, CheckCircle, XCircle, AlertTriangle } from 'lucide-react'
+import { useStatus, importHangarXplor, usePreferences, setPreferences, useUserSyncStatus, deleteSyncData } from '../hooks/useAPI'
+import { Upload, FileJson, CheckCircle, XCircle, AlertTriangle, Loader, RefreshCw, AlertCircle, Plug, Database, Trash2, Download, ExternalLink } from 'lucide-react'
 import PageHeader from '../components/PageHeader'
 import AlertBanner from '../components/AlertBanner'
 import PanelSection from '../components/PanelSection'
+import ConfirmDialog from '../components/ConfirmDialog'
+import useHangarSync, { SYNC_CATEGORIES } from '../hooks/useHangarSync'
+import { formatDate } from '../lib/dates'
 
 export default function Import() {
   const { data: appStatus, refetch: refetchStatus } = useStatus()
+  const sync = useHangarSync()
+  const { data: preferences, refetch: refetchPrefs } = usePreferences()
+  const { data: syncStatus, refetch: refetchSyncStatus } = useUserSyncStatus()
   const [status, setStatus] = useState(null)
   const [result, setResult] = useState(null)
   const [preview, setPreview] = useState(null)
   const [error, setError] = useState(null)
   const [dragging, setDragging] = useState(false)
+  const [notification, setNotification] = useState(null)
+  const [confirmDialog, setConfirmDialog] = useState({ open: false })
+  const [syncCategories, setSyncCategories] = useState(() =>
+    Object.fromEntries(Object.entries(SYNC_CATEGORIES).map(([k, v]) => [k, v.default]))
+  )
   const fileRef = useRef(null)
   const dragCounter = useRef(0)
 
   const vehicleCount = appStatus?.vehicles || 0
+
+  const showNotification = (msg, variant = 'info') => {
+    setNotification({ msg, variant })
+    setTimeout(() => setNotification(null), 3000)
+  }
+
+  const handleSyncClick = () => {
+    // Reset categories to defaults each time the dialog opens
+    setSyncCategories(Object.fromEntries(Object.entries(SYNC_CATEGORIES).map(([k, v]) => [k, v.default])))
+
+    setConfirmDialog({
+      open: true,
+      title: 'Hangar Sync',
+      message: 'sync-categories',
+      variant: 'info',
+      confirmLabel: 'Sync Now',
+      onConfirm: async () => {
+        setConfirmDialog({ open: false })
+        try {
+          if (!preferences?.sync_consent) {
+            await setPreferences({ sync_consent: new Date().toISOString() })
+            refetchPrefs()
+          }
+          sync.startSync(syncCategories)
+        } catch (err) {
+          showNotification('Failed to start sync: ' + err.message, 'error')
+        }
+      },
+    })
+  }
 
   const processFile = async (file) => {
     if (!file) return
@@ -108,34 +149,228 @@ export default function Import() {
   return (
     <div className="space-y-6 animate-fade-in-up">
       <PageHeader
-        title="IMPORT HANGAR"
-        subtitle="Import your fleet from HangarXplor to populate ships, insurance, and pledge data"
+        title="SYNC & IMPORT"
+        subtitle="Sync your RSI hangar or import from HangarXplor"
       />
 
-      {vehicleCount > 0 && (
-        <AlertBanner variant="info" icon={CheckCircle}>
-          <span className="text-sm text-gray-300">
-            Currently loaded: <span className="text-white font-medium">{vehicleCount} ships</span>
-          </span>
-        </AlertBanner>
+      {/* Inline notification */}
+      {notification && (
+        <div className={`panel p-4 flex items-center gap-2 text-sm animate-fade-in ${
+          notification.variant === 'error' ? 'border-sc-danger/30 text-sc-danger' :
+          notification.variant === 'success' ? 'border-sc-success/30 text-sc-success' :
+          'text-gray-300'
+        }`}>
+          {notification.variant === 'success' && <CheckCircle className="w-4 h-4" />}
+          {notification.variant === 'error' && <XCircle className="w-4 h-4" />}
+          {notification.msg}
+        </div>
       )}
 
-      {vehicleCount > 0 && (
-        <AlertBanner variant="warning" icon={AlertTriangle}>
-          <p className="text-xs text-gray-400">
-            Importing will <span className="text-sc-warn font-medium">replace</span> your
-            current fleet data with the new import.
+      <PanelSection title="SC Bridge Sync" icon={RefreshCw}>
+        <div className="p-5 space-y-4">
+          <p className="text-sm text-gray-400">
+            Sync your RSI hangar directly to SC Bridge using the browser extension.
+            Ships, insurance, buy-back pledges, upgrade history, and account info.
           </p>
-        </AlertBanner>
-      )}
 
-      <PanelSection title="HangarXplor Import" icon={FileJson}>
+          {sync.status === 'detecting' && (
+            <div className="flex items-center gap-2 text-sm text-gray-400">
+              <Loader className="w-4 h-4 animate-spin" />
+              Checking for extension...
+            </div>
+          )}
+
+          {sync.status === 'no-extension' && (
+            <div className="p-4 rounded bg-amber-500/10 border border-amber-500/20 space-y-3">
+              <div className="flex items-center gap-2 text-sm text-amber-400">
+                <Plug className="w-4 h-4" />
+                SC Bridge Sync extension not detected
+              </div>
+              <p className="text-xs text-gray-400">
+                Install the extension to sync your hangar data directly from RSI.
+              </p>
+              <button onClick={sync.detect} className="text-xs text-sc-accent hover:underline">
+                Retry detection
+              </button>
+            </div>
+          )}
+
+          {(sync.status === 'ready' || sync.status === 'complete' || sync.status === 'error') && (
+            <div className="space-y-3">
+              {sync.extensionVersion && (
+                <div className="text-xs text-gray-500">
+                  Extension v{sync.extensionVersion} detected
+                </div>
+              )}
+
+              <button
+                onClick={handleSyncClick}
+                disabled={sync.status === 'collecting' || sync.status === 'uploading'}
+                className="btn-primary flex items-center gap-2"
+              >
+                <RefreshCw className="w-4 h-4" />
+                Sync Now
+              </button>
+
+              {sync.status === 'complete' && sync.result && (
+                <div className="p-3 rounded bg-sc-success/10 border border-sc-success/20 text-sm text-sc-success flex items-center gap-2">
+                  <CheckCircle className="w-4 h-4" />
+                  Synced {sync.result.imported} ships, {sync.result.buyback_count} buy-back pledges, {sync.result.upgrade_count} upgrades
+                </div>
+              )}
+
+              {sync.status === 'error' && (
+                <div className="p-3 rounded bg-sc-danger/10 border border-sc-danger/20 space-y-2">
+                  <div className="text-sm text-sc-danger flex items-center gap-2">
+                    <AlertCircle className="w-4 h-4" />
+                    {sync.error}
+                  </div>
+                  <button onClick={sync.retry} className="text-xs text-sc-accent hover:underline">
+                    Retry
+                  </button>
+                </div>
+              )}
+            </div>
+          )}
+
+          {(sync.status === 'collecting' || sync.status === 'uploading') && (
+            <div className="p-4 rounded bg-sc-accent/10 border border-sc-accent/20 space-y-2">
+              <div className="flex items-center gap-2 text-sm text-sc-accent">
+                <Loader className="w-4 h-4 animate-spin" />
+                {sync.status === 'collecting' ? 'Collecting data from RSI...' : 'Saving to SC Bridge...'}
+              </div>
+              <p className="text-xs text-gray-400">
+                {sync.status === 'collecting'
+                  ? 'The extension is gathering your hangar data. This may take a minute.'
+                  : 'Uploading your data to SC Bridge...'}
+              </p>
+            </div>
+          )}
+        </div>
+      </PanelSection>
+
+      <PanelSection title="Sync Data" icon={Database}>
+        <div className="p-5 space-y-4">
+          {syncStatus?.has_data ? (
+            <>
+              <div className="space-y-2">
+                <div className="flex items-center justify-between text-sm">
+                  <span className="text-gray-400">Fleet ships</span>
+                  <span className="text-white font-mono">{syncStatus.fleet_count}</span>
+                </div>
+                <div className="flex items-center justify-between text-sm">
+                  <span className="text-gray-400">Buy-back pledges</span>
+                  <span className="text-white font-mono">{syncStatus.buyback_count}</span>
+                </div>
+                <div className="flex items-center justify-between text-sm">
+                  <span className="text-gray-400">RSI profile</span>
+                  <span className="text-white font-mono">{syncStatus.has_profile ? 'Yes' : 'No'}</span>
+                </div>
+                {syncStatus.last_synced && (
+                  <div className="flex items-center justify-between text-sm">
+                    <span className="text-gray-400">Last synced</span>
+                    <span className="text-white font-mono text-xs">{formatDate(syncStatus.last_synced)}</span>
+                  </div>
+                )}
+                {syncStatus.consent_given && (
+                  <div className="flex items-center justify-between text-sm">
+                    <span className="text-gray-400">Consent given</span>
+                    <span className="text-white font-mono text-xs">{formatDate(syncStatus.consent_given)}</span>
+                  </div>
+                )}
+              </div>
+
+              <button
+                onClick={() => setConfirmDialog({
+                  open: true,
+                  title: 'Delete All Synced Data',
+                  message: `This will permanently remove all data synced from RSI:\n\n• ${syncStatus.fleet_count} fleet ship${syncStatus.fleet_count !== 1 ? 's' : ''}\n• ${syncStatus.buyback_count} buy-back pledge${syncStatus.buyback_count !== 1 ? 's' : ''}\n• RSI profile data\n• Sync consent\n\nThis cannot be undone. You can re-sync at any time.`,
+                  variant: 'danger',
+                  confirmLabel: 'Delete All Synced Data',
+                  onConfirm: async () => {
+                    setConfirmDialog({ open: false })
+                    try {
+                      const result = await deleteSyncData()
+                      refetchSyncStatus()
+                      refetchPrefs()
+                      showNotification(
+                        `Deleted ${result.fleet_deleted} ships, ${result.buyback_deleted} buy-back pledges${result.profile_deleted ? ', and RSI profile' : ''}`,
+                        'success'
+                      )
+                    } catch (err) {
+                      showNotification('Failed to delete sync data: ' + err.message, 'error')
+                    }
+                  },
+                })}
+                className="w-full flex items-center justify-center gap-2 px-4 py-2 rounded border-2 border-sc-danger/30 text-sc-danger hover:bg-sc-danger/10 transition-colors text-sm font-medium"
+              >
+                <Trash2 className="w-3.5 h-3.5" />
+                Delete All Synced Data
+              </button>
+            </>
+          ) : (
+            <p className="text-sm text-gray-500">
+              No synced data. Use the SC Bridge Sync above to import your RSI hangar.
+            </p>
+          )}
+        </div>
+      </PanelSection>
+
+      <PanelSection title="Get the Extension" icon={Download}>
+        <div className="p-5 space-y-4">
+          <p className="text-sm text-gray-400">
+            The SC Bridge Sync extension connects to your RSI account and sends hangar data to SC Bridge.
+          </p>
+          <div className="space-y-3">
+            <div className="flex items-center justify-between p-3 rounded border border-sc-border">
+              <div className="flex items-center gap-3">
+                <ExternalLink className="w-4 h-4 text-gray-500" />
+                <span className="text-sm text-gray-300">Chrome Web Store</span>
+              </div>
+              <span className="text-xs font-mono px-2 py-0.5 rounded bg-amber-500/10 border border-amber-500/20 text-amber-400">Coming Soon</span>
+            </div>
+            <div className="flex items-center justify-between p-3 rounded border border-sc-border">
+              <div className="flex items-center gap-3">
+                <ExternalLink className="w-4 h-4 text-gray-500" />
+                <span className="text-sm text-gray-300">Firefox Add-ons</span>
+              </div>
+              <span className="text-xs font-mono px-2 py-0.5 rounded bg-amber-500/10 border border-amber-500/20 text-amber-400">Coming Soon</span>
+            </div>
+            <div className="p-3 rounded bg-white/5 border border-sc-border">
+              <p className="text-xs text-gray-500">
+                Manual install instructions will be available here once the extension is released.
+              </p>
+            </div>
+          </div>
+        </div>
+      </PanelSection>
+
+      <details className="panel">
+        <summary className="panel-header cursor-pointer select-none hover:text-gray-300 transition-colors flex items-center gap-2">
+          <FileJson className="w-4 h-4 text-gray-500" />
+          <span>HangarXplor Import (Legacy)</span>
+        </summary>
         <div className="p-5 space-y-4">
           <p className="text-sm text-gray-400">
             Upload a JSON export from the HangarXplor browser extension. Includes full
             pledge and insurance details. Ship data is automatically enriched from the
             reference database (images, specs, manufacturer info).
           </p>
+
+          {vehicleCount > 0 && (
+            <div className="p-3 rounded bg-sc-accent/10 border border-sc-accent/20 text-sm text-gray-300 flex items-center gap-2">
+              <CheckCircle className="w-4 h-4 text-sc-accent" />
+              Currently loaded: <span className="text-white font-medium">{vehicleCount} ships</span>
+            </div>
+          )}
+
+          {vehicleCount > 0 && (
+            <div className="p-3 rounded bg-sc-warn/10 border border-sc-warn/20 text-xs text-gray-400 flex items-center gap-2">
+              <AlertTriangle className="w-4 h-4 text-sc-warn" />
+              Importing will <span className="text-sc-warn font-medium">replace</span> your current fleet data with the new import.
+            </div>
+          )}
+
           <div className="text-xs text-gray-500 space-y-1">
             <div className="flex items-center gap-2">
               <span className="w-1.5 h-1.5 rounded-full bg-sc-accent" />
@@ -183,98 +418,139 @@ export default function Import() {
               Drop <span className="text-gray-300 font-mono">.json</span> file or click to browse
             </p>
           </div>
-        </div>
-      </PanelSection>
 
-      {preview && (
-        <PanelSection title={preview.filename} icon={FileJson}>
-          <div className="p-5 space-y-4">
-            <div className="grid grid-cols-4 gap-3">
-              <div className="text-center">
-                <div className="text-xl font-display font-bold text-white">{preview.total}</div>
-                <div className="text-xs font-mono text-gray-500">Total Ships</div>
+          {preview && (
+            <div className="space-y-4">
+              <div className="grid grid-cols-4 gap-3">
+                <div className="text-center">
+                  <div className="text-xl font-display font-bold text-white">{preview.total}</div>
+                  <div className="text-xs font-mono text-gray-500">Total Ships</div>
+                </div>
+                <div className="text-center">
+                  <div className="text-xl font-display font-bold text-sc-lti">{preview.lti}</div>
+                  <div className="text-xs font-mono text-gray-500">LTI</div>
+                </div>
+                <div className="text-center">
+                  <div className="text-xl font-display font-bold text-sc-warn">{preview.nonLTI}</div>
+                  <div className="text-xs font-mono text-gray-500">Non-LTI</div>
+                </div>
+                <div className="text-center">
+                  <div className="text-xl font-display font-bold text-sc-success">{preview.warbond}</div>
+                  <div className="text-xs font-mono text-gray-500">Warbond</div>
+                </div>
               </div>
-              <div className="text-center">
-                <div className="text-xl font-display font-bold text-sc-lti">{preview.lti}</div>
-                <div className="text-xs font-mono text-gray-500">LTI</div>
-              </div>
-              <div className="text-center">
-                <div className="text-xl font-display font-bold text-sc-warn">{preview.nonLTI}</div>
-                <div className="text-xs font-mono text-gray-500">Non-LTI</div>
-              </div>
-              <div className="text-center">
-                <div className="text-xl font-display font-bold text-sc-success">{preview.warbond}</div>
-                <div className="text-xs font-mono text-gray-500">Warbond</div>
-              </div>
+              <button onClick={handleImport} className="btn-primary w-full flex items-center justify-center gap-2">
+                <Upload className="w-4 h-4" /> Import {preview.total} Ships
+              </button>
             </div>
-            <button onClick={handleImport} className="btn-primary w-full flex items-center justify-center gap-2">
-              <Upload className="w-4 h-4" /> Import {preview.total} Ships
-            </button>
-          </div>
-        </PanelSection>
-      )}
-
-      {status === 'importing' && (
-        <div className="panel p-5 flex items-center gap-3">
-          <div className="w-4 h-4 border-2 border-sc-accent border-t-transparent rounded-full animate-spin" />
-          <span className="text-sm text-gray-300">Importing...</span>
-        </div>
-      )}
-
-      {status === 'success' && result && (
-        <AlertBanner variant="success" icon={CheckCircle}>
-          <span className="text-sm text-white font-medium">Import complete!</span>
-          {result.imported != null && (
-            <span className="text-sm text-gray-400 ml-2">
-              {result.imported} of {result.total} entries imported
-            </span>
           )}
-        </AlertBanner>
-      )}
 
-      {status === 'error' && (
-        <AlertBanner variant="error" icon={XCircle}>
-          <span className="text-sm text-sc-danger">{error}</span>
-        </AlertBanner>
-      )}
+          {status === 'importing' && (
+            <div className="flex items-center gap-3">
+              <div className="w-4 h-4 border-2 border-sc-accent border-t-transparent rounded-full animate-spin" />
+              <span className="text-sm text-gray-300">Importing...</span>
+            </div>
+          )}
 
-      <details className="panel">
-        <summary className="panel-header cursor-pointer select-none hover:text-gray-300 transition-colors">
-          How to export from HangarXplor
-        </summary>
-        <div className="p-5">
-          <ol className="space-y-2 text-sm text-gray-400">
-            <li className="flex gap-2">
-              <span className="text-sc-accent font-mono font-bold shrink-0">1.</span>
-              Install the HangarXplor browser extension from{' '}
-              <a
-                href="https://hangarxplor.space/"
-                target="_blank"
-                rel="noopener noreferrer"
-                className="text-sc-accent hover:underline"
-              >
-                https://hangarxplor.space/
-              </a>
-            </li>
-            <li className="flex gap-2">
-              <span className="text-sc-accent font-mono font-bold shrink-0">2.</span>
-              Go to <span className="font-mono text-gray-300">robertsspaceindustries.com</span> and log in
-            </li>
-            <li className="flex gap-2">
-              <span className="text-sc-accent font-mono font-bold shrink-0">3.</span>
-              Navigate to <span className="font-mono text-gray-300">My Hangar</span> and wait for the page to fully load
-            </li>
-            <li className="flex gap-2">
-              <span className="text-sc-accent font-mono font-bold shrink-0">4.</span>
-              Click the HangarXplor icon and export as JSON
-            </li>
-            <li className="flex gap-2">
-              <span className="text-sc-accent font-mono font-bold shrink-0">5.</span>
-              Upload the exported JSON file above
-            </li>
-          </ol>
+          {status === 'success' && result && (
+            <div className="p-3 rounded bg-sc-success/10 border border-sc-success/20 text-sm text-sc-success flex items-center gap-2">
+              <CheckCircle className="w-4 h-4" />
+              Import complete!
+              {result.imported != null && (
+                <span className="text-gray-400 ml-1">
+                  {result.imported} of {result.total} entries imported
+                </span>
+              )}
+            </div>
+          )}
+
+          {status === 'error' && (
+            <div className="p-3 rounded bg-sc-danger/10 border border-sc-danger/20 text-sm text-sc-danger flex items-center gap-2">
+              <XCircle className="w-4 h-4" />
+              {error}
+            </div>
+          )}
+
+          <details>
+            <summary className="cursor-pointer select-none text-sm text-gray-500 hover:text-gray-300 transition-colors">
+              How to export from HangarXplor
+            </summary>
+            <div className="mt-3">
+              <ol className="space-y-2 text-sm text-gray-400">
+                <li className="flex gap-2">
+                  <span className="text-sc-accent font-mono font-bold shrink-0">1.</span>
+                  Install the HangarXplor browser extension from{' '}
+                  <a
+                    href="https://hangarxplor.space/"
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="text-sc-accent hover:underline"
+                  >
+                    https://hangarxplor.space/
+                  </a>
+                </li>
+                <li className="flex gap-2">
+                  <span className="text-sc-accent font-mono font-bold shrink-0">2.</span>
+                  Go to <span className="font-mono text-gray-300">robertsspaceindustries.com</span> and log in
+                </li>
+                <li className="flex gap-2">
+                  <span className="text-sc-accent font-mono font-bold shrink-0">3.</span>
+                  Navigate to <span className="font-mono text-gray-300">My Hangar</span> and wait for the page to fully load
+                </li>
+                <li className="flex gap-2">
+                  <span className="text-sc-accent font-mono font-bold shrink-0">4.</span>
+                  Click the HangarXplor icon and export as JSON
+                </li>
+                <li className="flex gap-2">
+                  <span className="text-sc-accent font-mono font-bold shrink-0">5.</span>
+                  Upload the exported JSON file above
+                </li>
+              </ol>
+            </div>
+          </details>
         </div>
       </details>
+
+      <ConfirmDialog
+        open={confirmDialog.open}
+        onConfirm={confirmDialog.onConfirm || (() => {})}
+        onCancel={() => setConfirmDialog({ open: false })}
+        title={confirmDialog.title}
+        message={confirmDialog.message !== 'sync-categories' ? confirmDialog.message : undefined}
+        confirmLabel={confirmDialog.confirmLabel}
+        variant={confirmDialog.variant}
+      >
+        {confirmDialog.message === 'sync-categories' && (
+          <div className="mt-2 space-y-3">
+            <p className="text-sm text-gray-400">
+              Choose which data to sync from your RSI account. Data is stored in your SC Bridge account only.
+            </p>
+            <div className="space-y-1.5">
+              {Object.entries(SYNC_CATEGORIES).map(([key, cat]) => (
+                <label
+                  key={key}
+                  className={`flex items-start gap-3 p-2.5 rounded border cursor-pointer transition-colors ${
+                    syncCategories[key]
+                      ? 'border-sc-accent/40 bg-sc-accent/5'
+                      : 'border-sc-border/50 opacity-60'
+                  }`}
+                >
+                  <input
+                    type="checkbox"
+                    checked={syncCategories[key]}
+                    onChange={(e) => setSyncCategories(prev => ({ ...prev, [key]: e.target.checked }))}
+                    className="mt-0.5 accent-sc-accent"
+                  />
+                  <div className="flex-1 min-w-0">
+                    <div className="text-sm text-white font-medium">{cat.label}</div>
+                    <div className="text-xs text-gray-500">{cat.description}</div>
+                  </div>
+                </label>
+              ))}
+            </div>
+          </div>
+        )}
+      </ConfirmDialog>
     </div>
   )
 }

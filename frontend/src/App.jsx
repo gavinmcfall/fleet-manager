@@ -83,7 +83,7 @@ const authNavItems = [
           { to: '/analysis/history', icon: History, label: 'History' },
         ],
       },
-      { to: '/import', icon: Upload, label: 'Import' },
+      { to: '/import', icon: Upload, label: 'Sync & Import' },
     ],
   },
   {
