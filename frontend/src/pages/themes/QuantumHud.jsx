@@ -1,10 +1,15 @@
 // Quantum HUD — Cockpit Overlay
-// No traditional sidebar. Full-screen spatial layout with data positioned
-// in zones like a fighter pilot's HUD. Fleet value dominates the center.
-// Angular panels, targeting bracket decorations, animated scan-in effects.
+// Full-screen spatial layout with HUD aesthetic. Real collapsible sidebar
+// with Lucide icons. Angular panels, bracket decorations, animated scan-in.
 
-import React from 'react'
+import React, { useState } from 'react'
 import { PieChart, Pie, Cell, ResponsiveContainer, Tooltip, RadarChart, Radar, PolarGrid, PolarAngleAxis, PolarRadiusAxis } from 'recharts'
+import {
+  BarChart3, Rocket, Shield, Search, MapPin, FileText, ShoppingCart,
+  Hammer, Users, Package, Database, Settings, Upload, DollarSign,
+  Activity, Crosshair, BookOpen, Star, Scale, Briefcase, TrendingUp,
+  Palette, ChevronDown, ChevronRight, ChevronLeft, LogOut, User
+} from 'lucide-react'
 
 const CYAN = '#00d4ff'
 const CYAN_DIM = '#006680'
@@ -14,26 +19,62 @@ const VIOLET = '#a78bfa'
 const GREEN = '#00e890'
 const PINK = '#ff6b9d'
 const BG = '#020208'
-const TEXT = '#8899aa'
-const TEXT_BRIGHT = '#d0e0f0'
+const BG_SIDEBAR = '#04040c'
+const BORDER = 'rgba(0, 212, 255, 0.08)'
+const BORDER_STRONG = 'rgba(0, 212, 255, 0.15)'
+const TEXT = '#7888a0'
+const TEXT_BRIGHT = '#c8d8e8'
 
 const HEADING_FONT = "'Orbitron', sans-serif"
 const BODY_FONT = "'Exo 2', sans-serif"
 const MONO_FONT = "'Share Tech Mono', monospace"
-const GOOGLE_FONT = 'https://fonts.googleapis.com/css2?family=Orbitron:wght@500;700;900&family=Exo+2:wght@300;400;500;600&family=Share+Tech+Mono&display=swap'
+const GOOGLE_FONT = 'https://fonts.googleapis.com/css2?family=Orbitron:wght@500;700;900&family=Exo+2:wght@300;400;500;600;700&family=Share+Tech+Mono&display=swap'
 
 const CHART_COLORS = [CYAN, VIOLET, GREEN, PINK, '#4e9eff', '#ffb347', '#36d399', '#818cf8']
 
 const TOOLTIP_STYLE = {
-  contentStyle: { background: 'rgba(2,2,8,0.95)', border: `1px solid ${CYAN_DIM}`, borderRadius: 0, boxShadow: `0 0 20px rgba(0, 212, 255, 0.15)` },
-  labelStyle: { color: TEXT, fontFamily: MONO_FONT, fontSize: 11 },
-  itemStyle: { color: TEXT_BRIGHT, fontFamily: MONO_FONT, fontSize: 11 },
+  contentStyle: { background: 'rgba(4,4,12,0.95)', border: `1px solid ${CYAN_DIM}`, borderRadius: 0, boxShadow: `0 0 20px rgba(0, 212, 255, 0.15)` },
+  labelStyle: { color: TEXT, fontFamily: MONO_FONT, fontSize: 12 },
+  itemStyle: { color: TEXT_BRIGHT, fontFamily: MONO_FONT, fontSize: 12 },
 }
 
+const SIDEBAR_NAV = [
+  { icon: BarChart3, label: 'Dashboard', active: true },
+  {
+    group: 'Game Data', icon: Crosshair, items: [
+      { icon: Search, label: 'Item Finder' },
+      { icon: MapPin, label: 'Locations' },
+      { icon: FileText, label: 'Missions' },
+      { icon: ShoppingCart, label: 'Shops' },
+      { icon: TrendingUp, label: 'Trade' },
+      { icon: Hammer, label: 'Mining Guide' },
+      { icon: Users, label: 'NPC Loadouts' },
+    ]
+  },
+  {
+    group: 'My Fleet', icon: Rocket, items: [
+      { icon: Rocket, label: 'Fleet' },
+      { icon: Shield, label: 'Insurance' },
+      { icon: Activity, label: 'Analysis' },
+      { icon: Upload, label: 'Import' },
+    ]
+  },
+  {
+    group: 'Reference', icon: BookOpen, items: [
+      { icon: Database, label: 'Ship DB' },
+      { icon: Palette, label: 'Paints' },
+      { icon: Briefcase, label: 'Careers & Roles' },
+      { icon: Star, label: 'Reputation' },
+      { icon: Scale, label: 'Law System' },
+    ]
+  },
+  { icon: Settings, label: 'Settings' },
+]
+
 // SVG corner bracket decoration
-function Brackets({ width = '100%', height = '100%', color = CYAN_DIM, size = 16, style }) {
+function Brackets({ color = CYAN_DIM, size = 16 }) {
   return (
-    <svg style={{ position: 'absolute', inset: 0, width, height, pointerEvents: 'none', ...style }} viewBox="0 0 100 100" preserveAspectRatio="none">
+    <svg style={{ position: 'absolute', inset: 0, width: '100%', height: '100%', pointerEvents: 'none' }} viewBox="0 0 100 100" preserveAspectRatio="none">
       <polyline points={`0,${size} 0,0 ${size},0`} fill="none" stroke={color} strokeWidth="0.5" vectorEffect="non-scaling-stroke" />
       <polyline points={`${100-size},0 100,0 100,${size}`} fill="none" stroke={color} strokeWidth="0.5" vectorEffect="non-scaling-stroke" />
       <polyline points={`100,${100-size} 100,100 ${100-size},100`} fill="none" stroke={color} strokeWidth="0.5" vectorEffect="non-scaling-stroke" />
@@ -47,18 +88,19 @@ function HudPanel({ label, children, delay = 0, style = {} }) {
     <div style={{
       position: 'relative',
       background: CYAN_FAINT,
-      padding: '14px 16px',
+      padding: '16px 18px',
       animation: `hud-scan-in 0.5s ease-out ${delay}ms both`,
       ...style,
     }}>
       <Brackets color={CYAN_DIM} />
       {label && (
         <div style={{
-          fontFamily: HEADING_FONT,
-          fontSize: 9,
-          letterSpacing: '0.2em',
+          fontFamily: BODY_FONT,
+          fontSize: 11,
+          fontWeight: 600,
+          letterSpacing: '0.15em',
           color: CYAN_DIM,
-          marginBottom: 8,
+          marginBottom: 10,
           textTransform: 'uppercase',
         }}>
           {label}
@@ -76,9 +118,10 @@ function StatBlock({ label, value, unit, color = TEXT_BRIGHT, delay = 0 }) {
       animation: `hud-scan-in 0.5s ease-out ${delay}ms both`,
     }}>
       <div style={{
-        fontFamily: HEADING_FONT,
-        fontSize: 9,
-        letterSpacing: '0.2em',
+        fontFamily: BODY_FONT,
+        fontSize: 11,
+        fontWeight: 500,
+        letterSpacing: '0.15em',
         color: CYAN_DIM,
         marginBottom: 6,
         textTransform: 'uppercase',
@@ -87,7 +130,7 @@ function StatBlock({ label, value, unit, color = TEXT_BRIGHT, delay = 0 }) {
       </div>
       <div style={{
         fontFamily: HEADING_FONT,
-        fontSize: 28,
+        fontSize: 26,
         fontWeight: 700,
         color,
         lineHeight: 1,
@@ -98,7 +141,7 @@ function StatBlock({ label, value, unit, color = TEXT_BRIGHT, delay = 0 }) {
       {unit && (
         <div style={{
           fontFamily: MONO_FONT,
-          fontSize: 10,
+          fontSize: 11,
           color: TEXT,
           marginTop: 4,
         }}>
@@ -109,7 +152,302 @@ function StatBlock({ label, value, unit, color = TEXT_BRIGHT, delay = 0 }) {
   )
 }
 
+/* ── Collapsible sidebar ── */
+
+function CollapsedSidebar({ onExpand }) {
+  return (
+    <div style={{
+      width: 52,
+      minHeight: '100%',
+      background: BG_SIDEBAR,
+      borderRight: `1px solid ${BORDER}`,
+      display: 'flex',
+      flexDirection: 'column',
+      alignItems: 'center',
+      flexShrink: 0,
+    }}>
+      {/* Brand mark */}
+      <div style={{
+        padding: '14px 0',
+        borderBottom: `1px solid ${BORDER}`,
+        width: '100%',
+        display: 'flex',
+        justifyContent: 'center',
+      }}>
+        <Rocket style={{ width: 18, height: 18, color: CYAN }} />
+      </div>
+
+      {/* Icons */}
+      <div style={{ flex: 1, display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 2, padding: '8px 0' }}>
+        {SIDEBAR_NAV.map((item, i) => {
+          if (item.group) {
+            const GroupIcon = item.icon
+            const isActive = item.items.some(c => c.active)
+            return (
+              <div
+                key={item.group}
+                title={item.group}
+                style={{
+                  width: 36,
+                  height: 36,
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  color: isActive ? CYAN : TEXT,
+                  cursor: 'default',
+                  border: isActive ? `1px solid ${BORDER_STRONG}` : '1px solid transparent',
+                  background: isActive ? CYAN_FAINT : 'transparent',
+                }}
+              >
+                <GroupIcon style={{ width: 16, height: 16 }} />
+              </div>
+            )
+          }
+          const Icon = item.icon
+          return (
+            <div
+              key={item.label}
+              title={item.label}
+              style={{
+                width: 36,
+                height: 36,
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                color: item.active ? CYAN : TEXT,
+                cursor: 'default',
+                border: item.active ? `1px solid ${BORDER_STRONG}` : '1px solid transparent',
+                background: item.active ? CYAN_FAINT : 'transparent',
+              }}
+            >
+              <Icon style={{ width: 16, height: 16 }} />
+            </div>
+          )
+        })}
+      </div>
+
+      {/* Expand button */}
+      <div style={{ padding: '12px 0', borderTop: `1px solid ${BORDER}`, width: '100%', display: 'flex', justifyContent: 'center' }}>
+        <button
+          onClick={onExpand}
+          style={{
+            background: 'none',
+            border: 'none',
+            color: TEXT,
+            cursor: 'pointer',
+            padding: 6,
+          }}
+          title="Expand sidebar"
+        >
+          <ChevronRight style={{ width: 16, height: 16 }} />
+        </button>
+      </div>
+    </div>
+  )
+}
+
+function ExpandedSidebar({ onCollapse }) {
+  const [expanded, setExpanded] = useState('Game Data')
+
+  return (
+    <div style={{
+      width: 220,
+      minHeight: '100%',
+      background: BG_SIDEBAR,
+      borderRight: `1px solid ${BORDER}`,
+      display: 'flex',
+      flexDirection: 'column',
+      flexShrink: 0,
+      position: 'relative',
+    }}>
+      {/* Brand */}
+      <div style={{
+        padding: '14px 16px',
+        borderBottom: `1px solid ${BORDER}`,
+      }}>
+        <div style={{
+          fontFamily: HEADING_FONT,
+          fontWeight: 700,
+          fontSize: 14,
+          letterSpacing: '0.12em',
+          color: CYAN,
+          display: 'flex',
+          alignItems: 'center',
+          gap: 8,
+        }}>
+          <Rocket style={{ width: 16, height: 16 }} />
+          SC BRIDGE
+        </div>
+        <div style={{
+          fontFamily: MONO_FONT,
+          fontSize: 10,
+          color: TEXT,
+          marginTop: 4,
+          letterSpacing: '0.1em',
+        }}>
+          STAR CITIZEN COMPANION
+        </div>
+        <div style={{
+          fontFamily: MONO_FONT,
+          fontSize: 10,
+          color: CYAN_DIM,
+          marginTop: 2,
+        }}>
+          4.0.2-LIVE
+        </div>
+      </div>
+
+      {/* Nav */}
+      <div style={{ flex: 1, padding: '8px 6px', overflowY: 'auto' }}>
+        {SIDEBAR_NAV.map((item) => {
+          if (item.group) {
+            const GroupIcon = item.icon
+            const isOpen = expanded === item.group
+            const isGroupActive = item.items.some(c => c.active)
+            return (
+              <div key={item.group} style={{ marginBottom: 2 }}>
+                <button
+                  onClick={() => setExpanded(isOpen ? null : item.group)}
+                  style={{
+                    width: '100%',
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: 10,
+                    padding: '8px 10px',
+                    border: 'none',
+                    background: 'transparent',
+                    color: isGroupActive && !isOpen ? CYAN : TEXT,
+                    fontFamily: BODY_FONT,
+                    fontSize: 11,
+                    fontWeight: 600,
+                    letterSpacing: '0.1em',
+                    textTransform: 'uppercase',
+                    cursor: 'pointer',
+                    textAlign: 'left',
+                  }}
+                >
+                  <GroupIcon style={{ width: 14, height: 14 }} />
+                  <span style={{ flex: 1 }}>{item.group}</span>
+                  {isOpen
+                    ? <ChevronDown style={{ width: 12, height: 12 }} />
+                    : <ChevronRight style={{ width: 12, height: 12 }} />
+                  }
+                </button>
+                {isOpen && (
+                  <div style={{
+                    marginLeft: 14,
+                    paddingLeft: 10,
+                    borderLeft: `1px solid ${BORDER}`,
+                  }}>
+                    {item.items.map(sub => {
+                      const SubIcon = sub.icon
+                      return (
+                        <div
+                          key={sub.label}
+                          style={{
+                            display: 'flex',
+                            alignItems: 'center',
+                            gap: 8,
+                            padding: '6px 10px',
+                            fontFamily: BODY_FONT,
+                            fontSize: 12,
+                            color: sub.active ? CYAN : TEXT,
+                            cursor: 'default',
+                            borderLeft: sub.active ? `2px solid ${CYAN}` : '2px solid transparent',
+                            marginLeft: -11,
+                            paddingLeft: 19,
+                          }}
+                        >
+                          <SubIcon style={{ width: 13, height: 13 }} />
+                          {sub.label}
+                        </div>
+                      )
+                    })}
+                  </div>
+                )}
+              </div>
+            )
+          }
+
+          const Icon = item.icon
+          return (
+            <div
+              key={item.label}
+              style={{
+                display: 'flex',
+                alignItems: 'center',
+                gap: 10,
+                padding: '8px 10px',
+                fontFamily: BODY_FONT,
+                fontSize: 12,
+                fontWeight: item.active ? 600 : 400,
+                color: item.active ? CYAN : TEXT,
+                cursor: 'default',
+                background: item.active ? CYAN_FAINT : 'transparent',
+                borderLeft: item.active ? `2px solid ${CYAN}` : '2px solid transparent',
+                letterSpacing: '0.06em',
+                textTransform: 'uppercase',
+              }}
+            >
+              <Icon style={{ width: 14, height: 14 }} />
+              {item.label}
+            </div>
+          )
+        })}
+      </div>
+
+      {/* User */}
+      <div style={{ padding: '10px 12px', borderTop: `1px solid ${BORDER}` }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '4px 4px' }}>
+          <User style={{ width: 14, height: 14, color: TEXT }} />
+          <span style={{ fontFamily: BODY_FONT, fontSize: 12, color: TEXT }}>NZVengeance</span>
+          <div style={{ flex: 1 }} />
+          <LogOut style={{ width: 13, height: 13, color: TEXT }} />
+        </div>
+      </div>
+
+      {/* Footer */}
+      <div style={{
+        padding: '8px 12px',
+        borderTop: `1px solid ${BORDER}`,
+        textAlign: 'center',
+      }}>
+        <span style={{ fontFamily: MONO_FONT, fontSize: 10, color: CYAN_DIM, letterSpacing: '0.1em' }}>
+          v2.0.0 &middot; NZVengeance
+        </span>
+      </div>
+
+      {/* Collapse button */}
+      <button
+        onClick={onCollapse}
+        style={{
+          position: 'absolute',
+          right: -12,
+          top: '50%',
+          transform: 'translateY(-50%)',
+          width: 24,
+          height: 24,
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'center',
+          background: BG_SIDEBAR,
+          border: `1px solid ${BORDER_STRONG}`,
+          color: TEXT,
+          cursor: 'pointer',
+          zIndex: 10,
+        }}
+        title="Collapse sidebar"
+      >
+        <ChevronLeft style={{ width: 14, height: 14 }} />
+      </button>
+    </div>
+  )
+}
+
+/* ── Main component ── */
+
 export default function QuantumHud({ mock }) {
+  const [sidebarCollapsed, setSidebarCollapsed] = useState(false)
   const ltiPct = Math.round((mock.ltiCount / mock.ships) * 100)
   const readyPct = Math.round((mock.flightReady / mock.ships) * 100)
   const sizeData = Object.entries(mock.sizeDistribution).map(([name, value]) => ({ name, value }))
@@ -123,6 +461,7 @@ export default function QuantumHud({ mock }) {
       color: TEXT,
       position: 'relative',
       overflow: 'hidden',
+      display: 'flex',
       paddingTop: 40,
     }}>
       <style>{`
@@ -163,7 +502,7 @@ export default function QuantumHud({ mock }) {
           left: 50%;
           transform: translate(-50%, -50%);
           pointer-events: none;
-          opacity: 0.08;
+          opacity: 0.06;
           animation: hud-rotate 60s linear infinite;
         }
       `}</style>
@@ -171,63 +510,24 @@ export default function QuantumHud({ mock }) {
       <div className="hud-dotgrid" />
       <div className="hud-vignette" />
 
-      {/* Thin icon strip — left edge */}
-      <div style={{
-        position: 'fixed',
-        left: 0,
-        top: 40,
-        bottom: 0,
-        width: 48,
-        background: 'rgba(0, 212, 255, 0.02)',
-        borderRight: `1px solid rgba(0, 212, 255, 0.08)`,
-        display: 'flex',
-        flexDirection: 'column',
-        alignItems: 'center',
-        paddingTop: 16,
-        gap: 4,
-        zIndex: 3,
-      }}>
-        {['\u25C8', '\u25CE', '\u2726', '\u25C6', '\u2738', '\u25B2', '\u2302'].map((sym, i) => (
-          <div
-            key={i}
-            style={{
-              width: 32,
-              height: 32,
-              display: 'flex',
-              alignItems: 'center',
-              justifyContent: 'center',
-              fontSize: 14,
-              color: i === 0 ? CYAN : 'rgba(0, 212, 255, 0.2)',
-              cursor: 'default',
-              borderLeft: i === 0 ? `2px solid ${CYAN}` : '2px solid transparent',
-            }}
-          >
-            {sym}
-          </div>
-        ))}
-        <div style={{ flex: 1 }} />
-        <div style={{
-          fontSize: 8,
-          color: CYAN_DIM,
-          letterSpacing: '0.2em',
-          writingMode: 'vertical-rl',
-          textOrientation: 'mixed',
-          fontFamily: MONO_FONT,
-          padding: '8px 0 16px',
-        }}>
-          SC BRIDGE v2.0
-        </div>
+      {/* Sidebar */}
+      <div style={{ position: 'relative', zIndex: 3, display: 'flex' }}>
+        {sidebarCollapsed ? (
+          <CollapsedSidebar onExpand={() => setSidebarCollapsed(false)} />
+        ) : (
+          <ExpandedSidebar onCollapse={() => setSidebarCollapsed(true)} />
+        )}
       </div>
 
-      {/* Main HUD layout */}
+      {/* Main content */}
       <div style={{
         position: 'relative',
         zIndex: 2,
-        marginLeft: 48,
-        padding: '24px 32px',
-        minHeight: 'calc(100vh - 40px)',
+        flex: 1,
+        padding: '20px 28px',
         display: 'flex',
         flexDirection: 'column',
+        overflow: 'auto',
       }}>
 
         {/* Top bar: breadcrumb + status */}
@@ -235,9 +535,9 @@ export default function QuantumHud({ mock }) {
           display: 'flex',
           justifyContent: 'space-between',
           alignItems: 'center',
-          marginBottom: 32,
+          marginBottom: 28,
           fontFamily: MONO_FONT,
-          fontSize: 11,
+          fontSize: 12,
         }}>
           <div style={{ color: TEXT }}>
             <span style={{ color: CYAN_DIM }}>SYS</span>
@@ -254,10 +554,9 @@ export default function QuantumHud({ mock }) {
         {/* Central hero — fleet value */}
         <div style={{
           textAlign: 'center',
-          padding: '48px 0 40px',
+          padding: '32px 0 28px',
           position: 'relative',
         }}>
-          {/* Decorative reticle */}
           <svg className="hud-reticle" viewBox="0 0 200 200">
             <circle cx="100" cy="100" r="90" fill="none" stroke={CYAN} strokeWidth="0.5" strokeDasharray="4 8" />
             <circle cx="100" cy="100" r="70" fill="none" stroke={CYAN} strokeWidth="0.3" />
@@ -268,17 +567,19 @@ export default function QuantumHud({ mock }) {
           </svg>
 
           <div style={{
-            fontFamily: HEADING_FONT,
-            fontSize: 10,
-            letterSpacing: '0.3em',
+            fontFamily: BODY_FONT,
+            fontSize: 12,
+            fontWeight: 500,
+            letterSpacing: '0.25em',
             color: CYAN_DIM,
-            marginBottom: 12,
+            marginBottom: 10,
+            textTransform: 'uppercase',
           }}>
             TOTAL FLEET VALUE
           </div>
           <div style={{
             fontFamily: HEADING_FONT,
-            fontSize: 72,
+            fontSize: 64,
             fontWeight: 900,
             color: CYAN,
             lineHeight: 1,
@@ -292,18 +593,18 @@ export default function QuantumHud({ mock }) {
             fontSize: 13,
             color: TEXT,
             marginTop: 10,
-            letterSpacing: '0.15em',
+            letterSpacing: '0.1em',
           }}>
             {mock.ships} SHIPS PLEDGED &middot; {mock.cargo.toLocaleString()} SCU CARGO CAPACITY
           </div>
         </div>
 
-        {/* Stat row — evenly spaced below hero */}
+        {/* Stat row */}
         <div style={{
           display: 'flex',
           justifyContent: 'center',
-          gap: 48,
-          padding: '24px 0 36px',
+          gap: 40,
+          padding: '20px 0 28px',
         }}>
           <StatBlock label="SHIPS" value={mock.ships} delay={100} />
           <StatBlock label="CARGO" value={mock.cargo.toLocaleString()} unit="SCU" delay={200} />
@@ -313,14 +614,14 @@ export default function QuantumHud({ mock }) {
           <StatBlock label="READY" value={`${readyPct}%`} color={GREEN} delay={600} />
         </div>
 
-        {/* Bottom section: charts + status in angular panels */}
+        {/* Bottom: charts + status */}
         <div style={{
           display: 'grid',
           gridTemplateColumns: '1fr 1.2fr 1fr',
           gap: 16,
           flex: 1,
         }}>
-          {/* Left: Size distribution donut */}
+          {/* Size distribution donut */}
           <HudPanel label="SIZE DISTRIBUTION" delay={200}>
             <div style={{ height: 220 }}>
               <ResponsiveContainer width="100%" height="100%">
@@ -343,10 +644,9 @@ export default function QuantumHud({ mock }) {
                 </PieChart>
               </ResponsiveContainer>
             </div>
-            {/* Legend */}
             <div style={{ display: 'flex', flexWrap: 'wrap', gap: '4px 14px', marginTop: 8 }}>
               {sizeData.map((d, i) => (
-                <div key={d.name} style={{ display: 'flex', alignItems: 'center', gap: 5, fontSize: 10, fontFamily: MONO_FONT }}>
+                <div key={d.name} style={{ display: 'flex', alignItems: 'center', gap: 5, fontSize: 11, fontFamily: MONO_FONT }}>
                   <div style={{ width: 6, height: 6, background: CHART_COLORS[i], borderRadius: 1 }} />
                   <span style={{ color: TEXT }}>{d.name}</span>
                   <span style={{ color: TEXT_BRIGHT }}>{d.value}</span>
@@ -355,7 +655,7 @@ export default function QuantumHud({ mock }) {
             </div>
           </HudPanel>
 
-          {/* Center: Radar chart for roles */}
+          {/* Radar chart for roles */}
           <HudPanel label="ROLE ANALYSIS" delay={400}>
             <div style={{ height: 260 }}>
               <ResponsiveContainer width="100%" height="100%">
@@ -363,7 +663,7 @@ export default function QuantumHud({ mock }) {
                   <PolarGrid stroke="rgba(0, 212, 255, 0.1)" />
                   <PolarAngleAxis
                     dataKey="subject"
-                    tick={{ fill: TEXT, fontSize: 9, fontFamily: MONO_FONT }}
+                    tick={{ fill: TEXT, fontSize: 10, fontFamily: MONO_FONT }}
                   />
                   <PolarRadiusAxis
                     angle={90}
@@ -384,16 +684,15 @@ export default function QuantumHud({ mock }) {
             </div>
           </HudPanel>
 
-          {/* Right: Fleet health + system status */}
+          {/* Fleet health + system status */}
           <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
             <HudPanel label="FLEET HEALTH" delay={600}>
-              {/* LTI gauge */}
               <div style={{ marginBottom: 16 }}>
-                <div style={{ display: 'flex', justifyContent: 'space-between', fontFamily: MONO_FONT, fontSize: 10, marginBottom: 6 }}>
+                <div style={{ display: 'flex', justifyContent: 'space-between', fontFamily: MONO_FONT, fontSize: 11, marginBottom: 6 }}>
                   <span style={{ color: VIOLET }}>LTI COVERAGE</span>
                   <span style={{ color: TEXT }}>{mock.ltiCount}/{mock.ships}</span>
                 </div>
-                <div style={{ height: 4, background: 'rgba(167, 139, 250, 0.1)', position: 'relative' }}>
+                <div style={{ height: 4, background: 'rgba(167, 139, 250, 0.1)' }}>
                   <div style={{
                     height: '100%',
                     width: `${ltiPct}%`,
@@ -403,13 +702,12 @@ export default function QuantumHud({ mock }) {
                   }} />
                 </div>
               </div>
-              {/* Flight ready gauge */}
               <div>
-                <div style={{ display: 'flex', justifyContent: 'space-between', fontFamily: MONO_FONT, fontSize: 10, marginBottom: 6 }}>
+                <div style={{ display: 'flex', justifyContent: 'space-between', fontFamily: MONO_FONT, fontSize: 11, marginBottom: 6 }}>
                   <span style={{ color: GREEN }}>FLIGHT READY</span>
                   <span style={{ color: TEXT }}>{mock.flightReady}/{mock.ships}</span>
                 </div>
-                <div style={{ height: 4, background: 'rgba(0, 232, 144, 0.1)', position: 'relative' }}>
+                <div style={{ height: 4, background: 'rgba(0, 232, 144, 0.1)' }}>
                   <div style={{
                     height: '100%',
                     width: `${readyPct}%`,
@@ -432,13 +730,11 @@ export default function QuantumHud({ mock }) {
                   display: 'flex',
                   justifyContent: 'space-between',
                   fontFamily: MONO_FONT,
-                  fontSize: 10,
-                  padding: '4px 0',
+                  fontSize: 11,
+                  padding: '5px 0',
                 }}>
                   <span style={{ color: TEXT }}>{item.label}</span>
-                  <span style={{ color: item.color, animation: 'hud-pulse 3s ease-in-out infinite' }}>
-                    {item.status}
-                  </span>
+                  <span style={{ color: item.color }}>{item.status}</span>
                 </div>
               ))}
             </HudPanel>
