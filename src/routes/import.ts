@@ -11,6 +11,7 @@ import {
   preloadVehicleMap,
   findVehicleSlugLocal,
   executeFleetSwap,
+  executeTableSwap,
   parseRsiDate,
   parseValueCents,
 } from "../lib/fleet-import";
@@ -357,14 +358,9 @@ export function importRoutes() {
       hasProfile = true;
     }
 
-    // --- Buy-back pledges: DELETE + INSERT ---
+    // --- Buy-back pledges: insert-then-swap ---
     let buybackCount = 0;
     if (payload.buyback_pledges.length > 0) {
-      await db
-        .prepare("DELETE FROM user_buyback_pledges WHERE user_id = ?")
-        .bind(userID)
-        .run();
-
       const bbStmts: D1PreparedStatement[] = [];
       for (const bb of payload.buyback_pledges) {
         bbStmts.push(
@@ -386,9 +382,7 @@ export function importRoutes() {
         );
       }
 
-      for (let i = 0; i < bbStmts.length; i += 1000) {
-        await db.batch(bbStmts.slice(i, i + 1000));
-      }
+      await executeTableSwap(db, "user_buyback_pledges", userID, bbStmts, 1000);
       buybackCount = bbStmts.length;
     }
 
@@ -407,12 +401,27 @@ export function importRoutes() {
       .run();
     const syncId = syncResult.meta.last_row_id;
 
-    // --- Populate user_pledges (clean-slate) ---
-    await db
-      .prepare("DELETE FROM user_pledges WHERE user_id = ?")
+    // --- Populate user_pledges (insert-then-swap) ---
+    // Record max existing IDs before inserting new data
+    const maxPledgeRow = await db
+      .prepare("SELECT MAX(id) as max_id FROM user_pledges WHERE user_id = ?")
       .bind(userID)
-      .run();
+      .first<{ max_id: number | null }>();
+    const maxExistingPledgeId = maxPledgeRow?.max_id ?? 0;
 
+    const maxItemRow = await db
+      .prepare("SELECT MAX(id) as max_id FROM user_pledge_items WHERE user_id = ?")
+      .bind(userID)
+      .first<{ max_id: number | null }>();
+    const maxExistingItemId = maxItemRow?.max_id ?? 0;
+
+    const maxUpgradeRow = await db
+      .prepare("SELECT MAX(id) as max_id FROM user_pledge_upgrades WHERE user_id = ?")
+      .bind(userID)
+      .first<{ max_id: number | null }>();
+    const maxExistingUpgradeId = maxUpgradeRow?.max_id ?? 0;
+
+    // Step 1: Insert new pledges (old ones still exist with lower IDs)
     const pledgeStmts: D1PreparedStatement[] = [];
     for (const pledge of payload.pledges) {
       pledgeStmts.push(
@@ -446,21 +455,17 @@ export function importRoutes() {
       await db.batch(pledgeStmts.slice(i, i + 100));
     }
 
-    // --- Build pledge ID map ---
+    // Step 2: Build pledge ID map from NEW pledges only (id > maxExistingPledgeId)
     const pledgeMapRows = await db
-      .prepare("SELECT id, rsi_pledge_id FROM user_pledges WHERE user_id = ?")
-      .bind(userID)
+      .prepare("SELECT id, rsi_pledge_id FROM user_pledges WHERE user_id = ? AND id > ?")
+      .bind(userID, maxExistingPledgeId)
       .all<{ id: number; rsi_pledge_id: number }>();
     const pledgeIdMap = new Map<number, number>();
     for (const row of pledgeMapRows.results) {
       pledgeIdMap.set(row.rsi_pledge_id, row.id);
     }
 
-    // --- Populate user_pledge_items (clean-slate) ---
-    await db
-      .prepare("DELETE FROM user_pledge_items WHERE user_id = ?")
-      .bind(userID)
-      .run();
+    // Step 3: Insert new pledge items (referencing new pledge IDs)
 
     const itemStmts: D1PreparedStatement[] = [];
     for (const pledge of payload.pledges) {
@@ -516,12 +521,7 @@ export function importRoutes() {
       await db.batch(itemStmts.slice(i, i + 500));
     }
 
-    // --- Populate user_pledge_upgrades (clean-slate) ---
-    await db
-      .prepare("DELETE FROM user_pledge_upgrades WHERE user_id = ?")
-      .bind(userID)
-      .run();
-
+    // Step 4: Insert new pledge upgrades (referencing new pledge IDs)
     const upgradeStmts: D1PreparedStatement[] = [];
     for (let idx = 0; idx < payload.upgrades.length; idx++) {
       const upgrade = payload.upgrades[idx];
@@ -550,6 +550,20 @@ export function importRoutes() {
 
     for (let i = 0; i < upgradeStmts.length; i += 100) {
       await db.batch(upgradeStmts.slice(i, i + 100));
+    }
+
+    // Step 5: Delete old rows (children first, then parent pledges)
+    if (maxExistingUpgradeId > 0) {
+      await db.prepare("DELETE FROM user_pledge_upgrades WHERE user_id = ? AND id <= ?")
+        .bind(userID, maxExistingUpgradeId).run();
+    }
+    if (maxExistingItemId > 0) {
+      await db.prepare("DELETE FROM user_pledge_items WHERE user_id = ? AND id <= ?")
+        .bind(userID, maxExistingItemId).run();
+    }
+    if (maxExistingPledgeId > 0) {
+      await db.prepare("DELETE FROM user_pledges WHERE user_id = ? AND id <= ?")
+        .bind(userID, maxExistingPledgeId).run();
     }
 
     const upgradeCount = payload.upgrades.length;

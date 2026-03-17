@@ -144,18 +144,40 @@ export async function executeFleetSwap(
   userID: string,
   insertStmts: D1PreparedStatement[],
 ): Promise<void> {
+  await executeTableSwap(db, "user_fleet", userID, insertStmts, 1000);
+}
+
+/**
+ * Generic insert-then-swap for any user-scoped table with AUTOINCREMENT id.
+ *
+ * 1. Record MAX(id) of existing rows for this user
+ * 2. Insert all new rows (which get higher IDs)
+ * 3. Delete only rows with id <= the recorded max
+ *
+ * If inserts fail, old data is preserved. If delete fails, both old and new
+ * data coexist (duplicates, but no data loss).
+ */
+export async function executeTableSwap(
+  db: D1Database,
+  table: string,
+  userID: string,
+  insertStmts: D1PreparedStatement[],
+  batchSize = 1000,
+): Promise<void> {
+  if (insertStmts.length === 0) return;
+
   const maxRow = await db
-    .prepare("SELECT MAX(id) as max_id FROM user_fleet WHERE user_id = ?")
+    .prepare(`SELECT MAX(id) as max_id FROM ${table} WHERE user_id = ?`)
     .bind(userID)
     .first<{ max_id: number | null }>();
   const maxExistingId = maxRow?.max_id ?? 0;
 
-  for (let i = 0; i < insertStmts.length; i += 1000) {
-    await db.batch(insertStmts.slice(i, i + 1000));
+  for (let i = 0; i < insertStmts.length; i += batchSize) {
+    await db.batch(insertStmts.slice(i, i + batchSize));
   }
 
   await db
-    .prepare("DELETE FROM user_fleet WHERE user_id = ? AND id <= ?")
+    .prepare(`DELETE FROM ${table} WHERE user_id = ? AND id <= ?`)
     .bind(userID, maxExistingId)
     .run();
 }
