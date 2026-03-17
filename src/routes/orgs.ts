@@ -108,8 +108,9 @@ export function orgRoutes() {
       return c.json({ error: "Failed to verify org — please try again later" }, 502);
     }
 
-    // Check charter for verification key
-    if (!orgData.charterHtml || !orgData.charterHtml.includes(pending.verification_key)) {
+    // Check raw page HTML for verification key — more reliable than parsed charter
+    // because the charter extraction regex may miss content in nested divs.
+    if (!orgData.rawHtml.includes(pending.verification_key)) {
       return c.json({
         ok: false,
         verified: false,

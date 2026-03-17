@@ -33,6 +33,8 @@ export interface RsiOrgData {
   historyHtml: string | null;
   manifestoHtml: string | null;
   charterHtml: string | null;
+  /** Raw full-page HTML — used for verification key search (not stored in DB). */
+  rawHtml: string;
 }
 
 /**
@@ -118,6 +120,7 @@ function parseOrgHtml(html: string, sid: string): RsiOrgData {
     historyHtml,
     manifestoHtml,
     charterHtml,
+    rawHtml: html,
   };
 }
 
@@ -133,15 +136,45 @@ function extractLabelledValue(html: string, className: string): string | null {
 }
 
 function extractTabContent(html: string, tabName: string): string | null {
-  // Tab content: id="tab-history" ... class="markitup-text">CONTENT</div>
-  const pattern = new RegExp(
-    `id="tab-${tabName}"[\\s\\S]*?class="markitup-text">([\\s\\S]*?)<\\/div>`,
-  );
-  const match = html.match(pattern);
-  if (match) {
-    const content = match[1].trim();
+  // Find the tab section start
+  const tabIdx = html.indexOf(`id="tab-${tabName}"`);
+  if (tabIdx === -1) return null;
+
+  // Find the markitup-text div within this tab (search a reasonable window)
+  const window = html.slice(tabIdx, tabIdx + 50000);
+  const markitupIdx = window.indexOf('class="markitup-text">');
+  if (markitupIdx === -1) return null;
+
+  const contentStart = markitupIdx + 'class="markitup-text">'.length;
+
+  // Find the closing </div> by tracking nesting depth.
+  // The markitup-text div's content may contain nested <div> tags.
+  let depth = 1;
+  let pos = contentStart;
+  while (pos < window.length && depth > 0) {
+    const nextOpen = window.indexOf("<div", pos);
+    const nextClose = window.indexOf("</div>", pos);
+    if (nextClose === -1) break;
+    if (nextOpen !== -1 && nextOpen < nextClose) {
+      depth++;
+      pos = nextOpen + 4;
+    } else {
+      depth--;
+      if (depth === 0) {
+        const content = window.slice(contentStart, nextClose).trim();
+        return content || null;
+      }
+      pos = nextClose + 6;
+    }
+  }
+
+  // Fallback: grab everything from content start to first </div> (old behavior)
+  const fallbackEnd = window.indexOf("</div>", contentStart);
+  if (fallbackEnd !== -1) {
+    const content = window.slice(contentStart, fallbackEnd).trim();
     return content || null;
   }
+
   return null;
 }
 
