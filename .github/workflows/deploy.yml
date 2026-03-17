@@ -25,16 +25,22 @@ jobs:
         run: npm ci
         working-directory: frontend
 
+      - name: Audit production dependencies
+        run: npm audit --omit=dev --audit-level=high
+
+      - name: TypeScript check
+        run: npm run typecheck
+
       - name: Build
         run: npm run build
+
+      - name: Run tests
+        run: npm run test
 
       - name: Build frontend for staging
         if: github.ref == 'refs/heads/staging'
         run: npm run build
         working-directory: frontend
-
-      - name: TypeScript check
-        run: npm run typecheck
 
       - name: Deploy to production
         if: github.ref == 'refs/heads/main'
