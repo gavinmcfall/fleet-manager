@@ -62,6 +62,60 @@ export function fleetRoutes() {
     return c.json({ success: true });
   });
 
+  // GET /api/vehicles/:id/upgrades — get CCU chain for a fleet entry
+  routes.get("/:id/upgrades",
+    validate("param", IntIdParam),
+    async (c) => {
+    const { id } = c.req.valid("param");
+    const db = c.env.DB;
+    const userID = getAuthUser(c).id;
+
+    // Get the fleet entry's pledge_id
+    const fleetEntry = await db
+      .prepare("SELECT pledge_id FROM user_fleet WHERE id = ? AND user_id = ?")
+      .bind(id, userID)
+      .first<{ pledge_id: string | null }>();
+
+    if (!fleetEntry?.pledge_id) {
+      return c.json({ pledge: null, upgrades: [] });
+    }
+
+    const rsiPledgeId = parseInt(fleetEntry.pledge_id, 10);
+    if (isNaN(rsiPledgeId)) {
+      return c.json({ pledge: null, upgrades: [] });
+    }
+
+    // Get the pledge
+    const pledge = await db
+      .prepare(
+        `SELECT id, rsi_pledge_id, name, value, value_cents, pledge_date, pledge_date_parsed,
+          is_upgraded, currency, availability
+        FROM user_pledges WHERE user_id = ? AND rsi_pledge_id = ?`,
+      )
+      .bind(userID, rsiPledgeId)
+      .first();
+
+    if (!pledge) {
+      return c.json({ pledge: null, upgrades: [] });
+    }
+
+    // Get the upgrade chain, ordered by sort_order
+    const upgrades = await db
+      .prepare(
+        `SELECT upgrade_name, applied_at, applied_at_parsed, new_value, new_value_cents, sort_order
+        FROM user_pledge_upgrades
+        WHERE user_pledge_id = ?
+        ORDER BY sort_order ASC`,
+      )
+      .bind(pledge.id)
+      .all();
+
+    return c.json({
+      pledge,
+      upgrades: upgrades.results,
+    });
+  });
+
   return routes;
 }
 
@@ -80,13 +134,23 @@ async function getFleetList(
         m.name as manufacturer_name, m.code as manufacturer_code,
         it.label as insurance_label, it.duration_months, it.is_lifetime,
         p.name as paint_name,
-        ps.key as production_status
+        ps.key as production_status,
+        COALESCE(latest_upg.new_value_cents, up.value_cents) as current_value_cents
       FROM user_fleet uf
       JOIN vehicles v ON v.id = uf.vehicle_id
       LEFT JOIN manufacturers m ON m.id = v.manufacturer_id
       LEFT JOIN insurance_types it ON it.id = uf.insurance_type_id
       LEFT JOIN paints p ON p.id = uf.equipped_paint_id
       LEFT JOIN production_statuses ps ON ps.id = v.production_status_id
+      LEFT JOIN user_pledges up ON up.user_id = uf.user_id
+        AND up.rsi_pledge_id = CAST(uf.pledge_id AS INTEGER)
+      LEFT JOIN (
+        SELECT user_pledge_id, new_value_cents
+        FROM user_pledge_upgrades
+        WHERE (user_pledge_id, sort_order) IN (
+          SELECT user_pledge_id, MAX(sort_order) FROM user_pledge_upgrades GROUP BY user_pledge_id
+        )
+      ) latest_upg ON latest_upg.user_pledge_id = up.id
       WHERE uf.user_id = ?
       ORDER BY v.name`,
     )

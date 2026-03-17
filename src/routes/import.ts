@@ -11,6 +11,8 @@ import {
   preloadVehicleMap,
   findVehicleSlugLocal,
   executeFleetSwap,
+  parseRsiDate,
+  parseValueCents,
 } from "../lib/fleet-import";
 
 /**
@@ -390,18 +392,178 @@ export function importRoutes() {
       buybackCount = bbStmts.length;
     }
 
-    // --- Upgrades ---
-    // user_pledge_upgrades has FK to user_pledges(id) which we don't populate
-    // in this flow. Upgrade data is stored in the payload for future use.
+    // --- Sync record ---
+    const syncResult = await db
+      .prepare(
+        `INSERT INTO user_hangar_syncs (user_id, source, pledge_count, ship_count, item_count)
+        VALUES (?, 'extension', ?, ?, ?)`,
+      )
+      .bind(
+        userID,
+        payload.pledges.length,
+        imported,
+        payload.pledges.reduce((sum: number, p: { items: unknown[] }) => sum + p.items.length, 0),
+      )
+      .run();
+    const syncId = syncResult.meta.last_row_id;
+
+    // --- Populate user_pledges (clean-slate) ---
+    await db
+      .prepare("DELETE FROM user_pledges WHERE user_id = ?")
+      .bind(userID)
+      .run();
+
+    const pledgeStmts: D1PreparedStatement[] = [];
+    for (const pledge of payload.pledges) {
+      pledgeStmts.push(
+        db
+          .prepare(
+            `INSERT INTO user_pledges (user_id, sync_id, rsi_pledge_id, name, value, value_cents,
+              configuration_value, currency, pledge_date, pledge_date_parsed,
+              is_upgraded, is_reclaimable, is_giftable, availability)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+          )
+          .bind(
+            userID,
+            syncId,
+            pledge.id,
+            pledge.name || "",
+            pledge.value || null,
+            pledge.valueCents ?? null,
+            pledge.configurationValue || null,
+            pledge.currency || null,
+            pledge.date || null,
+            parseRsiDate(pledge.date),
+            pledge.isUpgraded ? 1 : 0,
+            pledge.isReclaimable ? 1 : 0,
+            pledge.isGiftable ? 1 : 0,
+            pledge.availability || null,
+          ),
+      );
+    }
+
+    for (let i = 0; i < pledgeStmts.length; i += 100) {
+      await db.batch(pledgeStmts.slice(i, i + 100));
+    }
+
+    // --- Build pledge ID map ---
+    const pledgeMapRows = await db
+      .prepare("SELECT id, rsi_pledge_id FROM user_pledges WHERE user_id = ?")
+      .bind(userID)
+      .all<{ id: number; rsi_pledge_id: number }>();
+    const pledgeIdMap = new Map<number, number>();
+    for (const row of pledgeMapRows.results) {
+      pledgeIdMap.set(row.rsi_pledge_id, row.id);
+    }
+
+    // --- Populate user_pledge_items (clean-slate) ---
+    await db
+      .prepare("DELETE FROM user_pledge_items WHERE user_id = ?")
+      .bind(userID)
+      .run();
+
+    const itemStmts: D1PreparedStatement[] = [];
+    for (const pledge of payload.pledges) {
+      const userPledgeId = pledgeIdMap.get(pledge.id);
+      if (!userPledgeId) continue;
+
+      for (let idx = 0; idx < pledge.items.length; idx++) {
+        const item = pledge.items[idx];
+
+        // Parse insurance type from Insurance items
+        let insuranceTypeId: number | null = null;
+        if (item.kind === "Insurance") {
+          const insTitle = (item.title ?? "").toLowerCase();
+          if (insTitle.includes("lifetime") || insTitle.includes("lti")) {
+            insuranceTypeId = insuranceMap.get("lti") ?? null;
+          } else {
+            const monthMatch = insTitle.match(/(\d+)[\s-]*month/);
+            if (monthMatch) {
+              insuranceTypeId = insuranceMap.get(`${monthMatch[1]}_month`) ?? insuranceMap.get("unknown") ?? null;
+            } else {
+              insuranceTypeId = insuranceMap.get("unknown") ?? null;
+            }
+          }
+        }
+
+        itemStmts.push(
+          db
+            .prepare(
+              `INSERT INTO user_pledge_items (user_id, user_pledge_id, title, kind,
+                manufacturer_code, manufacturer_name, image_url, custom_name, serial,
+                is_nameable, insurance_type_id, sort_order)
+              VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+            )
+            .bind(
+              userID,
+              userPledgeId,
+              item.title || "",
+              item.kind || null,
+              item.manufacturerCode || null,
+              item.manufacturer || null,
+              item.image || null,
+              item.customName || null,
+              item.serial || null,
+              item.isNameable ? 1 : 0,
+              insuranceTypeId,
+              idx,
+            ),
+        );
+      }
+    }
+
+    for (let i = 0; i < itemStmts.length; i += 500) {
+      await db.batch(itemStmts.slice(i, i + 500));
+    }
+
+    // --- Populate user_pledge_upgrades (clean-slate) ---
+    await db
+      .prepare("DELETE FROM user_pledge_upgrades WHERE user_id = ?")
+      .bind(userID)
+      .run();
+
+    const upgradeStmts: D1PreparedStatement[] = [];
+    for (let idx = 0; idx < payload.upgrades.length; idx++) {
+      const upgrade = payload.upgrades[idx];
+      const userPledgeId = pledgeIdMap.get(upgrade.pledge_id);
+      if (!userPledgeId) continue; // Skip orphaned upgrades
+
+      upgradeStmts.push(
+        db
+          .prepare(
+            `INSERT INTO user_pledge_upgrades (user_id, user_pledge_id, upgrade_name,
+              applied_at, applied_at_parsed, new_value, new_value_cents, sort_order)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
+          )
+          .bind(
+            userID,
+            userPledgeId,
+            upgrade.name || "",
+            upgrade.applied_at || null,
+            parseRsiDate(upgrade.applied_at),
+            upgrade.new_value || null,
+            parseValueCents(upgrade.new_value),
+            idx,
+          ),
+      );
+    }
+
+    for (let i = 0; i < upgradeStmts.length; i += 100) {
+      await db.batch(upgradeStmts.slice(i, i + 100));
+    }
+
     const upgradeCount = payload.upgrades.length;
+    const pledgeItemCount = itemStmts.length;
 
     // --- Log change history ---
-    console.log(`[hangar-sync] Sync complete: ${imported} ships, ${skippedItems.length} skipped, ${buybackCount} buyback, ${upgradeCount} upgrades`);
+    console.log(`[hangar-sync] Sync complete: ${imported} ships, ${skippedItems.length} skipped, ${buybackCount} buyback, ${upgradeCount} upgrades, ${pledgeStmts.length} pledges, ${pledgeItemCount} items`);
     logEvent("hangar_sync", {
       imported,
       skipped: skippedItems.length,
       buyback_count: buybackCount,
       upgrade_count: upgradeCount,
+      pledge_count: pledgeStmts.length,
+      pledge_item_count: pledgeItemCount,
       has_profile: hasProfile,
       anomalous: isAnomalous,
       extension_version: payload.sync_meta.extension_version,
@@ -412,6 +574,8 @@ export function importRoutes() {
         skipped_count: skippedItems.length,
         buyback_count: buybackCount,
         upgrade_count: upgradeCount,
+        pledge_count: pledgeStmts.length,
+        pledge_item_count: pledgeItemCount,
         extension_version: payload.sync_meta.extension_version,
       },
       ipAddress: clientIP,
@@ -423,6 +587,8 @@ export function importRoutes() {
       skipped_items: skippedItems.slice(0, 20),
       buyback_count: buybackCount,
       upgrade_count: upgradeCount,
+      pledge_count: pledgeStmts.length,
+      pledge_item_count: pledgeItemCount,
       has_profile: hasProfile,
       message: "Hangar sync complete",
     });

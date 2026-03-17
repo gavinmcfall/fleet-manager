@@ -90,6 +90,48 @@ export function findVehicleSlugLocal(
   return null;
 }
 
+// --- Date and value parsing helpers ---
+
+/**
+ * Parse RSI date strings like "August 19, 2025" or "Feb 28 2020, 7:41 am" to ISO format.
+ * Returns null if unparseable.
+ */
+export function parseRsiDate(raw: string | null | undefined): string | null {
+  if (!raw) return null;
+  const trimmed = raw.trim();
+  if (!trimmed) return null;
+
+  // Already ISO format
+  if (/^\d{4}-\d{2}-\d{2}/.test(trimmed)) return trimmed;
+
+  // Try Date.parse (handles "August 19, 2025" and "Feb 28 2020, 7:41 am")
+  const ts = Date.parse(trimmed);
+  if (!isNaN(ts)) {
+    const d = new Date(ts);
+    const iso = d.toISOString();
+    // Return date only if no time component in input, otherwise full ISO
+    if (/\d{1,2}:\d{2}/.test(trimmed)) {
+      return iso.replace("Z", "").replace(/\.000$/, "");
+    }
+    return iso.slice(0, 10);
+  }
+
+  return null;
+}
+
+/**
+ * Parse RSI value strings like "$295.00 USD" or "$1,500.00" to cents.
+ * Returns null if unparseable.
+ */
+export function parseValueCents(raw: string | null | undefined): number | null {
+  if (!raw) return null;
+  const match = raw.match(/\$\s*([\d,]+(?:\.\d+)?)/);
+  if (!match) return null;
+  const num = parseFloat(match[1].replace(/,/g, ""));
+  if (isNaN(num)) return null;
+  return Math.round(num * 100);
+}
+
 /**
  * Insert-then-swap pattern for fleet imports.
  *

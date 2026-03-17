@@ -96,6 +96,10 @@ export function useFleet() {
   return useAPI('/vehicles')
 }
 
+export function useFleetEntryUpgrades(fleetEntryId) {
+  return useAPI(fleetEntryId ? `/vehicles/${fleetEntryId}/upgrades` : null, { skip: !fleetEntryId })
+}
+
 export function useAnalysis(opts) {
   return useAPI('/analysis', opts)
 }

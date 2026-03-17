@@ -11,6 +11,18 @@ import InsuranceBadge from '../components/InsuranceBadge'
 import StatusBadge from '../components/StatusBadge'
 import ShipImage from '../components/ShipImage'
 
+/** Get display value and numeric sort value for a fleet entry's cost.
+ * Prefers current_value_cents (from upgrade chain / pledge data) over raw pledge_cost string. */
+function getShipValue(entry) {
+  // Prefer current_value_cents from pledge/upgrade data
+  if (entry.current_value_cents != null && entry.current_value_cents > 0) {
+    const dollars = entry.current_value_cents / 100
+    return { display: `$${Math.round(dollars).toLocaleString('en-US')}`, numeric: dollars }
+  }
+  // Fall back to parsing pledge_cost string
+  return parsePledgeCost(entry.pledge_cost)
+}
+
 /** Parse pledge_cost string (e.g. "$290.00", "$0.00 USD", "¤15,000 UEC") into a display value and numeric sort value. */
 function parsePledgeCost(raw) {
   if (!raw) return { display: '-', numeric: 0 }
@@ -74,7 +86,7 @@ export default function FleetTable() {
         case 'vehicle_name': va = a.vehicle_name; vb = b.vehicle_name; break
         case 'size': va = a.size_label || ''; vb = b.size_label || ''; break
         case 'focus': va = a.focus || ''; vb = b.focus || ''; break
-        case 'pledge': va = parsePledgeCost(a.pledge_cost).numeric; vb = parsePledgeCost(b.pledge_cost).numeric; break
+        case 'pledge': va = getShipValue(a).numeric; vb = getShipValue(b).numeric; break
         default: va = a.vehicle_name; vb = b.vehicle_name
       }
       if (typeof va === 'string') {
@@ -214,7 +226,7 @@ export default function FleetTable() {
                     </td>
                     <td className="table-cell text-gray-400">{v.focus || '-'}</td>
                     <td className="table-cell font-mono text-gray-400">
-                      {parsePledgeCost(v.pledge_cost).display}
+                      {getShipValue(v).display}
                     </td>
                     <td className="table-cell">
                       <StatusBadge status={v.production_status} size="sm" />

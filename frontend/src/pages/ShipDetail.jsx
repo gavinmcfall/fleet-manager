@@ -4,7 +4,7 @@ import {
   ArrowLeft, ExternalLink, X,
   Rocket, Zap, Box, Palette, LayoutGrid, List,
 } from 'lucide-react'
-import { useShip, useShipLoadout, useShipPaints, useWeaponRacks, useSuitLockers } from '../hooks/useAPI'
+import { useShip, useShipLoadout, useShipPaints, useWeaponRacks, useSuitLockers, useFleet, useFleetEntryUpgrades } from '../hooks/useAPI'
 import ShipImage from '../components/ShipImage'
 import StatusBadge from '../components/StatusBadge'
 import LoadingState from '../components/LoadingState'
@@ -377,6 +377,115 @@ function OverviewRightCol({ ship }) {
   )
 }
 
+// ─── CCU History ──────────────────────────────────────────────────────────────
+
+function CCUHistory({ fleetEntryId }) {
+  const { data, loading } = useFleetEntryUpgrades(fleetEntryId)
+
+  if (loading || !data?.pledge || !data?.upgrades?.length) return null
+
+  const { pledge, upgrades } = data
+  const formatDate = (parsed, raw) => {
+    if (parsed) {
+      const d = new Date(parsed)
+      return d.toLocaleDateString('en-US', { month: 'short', year: 'numeric' })
+    }
+    if (raw) return raw
+    return ''
+  }
+
+  const formatValue = (cents, raw) => {
+    if (cents) return `$${(cents / 100).toLocaleString('en-US', { maximumFractionDigits: 0 })}`
+    if (raw) return raw
+    return ''
+  }
+
+  return (
+    <div className="panel">
+      <div className="panel-header">Upgrade History</div>
+      <div className="p-4">
+        <div className="relative pl-6 space-y-0">
+          {/* Vertical line */}
+          <div className="absolute left-2 top-2 bottom-2 w-px bg-sc-border" />
+
+          {/* Base pledge */}
+          <div className="relative pb-4">
+            <div className="absolute left-[-16px] top-1.5 w-2 h-2 rounded-full bg-sc-accent2" />
+            <div className="flex items-baseline justify-between gap-4">
+              <div>
+                <p className="text-sm font-mono text-white">{pledge.name}</p>
+                <p className="text-xs text-gray-500 mt-0.5">Base pledge</p>
+              </div>
+              <div className="text-right shrink-0">
+                <span className="text-sm font-mono text-sc-warn">{formatValue(pledge.value_cents, pledge.value)}</span>
+                {pledge.pledge_date_parsed && (
+                  <p className="text-xs text-gray-600 mt-0.5">{formatDate(pledge.pledge_date_parsed, pledge.pledge_date)}</p>
+                )}
+              </div>
+            </div>
+          </div>
+
+          {/* Upgrades */}
+          {upgrades.map((upg, i) => (
+            <div key={i} className="relative pb-4 last:pb-0">
+              <div className={`absolute left-[-16px] top-1.5 w-2 h-2 rounded-full ${i === upgrades.length - 1 ? 'bg-sc-accent' : 'bg-gray-500'}`} />
+              <div className="flex items-baseline justify-between gap-4">
+                <div>
+                  <p className="text-sm font-mono text-gray-300">{upg.upgrade_name}</p>
+                </div>
+                <div className="text-right shrink-0">
+                  {upg.new_value_cents && (
+                    <span className="text-sm font-mono text-sc-warn">{formatValue(upg.new_value_cents, upg.new_value)}</span>
+                  )}
+                  {upg.applied_at_parsed && (
+                    <p className="text-xs text-gray-600 mt-0.5">{formatDate(upg.applied_at_parsed, upg.applied_at)}</p>
+                  )}
+                </div>
+              </div>
+            </div>
+          ))}
+        </div>
+      </div>
+    </div>
+  )
+}
+
+function PledgeSection({ ship }) {
+  const { data: fleet } = useFleet()
+
+  // Find fleet entries for this ship
+  const entries = (fleet || []).filter(v => v.vehicle_slug === ship.slug)
+
+  if (entries.length === 0) return null
+
+  return (
+    <div className="space-y-4">
+      {entries.map((entry) => (
+        <div key={entry.id} className="space-y-2">
+          <div className="panel">
+            <div className="panel-header">Your Pledge</div>
+            <div className="p-4 space-y-0">
+              {entry.pledge_name && (
+                <SpecRow label="Pledge" value={entry.pledge_name} />
+              )}
+              {entry.current_value_cents > 0 && (
+                <SpecRow label="Current Value" value={`$${(entry.current_value_cents / 100).toLocaleString('en-US', { maximumFractionDigits: 0 })}`} />
+              )}
+              {entry.pledge_date && (
+                <SpecRow label="Date" value={entry.pledge_date} />
+              )}
+              {entry.custom_name && (
+                <SpecRow label="Ship Name" value={entry.custom_name} />
+              )}
+            </div>
+          </div>
+          <CCUHistory fleetEntryId={entry.id} />
+        </div>
+      ))}
+    </div>
+  )
+}
+
 // ─── Overview ─────────────────────────────────────────────────────────────────
 
 function OverviewTab({ ship }) {
@@ -431,7 +540,10 @@ function OverviewTab({ ship }) {
         )}
       </div>
 
-      <OverviewRightCol ship={ship} />
+      <div className="space-y-4">
+        <OverviewRightCol ship={ship} />
+        <PledgeSection ship={ship} />
+      </div>
     </div>
   )
 }
