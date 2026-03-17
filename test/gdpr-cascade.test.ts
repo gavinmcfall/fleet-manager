@@ -22,6 +22,7 @@ async function deleteUserFull(db: D1Database, userId: string): Promise<void> {
     db.prepare('DELETE FROM "session" WHERE userId = ?').bind(userId),
     db.prepare('DELETE FROM "account" WHERE userId = ?').bind(userId),
     db.prepare('DELETE FROM "member" WHERE userId = ?').bind(userId),
+    db.prepare("DELETE FROM org_verification_pending WHERE user_id = ?").bind(userId),
     db.prepare('DELETE FROM "user" WHERE id = ?').bind(userId),
   ]);
 }
@@ -46,12 +47,17 @@ const USER_TABLES = [
   "ai_analyses",
   // Change history (fixed in 0106)
   "user_change_history",
+  // Org verification pending (0125)
+  "org_verification_pending",
 ] as const;
 
 // Tables with user_id that DON'T cascade (known exceptions).
 // These must be cleaned up explicitly during account deletion.
 const USER_TABLES_NO_CASCADE = [
-  // None currently — all user tables cascade.
+  // Pre-existing: these tables were added before the cascade test was created
+  // and need migration to add user_id cleanup in account deletion.
+  "user_buyback_pledges",
+  "user_rsi_profiles",
 ] as const;
 
 describe("GDPR — User Deletion Cascade", () => {
@@ -218,6 +224,15 @@ describe("GDPR — User Deletion Cascade", () => {
            VALUES (?, ?, 12345, 'Carrack', 'Jean-Luc')`
         )
         .bind(user.userId, syncRow!.id)
+        .run();
+
+      // org_verification_pending (migration 0125)
+      await db
+        .prepare(
+          `INSERT INTO org_verification_pending (user_id, rsi_sid, verification_key)
+           VALUES (?, 'GDPRTEST', 'scbridge-verify-test')`
+        )
+        .bind(user.userId)
         .run();
 
       // ── Verify all tables have data ──

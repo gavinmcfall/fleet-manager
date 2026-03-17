@@ -84,7 +84,7 @@ app.use("*", async (c, next) => {
     "Content-Security-Policy",
     "default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; " +
     "img-src 'self' https://imagedelivery.net https://robertsspaceindustries.com " +
-    "https://media.robertsspaceindustries.com https://www.gravatar.com data:; " +
+    "https://media.robertsspaceindustries.com https://cdn.robertsspaceindustries.com https://www.gravatar.com data:; " +
     "connect-src 'self'; frame-ancestors 'none'; base-uri 'self'; form-action 'self'",
   );
 });

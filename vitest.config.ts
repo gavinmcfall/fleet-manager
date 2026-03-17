@@ -25,7 +25,7 @@ export default defineWorkersConfig(async () => {
             bindings: {
               TEST_MIGRATIONS: migrations,
               ENVIRONMENT: "test",
-              ENCRYPTION_KEY: "test-encryption-key-32-chars-ok!",
+              ENCRYPTION_KEY: "dGVzdC1lbmNyeXB0aW9uLWtleS1mb3Itdml0ZXN0IXQ=",
               BETTER_AUTH_SECRET: "test-secret-value-for-testing-xx",
               BETTER_AUTH_URL: "http://localhost:8787",
             },

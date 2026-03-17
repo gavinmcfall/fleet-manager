@@ -197,6 +197,50 @@ export async function updateOrgSettings(slug, settings) {
   return patchJSON(`/orgs/${slug}`, settings)
 }
 
+// Org verify-then-create flow
+export async function generateOrgVerification(rsiSid) {
+  return postJSON('/orgs/verify/generate', { rsiSid })
+}
+
+export async function checkOrgVerification() {
+  return postJSON('/orgs/verify/check')
+}
+
+export function useOrgVerificationStatus() {
+  return useAPI('/orgs/verify/status')
+}
+
+// Org join
+export async function joinOrg(code) {
+  return postJSON('/orgs/join', { code })
+}
+
+// Org join codes (admin)
+export function useOrgJoinCodes(slug) {
+  return useAPI(slug ? `/orgs/${slug}/join-codes` : null, { skip: !slug })
+}
+
+export async function generateJoinCode(slug, opts = {}) {
+  return postJSON(`/orgs/${slug}/join-codes`, opts)
+}
+
+export async function revokeJoinCode(slug, id) {
+  return apiFetch('DELETE', `/orgs/${slug}/join-codes/${id}`)
+}
+
+// Org sync + delete + primary
+export async function syncOrgFromRsi(slug) {
+  return postJSON(`/orgs/${slug}/sync-rsi`)
+}
+
+export async function deleteOrg(slug) {
+  return apiFetch('DELETE', `/orgs/${slug}`)
+}
+
+export async function setPrimaryOrg(organizationId) {
+  return putJSON('/orgs/primary', { organizationId })
+}
+
 // Loot / Item Finder
 // These hooks accept an optional patchCode to query a specific game version.
 // When patchCode changes, the path changes, triggering a re-fetch.

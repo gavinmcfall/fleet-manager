@@ -1,6 +1,9 @@
 import React, { useState, useCallback } from 'react'
 import { useParams, Link, useSearchParams } from 'react-router-dom'
-import { ExternalLink, Users, Rocket, BarChart3, Building2, Globe, MessageSquare, Tv, Youtube, Settings } from 'lucide-react'
+import {
+  ExternalLink, Users, Rocket, BarChart3, Building2, Globe,
+  MessageSquare, Tv, Youtube, Settings, ShieldCheck, ChevronDown
+} from 'lucide-react'
 import { useOrgProfile, useOrgFleet, useOrgMembers, useOrgAnalysis } from '../hooks/useAPI'
 import { useSession } from '../lib/auth-client'
 import PageHeader from '../components/PageHeader'
@@ -14,6 +17,7 @@ const TABS = [
   { id: 'fleet', label: 'Fleet', icon: Rocket },
   { id: 'members', label: 'Members', icon: Users },
   { id: 'analysis', label: 'Analysis', icon: BarChart3 },
+  { id: 'about', label: 'About', icon: Building2 },
 ]
 
 const ROLE_BADGE = {
@@ -179,11 +183,98 @@ function OrgAnalysis({ slug }) {
   )
 }
 
+// ── About Tab (RSI scraped content) ───────────────────────────────────
+
+function OrgAbout({ org }) {
+  const [expandedSection, setExpandedSection] = useState(null)
+
+  const sections = [
+    { id: 'history', label: 'History', content: org.rsi_history_html },
+    { id: 'manifesto', label: 'Manifesto', content: org.rsi_manifesto_html },
+    { id: 'charter', label: 'Charter', content: org.rsi_charter_html },
+  ].filter(s => s.content)
+
+  if (sections.length === 0 && !org.rsi_model) {
+    return (
+      <div className="text-center py-16 text-gray-500">
+        <Building2 className="w-10 h-10 mx-auto mb-3 text-gray-600" />
+        <p className="text-sm">No RSI data available</p>
+        {org.callerRole === 'owner' && (
+          <p className="text-xs mt-1">Sync from RSI in org settings to populate this section</p>
+        )}
+      </div>
+    )
+  }
+
+  return (
+    <div className="space-y-4">
+      {/* RSI badges */}
+      {(org.rsi_model || org.rsi_commitment || org.rsi_primary_focus) && (
+        <div className="flex flex-wrap gap-2">
+          {org.rsi_model && (
+            <span className="text-xs px-2 py-1 rounded border border-sc-border bg-white/5 text-gray-300">
+              {org.rsi_model}
+            </span>
+          )}
+          {org.rsi_commitment && (
+            <span className="text-xs px-2 py-1 rounded border border-sc-border bg-white/5 text-gray-300">
+              {org.rsi_commitment}
+            </span>
+          )}
+          {org.rsi_roleplay && (
+            <span className="text-xs px-2 py-1 rounded border border-sc-border bg-white/5 text-gray-300">
+              {org.rsi_roleplay}
+            </span>
+          )}
+          {org.rsi_primary_focus && (
+            <span className="text-xs px-2 py-1 rounded border border-blue-400/30 bg-blue-400/10 text-blue-400">
+              {org.rsi_primary_focus}
+            </span>
+          )}
+          {org.rsi_secondary_focus && (
+            <span className="text-xs px-2 py-1 rounded border border-gray-500/30 bg-white/5 text-gray-400">
+              {org.rsi_secondary_focus}
+            </span>
+          )}
+        </div>
+      )}
+
+      {/* RSI member count */}
+      {org.rsi_member_count && (
+        <p className="text-xs text-gray-500">
+          {org.rsi_member_count.toLocaleString()} members on RSI
+        </p>
+      )}
+
+      {/* Expandable sections */}
+      {sections.map(({ id, label, content }) => (
+        <div key={id} className="panel overflow-hidden">
+          <button
+            onClick={() => setExpandedSection(expandedSection === id ? null : id)}
+            className="w-full flex items-center justify-between px-4 py-3 text-left hover:bg-white/[0.02] transition-colors"
+          >
+            <span className="text-xs font-display uppercase tracking-wider text-gray-400">{label}</span>
+            <ChevronDown className={`w-4 h-4 text-gray-500 transition-transform ${expandedSection === id ? 'rotate-180' : ''}`} />
+          </button>
+          {expandedSection === id && (
+            <div
+              className="px-4 pb-4 prose prose-invert prose-sm max-w-none text-gray-300"
+              dangerouslySetInnerHTML={{ __html: content }}
+            />
+          )}
+        </div>
+      ))}
+    </div>
+  )
+}
+
+// ── Main OrgProfile Page ──────────────────────────────────────────────
+
 export default function OrgProfile() {
   const { slug } = useParams()
   const { data: session } = useSession()
   const { data: org, loading, error, refetch } = useOrgProfile(slug)
-  const VALID_TABS = ['fleet', 'members', 'analysis']
+  const VALID_TABS = ['fleet', 'members', 'analysis', 'about']
   const [searchParams, setSearchParams] = useSearchParams()
   const tabParam = searchParams.get('tab')
   const activeTab = VALID_TABS.includes(tabParam) ? tabParam : 'fleet'
@@ -203,9 +294,25 @@ export default function OrgProfile() {
   const isLoggedIn = !!session?.user
   const callerRole = org.callerRole
   const canManage = callerRole === 'owner' || callerRole === 'admin'
+  const hasAboutContent = org.rsi_model || org.rsi_history_html || org.rsi_manifesto_html || org.rsi_charter_html
+
+  // Only show About tab if there's RSI content or user is owner (can sync)
+  const visibleTabs = TABS.filter(t => t.id !== 'about' || hasAboutContent || callerRole === 'owner')
 
   return (
     <div className="space-y-6 animate-fade-in-up">
+      {/* Banner */}
+      {org.rsi_banner_url && (
+        <div className="relative -mx-4 -mt-4 sm:mx-0 sm:mt-0 sm:rounded-lg overflow-hidden">
+          <img
+            src={org.rsi_banner_url}
+            alt={`${org.name} banner`}
+            className="w-full h-32 sm:h-40 object-cover"
+          />
+          <div className="absolute inset-0 bg-gradient-to-t from-sc-bg/80 to-transparent" />
+        </div>
+      )}
+
       <PageHeader
         title={org.name}
         subtitle={org.slug}
@@ -218,7 +325,13 @@ export default function OrgProfile() {
         )}
 
         <div className="flex-1 min-w-0 space-y-2">
-          <div className="flex flex-wrap gap-2">
+          <div className="flex flex-wrap gap-2 items-center">
+            {org.verified_at && (
+              <span className="inline-flex items-center gap-1 text-xs text-green-400 bg-green-400/10 border border-green-400/30 px-1.5 py-0.5 rounded">
+                <ShieldCheck className="w-3 h-3" />
+                Verified
+              </span>
+            )}
             {org.rsiSid && (
               <a
                 href={`${RSI_BASE}/en/orgs/${org.rsiSid}`}
@@ -263,6 +376,9 @@ export default function OrgProfile() {
           <div className="flex items-center gap-2 text-xs text-gray-500">
             <Users className="w-3.5 h-3.5" />
             {org.memberCount} members
+            {org.rsi_member_count && org.rsi_member_count !== org.memberCount && (
+              <span className="text-gray-600">({org.rsi_member_count.toLocaleString()} on RSI)</span>
+            )}
             <span className="text-gray-600">·</span>
             <span>Founded {new Date(org.createdAt).toLocaleDateString()}</span>
           </div>
@@ -282,7 +398,7 @@ export default function OrgProfile() {
       {/* Tabs */}
       <div>
         <div className="flex gap-1 border-b border-sc-border mb-4">
-          {TABS.map(({ id, label, icon: Icon }) => (
+          {visibleTabs.map(({ id, label, icon: Icon }) => (
             <button
               key={id}
               onClick={() => setActiveTab(id)}
@@ -321,6 +437,7 @@ export default function OrgProfile() {
               </div>
             )
         )}
+        {activeTab === 'about' && <OrgAbout org={org} />}
       </div>
     </div>
   )

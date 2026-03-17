@@ -4,16 +4,330 @@ import type { HonoEnv, UserFleetEntry, Vehicle } from "../lib/types";
 import { validate } from "../lib/validation";
 import { analyzeFleet } from "./analysis";
 import { VEHICLE_VERSION_JOIN } from "../lib/constants";
+import { scrapeRsiOrg } from "../lib/rsi-org-scraper";
 
 /**
  * /api/orgs/* — Organisation endpoints
  *
- * Core org operations (create, invite, accept) are handled by Better Auth's
- * organization plugin at /api/auth/organization/*. These routes cover
- * fleet-specific and public-facing endpoints that Better Auth doesn't provide.
+ * Verify-then-create flow: RSI SID → charter key → verify → org created from scraped data.
+ * Join codes: admin generates codes, users join without invitation emails.
+ * Multi-org: users can belong to multiple orgs, set a primary.
  */
 export function orgRoutes() {
   const routes = new Hono<HonoEnv>();
+
+  // ── Verification (pre-creation) ────────────────────────────────────────
+
+  // POST /api/orgs/verify/generate — start verification by generating a key
+  routes.post("/verify/generate",
+    validate("json", z.object({
+      rsiSid: z.string().min(2).max(20).regex(/^[A-Za-z0-9_-]+$/, "Invalid RSI org SID"),
+    })),
+    async (c) => {
+      const user = c.get("user");
+      if (!user) return c.json({ error: "Unauthorized" }, 401);
+
+      const db = c.env.DB;
+      const { rsiSid } = c.req.valid("json");
+      const sid = rsiSid.toUpperCase();
+
+      // Check no existing org already has this SID
+      const existing = await db
+        .prepare("SELECT id FROM organization WHERE rsiSid = ?")
+        .bind(sid)
+        .first();
+      if (existing) {
+        return c.json({ error: "An org with this RSI SID already exists" }, 409);
+      }
+
+      // Check no other pending verification for this SID (only consider non-expired, < 24hr old)
+      const pendingOther = await db
+        .prepare("SELECT id FROM org_verification_pending WHERE rsi_sid = ? AND user_id != ? AND created_at > datetime('now', '-24 hours')")
+        .bind(sid, user.id)
+        .first();
+      if (pendingOther) {
+        return c.json({ error: "Another user is already verifying this org" }, 409);
+      }
+
+      // Clean up expired pending verifications for this SID before inserting
+      await db
+        .prepare("DELETE FROM org_verification_pending WHERE rsi_sid = ? AND created_at <= datetime('now', '-24 hours')")
+        .bind(sid)
+        .run();
+
+      // Generate verification key
+      const keyBytes = new Uint8Array(16);
+      crypto.getRandomValues(keyBytes);
+      const verificationKey = `scbridge-verify-${Array.from(keyBytes).map(b => b.toString(16).padStart(2, "0")).join("")}`;
+
+      // Upsert pending verification — only allow same user to overwrite their own row
+      await db
+        .prepare(
+          `INSERT INTO org_verification_pending (user_id, rsi_sid, verification_key)
+           VALUES (?, ?, ?)
+           ON CONFLICT(rsi_sid) DO UPDATE SET
+             verification_key = excluded.verification_key,
+             created_at = datetime('now')
+           WHERE org_verification_pending.user_id = excluded.user_id`,
+        )
+        .bind(user.id, sid, verificationKey)
+        .run();
+
+      return c.json({
+        ok: true,
+        verification_key: verificationKey,
+        rsiSid: sid,
+        instructions: `Add this key anywhere in your RSI org charter at https://robertsspaceindustries.com/en/orgs/${sid}, then click Verify.`,
+      });
+    },
+  );
+
+  // POST /api/orgs/verify/check — check charter for key, create org on success
+  routes.post("/verify/check", async (c) => {
+    const user = c.get("user");
+    if (!user) return c.json({ error: "Unauthorized" }, 401);
+
+    const db = c.env.DB;
+
+    // Find user's pending verification (must be < 24hr old)
+    const pending = await db
+      .prepare("SELECT id, rsi_sid, verification_key FROM org_verification_pending WHERE user_id = ? AND created_at > datetime('now', '-24 hours')")
+      .bind(user.id)
+      .first<{ id: number; rsi_sid: string; verification_key: string }>();
+
+    if (!pending) {
+      return c.json({ error: "No pending verification — generate a key first" }, 400);
+    }
+
+    // Scrape RSI org page
+    let orgData;
+    try {
+      orgData = await scrapeRsiOrg(pending.rsi_sid);
+    } catch (err) {
+      console.error(`[orgs] RSI scrape failed for ${pending.rsi_sid}:`, (err as Error).message);
+      return c.json({ error: "Failed to verify org — please try again later" }, 502);
+    }
+
+    // Check charter for verification key
+    if (!orgData.charterHtml || !orgData.charterHtml.includes(pending.verification_key)) {
+      return c.json({
+        ok: false,
+        verified: false,
+        message: `Verification key not found in charter. Add "${pending.verification_key}" to your org charter at https://robertsspaceindustries.com/en/orgs/${pending.rsi_sid}, save it, then try again.`,
+      });
+    }
+
+    // Verified — create the org directly in DB (Better Auth organization schema)
+    const slug = pending.rsi_sid.toLowerCase();
+    const orgId = crypto.randomUUID();
+    const now = new Date().toISOString();
+
+    // Check slug uniqueness
+    const slugExists = await db
+      .prepare("SELECT id FROM organization WHERE slug = ?")
+      .bind(slug)
+      .first();
+    if (slugExists) {
+      return c.json({ error: `An org with slug "${slug}" already exists` }, 409);
+    }
+
+    // Create org, owner member, set primary, and clean up pending — all atomically via batch.
+    // Prevents phantom orgs with no owner if any step fails.
+    const memberId = crypto.randomUUID();
+    await db.batch([
+      db.prepare(
+        `INSERT INTO organization (
+          id, name, slug, logo, createdAt,
+          rsiSid, rsiUrl,
+          rsi_model, rsi_commitment, rsi_roleplay,
+          rsi_primary_focus, rsi_secondary_focus,
+          rsi_banner_url, rsi_member_count,
+          rsi_history_html, rsi_manifesto_html, rsi_charter_html,
+          last_synced_at, verified_at, verified_by
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, datetime('now'), datetime('now'), ?)`,
+      ).bind(
+        orgId, orgData.name, slug, orgData.logo, now,
+        pending.rsi_sid,
+        `https://robertsspaceindustries.com/en/orgs/${pending.rsi_sid}`,
+        orgData.model, orgData.commitment, orgData.roleplay,
+        orgData.primaryFocus, orgData.secondaryFocus,
+        orgData.bannerUrl, orgData.memberCount,
+        orgData.historyHtml, orgData.manifestoHtml, orgData.charterHtml,
+        user.id,
+      ),
+      db.prepare(
+        `INSERT INTO member (id, organizationId, userId, role, createdAt)
+         VALUES (?, ?, ?, 'owner', ?)`,
+      ).bind(memberId, orgId, user.id, now),
+      db.prepare("UPDATE user SET primary_org_id = ? WHERE id = ? AND primary_org_id IS NULL")
+        .bind(orgId, user.id),
+      db.prepare("DELETE FROM org_verification_pending WHERE id = ?")
+        .bind(pending.id),
+    ]);
+
+    return c.json({
+      ok: true,
+      verified: true,
+      slug,
+      message: "Org verified and created! You can now remove the key from your charter.",
+    });
+  });
+
+  // GET /api/orgs/verify/status — check if user has a pending verification
+  // NOTE: verification_key is NOT returned here — it's only returned from /verify/generate.
+  // The frontend caches it client-side. Exposing it in a GET would leak the ownership proof token.
+  routes.get("/verify/status", async (c) => {
+    const user = c.get("user");
+    if (!user) return c.json({ error: "Unauthorized" }, 401);
+
+    const pending = await c.env.DB
+      .prepare("SELECT rsi_sid, created_at FROM org_verification_pending WHERE user_id = ? AND created_at > datetime('now', '-24 hours')")
+      .bind(user.id)
+      .first<{ rsi_sid: string; created_at: string }>();
+
+    if (!pending) {
+      return c.json({ pending: false });
+    }
+
+    return c.json({
+      pending: true,
+      rsiSid: pending.rsi_sid,
+      created_at: pending.created_at,
+    });
+  });
+
+  // ── Join codes ─────────────────────────────────────────────────────────
+
+  // POST /api/orgs/join — join an org using a join code
+  routes.post("/join",
+    validate("json", z.object({
+      code: z.string().min(1).max(50),
+    })),
+    async (c) => {
+      const user = c.get("user");
+      if (!user) return c.json({ error: "Unauthorized" }, 401);
+
+      const db = c.env.DB;
+      const { code } = c.req.valid("json");
+
+      // Find the join code
+      const joinCode = await db
+        .prepare(
+          `SELECT jc.id, jc.organization_id, jc.max_uses, jc.use_count, jc.expires_at,
+            o.slug, o.name
+          FROM org_join_codes jc
+          JOIN organization o ON o.id = jc.organization_id
+          WHERE jc.code = ?`,
+        )
+        .bind(code.trim())
+        .first<{
+          id: number; organization_id: string; max_uses: number | null;
+          use_count: number; expires_at: string | null; slug: string; name: string;
+        }>();
+
+      if (!joinCode) {
+        return c.json({ error: "Invalid join code" }, 404);
+      }
+
+      // Check expiry — expires_at may or may not have a Z suffix from different insert paths
+      if (joinCode.expires_at) {
+        const raw = joinCode.expires_at;
+        const expiresAt = new Date(raw.endsWith("Z") ? raw : raw + "Z");
+        if (expiresAt < new Date()) {
+          return c.json({ error: "This join code has expired" }, 410);
+        }
+      }
+
+      // Check max uses
+      if (joinCode.max_uses !== null && joinCode.use_count >= joinCode.max_uses) {
+        return c.json({ error: "This join code has reached its usage limit" }, 410);
+      }
+
+      // Check if already a member
+      const existing = await db
+        .prepare("SELECT id FROM member WHERE organizationId = ? AND userId = ?")
+        .bind(joinCode.organization_id, user.id)
+        .first();
+      if (existing) {
+        return c.json({ error: "You are already a member of this org", slug: joinCode.slug }, 409);
+      }
+
+      // Atomically increment use_count, but only if still under max_uses.
+      // This prevents race conditions where concurrent requests bypass the limit.
+      const updateResult = await db
+        .prepare(
+          `UPDATE org_join_codes SET use_count = use_count + 1
+           WHERE id = ? AND (max_uses IS NULL OR use_count < max_uses)`,
+        )
+        .bind(joinCode.id)
+        .run();
+
+      if (!updateResult.meta.changes) {
+        return c.json({ error: "This join code has reached its usage limit" }, 410);
+      }
+
+      // Add as member — use INSERT OR IGNORE to handle duplicate member race
+      const memberId = crypto.randomUUID();
+      const insertResult = await db
+        .prepare(
+          `INSERT OR IGNORE INTO member (id, organizationId, userId, role, createdAt)
+           VALUES (?, ?, ?, 'member', datetime('now'))`,
+        )
+        .bind(memberId, joinCode.organization_id, user.id)
+        .run();
+
+      if (!insertResult.meta.changes) {
+        // Race: duplicate member — decrement use_count back
+        await db
+          .prepare("UPDATE org_join_codes SET use_count = use_count - 1 WHERE id = ? AND use_count > 0")
+          .bind(joinCode.id)
+          .run();
+        return c.json({ error: "You are already a member of this org", slug: joinCode.slug }, 409);
+      }
+
+      // Set as primary if user has none
+      await db
+        .prepare("UPDATE user SET primary_org_id = ? WHERE id = ? AND primary_org_id IS NULL")
+        .bind(joinCode.organization_id, user.id)
+        .run();
+
+      return c.json({ ok: true, slug: joinCode.slug, name: joinCode.name });
+    },
+  );
+
+  // ── Primary org ────────────────────────────────────────────────────────
+
+  // PUT /api/orgs/primary — set primary org
+  routes.put("/primary",
+    validate("json", z.object({
+      organizationId: z.string().min(1),
+    })),
+    async (c) => {
+      const user = c.get("user");
+      if (!user) return c.json({ error: "Unauthorized" }, 401);
+
+      const db = c.env.DB;
+      const { organizationId } = c.req.valid("json");
+
+      // Verify membership
+      const membership = await db
+        .prepare("SELECT id FROM member WHERE organizationId = ? AND userId = ?")
+        .bind(organizationId, user.id)
+        .first();
+      if (!membership) {
+        return c.json({ error: "You are not a member of this org" }, 403);
+      }
+
+      await db
+        .prepare("UPDATE user SET primary_org_id = ? WHERE id = ?")
+        .bind(organizationId, user.id)
+        .run();
+
+      return c.json({ ok: true });
+    },
+  );
+
+  // ── List user's orgs ───────────────────────────────────────────────────
 
   // GET /api/orgs — list orgs the authenticated user belongs to
   routes.get("/", async (c) => {
@@ -24,19 +338,33 @@ export function orgRoutes() {
 
     const orgs = await db
       .prepare(
-        `SELECT o.id, o.name, o.slug, o.logo, o.rsiSid, o.rsiUrl, mb.role,
+        `SELECT o.id, o.name, o.slug, o.logo, o.rsiSid, o.rsiUrl, o.verified_at,
+          o.rsi_banner_url, o.rsi_model, o.rsi_member_count,
+          mb.role,
           COUNT(DISTINCT m2.userId) as memberCount
         FROM organization o
         JOIN member mb ON mb.organizationId = o.id AND mb.userId = ?
         LEFT JOIN member m2 ON m2.organizationId = o.id
-        GROUP BY o.id, o.name, o.slug, o.logo, o.rsiSid, o.rsiUrl, mb.role
+        GROUP BY o.id, o.name, o.slug, o.logo, o.rsiSid, o.rsiUrl, o.verified_at,
+          o.rsi_banner_url, o.rsi_model, o.rsi_member_count, mb.role
         ORDER BY o.name`,
       )
       .bind(user.id)
       .all();
 
-    return c.json({ orgs: orgs.results });
+    // Get user's primary org id
+    const userRow = await db
+      .prepare("SELECT primary_org_id FROM user WHERE id = ?")
+      .bind(user.id)
+      .first<{ primary_org_id: string | null }>();
+
+    return c.json({
+      orgs: orgs.results,
+      primaryOrgId: userRow?.primary_org_id ?? null,
+    });
   });
+
+  // ── Org profile ────────────────────────────────────────────────────────
 
   // GET /api/orgs/:slug — org profile (members only)
   routes.get("/:slug", async (c) => {
@@ -47,28 +375,27 @@ export function orgRoutes() {
     if (!user) return c.json({ error: "Not found" }, 404);
 
     const org = await db
-      .prepare("SELECT id, name, slug, logo, description, rsiSid, rsiUrl, homepage, discord, twitch, youtube, createdAt FROM organization WHERE slug = ?")
+      .prepare(
+        `SELECT id, name, slug, logo, description, rsiSid, rsiUrl, homepage, discord, twitch, youtube, createdAt,
+          verified_at, rsi_model, rsi_commitment, rsi_roleplay,
+          rsi_primary_focus, rsi_secondary_focus, rsi_banner_url, rsi_member_count,
+          rsi_history_html, rsi_manifesto_html, rsi_charter_html, last_synced_at
+        FROM organization WHERE slug = ?`,
+      )
       .bind(slug)
-      .first<{
-        id: string; name: string; slug: string; logo: string | null;
-        description: string | null;
-        rsiSid: string | null; rsiUrl: string | null; homepage: string | null;
-        discord: string | null; twitch: string | null; youtube: string | null;
-        createdAt: string;
-      }>();
+      .first();
 
     if (!org) return c.json({ error: "Not found" }, 404);
 
-    // Only members can view org profiles
     const membership = await db
       .prepare("SELECT role FROM member WHERE organizationId = ? AND userId = ?")
-      .bind(org.id, user.id)
+      .bind((org as { id: string }).id, user.id)
       .first<{ role: string }>();
     if (!membership) return c.json({ error: "Not found" }, 404);
 
     const memberCount = await db
       .prepare("SELECT COUNT(*) as count FROM member WHERE organizationId = ?")
-      .bind(org.id)
+      .bind((org as { id: string }).id)
       .first<{ count: number }>();
 
     return c.json({
@@ -82,19 +409,299 @@ export function orgRoutes() {
   routes.patch("/:slug",
     validate("json", z.object({
       description: z.string().max(500).nullable().optional(),
-      rsiSid: z.string().max(20).nullable().optional(),
-      rsiUrl: z.string().url().max(200).refine(v => /^https?:\/\//i.test(v), "Must be http/https URL").nullable().optional(),
       homepage: z.string().url().max(200).refine(v => /^https?:\/\//i.test(v), "Must be http/https URL").nullable().optional(),
       discord: z.string().url().max(200).refine(v => /^https?:\/\//i.test(v), "Must be http/https URL").nullable().optional(),
       twitch: z.string().url().max(200).refine(v => /^https?:\/\//i.test(v), "Must be http/https URL").nullable().optional(),
       youtube: z.string().url().max(200).refine(v => /^https?:\/\//i.test(v), "Must be http/https URL").nullable().optional(),
     }).strict()),
     async (c) => {
+      const user = c.get("user");
+      if (!user) return c.json({ error: "Unauthorized" }, 401);
+
+      const slug = c.req.param("slug");
+      const db = c.env.DB;
+
+      const org = await db
+        .prepare("SELECT id FROM organization WHERE slug = ?")
+        .bind(slug)
+        .first<{ id: string }>();
+      if (!org) return c.json({ error: "Not found" }, 404);
+
+      const membership = await db
+        .prepare("SELECT role FROM member WHERE organizationId = ? AND userId = ?")
+        .bind(org.id, user.id)
+        .first<{ role: string }>();
+      if (!membership || (membership.role !== "owner" && membership.role !== "admin")) {
+        return c.json({ error: "Forbidden — owner or admin role required" }, 403);
+      }
+
+      const body = c.req.valid("json");
+      // rsiSid and rsiUrl are now read-only (set by verification/sync)
+      const ALLOWED_COLUMNS = new Set(["description", "homepage", "discord", "twitch", "youtube"]);
+      const updates: string[] = [];
+      const values: (string | null)[] = [];
+
+      for (const [key, val] of Object.entries(body)) {
+        if (val !== undefined && ALLOWED_COLUMNS.has(key)) {
+          updates.push(`${key} = ?`);
+          values.push(val);
+        }
+      }
+
+      if (updates.length === 0) {
+        return c.json({ error: "No fields to update" }, 400);
+      }
+
+      values.push(org.id);
+      await db
+        .prepare(`UPDATE organization SET ${updates.join(", ")} WHERE id = ?`)
+        .bind(...values)
+        .run();
+
+      return c.json({ ok: true });
+    },
+  );
+
+  // ── Join code management (owner/admin) ─────────────────────────────────
+
+  // GET /api/orgs/:slug/join-codes — list active join codes
+  routes.get("/:slug/join-codes", async (c) => {
+    const { slug } = c.req.param();
     const user = c.get("user");
     if (!user) return c.json({ error: "Unauthorized" }, 401);
 
+    const db = c.env.DB;
+    const org = await db.prepare("SELECT id FROM organization WHERE slug = ?").bind(slug).first<{ id: string }>();
+    if (!org) return c.json({ error: "Not found" }, 404);
+
+    const membership = await db
+      .prepare("SELECT role FROM member WHERE organizationId = ? AND userId = ?")
+      .bind(org.id, user.id)
+      .first<{ role: string }>();
+    if (!membership || (membership.role !== "owner" && membership.role !== "admin")) {
+      return c.json({ error: "Forbidden" }, 403);
+    }
+
+    const codes = await db
+      .prepare(
+        `SELECT jc.id, jc.code, jc.max_uses, jc.use_count, jc.expires_at, jc.created_at,
+          u.name as created_by_name
+        FROM org_join_codes jc
+        LEFT JOIN user u ON u.id = jc.created_by
+        WHERE jc.organization_id = ?
+        ORDER BY jc.created_at DESC`,
+      )
+      .bind(org.id)
+      .all();
+
+    return c.json({ codes: codes.results });
+  });
+
+  // POST /api/orgs/:slug/join-codes — generate a new join code
+  routes.post("/:slug/join-codes",
+    validate("json", z.object({
+      maxUses: z.number().int().min(1).max(1000).nullable().optional(),
+      expiresAt: z.string().datetime().nullable().optional(),
+    }).strict()),
+    async (c) => {
+      const { slug } = c.req.param();
+      const user = c.get("user");
+      if (!user) return c.json({ error: "Unauthorized" }, 401);
+
+      const db = c.env.DB;
+      const org = await db
+        .prepare("SELECT id, rsiSid FROM organization WHERE slug = ?")
+        .bind(slug)
+        .first<{ id: string; rsiSid: string | null }>();
+      if (!org) return c.json({ error: "Not found" }, 404);
+
+      const membership = await db
+        .prepare("SELECT role FROM member WHERE organizationId = ? AND userId = ?")
+        .bind(org.id, user.id)
+        .first<{ role: string }>();
+      if (!membership || (membership.role !== "owner" && membership.role !== "admin")) {
+        return c.json({ error: "Forbidden" }, 403);
+      }
+
+      const body = c.req.valid("json");
+
+      // Generate code: SID-16hex (8 bytes = 2^64 keyspace, brute-force resistant)
+      const hexBytes = new Uint8Array(8);
+      crypto.getRandomValues(hexBytes);
+      const hexSuffix = Array.from(hexBytes).map(b => b.toString(16).padStart(2, "0")).join("");
+      const prefix = org.rsiSid || slug.toUpperCase();
+      const code = `${prefix}-${hexSuffix}`;
+
+      await db
+        .prepare(
+          `INSERT INTO org_join_codes (organization_id, code, created_by, max_uses, expires_at)
+           VALUES (?, ?, ?, ?, ?)`,
+        )
+        .bind(org.id, code, user.id, body.maxUses ?? null, body.expiresAt ?? null)
+        .run();
+
+      return c.json({ ok: true, code });
+    },
+  );
+
+  // DELETE /api/orgs/:slug/join-codes/:id — revoke a join code
+  routes.delete("/:slug/join-codes/:id", async (c) => {
+    const { slug, id } = c.req.param();
+    const user = c.get("user");
+    if (!user) return c.json({ error: "Unauthorized" }, 401);
+
+    const db = c.env.DB;
+    const org = await db.prepare("SELECT id FROM organization WHERE slug = ?").bind(slug).first<{ id: string }>();
+    if (!org) return c.json({ error: "Not found" }, 404);
+
+    const membership = await db
+      .prepare("SELECT role FROM member WHERE organizationId = ? AND userId = ?")
+      .bind(org.id, user.id)
+      .first<{ role: string }>();
+    if (!membership || (membership.role !== "owner" && membership.role !== "admin")) {
+      return c.json({ error: "Forbidden" }, 403);
+    }
+
+    await db
+      .prepare("DELETE FROM org_join_codes WHERE id = ? AND organization_id = ?")
+      .bind(parseInt(id, 10), org.id)
+      .run();
+
+    return c.json({ ok: true });
+  });
+
+  // ── Sync from RSI ──────────────────────────────────────────────────────
+
+  // POST /api/orgs/:slug/sync-rsi — refresh RSI data (owner only, 1hr cooldown)
+  routes.post("/:slug/sync-rsi", async (c) => {
+    const { slug } = c.req.param();
+    const user = c.get("user");
+    if (!user) return c.json({ error: "Unauthorized" }, 401);
+
+    const db = c.env.DB;
+    const org = await db
+      .prepare("SELECT id, rsiSid, last_synced_at FROM organization WHERE slug = ?")
+      .bind(slug)
+      .first<{ id: string; rsiSid: string | null; last_synced_at: string | null }>();
+    if (!org) return c.json({ error: "Not found" }, 404);
+
+    const membership = await db
+      .prepare("SELECT role FROM member WHERE organizationId = ? AND userId = ?")
+      .bind(org.id, user.id)
+      .first<{ role: string }>();
+    if (!membership || membership.role !== "owner") {
+      return c.json({ error: "Forbidden — owner role required" }, 403);
+    }
+
+    if (!org.rsiSid) {
+      return c.json({ error: "Org has no RSI SID — cannot sync" }, 400);
+    }
+
+    // 1hr cooldown
+    if (org.last_synced_at) {
+      const lastSync = new Date(org.last_synced_at + "Z");
+      const oneHourAgo = new Date(Date.now() - 60 * 60 * 1000);
+      if (lastSync > oneHourAgo) {
+        const nextSyncAt = new Date(lastSync.getTime() + 60 * 60 * 1000);
+        return c.json({
+          error: "Sync cooldown — try again later",
+          nextSyncAt: nextSyncAt.toISOString(),
+        }, 429);
+      }
+    }
+
+    let orgData;
+    try {
+      orgData = await scrapeRsiOrg(org.rsiSid);
+    } catch (err) {
+      console.error(`[orgs] RSI sync failed for ${org.rsiSid}:`, (err as Error).message);
+      return c.json({ error: "Failed to sync from RSI — please try again later" }, 502);
+    }
+
+    await db
+      .prepare(
+        `UPDATE organization SET
+          name = ?,
+          logo = COALESCE(?, logo),
+          rsi_model = ?, rsi_commitment = ?, rsi_roleplay = ?,
+          rsi_primary_focus = ?, rsi_secondary_focus = ?,
+          rsi_banner_url = ?, rsi_member_count = ?,
+          rsi_history_html = ?, rsi_manifesto_html = ?, rsi_charter_html = ?,
+          last_synced_at = datetime('now')
+        WHERE id = ?`,
+      )
+      .bind(
+        orgData.name,
+        orgData.logo,
+        orgData.model, orgData.commitment, orgData.roleplay,
+        orgData.primaryFocus, orgData.secondaryFocus,
+        orgData.bannerUrl, orgData.memberCount,
+        orgData.historyHtml, orgData.manifestoHtml, orgData.charterHtml,
+        org.id,
+      )
+      .run();
+
+    return c.json({ ok: true, message: "RSI data synced successfully" });
+  });
+
+  // ── Delete org ─────────────────────────────────────────────────────────
+
+  // DELETE /api/orgs/:slug — delete org (owner only)
+  routes.delete("/:slug", async (c) => {
+    const { slug } = c.req.param();
+    const user = c.get("user");
+    if (!user) return c.json({ error: "Unauthorized" }, 401);
+
+    const db = c.env.DB;
+    const org = await db
+      .prepare("SELECT id FROM organization WHERE slug = ?")
+      .bind(slug)
+      .first<{ id: string }>();
+    if (!org) return c.json({ error: "Not found" }, 404);
+
+    const membership = await db
+      .prepare("SELECT role FROM member WHERE organizationId = ? AND userId = ?")
+      .bind(org.id, user.id)
+      .first<{ role: string }>();
+    if (!membership || membership.role !== "owner") {
+      return c.json({ error: "Forbidden — owner role required" }, 403);
+    }
+
+    // Get the RSI SID before deletion for pending verification cleanup
+    const orgFull = await db
+      .prepare("SELECT rsiSid FROM organization WHERE id = ?")
+      .bind(org.id)
+      .first<{ rsiSid: string | null }>();
+
+    // Clean up atomically via batch — prevents race with concurrent join
+    const stmts = [
+      db.prepare("DELETE FROM org_join_codes WHERE organization_id = ?").bind(org.id),
+      db.prepare("DELETE FROM invitation WHERE organizationId = ?").bind(org.id),
+      db.prepare("DELETE FROM member WHERE organizationId = ?").bind(org.id),
+      db.prepare("UPDATE user SET primary_org_id = NULL WHERE primary_org_id = ?").bind(org.id),
+      db.prepare("DELETE FROM organization WHERE id = ?").bind(org.id),
+    ];
+    // Also clean up any pending verification for this SID
+    if (orgFull?.rsiSid) {
+      stmts.push(
+        db.prepare("DELETE FROM org_verification_pending WHERE rsi_sid = ?").bind(orgFull.rsiSid),
+      );
+    }
+    await db.batch(stmts);
+
+    return c.json({ ok: true });
+  });
+
+  // ── Fleet, members, analysis, stats (unchanged) ───────────────────────
+
+  // GET /api/orgs/:slug/fleet — visibility-gated org fleet (members only)
+  routes.get("/:slug/fleet", async (c) => {
     const slug = c.req.param("slug");
     const db = c.env.DB;
+    const user = c.get("user");
+
+    // Auth required — org fleet is members-only
+    if (!user) return c.json({ error: "Not found" }, 404);
 
     const org = await db
       .prepare("SELECT id FROM organization WHERE slug = ?")
@@ -106,55 +713,9 @@ export function orgRoutes() {
       .prepare("SELECT role FROM member WHERE organizationId = ? AND userId = ?")
       .bind(org.id, user.id)
       .first<{ role: string }>();
-    if (!membership || (membership.role !== "owner" && membership.role !== "admin")) {
-      return c.json({ error: "Forbidden — owner or admin role required" }, 403);
-    }
+    if (!membership) return c.json({ error: "Not found" }, 404);
 
-    const body = c.req.valid("json");
-    const ALLOWED_COLUMNS = new Set(["description", "rsiSid", "rsiUrl", "homepage", "discord", "twitch", "youtube"]);
-    const updates: string[] = [];
-    const values: (string | null)[] = [];
-
-    for (const [key, val] of Object.entries(body)) {
-      if (val !== undefined && ALLOWED_COLUMNS.has(key)) {
-        updates.push(`${key} = ?`);
-        values.push(val);
-      }
-    }
-
-    if (updates.length === 0) {
-      return c.json({ error: "No fields to update" }, 400);
-    }
-
-    values.push(org.id);
-    await db
-      .prepare(`UPDATE organization SET ${updates.join(", ")} WHERE id = ?`)
-      .bind(...values)
-      .run();
-
-    return c.json({ ok: true });
-  });
-
-  // GET /api/orgs/:slug/fleet — visibility-gated org fleet
-  routes.get("/:slug/fleet", async (c) => {
-    const slug = c.req.param("slug");
-    const db = c.env.DB;
-    const user = c.get("user");
-
-    const org = await db
-      .prepare("SELECT id FROM organization WHERE slug = ?")
-      .bind(slug)
-      .first<{ id: string }>();
-    if (!org) return c.json({ error: "Not found" }, 404);
-
-    let callerRole: string | null = null;
-    if (user) {
-      const membership = await db
-        .prepare("SELECT role FROM member WHERE organizationId = ? AND userId = ?")
-        .bind(org.id, user.id)
-        .first<{ role: string }>();
-      callerRole = membership?.role ?? null;
-    }
+    const callerRole = membership.role;
 
     // SAFETY: visibilityClause is built from callerRole which comes from the DB
     // (member.role column), not from user input. All branches produce static SQL
@@ -331,166 +892,6 @@ export function orgRoutes() {
       .first();
 
     return c.json({ stats });
-  });
-
-  // POST /api/orgs/:slug/verify-rsi/generate — generate a verification key (owner only)
-  routes.post("/:slug/verify-rsi/generate",
-    validate("json", z.object({
-      rsiSid: z.string().min(2).max(20).regex(/^[A-Za-z0-9_-]+$/, "Invalid RSI org SID"),
-    })),
-    async (c) => {
-    const user = c.get("user");
-    if (!user) return c.json({ error: "Unauthorized" }, 401);
-
-    const slug = c.req.param("slug");
-    const db = c.env.DB;
-    const body = c.req.valid("json");
-
-    const org = await db
-      .prepare("SELECT id, rsiSid, verified_at FROM organization WHERE slug = ?")
-      .bind(slug)
-      .first<{ id: string; rsiSid: string | null; verified_at: string | null }>();
-    if (!org) return c.json({ error: "Not found" }, 404);
-
-    const membership = await db
-      .prepare("SELECT role FROM member WHERE organizationId = ? AND userId = ?")
-      .bind(org.id, user.id)
-      .first<{ role: string }>();
-    if (!membership || membership.role !== "owner") {
-      return c.json({ error: "Forbidden — owner role required" }, 403);
-    }
-
-    if (org.verified_at) {
-      return c.json({ error: "Org is already verified" }, 400);
-    }
-
-    // Generate a random verification key
-    const keyBytes = new Uint8Array(16);
-    crypto.getRandomValues(keyBytes);
-    const verificationKey = `scbridge-verify-${Array.from(keyBytes).map(b => b.toString(16).padStart(2, "0")).join("")}`;
-
-    // Store key and RSI SID on the org
-    await db
-      .prepare("UPDATE organization SET verification_key = ?, rsiSid = ? WHERE id = ?")
-      .bind(verificationKey, body.rsiSid.toUpperCase(), org.id)
-      .run();
-
-    return c.json({
-      ok: true,
-      verification_key: verificationKey,
-      rsiSid: body.rsiSid.toUpperCase(),
-      instructions: `Add this key anywhere in your RSI org charter at https://robertsspaceindustries.com/en/orgs/${body.rsiSid.toUpperCase()}, then click Verify.`,
-    });
-  });
-
-  // POST /api/orgs/:slug/verify-rsi/check — check if the key is in the RSI charter (owner only)
-  routes.post("/:slug/verify-rsi/check", async (c) => {
-    const user = c.get("user");
-    if (!user) return c.json({ error: "Unauthorized" }, 401);
-
-    const slug = c.req.param("slug");
-    const db = c.env.DB;
-
-    const org = await db
-      .prepare("SELECT id, rsiSid, verification_key, verified_at FROM organization WHERE slug = ?")
-      .bind(slug)
-      .first<{ id: string; rsiSid: string | null; verification_key: string | null; verified_at: string | null }>();
-    if (!org) return c.json({ error: "Not found" }, 404);
-
-    const membership = await db
-      .prepare("SELECT role FROM member WHERE organizationId = ? AND userId = ?")
-      .bind(org.id, user.id)
-      .first<{ role: string }>();
-    if (!membership || membership.role !== "owner") {
-      return c.json({ error: "Forbidden — owner role required" }, 403);
-    }
-
-    if (org.verified_at) {
-      return c.json({ error: "Org is already verified" }, 400);
-    }
-
-    if (!org.verification_key || !org.rsiSid) {
-      return c.json({ error: "No verification key generated — generate one first" }, 400);
-    }
-
-    // Fetch the RSI org page and check charter content
-    const rsiUrl = `https://robertsspaceindustries.com/en/orgs/${encodeURIComponent(org.rsiSid)}`;
-    let html: string;
-    try {
-      const resp = await fetch(rsiUrl, {
-        headers: {
-          "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
-          Accept: "text/html",
-        },
-      });
-      if (!resp.ok) {
-        return c.json({ error: `RSI returned ${resp.status} — check the org SID is correct` }, 502);
-      }
-      html = await resp.text();
-    } catch (err) {
-      return c.json({ error: "Failed to reach RSI — try again later" }, 502);
-    }
-
-    // Extract the charter tab content
-    const charterMatch = html.match(/id="tab-charter"[\s\S]*?<div class="markitup-text">([\s\S]*?)<\/div>/);
-    if (!charterMatch) {
-      return c.json({
-        ok: false,
-        verified: false,
-        message: "Could not find a charter section on the RSI org page. Make sure the org has a charter.",
-      });
-    }
-
-    const charterContent = charterMatch[1];
-    if (!charterContent.includes(org.verification_key)) {
-      return c.json({
-        ok: false,
-        verified: false,
-        message: `Verification key not found in charter. Add "${org.verification_key}" to your org charter at ${rsiUrl}, save it, then try again.`,
-      });
-    }
-
-    // Verified — mark the org
-    await db
-      .prepare("UPDATE organization SET verified_at = datetime('now'), verified_by = ? WHERE id = ?")
-      .bind(user.id, org.id)
-      .run();
-
-    return c.json({
-      ok: true,
-      verified: true,
-      message: "Org verified successfully! You can now remove the key from your charter.",
-    });
-  });
-
-  // GET /api/orgs/:slug/verify-rsi/status — check verification status (members)
-  routes.get("/:slug/verify-rsi/status", async (c) => {
-    const user = c.get("user");
-    if (!user) return c.json({ error: "Unauthorized" }, 401);
-
-    const slug = c.req.param("slug");
-    const db = c.env.DB;
-
-    const org = await db
-      .prepare("SELECT id, rsiSid, verification_key, verified_at FROM organization WHERE slug = ?")
-      .bind(slug)
-      .first<{ id: string; rsiSid: string | null; verification_key: string | null; verified_at: string | null }>();
-    if (!org) return c.json({ error: "Not found" }, 404);
-
-    const membership = await db
-      .prepare("SELECT role FROM member WHERE organizationId = ? AND userId = ?")
-      .bind(org.id, user.id)
-      .first<{ role: string }>();
-    if (!membership) return c.json({ error: "Not found" }, 404);
-
-    return c.json({
-      verified: !!org.verified_at,
-      verified_at: org.verified_at,
-      rsiSid: org.rsiSid,
-      // Only show the key to the owner
-      verification_key: membership.role === "owner" ? org.verification_key : undefined,
-      has_key: !!org.verification_key,
-    });
   });
 
   return routes;

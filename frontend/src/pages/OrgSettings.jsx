@@ -1,198 +1,257 @@
-import { useState, useEffect, useCallback } from 'react'
+import { useState, useEffect } from 'react'
 import { useParams, useNavigate, Link } from 'react-router-dom'
-import { ArrowLeft, Save, Loader2, ShieldCheck, Copy, CheckCircle, AlertCircle, ExternalLink } from 'lucide-react'
-import { useOrgProfile } from '../hooks/useAPI'
-import { updateOrgSettings } from '../hooks/useAPI'
+import {
+  ArrowLeft, Save, Loader2, Copy, CheckCircle, AlertCircle,
+  RefreshCw, Trash2, KeyRound, Plus, X, Clock
+} from 'lucide-react'
+import { useOrgProfile, updateOrgSettings, useOrgJoinCodes, generateJoinCode, revokeJoinCode, syncOrgFromRsi, deleteOrg } from '../hooks/useAPI'
 import PageHeader from '../components/PageHeader'
 import LoadingState from '../components/LoadingState'
 import ErrorState from '../components/ErrorState'
 
 const FIELDS = [
-  { key: 'rsiSid', label: 'RSI Org SID', placeholder: 'MYORG', maxLength: 20 },
   { key: 'description', label: 'Description', placeholder: 'A brief description of your org', maxLength: 500, multiline: true },
-  { key: 'rsiUrl', label: 'RSI Profile URL', placeholder: 'https://robertsspaceindustries.com/en/orgs/MYORG', type: 'url' },
   { key: 'homepage', label: 'Website', placeholder: 'https://myorg.example.com', type: 'url' },
   { key: 'discord', label: 'Discord', placeholder: 'https://discord.gg/invite-code', type: 'url' },
   { key: 'twitch', label: 'Twitch', placeholder: 'https://twitch.tv/channel', type: 'url' },
   { key: 'youtube', label: 'YouTube', placeholder: 'https://youtube.com/@channel', type: 'url' },
 ]
 
-function RsiVerification({ slug, org }) {
-  const [rsiSid, setRsiSid] = useState(org.rsiSid || '')
-  const [verifyKey, setVerifyKey] = useState(null)
-  const [status, setStatus] = useState('idle') // idle | generating | key-ready | checking | verified | error
-  const [message, setMessage] = useState(null)
-  const [copied, setCopied] = useState(false)
+// ── Join Code Management ──────────────────────────────────────────────
 
-  // Check verification status on mount
-  useEffect(() => {
-    fetch(`/api/orgs/${slug}/verify-rsi/status`, { credentials: 'same-origin' })
-      .then(r => r.json())
-      .then(data => {
-        if (data.verified) {
-          setStatus('verified')
-          setRsiSid(data.rsiSid || '')
-        } else if (data.verification_key) {
-          setVerifyKey(data.verification_key)
-          setRsiSid(data.rsiSid || '')
-          setStatus('key-ready')
-        }
-      })
-      .catch(() => {})
-  }, [slug])
+function JoinCodePanel({ slug }) {
+  const { data, loading, refetch } = useOrgJoinCodes(slug)
+  const [generating, setGenerating] = useState(false)
+  const [revoking, setRevoking] = useState(null)
+  const [copiedCode, setCopiedCode] = useState(null)
+  const [error, setError] = useState(null)
+
+  const codes = data?.codes ?? []
 
   const handleGenerate = async () => {
-    if (!rsiSid.trim()) return
-    setStatus('generating')
-    setMessage(null)
+    setGenerating(true)
+    setError(null)
     try {
-      const resp = await fetch(`/api/orgs/${slug}/verify-rsi/generate`, {
-        method: 'POST',
-        credentials: 'same-origin',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ rsiSid: rsiSid.trim() }),
-      })
-      const data = await resp.json()
-      if (!resp.ok) throw new Error(data.error || 'Failed to generate key')
-      setVerifyKey(data.verification_key)
-      setStatus('key-ready')
+      await generateJoinCode(slug)
+      refetch()
     } catch (err) {
-      setMessage(err.message)
-      setStatus('error')
+      setError(err.message)
+    } finally {
+      setGenerating(false)
     }
   }
 
-  const handleCheck = async () => {
-    setStatus('checking')
-    setMessage(null)
+  const handleRevoke = async (id) => {
+    setRevoking(id)
     try {
-      const resp = await fetch(`/api/orgs/${slug}/verify-rsi/check`, {
-        method: 'POST',
-        credentials: 'same-origin',
-      })
-      const data = await resp.json()
-      if (!resp.ok) throw new Error(data.error || 'Verification failed')
-      if (data.verified) {
-        setStatus('verified')
-        setMessage(data.message)
-      } else {
-        setMessage(data.message)
-        setStatus('key-ready')
-      }
+      await revokeJoinCode(slug, id)
+      refetch()
     } catch (err) {
-      setMessage(err.message)
-      setStatus('key-ready')
+      setError(err.message)
+    } finally {
+      setRevoking(null)
     }
   }
 
-  const copyKey = () => {
-    navigator.clipboard.writeText(verifyKey)
-    setCopied(true)
-    setTimeout(() => setCopied(false), 2000)
-  }
-
-  if (status === 'verified') {
-    return (
-      <div className="panel p-5 space-y-3">
-        <div className="flex items-center gap-2">
-          <ShieldCheck className="w-5 h-5 text-green-400" />
-          <h3 className="font-display font-semibold text-white text-sm uppercase tracking-wider">RSI Verification</h3>
-        </div>
-        <div className="flex items-center gap-2 p-3 bg-green-500/10 border border-green-500/30 rounded text-green-400 text-sm">
-          <CheckCircle className="w-4 h-4 shrink-0" />
-          <span>Verified as <strong>{rsiSid}</strong> on RSI{message ? ` — ${message}` : ''}</span>
-        </div>
-      </div>
-    )
+  const copyCode = (code) => {
+    navigator.clipboard.writeText(code)
+    setCopiedCode(code)
+    setTimeout(() => setCopiedCode(null), 2000)
   }
 
   return (
     <div className="panel p-5 space-y-4">
-      <div className="flex items-center gap-2">
-        <ShieldCheck className="w-5 h-5 text-sc-accent" />
-        <h3 className="font-display font-semibold text-white text-sm uppercase tracking-wider">RSI Verification</h3>
+      <div className="flex items-center justify-between">
+        <div className="flex items-center gap-2">
+          <KeyRound className="w-5 h-5 text-sc-accent" />
+          <h3 className="font-display font-semibold text-white text-sm uppercase tracking-wider">Join Codes</h3>
+        </div>
+        <button
+          onClick={handleGenerate}
+          disabled={generating}
+          className="btn-primary text-xs inline-flex items-center gap-1.5"
+        >
+          {generating ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Plus className="w-3.5 h-3.5" />}
+          Generate Code
+        </button>
       </div>
+
       <p className="text-xs text-gray-400">
-        Prove you own this RSI org by adding a verification key to the org's charter page.
+        Share join codes with members so they can join without an email invitation.
       </p>
 
-      {(status === 'idle' || status === 'generating' || status === 'error') && (
-        <div className="space-y-3">
-          <div>
-            <label className="block text-xs font-display uppercase tracking-wider text-gray-400 mb-1.5">RSI Org SID</label>
-            <input
-              type="text"
-              value={rsiSid}
-              onChange={e => setRsiSid(e.target.value.toUpperCase().replace(/[^A-Z0-9_-]/g, ''))}
-              placeholder="MYORG"
-              maxLength={20}
-              className="w-full bg-sc-darker border border-sc-border rounded px-3 py-2 text-sm text-gray-200 placeholder:text-gray-600 focus:border-sc-accent focus:outline-none font-mono"
-            />
-          </div>
-          <button
-            onClick={handleGenerate}
-            disabled={!rsiSid.trim() || status === 'generating'}
-            className="btn-primary text-xs inline-flex items-center gap-1.5"
-          >
-            {status === 'generating' ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <ShieldCheck className="w-3.5 h-3.5" />}
-            {status === 'generating' ? 'Generating...' : 'Generate Verification Key'}
-          </button>
-        </div>
-      )}
-
-      {(status === 'key-ready' || status === 'checking') && verifyKey && (
-        <div className="space-y-3">
-          <div className="p-3 bg-sc-darker border border-sc-border rounded space-y-2">
-            <p className="text-xs text-gray-400">Add this key anywhere in your RSI org charter:</p>
-            <div className="flex items-center gap-2">
-              <code className="flex-1 text-sm text-sc-accent font-mono bg-black/30 px-3 py-2 rounded border border-sc-border select-all break-all">
-                {verifyKey}
-              </code>
-              <button onClick={copyKey} className="shrink-0 p-2 text-gray-400 hover:text-white transition-colors" title="Copy key">
-                {copied ? <CheckCircle className="w-4 h-4 text-green-400" /> : <Copy className="w-4 h-4" />}
-              </button>
-            </div>
-          </div>
-
-          <div className="flex items-start gap-2 p-3 bg-blue-500/5 border border-blue-500/20 rounded text-xs text-gray-400">
-            <span className="text-blue-400 font-mono shrink-0">1.</span>
-            <span>Go to <a href={`https://robertsspaceindustries.com/en/orgs/${rsiSid}`} target="_blank" rel="noopener noreferrer" className="text-sc-accent hover:underline inline-flex items-center gap-0.5">{rsiSid} on RSI <ExternalLink className="w-3 h-3" /></a></span>
-          </div>
-          <div className="flex items-start gap-2 px-3 text-xs text-gray-400">
-            <span className="text-blue-400 font-mono shrink-0">2.</span>
-            <span>Edit your org and paste the key into the <strong className="text-gray-300">Charter</strong> section</span>
-          </div>
-          <div className="flex items-start gap-2 px-3 text-xs text-gray-400">
-            <span className="text-blue-400 font-mono shrink-0">3.</span>
-            <span>Save on RSI, then click Verify below</span>
-          </div>
-
-          <button
-            onClick={handleCheck}
-            disabled={status === 'checking'}
-            className="btn-primary text-xs inline-flex items-center gap-1.5"
-          >
-            {status === 'checking' ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <ShieldCheck className="w-3.5 h-3.5" />}
-            {status === 'checking' ? 'Checking RSI...' : 'Verify'}
-          </button>
-        </div>
-      )}
-
-      {message && status !== 'verified' && (
-        <div className={`flex items-center gap-2 p-3 rounded text-sm ${
-          status === 'error' ? 'bg-sc-danger/10 border border-sc-danger/30 text-sc-danger' : 'bg-amber-500/10 border border-amber-500/30 text-amber-400'
-        }`}>
+      {error && (
+        <div className="flex items-center gap-2 p-3 bg-sc-danger/10 border border-sc-danger/30 rounded text-sc-danger text-sm">
           <AlertCircle className="w-4 h-4 shrink-0" />
-          <span>{message}</span>
+          <span>{error}</span>
+        </div>
+      )}
+
+      {loading ? (
+        <div className="text-xs text-gray-500">Loading codes...</div>
+      ) : codes.length === 0 ? (
+        <div className="text-xs text-gray-500 py-3 text-center">No active join codes</div>
+      ) : (
+        <div className="space-y-2">
+          {codes.map((jc) => {
+            const isExpired = jc.expires_at && new Date(jc.expires_at + 'Z') < new Date()
+            const isMaxed = jc.max_uses !== null && jc.use_count >= jc.max_uses
+            const isInactive = isExpired || isMaxed
+
+            return (
+              <div key={jc.id} className={`flex items-center gap-3 p-3 rounded border ${isInactive ? 'border-sc-border/30 opacity-50' : 'border-sc-border'} bg-sc-darker`}>
+                <code className="text-sm font-mono text-sc-accent flex-1 select-all">{jc.code}</code>
+                <span className="text-[11px] text-gray-500 font-mono shrink-0">
+                  {jc.use_count}{jc.max_uses !== null ? `/${jc.max_uses}` : ''} uses
+                </span>
+                <button
+                  onClick={() => copyCode(jc.code)}
+                  className="p-1 text-gray-400 hover:text-white transition-colors shrink-0"
+                  title="Copy code"
+                >
+                  {copiedCode === jc.code ? <CheckCircle className="w-3.5 h-3.5 text-green-400" /> : <Copy className="w-3.5 h-3.5" />}
+                </button>
+                <button
+                  onClick={() => handleRevoke(jc.id)}
+                  disabled={revoking === jc.id}
+                  className="p-1 text-gray-500 hover:text-red-400 transition-colors shrink-0"
+                  title="Revoke code"
+                >
+                  {revoking === jc.id ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <X className="w-3.5 h-3.5" />}
+                </button>
+              </div>
+            )
+          })}
         </div>
       )}
     </div>
   )
 }
 
+// ── Sync from RSI Panel ───────────────────────────────────────────────
+
+function SyncPanel({ slug, lastSyncedAt, onSynced }) {
+  const [syncing, setSyncing] = useState(false)
+  const [error, setError] = useState(null)
+  const [success, setSuccess] = useState(false)
+
+  const canSync = !lastSyncedAt || (new Date() - new Date(lastSyncedAt + 'Z')) > 60 * 60 * 1000
+
+  const handleSync = async () => {
+    setSyncing(true)
+    setError(null)
+    setSuccess(false)
+    try {
+      await syncOrgFromRsi(slug)
+      setSuccess(true)
+      onSynced?.()
+    } catch (err) {
+      setError(err.message)
+    } finally {
+      setSyncing(false)
+    }
+  }
+
+  return (
+    <div className="panel p-5 space-y-3">
+      <div className="flex items-center gap-2">
+        <RefreshCw className="w-5 h-5 text-sc-accent" />
+        <h3 className="font-display font-semibold text-white text-sm uppercase tracking-wider">Sync from RSI</h3>
+      </div>
+      <p className="text-xs text-gray-400">
+        Refresh the org's name, logo, banner, focus, and about sections from RSI. 1-hour cooldown.
+      </p>
+
+      {lastSyncedAt && (
+        <div className="flex items-center gap-1.5 text-xs text-gray-500">
+          <Clock className="w-3 h-3" />
+          Last synced: {new Date(lastSyncedAt + 'Z').toLocaleString()}
+        </div>
+      )}
+
+      <button
+        onClick={handleSync}
+        disabled={syncing || !canSync}
+        className="btn-primary text-xs inline-flex items-center gap-1.5"
+      >
+        {syncing ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <RefreshCw className="w-3.5 h-3.5" />}
+        {syncing ? 'Syncing...' : canSync ? 'Sync Now' : 'Cooldown active'}
+      </button>
+
+      {success && <span className="text-xs text-green-400 ml-3">Synced successfully</span>}
+      {error && <span className="text-xs text-red-400 ml-3">{error}</span>}
+    </div>
+  )
+}
+
+// ── Delete Org Panel ──────────────────────────────────────────────────
+
+function DeletePanel({ slug, orgName }) {
+  const navigate = useNavigate()
+  const [confirmName, setConfirmName] = useState('')
+  const [deleting, setDeleting] = useState(false)
+  const [error, setError] = useState(null)
+
+  const handleDelete = async () => {
+    if (confirmName !== orgName) return
+    setDeleting(true)
+    setError(null)
+    try {
+      await deleteOrg(slug)
+      navigate('/orgs')
+    } catch (err) {
+      setError(err.message)
+    } finally {
+      setDeleting(false)
+    }
+  }
+
+  return (
+    <div className="panel p-5 space-y-4 border-sc-danger/30">
+      <div className="flex items-center gap-2">
+        <Trash2 className="w-5 h-5 text-sc-danger" />
+        <h3 className="font-display font-semibold text-sc-danger text-sm uppercase tracking-wider">Danger Zone</h3>
+      </div>
+      <p className="text-xs text-gray-400">
+        Permanently delete this organisation and all its data. This cannot be undone.
+      </p>
+
+      <div>
+        <label className="block text-xs font-display uppercase tracking-wider text-gray-400 mb-1.5">
+          Type <strong className="text-gray-300">{orgName}</strong> to confirm
+        </label>
+        <input
+          type="text"
+          value={confirmName}
+          onChange={e => setConfirmName(e.target.value)}
+          placeholder={orgName}
+          className="w-full bg-sc-darker border border-sc-border rounded px-3 py-2 text-sm text-gray-200 placeholder:text-gray-600 focus:border-sc-danger focus:outline-none"
+        />
+      </div>
+
+      <button
+        onClick={handleDelete}
+        disabled={confirmName !== orgName || deleting}
+        className="text-xs inline-flex items-center gap-1.5 px-3 py-1.5 rounded border border-sc-danger/50 text-sc-danger hover:bg-sc-danger/10 disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
+      >
+        {deleting ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Trash2 className="w-3.5 h-3.5" />}
+        {deleting ? 'Deleting...' : 'Delete Organisation'}
+      </button>
+
+      {error && (
+        <div className="flex items-center gap-2 p-3 bg-sc-danger/10 border border-sc-danger/30 rounded text-sc-danger text-sm">
+          <AlertCircle className="w-4 h-4 shrink-0" />
+          <span>{error}</span>
+        </div>
+      )}
+    </div>
+  )
+}
+
+// ── Main OrgSettings Page ─────────────────────────────────────────────
+
 export default function OrgSettings() {
   const { slug } = useParams()
-  const navigate = useNavigate()
   const { data: org, loading, error, refetch } = useOrgProfile(slug)
 
   const [form, setForm] = useState({})
@@ -263,6 +322,20 @@ export default function OrgSettings() {
         Back to profile
       </Link>
 
+      {/* RSI info (read-only) */}
+      {org.rsiSid && (
+        <div className="panel p-4 flex items-center gap-3">
+          <CheckCircle className="w-5 h-5 text-green-400 shrink-0" />
+          <div className="flex-1">
+            <p className="text-sm text-white">RSI Verified as <strong className="font-mono">{org.rsiSid}</strong></p>
+            {org.verified_at && (
+              <p className="text-xs text-gray-500">Verified {new Date(org.verified_at + 'Z').toLocaleDateString()}</p>
+            )}
+          </div>
+        </div>
+      )}
+
+      {/* Editable fields */}
       <form onSubmit={handleSave} className="panel p-5 space-y-5">
         {FIELDS.map(({ key, label, placeholder, maxLength, type, multiline }) => (
           <div key={key}>
@@ -301,17 +374,22 @@ export default function OrgSettings() {
             {saving ? 'Saving...' : 'Save Changes'}
           </button>
 
-          {saved && (
-            <span className="text-xs text-green-400">Settings saved</span>
-          )}
-          {saveError && (
-            <span className="text-xs text-red-400">{saveError}</span>
-          )}
+          {saved && <span className="text-xs text-green-400">Settings saved</span>}
+          {saveError && <span className="text-xs text-red-400">{saveError}</span>}
         </div>
       </form>
 
+      {/* Join Codes — owner/admin */}
+      <JoinCodePanel slug={slug} />
+
+      {/* Sync from RSI — owner only */}
+      {org.callerRole === 'owner' && org.rsiSid && (
+        <SyncPanel slug={slug} lastSyncedAt={org.last_synced_at} onSynced={refetch} />
+      )}
+
+      {/* Delete — owner only */}
       {org.callerRole === 'owner' && (
-        <RsiVerification slug={slug} org={org} />
+        <DeletePanel slug={slug} orgName={org.name} />
       )}
     </div>
   )

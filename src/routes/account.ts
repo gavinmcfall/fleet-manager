@@ -467,6 +467,8 @@ export function accountRoutes() {
       db.prepare("DELETE FROM user_account_snapshots WHERE user_id = ?").bind(user.id),
       db.prepare("DELETE FROM user_ccu_chains WHERE user_id = ?").bind(user.id),
       db.prepare("DELETE FROM user_named_ships WHERE user_id = ?").bind(user.id),
+      // Org verification pending (migration 0125)
+      db.prepare("DELETE FROM org_verification_pending WHERE user_id = ?").bind(user.id),
       // Scrub PII from change history — keep rows (event log) but wipe values + IP
       db.prepare(
         `UPDATE user_change_history SET
@@ -489,11 +491,12 @@ export function accountRoutes() {
     await db
       .prepare(
         `UPDATE user SET
-           name       = 'Deleted User',
-           email      = 'deleted-' || id || '@deleted.invalid',
-           image      = NULL,
-           status     = 'deleted',
-           deleted_at = datetime('now')
+           name            = 'Deleted User',
+           email           = 'deleted-' || id || '@deleted.invalid',
+           image           = NULL,
+           primary_org_id  = NULL,
+           status          = 'deleted',
+           deleted_at      = datetime('now')
          WHERE id = ?`,
       )
       .bind(user.id)
