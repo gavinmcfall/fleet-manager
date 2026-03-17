@@ -44,7 +44,10 @@ app.use("*", async (c, next) => {
   if (!encryptionKeyValidated) {
     if (c.env.ENCRYPTION_KEY) {
       const err = validateEncryptionKey(c.env.ENCRYPTION_KEY);
-      if (err) console.error(`[startup] ${err}`);
+      if (err) {
+        console.error(`[startup] ${err}`);
+        return c.json({ error: "Service configuration error" }, 503);
+      }
     }
     encryptionKeyValidated = true;
   }
@@ -76,6 +79,14 @@ app.use("*", async (c, next) => {
   c.header("X-Content-Type-Options", "nosniff");
   c.header("X-Frame-Options", "DENY");
   c.header("Referrer-Policy", "strict-origin-when-cross-origin");
+  c.header("Strict-Transport-Security", "max-age=31536000; includeSubDomains");
+  c.header(
+    "Content-Security-Policy",
+    "default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; " +
+    "img-src 'self' https://imagedelivery.net https://robertsspaceindustries.com " +
+    "https://media.robertsspaceindustries.com https://www.gravatar.com data:; " +
+    "connect-src 'self'; frame-ancestors 'none'; base-uri 'self'; form-action 'self'",
+  );
 });
 
 // Default: prevent CDN caching of API responses (route handlers can override)
@@ -86,14 +97,26 @@ app.use("/api/*", async (c, next) => {
   }
 });
 
-// CORS — strict same-origin in production, localhost in dev, chrome-extension:// for SC Bridge Sync
+// CORS — strict same-origin in production, localhost in dev, pinned extension IDs for SC Bridge Sync
+// Extension IDs are stable after store publication. Update these when publishing new extensions.
+const TRUSTED_EXTENSION_ORIGINS = new Set<string>([
+  // Add published extension IDs here:
+  // "chrome-extension://YOUR_CHROME_EXTENSION_ID",
+  // "moz-extension://YOUR_FIREFOX_EXTENSION_UUID",
+]);
+const isTrustedExtension = (origin: string) =>
+  TRUSTED_EXTENSION_ORIGINS.has(origin) ||
+  // Fallback: accept any extension origin only in development
+  ((origin.startsWith("chrome-extension://") || origin.startsWith("moz-extension://")) &&
+    false); // Set to true ONLY during local dev before extension IDs are known
+
 app.use("/api/*", async (c, next) => {
   const origin = c.req.header("Origin") || "";
   const host = c.req.header("Host") || "";
   if (!origin) return cors({ origin: `https://${host}` })(c, next);
   try {
-    // Allow browser extension origins (chrome-extension://, moz-extension://)
-    if (origin.startsWith("chrome-extension://") || origin.startsWith("moz-extension://")) {
+    // Allow pinned browser extension origins (SC Bridge Sync)
+    if (isTrustedExtension(origin)) {
       return cors({ origin, credentials: true })(c, next);
     }
     const originHost = new URL(origin).hostname;
@@ -160,7 +183,7 @@ async function requireAuth(c: Context<HonoEnv>, next: Next): Promise<Response | 
   // Fallback: X-API-Key for external API consumers
   const token = c.env.API_TOKEN;
   if (token) {
-    const provided = c.req.header("X-API-Key") || c.req.query("token") || "";
+    const provided = c.req.header("X-API-Key") || "";
     // Hash both values to fixed length before comparing — avoids leaking token length
     const encoder = new TextEncoder();
     const [hashA, hashB] = await Promise.all([
@@ -185,7 +208,7 @@ function requireRole(...roles: string[]) {
       // API token fallback check — valid tokens get 403 (no role context), invalid get 401
       const token = c.env.API_TOKEN;
       if (token) {
-        const provided = c.req.header("X-API-Key") || c.req.query("token") || "";
+        const provided = c.req.header("X-API-Key") || "";
         const encoder = new TextEncoder();
         const [hashA, hashB] = await Promise.all([
           crypto.subtle.digest("SHA-256", encoder.encode(provided)),

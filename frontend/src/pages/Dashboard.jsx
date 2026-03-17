@@ -7,6 +7,7 @@ import { PieChart, Pie, Cell, ResponsiveContainer, Tooltip, BarChart, Bar, XAxis
 import { CHART_COLORS, TOOLTIP_STYLE } from '../lib/theme'
 import PageHeader from '../components/PageHeader'
 import LoadingState from '../components/LoadingState'
+import ErrorState from '../components/ErrorState'
 import PanelSection from '../components/PanelSection'
 import FleetOverviewGrid from '../components/FleetOverviewGrid'
 import SectionBoundary from '../components/SectionBoundary'
@@ -14,11 +15,15 @@ import SectionBoundary from '../components/SectionBoundary'
 export default function Dashboard() {
   const { data: session, isPending: sessionPending } = useSession()
   const isLoggedIn = !!session?.user
-  const { data: status, loading: statusLoading } = useStatus()
-  const { data: analysis, loading: analysisLoading } = useAnalysis({ skip: !isLoggedIn })
+  const { data: status, loading: statusLoading, error: statusError } = useStatus()
+  const { data: analysis, loading: analysisLoading, error: analysisError } = useAnalysis({ skip: !isLoggedIn })
 
   if (sessionPending || statusLoading || (isLoggedIn && analysisLoading)) {
     return <LoadingState variant="skeleton" />
+  }
+
+  if (statusError || analysisError) {
+    return <ErrorState error={statusError || analysisError} />
   }
 
   // Public landing — show when not logged in

@@ -760,6 +760,7 @@ export async function getGameVersions(db: D1Database): Promise<{ code: string; c
       FROM game_versions gv
       WHERE gv.id <= (SELECT MAX(gv2.id) FROM game_versions gv2
         WHERE EXISTS (SELECT 1 FROM loot_map lm WHERE lm.game_version_id = gv2.id))
+        AND (gv.is_default = 1 OR gv.released_at IS NOT NULL)
       ORDER BY gv.released_at DESC`)
     .all<{ code: string; channel: string; is_default: number; released_at: string }>();
   return result.results;

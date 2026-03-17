@@ -323,17 +323,14 @@ export function accountRoutes() {
   });
 
   // PATCH /api/account/avatar — set avatar source (gravatar or rsi)
-  routes.patch("/avatar", async (c) => {
+  routes.patch("/avatar",
+    validate("json", z.object({
+      source: z.enum(["gravatar", "rsi"]),
+    })),
+    async (c) => {
     const user = getAuthUser(c);
     const db = c.env.DB;
-
-    const body = await c.req
-      .json<{ source?: "gravatar" | "rsi" }>()
-      .catch(() => ({ source: undefined }));
-
-    if (!body.source || !["gravatar", "rsi"].includes(body.source)) {
-      return c.json({ error: "source must be 'gravatar' or 'rsi'" }, 400);
-    }
+    const body = c.req.valid("json");
 
     let imageUrl: string | null = null;
 
@@ -372,17 +369,14 @@ export function accountRoutes() {
   });
 
   // PATCH /api/account/gravatar-opt-out — set gravatar_opted_out flag
-  routes.patch("/gravatar-opt-out", async (c) => {
+  routes.patch("/gravatar-opt-out",
+    validate("json", z.object({
+      optOut: z.boolean(),
+    })),
+    async (c) => {
     const user = getAuthUser(c);
     const db = c.env.DB;
-
-    const body = await c.req
-      .json<{ optOut?: boolean }>()
-      .catch(() => ({ optOut: undefined }));
-
-    if (typeof body.optOut !== "boolean") {
-      return c.json({ error: "optOut must be a boolean" }, 400);
-    }
+    const body = c.req.valid("json");
 
     await db
       .prepare("UPDATE user SET gravatar_opted_out = ? WHERE id = ?")
@@ -432,13 +426,12 @@ export function accountRoutes() {
   });
 
   // DELETE /api/account — Self-service account deletion
-  routes.delete("/", async (c) => {
+  routes.delete("/",
+    validate("json", z.object({
+      confirmation: z.literal("DELETE"),
+    })),
+    async (c) => {
     const user = getAuthUser(c);
-    const body = await c.req.json<{ confirmation?: string }>().catch(() => ({ confirmation: undefined }));
-
-    if (body.confirmation !== "DELETE") {
-      return c.json({ error: "You must send { \"confirmation\": \"DELETE\" } to confirm account deletion" }, 400);
-    }
 
     const db = c.env.DB;
 
@@ -464,15 +457,27 @@ export function accountRoutes() {
       db.prepare("DELETE FROM user_loot_collection WHERE user_id = ?").bind(user.id),
       db.prepare("DELETE FROM user_loot_wishlist WHERE user_id = ?").bind(user.id),
       db.prepare("DELETE FROM user_rsi_profile WHERE user_id = ?").bind(user.id),
-      // Scrub PII from change history — keep rows (event log) but wipe values
+      // Hangar sync tables (migration 0105/0120 — no CASCADE in D1)
+      db.prepare("DELETE FROM user_pledge_upgrades WHERE user_id = ?").bind(user.id),
+      db.prepare("DELETE FROM user_pledge_items WHERE user_id = ?").bind(user.id),
+      db.prepare("DELETE FROM user_pledges WHERE user_id = ?").bind(user.id),
+      db.prepare("DELETE FROM user_buyback_pledges WHERE user_id = ?").bind(user.id),
+      db.prepare("DELETE FROM user_hangar_syncs WHERE user_id = ?").bind(user.id),
+      db.prepare("DELETE FROM user_rsi_profiles WHERE user_id = ?").bind(user.id),
+      db.prepare("DELETE FROM user_account_snapshots WHERE user_id = ?").bind(user.id),
+      db.prepare("DELETE FROM user_ccu_chains WHERE user_id = ?").bind(user.id),
+      db.prepare("DELETE FROM user_named_ships WHERE user_id = ?").bind(user.id),
+      // Scrub PII from change history — keep rows (event log) but wipe values + IP
       db.prepare(
         `UPDATE user_change_history SET
-           old_value = CASE WHEN old_value IS NOT NULL THEN '<Account Deleted>' ELSE NULL END,
-           new_value = CASE WHEN new_value IS NOT NULL THEN '<Account Deleted>' ELSE NULL END,
-           metadata  = CASE WHEN metadata  IS NOT NULL THEN '<Account Deleted>' ELSE NULL END
+           old_value  = CASE WHEN old_value IS NOT NULL THEN '<Account Deleted>' ELSE NULL END,
+           new_value  = CASE WHEN new_value IS NOT NULL THEN '<Account Deleted>' ELSE NULL END,
+           metadata   = CASE WHEN metadata  IS NOT NULL THEN '<Account Deleted>' ELSE NULL END,
+           ip_address = NULL
          WHERE user_id = ?`,
       ).bind(user.id),
       // Better Auth tables (FK order: dependents first)
+      db.prepare("DELETE FROM member WHERE userId = ?").bind(user.id),
       db.prepare("DELETE FROM passkey WHERE userId = ?").bind(user.id),
       db.prepare("DELETE FROM twoFactor WHERE userId = ?").bind(user.id),
       db.prepare("DELETE FROM verification WHERE identifier = ?").bind(user.email),

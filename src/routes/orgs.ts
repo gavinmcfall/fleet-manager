@@ -83,11 +83,11 @@ export function orgRoutes() {
     validate("json", z.object({
       description: z.string().max(500).nullable().optional(),
       rsiSid: z.string().max(20).nullable().optional(),
-      rsiUrl: z.string().url().max(200).nullable().optional(),
-      homepage: z.string().url().max(200).nullable().optional(),
-      discord: z.string().url().max(200).nullable().optional(),
-      twitch: z.string().url().max(200).nullable().optional(),
-      youtube: z.string().url().max(200).nullable().optional(),
+      rsiUrl: z.string().url().max(200).refine(v => /^https?:\/\//i.test(v), "Must be http/https URL").nullable().optional(),
+      homepage: z.string().url().max(200).refine(v => /^https?:\/\//i.test(v), "Must be http/https URL").nullable().optional(),
+      discord: z.string().url().max(200).refine(v => /^https?:\/\//i.test(v), "Must be http/https URL").nullable().optional(),
+      twitch: z.string().url().max(200).refine(v => /^https?:\/\//i.test(v), "Must be http/https URL").nullable().optional(),
+      youtube: z.string().url().max(200).refine(v => /^https?:\/\//i.test(v), "Must be http/https URL").nullable().optional(),
     }).strict()),
     async (c) => {
     const user = c.get("user");
@@ -111,11 +111,12 @@ export function orgRoutes() {
     }
 
     const body = c.req.valid("json");
+    const ALLOWED_COLUMNS = new Set(["description", "rsiSid", "rsiUrl", "homepage", "discord", "twitch", "youtube"]);
     const updates: string[] = [];
     const values: (string | null)[] = [];
 
     for (const [key, val] of Object.entries(body)) {
-      if (val !== undefined) {
+      if (val !== undefined && ALLOWED_COLUMNS.has(key)) {
         updates.push(`${key} = ?`);
         values.push(val);
       }
@@ -214,7 +215,7 @@ export function orgRoutes() {
     const members = await db
       .prepare(
         `SELECT mb.id, mb.userId, mb.organizationId, mb.role, mb.createdAt,
-          u.name as userName, u.email as userEmail, u.image as userImage
+          u.name as userName, u.image as userImage
         FROM member mb
         JOIN user u ON u.id = mb.userId
         WHERE mb.organizationId = ?
@@ -258,9 +259,8 @@ export function orgRoutes() {
     const fleetResult = await db
       .prepare(
         `SELECT uf.id, uf.vehicle_id, uf.warbond, uf.is_loaner,
-          uf.pledge_name, uf.pledge_cost, uf.pledge_date, uf.custom_name,
           v.name as vehicle_name, v.slug as vehicle_slug, v.focus, v.size_label, v.cargo,
-          v.crew_min, v.crew_max, v.pledge_price, v.speed_scm, v.classification,
+          v.crew_min, v.crew_max, v.speed_scm, v.classification,
           m.name as manufacturer_name, m.code as manufacturer_code,
           it.label as insurance_label, it.duration_months, it.is_lifetime,
           ps.key as production_status

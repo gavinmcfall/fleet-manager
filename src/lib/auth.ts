@@ -137,9 +137,15 @@ export function createAuth(env: Env) {
     },
     trustedOrigins: (request) => {
       const origins: string[] = [env.BETTER_AUTH_URL];
-      // Allow browser extension origins (SC Bridge Sync)
+      // Allow pinned browser extension origins (SC Bridge Sync)
+      // Extension IDs must match the TRUSTED_EXTENSION_ORIGINS set in index.ts
       const reqOrigin = request?.headers?.get("Origin") ?? "";
-      if (reqOrigin.startsWith("chrome-extension://") || reqOrigin.startsWith("moz-extension://")) {
+      const TRUSTED_EXT_ORIGINS = new Set<string>([
+        // Add published extension IDs here (must match index.ts):
+        // "chrome-extension://YOUR_CHROME_EXTENSION_ID",
+        // "moz-extension://YOUR_FIREFOX_EXTENSION_UUID",
+      ]);
+      if (TRUSTED_EXT_ORIGINS.has(reqOrigin)) {
         origins.push(reqOrigin);
       }
       return origins;

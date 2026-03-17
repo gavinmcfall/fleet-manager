@@ -594,7 +594,7 @@ export function importRoutes() {
     });
    } catch (err) {
     console.error("[hangar-sync] Unhandled error:", err instanceof Error ? err.message : err, err instanceof Error ? err.stack : "");
-    return c.json({ error: err instanceof Error ? err.message : "Sync failed" }, 500);
+    return c.json({ error: "Sync failed — please try again" }, 500);
    }
   });
 

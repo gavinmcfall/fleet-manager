@@ -2,6 +2,9 @@ import { useState, useEffect, useCallback, useRef } from 'react'
 
 const ALLOWED_SOURCE = 'sc-bridge-sync'
 const DETECT_TIMEOUT = 3000 // ms to wait for pong
+// Only accept postMessage from our own origin (same-origin extension bridge content script)
+const isAllowedOrigin = (origin) =>
+  origin === window.location.origin || origin === ''
 
 /** Default sync categories — all enabled */
 export const SYNC_CATEGORIES = {
@@ -40,6 +43,7 @@ export default function useHangarSync() {
     if (listenerRef.current) window.removeEventListener('message', listenerRef.current)
 
     const handler = (event) => {
+      if (!isAllowedOrigin(event.origin)) return
       if (event.data?.source !== ALLOWED_SOURCE) return
       if (event.data?.type === 'SCBRIDGE_PONG') {
         setStatus('ready')
@@ -79,6 +83,7 @@ export default function useHangarSync() {
     if (listenerRef.current) window.removeEventListener('message', listenerRef.current)
 
     const handler = async (event) => {
+      if (!isAllowedOrigin(event.origin)) return
       if (event.data?.source !== ALLOWED_SOURCE) return
 
       if (event.data?.type === 'SCBRIDGE_SYNC_RESPONSE') {

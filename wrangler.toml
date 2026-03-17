@@ -49,7 +49,7 @@ EMAIL_FROM = "SC Bridge <noreply@scbridge.app>"
 
 # ── Staging Environment ──
 [env.staging]
-workers_dev = true
+workers_dev = false
 preview_urls = false
 routes = [{ pattern = "staging.scbridge.app", custom_domain = true }]
 

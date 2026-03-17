@@ -107,7 +107,12 @@ export default function Analysis() {
 
   // Find high-value non-LTI ships
   const nonLtiShips = ins.non_lti_ships || []
-  const highValueNonLti = nonLtiShips.filter(s => s.pledge_cost > 200)
+  const highValueNonLti = nonLtiShips.filter(s => {
+    const cost = typeof s.pledge_cost === 'string'
+      ? parseFloat(s.pledge_cost.replace(/[^0-9.]/g, ''))
+      : s.pledge_cost
+    return cost > 200
+  })
 
   const aiButton = llmConfig?.api_key_set ? (
     <button
