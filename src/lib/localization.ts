@@ -93,10 +93,11 @@ export function generateAsopOverrides(
 ): LabelOverride[] {
   const overrides: LabelOverride[] = [];
   const sorted = [...entries].sort((a, b) => a.sortPosition - b.sortPosition);
+  const padWidth = sorted.length >= 10 ? 2 : 1;
 
   for (const entry of sorted) {
     if (!entry.className) continue;
-    const pos = entry.sortPosition;
+    const pos = String(entry.sortPosition).padStart(padWidth, "0");
     const label = entry.customLabel || entry.vehicleName;
     const numbered = `${pos}. ${label}`;
 

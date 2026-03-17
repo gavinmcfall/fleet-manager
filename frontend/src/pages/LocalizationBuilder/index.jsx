@@ -261,9 +261,9 @@ export default function LocalizationBuilder() {
     }))
   }, [fleet])
 
-  // ── Init ship order ─────────────────────────────────────────────
+  // ── Init ship order (from saved only — don't auto-populate) ─────
   useEffect(() => {
-    if (orderLoading || fleetLoading) return
+    if (orderLoading) return
     if (shipOrder?.items?.length > 0) {
       setOrderedShips(shipOrder.items.map(item => ({
         vehicleId: item.vehicle_id,
@@ -271,15 +271,8 @@ export default function LocalizationBuilder() {
         customLabel: item.custom_label,
         sortPosition: item.sort_position,
       })))
-    } else if (fleetVehicles.length > 0) {
-      setOrderedShips(fleetVehicles.map((v, idx) => ({
-        vehicleId: v.vehicleId,
-        vehicleName: v.vehicleName,
-        customLabel: v.customName || null,
-        sortPosition: idx + 1,
-      })))
     }
-  }, [shipOrder, fleetVehicles, orderLoading, fleetLoading])
+  }, [shipOrder, orderLoading])
 
   // ── Notification ────────────────────────────────────────────────
   const showNotification = useCallback((msg, variant = 'info') => {
@@ -305,34 +298,57 @@ export default function LocalizationBuilder() {
   }
 
   // ── Ship order helpers ──────────────────────────────────────────
-  const moveShip = (idx, direction) => {
-    const target = idx + direction
-    if (target < 0 || target >= orderedShips.length) return
-    const next = [...orderedShips]
-    ;[next[idx], next[target]] = [next[target], next[idx]]
-    next.forEach((s, i) => { s.sortPosition = i + 1 })
-    setOrderedShips(next)
-    setDirty(true)
-  }
+  const [shipDragIdx, setShipDragIdx] = useState(null)
+  const [shipOverIdx, setShipOverIdx] = useState(null)
+
+  const renumber = (list) => list.map((s, i) => ({ ...s, sortPosition: i + 1 }))
 
   const removeShip = (idx) => {
-    const next = orderedShips.filter((_, i) => i !== idx)
-    next.forEach((s, i) => { s.sortPosition = i + 1 })
-    setOrderedShips(next)
+    setOrderedShips(renumber(orderedShips.filter((_, i) => i !== idx)))
     setDirty(true)
   }
 
   const addShip = (vehicle) => {
     if (orderedShips.some(s => s.vehicleId === vehicle.id)) return
-    const next = [...orderedShips, {
+    setOrderedShips(renumber([...orderedShips, {
       vehicleId: vehicle.id,
       vehicleName: vehicle.name,
       customLabel: null,
-      sortPosition: orderedShips.length + 1,
-    }]
-    setOrderedShips(next)
+      sortPosition: 0,
+    }]))
     setShipSearch('')
     setDirty(true)
+  }
+
+  const handleShipDragStart = (e, idx) => {
+    setShipDragIdx(idx)
+    e.dataTransfer.effectAllowed = 'move'
+  }
+  const handleShipDragOver = (e, idx) => {
+    e.preventDefault()
+    e.dataTransfer.dropEffect = 'move'
+    setShipOverIdx(idx)
+  }
+  const handleShipDrop = (e, dropIdx) => {
+    e.preventDefault()
+    if (shipDragIdx === null || shipDragIdx === dropIdx) return
+    const next = [...orderedShips]
+    const [moved] = next.splice(shipDragIdx, 1)
+    next.splice(dropIdx, 0, moved)
+    setOrderedShips(renumber(next))
+    setShipDragIdx(null)
+    setShipOverIdx(null)
+    setDirty(true)
+  }
+  const handleShipDragEnd = () => {
+    setShipDragIdx(null)
+    setShipOverIdx(null)
+  }
+
+  // Zero-pad position numbers: "1" when <10, "01" when >=10
+  const padPos = (n) => {
+    const width = orderedShips.length >= 10 ? 2 : 1
+    return String(n).padStart(width, '0')
   }
 
   // Ships available to add (not already in order)
@@ -460,40 +476,29 @@ export default function LocalizationBuilder() {
 
           {config.asopEnabled && (
             <>
-              {/* Preview */}
+              {/* Ship list — drag to reorder */}
               {orderedShips.length > 0 && (
-                <div className="bg-black/40 rounded px-3 py-2">
-                  <p className="text-[10px] uppercase tracking-wider text-gray-500 mb-1">ASOP Preview</p>
-                  <div className="font-mono text-sm space-y-0.5">
-                    {orderedShips.slice(0, 5).map((ship, idx) => (
-                      <div key={idx} className="text-gray-300">
-                        <span className="text-sc-accent">{ship.sortPosition}.</span> {ship.customLabel || ship.vehicleName}
-                      </div>
-                    ))}
-                    {orderedShips.length > 5 && <div className="text-gray-500">... +{orderedShips.length - 5} more</div>}
-                  </div>
-                </div>
-              )}
-
-              {/* Ship list */}
-              {orderedShips.length > 0 && (
-                <div className="space-y-1 max-h-80 overflow-y-auto">
+                <div className="space-y-1 max-h-96 overflow-y-auto">
                   {orderedShips.map((ship, idx) => (
-                    <div key={`${ship.vehicleId}-${idx}`} className="flex items-center gap-2 px-3 py-1.5 rounded bg-black/20 border border-sc-border hover:border-sc-accent/30 transition-colors group">
-                      <span className="text-sc-accent font-mono text-xs w-6 text-right shrink-0">{ship.sortPosition}.</span>
-                      <GripVertical className="w-3.5 h-3.5 text-gray-600 shrink-0" />
+                    <div
+                      key={`${ship.vehicleId}-${idx}`}
+                      draggable
+                      onDragStart={(e) => handleShipDragStart(e, idx)}
+                      onDragOver={(e) => handleShipDragOver(e, idx)}
+                      onDrop={(e) => handleShipDrop(e, idx)}
+                      onDragEnd={handleShipDragEnd}
+                      className={`flex items-center gap-2 px-3 py-1.5 rounded border transition-all select-none ${
+                        shipDragIdx === idx ? 'opacity-40 bg-black/20 border-sc-accent/40' :
+                        shipOverIdx === idx && shipDragIdx !== null ? 'bg-black/20 border-sc-accent border-t-2' :
+                        'bg-black/20 border-sc-border hover:border-sc-accent/30'
+                      }`}
+                    >
+                      <span className="text-sc-accent font-mono text-xs w-6 text-right shrink-0">{padPos(ship.sortPosition)}.</span>
+                      <GripVertical className="w-3.5 h-3.5 text-gray-500 shrink-0 cursor-grab active:cursor-grabbing" />
                       <span className="text-xs text-gray-200 flex-1 truncate">{ship.customLabel || ship.vehicleName}</span>
-                      <div className="flex items-center gap-0.5 opacity-0 group-hover:opacity-100 transition-opacity">
-                        <button onClick={() => moveShip(idx, -1)} disabled={idx === 0} className="p-0.5 rounded hover:bg-white/10 disabled:opacity-20">
-                          <ChevronUp className="w-3.5 h-3.5 text-gray-400" />
-                        </button>
-                        <button onClick={() => moveShip(idx, 1)} disabled={idx === orderedShips.length - 1} className="p-0.5 rounded hover:bg-white/10 disabled:opacity-20">
-                          <ChevronDown className="w-3.5 h-3.5 text-gray-400" />
-                        </button>
-                        <button onClick={() => removeShip(idx)} className="p-0.5 rounded hover:bg-red-500/20">
-                          <X className="w-3.5 h-3.5 text-gray-400 hover:text-red-400" />
-                        </button>
-                      </div>
+                      <button onClick={() => removeShip(idx)} className="p-0.5 rounded hover:bg-red-500/20 opacity-0 group-hover:opacity-100 hover:!opacity-100">
+                        <X className="w-3.5 h-3.5 text-gray-500 hover:text-red-400" />
+                      </button>
                     </div>
                   ))}
                 </div>
@@ -502,7 +507,9 @@ export default function LocalizationBuilder() {
               {/* Add ship search */}
               <div className="space-y-2">
                 <p className="text-[10px] uppercase tracking-wider text-gray-500">
-                  Add ships purchased in-game with aUEC
+                  {orderedShips.length === 0
+                    ? 'Search and add your ships to set ASOP terminal order'
+                    : 'Add ships purchased in-game with aUEC'}
                 </p>
                 <div className="relative">
                   <Search className="w-3.5 h-3.5 text-gray-500 absolute left-3 top-1/2 -translate-y-1/2" />
@@ -515,7 +522,7 @@ export default function LocalizationBuilder() {
                   />
                 </div>
                 {shipSearchResults.length > 0 && (
-                  <div className="border border-sc-border rounded bg-black/40 overflow-hidden">
+                  <div className="border border-sc-border rounded bg-black/40 overflow-hidden max-h-48 overflow-y-auto">
                     {shipSearchResults.map(ship => (
                       <button
                         key={ship.id}
