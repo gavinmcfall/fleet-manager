@@ -325,9 +325,8 @@ async function buildOverrides(
     if (!cat.enabled) continue;
 
     const gradeCol = cat.hasGrade ? "t.grade" : "NULL as grade";
-    // Not all tables have size — consumables and ship_missiles don't
-    const hasSizeCol = !["consumables"].includes(cat.table);
-    const sizeCol = hasSizeCol ? "t.size" : "NULL as size";
+    const tablesWithoutSize = ["consumables", "fps_utilities"];
+    const sizeCol = tablesWithoutSize.includes(cat.table) ? "NULL as size" : "t.size";
 
     const rows = await db
       .prepare(
