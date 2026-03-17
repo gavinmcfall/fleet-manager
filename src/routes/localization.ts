@@ -221,14 +221,20 @@ export function localizationRoutes() {
       return c.json({ error: "No default game version configured" }, 500);
     }
 
-    // Read base global.ini from KV
-    const baseContent = await kv.get(`localization:global-ini:${ver.code}`);
-    if (!baseContent) {
+    // Read base global.ini from KV as raw bytes to preserve encoding.
+    // The file has mixed encoding (UTF-8 BOM + stray latin-1 0xA0 bytes).
+    // We decode as latin1 (1:1 byte→char) so no bytes are lost during merge.
+    const rawBuf = await kv.get(`localization:global-ini:${ver.code}`, "arrayBuffer");
+    if (!rawBuf) {
       return c.json(
         { error: "Base localization file not available for this version" },
         404,
       );
     }
+
+    // Decode as latin1 to preserve all bytes including bare 0xA0
+    const decoder = new TextDecoder("latin1");
+    const baseContent = decoder.decode(rawBuf);
 
     // Build overrides from user config
     const configRow = await db
@@ -251,13 +257,16 @@ export function localizationRoutes() {
       overrideMap.set(o.key, o.value);
     }
 
-    // Merge
+    // Merge and re-encode as latin1 to preserve original byte values
     const merged = mergeGlobalIni(baseContent, overrideMap);
+    const bytes = new Uint8Array(merged.length);
+    for (let i = 0; i < merged.length; i++) {
+      bytes[i] = merged.charCodeAt(i) & 0xFF;
+    }
 
-    // Return as downloadable file
-    return new Response(merged, {
+    return new Response(bytes, {
       headers: {
-        "Content-Type": "text/plain; charset=utf-8",
+        "Content-Type": "application/octet-stream",
         "Content-Disposition": `attachment; filename="global.ini"`,
         "Cache-Control": "no-store",
       },
