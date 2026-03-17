@@ -7,6 +7,22 @@ import ErrorState from '../components/ErrorState'
 import SearchInput from '../components/SearchInput'
 import { TrendingUp, MapPin, ArrowUpRight, ArrowDownRight, Package, AlertTriangle, X, Info } from 'lucide-react'
 
+// ── Category display names ────────────────────────────────────────────────
+const CATEGORY_LABELS = {
+  agriculturalsupplies: 'Agricultural Supplies',
+  consumergoods:        'Consumer Goods',
+  medicalsupplies:      'Medical Supplies',
+  mixedmining:          'Mixed Mining',
+  non_metals:           'Non-Metals',
+  processedgoods:       'Processed Goods',
+  manmade:              'Man-Made',
+}
+
+function categoryLabel(category) {
+  if (!category) return ''
+  return CATEGORY_LABELS[category] || category.charAt(0).toUpperCase() + category.slice(1)
+}
+
 // ── Category badge styles ──────────────────────────────────────────────────
 const CATEGORY_BADGE = {
   metals:    'bg-gray-700/60 text-gray-300 border border-gray-600/50',
@@ -69,7 +85,7 @@ function CommodityPanel({ commodity, onClose }) {
             </h2>
             <div className="flex items-center gap-2 mt-1.5">
               <span className={`text-[10px] font-display uppercase tracking-wide px-2 py-0.5 rounded ${categoryBadgeClass(commodity.category)}`}>
-                {commodity.category}
+                {categoryLabel(commodity.category)}
               </span>
               {commodity.type_name && (
                 <span className="text-[10px] font-mono text-gray-500">
@@ -229,7 +245,7 @@ function CommodityCard({ commodity, onClick }) {
 
       <div className="flex items-center gap-2 mb-3">
         <span className={`text-[10px] font-display uppercase tracking-wide px-2 py-0.5 rounded ${categoryBadgeClass(commodity.category)}`}>
-          {commodity.category}
+          {categoryLabel(commodity.category)}
         </span>
         {commodity.type_name && (
           <span className="text-[10px] font-mono text-gray-500">
@@ -340,7 +356,7 @@ export default function TradeCommodities() {
     // Add any categories from data not in the predefined list
     for (const cat of categories) {
       if (!CATEGORY_TABS.some(t => t.key === cat)) {
-        dynamicTabs.push({ key: cat, label: cat.charAt(0).toUpperCase() + cat.slice(1) })
+        dynamicTabs.push({ key: cat, label: categoryLabel(cat) })
       }
     }
     return dynamicTabs

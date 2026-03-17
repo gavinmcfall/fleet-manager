@@ -97,13 +97,24 @@ function friendlyElementName(className) {
     .replace(/\b\w/g, (c) => c.toUpperCase())
 }
 
+/**
+ * Strip DataCore "Minableelement <Type> " prefixes from element display names.
+ * e.g. "Minableelement Fps Hadanite" → "Hadanite"
+ *      "Minableelement Ship Quantanium" → "Quantanium"
+ *      "Minableelement Groundvehicle Agricium" → "Agricium"
+ */
+function cleanElementName(name) {
+  if (!name) return '--'
+  return name.replace(/^Minableelement\s+(?:Fps|Ship|Groundvehicle)\s+/i, '')
+}
+
 function ElementCard({ element }) {
   const instability = element.instability ?? null
 
   return (
     <div className="panel p-4 space-y-3">
       <div className="flex items-start justify-between gap-2">
-        <h3 className="font-display font-semibold text-white text-sm leading-tight">{element.name}</h3>
+        <h3 className="font-display font-semibold text-white text-sm leading-tight">{cleanElementName(element.name)}</h3>
         <div className="flex items-center gap-1.5">
           {element.category && (
             <Badge style={CATEGORY_STYLES[element.category]}>
@@ -241,7 +252,7 @@ export default function MiningGuide() {
   const filteredElements = useMemo(() => {
     if (!search) return elements
     const q = search.toLowerCase()
-    return elements.filter((el) => el.name.toLowerCase().includes(q))
+    return elements.filter((el) => cleanElementName(el.name).toLowerCase().includes(q))
   }, [elements, search])
 
   const filteredCompositions = useMemo(() => {
