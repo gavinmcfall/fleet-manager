@@ -1,7 +1,7 @@
 import { Hono } from "hono";
 import type { Env } from "../lib/types";
 import { getAllPaints, getPaintsForVehicle } from "../db/queries";
-import { cachedJson } from "../lib/cache";
+import { cachedJson, cacheSlug } from "../lib/cache";
 
 /**
  * /api/paints/* — Paint database
@@ -21,7 +21,7 @@ export function paintRoutes<E extends { Bindings: Env }>() {
   routes.get("/ship/:slug", async (c) => {
     const slug = c.req.param("slug");
     const db = c.env.DB;
-    return cachedJson(c,`paints:ship:${slug}`, () =>
+    return cachedJson(c,`paints:ship:${cacheSlug(slug)}`, () =>
       getPaintsForVehicle(db, slug),
     );
   });

@@ -1,7 +1,7 @@
 import { Hono } from "hono";
 import type { Env } from "../lib/types";
 import { VEHICLE_VERSION_JOIN } from "../lib/constants";
-import { cachedJson, resolveVersionId } from "../lib/cache";
+import { cachedJson, resolveVersionId, cacheSlug } from "../lib/cache";
 
 /**
  * /api/ships/* — Ship reference database (all vehicles in the game)
@@ -41,7 +41,7 @@ export function vehicleRoutes<E extends { Bindings: Env }>() {
     const slug = c.req.param("slug");
     const db = c.env.DB;
     const versionId = await resolveVersionId(db);
-    return cachedJson(c,`ships:detail:${versionId}:${slug}`, async () => {
+    return cachedJson(c,`ships:detail:${versionId}:${cacheSlug(slug)}`, async () => {
       const vehicle = await db
         .prepare(
           `SELECT v.id, v.uuid, v.slug, v.name, v.class_name,

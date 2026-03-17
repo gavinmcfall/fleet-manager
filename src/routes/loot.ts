@@ -19,7 +19,7 @@ import {
   getLootSetBySlug,
 } from "../db/queries";
 import { validate } from "../lib/validation";
-import { cachedJson, resolveVersionId } from "../lib/cache";
+import { cachedJson, resolveVersionId, cacheSlug } from "../lib/cache";
 
 // Auth middleware — reused for collection and wishlist sub-paths
 async function requireUser(c: Context<HonoEnv>, next: Next): Promise<Response | void> {
@@ -185,7 +185,7 @@ export function lootRoutes() {
     const slug = decodeURIComponent(c.req.param("slug"));
     const patch = c.req.query("patch");
     const versionId = await resolveVersionId(c.env.DB, patch);
-    return cachedJson(c, `loot:loc-detail:${versionId}:${type}:${slug}`, () =>
+    return cachedJson(c, `loot:loc-detail:${versionId}:${type}:${cacheSlug(slug)}`, () =>
       getLootLocationDetail(c.env.DB, type, slug, patch),
     );
   });
@@ -204,7 +204,7 @@ export function lootRoutes() {
     const setSlug = c.req.param("setSlug");
     const patch = c.req.query("patch");
     const versionId = await resolveVersionId(c.env.DB, patch);
-    return cachedJson(c, `loot:set-detail:${versionId}:${setSlug}`, async () => {
+    return cachedJson(c, `loot:set-detail:${versionId}:${cacheSlug(setSlug)}`, async () => {
       const set = await getLootSetBySlug(c.env.DB, setSlug, patch);
       if (!set) return null;
 
@@ -230,7 +230,7 @@ export function lootRoutes() {
     const uuid = c.req.param("uuid");
     const patch = c.req.query("patch");
     const versionId = await resolveVersionId(c.env.DB, patch);
-    return cachedJson(c, `loot:detail:${versionId}:${uuid}`, () =>
+    return cachedJson(c, `loot:detail:${versionId}:${cacheSlug(uuid)}`, () =>
       getLootByUuid(c.env.DB, uuid, patch),
     );
   });

@@ -1,6 +1,6 @@
 import { Hono } from "hono"
 import type { HonoEnv } from "../lib/types"
-import { cachedJson, resolveVersionId } from "../lib/cache"
+import { cachedJson, resolveVersionId, cacheSlug } from "../lib/cache"
 
 const DEFAULT_VERSION_SUBQUERY = "(SELECT id FROM game_versions WHERE is_default = 1)"
 
@@ -277,7 +277,7 @@ export function gamedataRoutes<E extends HonoEnv>() {
     const slug = c.req.param("slug")
     const db = c.env.DB
     const versionId = await resolveVersionId(db)
-    return cachedJson(c, `gd:shop-inv:${versionId}:${slug}`, async () => {
+    return cachedJson(c, `gd:shop-inv:${versionId}:${cacheSlug(slug)}`, async () => {
       const { results } = await db
         .prepare(
           `SELECT si.*,
@@ -356,7 +356,7 @@ export function gamedataRoutes<E extends HonoEnv>() {
     const slug = c.req.param("slug")
     const db = c.env.DB
     const versionId = await resolveVersionId(db)
-    return cachedJson(c, `gd:loc-shops:${versionId}:${slug}`, async () => {
+    return cachedJson(c, `gd:loc-shops:${versionId}:${cacheSlug(slug)}`, async () => {
       const location = await db
         .prepare(
           `SELECT id, name, slug, location_type
@@ -510,7 +510,7 @@ export function gamedataRoutes<E extends HonoEnv>() {
     const perPage = Math.min(100, Math.max(1, parseInt(c.req.query("per_page") || "50", 10)))
     const db = c.env.DB
     const versionId = await resolveVersionId(db)
-    return cachedJson(c, `gd:npc-loadout:${versionId}:${factionCode}:p${page}:pp${perPage}`, async () => {
+    return cachedJson(c, `gd:npc-loadout:${versionId}:${cacheSlug(factionCode)}:p${page}:pp${perPage}`, async () => {
       const faction = await db
         .prepare("SELECT * FROM npc_factions WHERE code = ? LIMIT 1")
         .bind(factionCode)

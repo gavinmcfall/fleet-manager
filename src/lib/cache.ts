@@ -1,5 +1,10 @@
 const DEFAULT_TTL = 86400; // 24 hours
 
+/** Sanitize a user-supplied value for use in cache keys. Strips colons to prevent namespace collision. */
+export function cacheSlug(value: string): string {
+  return value.replace(/:/g, "_");
+}
+
 /** Minimal context shape needed by cachedJson — accepts both HonoEnv and generic route contexts */
 interface CacheableContext {
   env: { SC_BRIDGE_CACHE: KVNamespace };
