@@ -1,4 +1,5 @@
-import React, { useState, useMemo } from 'react'
+import React, { useState, useMemo, useCallback } from 'react'
+import { useSearchParams } from 'react-router-dom'
 import { useAPI } from '../hooks/useAPI'
 import PageHeader from '../components/PageHeader'
 import LoadingState from '../components/LoadingState'
@@ -284,10 +285,43 @@ const INITIAL_COUNT = 30
 
 export default function TradeCommodities() {
   const { data, loading, error, refetch } = useAPI('/gamedata/trade')
-  const [search, setSearch] = useState('')
-  const [categoryTab, setCategoryTab] = useState('all')
-  const [locationFilter, setLocationFilter] = useState('all')
-  const [tradeFilter, setTradeFilter] = useState('all') // all | buy | sell
+  const [searchParams, setSearchParams] = useSearchParams()
+  const search = searchParams.get('q') || ''
+  const categoryTab = searchParams.get('cat') || 'all'
+  const locationFilter = searchParams.get('loc') || 'all'
+  const tradeFilter = searchParams.get('trade') || 'all'
+  const setSearch = useCallback((val) => {
+    setSearchParams(prev => {
+      const next = new URLSearchParams(prev)
+      if (val) next.set('q', val)
+      else next.delete('q')
+      return next
+    }, { replace: true })
+  }, [setSearchParams])
+  const setCategoryTab = useCallback((val) => {
+    setSearchParams(prev => {
+      const next = new URLSearchParams(prev)
+      if (val === 'all') next.delete('cat')
+      else next.set('cat', val)
+      return next
+    }, { replace: true })
+  }, [setSearchParams])
+  const setLocationFilter = useCallback((val) => {
+    setSearchParams(prev => {
+      const next = new URLSearchParams(prev)
+      if (val === 'all') next.delete('loc')
+      else next.set('loc', val)
+      return next
+    }, { replace: true })
+  }, [setSearchParams])
+  const setTradeFilter = useCallback((val) => {
+    setSearchParams(prev => {
+      const next = new URLSearchParams(prev)
+      if (val === 'all') next.delete('trade')
+      else next.set('trade', val)
+      return next
+    }, { replace: true })
+  }, [setSearchParams])
   const [selected, setSelected] = useState(null)
   const [showAll, setShowAll] = useState(false)
 

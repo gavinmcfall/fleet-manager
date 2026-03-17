@@ -207,11 +207,12 @@ const INITIAL_COUNT = 30
 
 export default function Shops() {
   const { data: shops, loading, error, refetch } = useAPI('/gamedata/shops')
-  const [search, setSearch] = useState('')
   const VALID_TYPES = TYPE_TABS.map(t => t.key)
   const [searchParams, setSearchParams] = useSearchParams()
   const typeParam = searchParams.get('type')
   const typeTab = VALID_TYPES.includes(typeParam) ? typeParam : 'all'
+  const search = searchParams.get('q') || ''
+  const locationFilter = searchParams.get('loc') || 'all'
   const setTypeTab = useCallback((t) => {
     setSearchParams(prev => {
       const next = new URLSearchParams(prev)
@@ -220,8 +221,22 @@ export default function Shops() {
       return next
     }, { replace: true })
   }, [setSearchParams])
-  const locParam = searchParams.get('location')
-  const [locationFilter, setLocationFilter] = useState(locParam || 'all')
+  const setSearch = useCallback((val) => {
+    setSearchParams(prev => {
+      const next = new URLSearchParams(prev)
+      if (val) next.set('q', val)
+      else next.delete('q')
+      return next
+    }, { replace: true })
+  }, [setSearchParams])
+  const setLocationFilter = useCallback((val) => {
+    setSearchParams(prev => {
+      const next = new URLSearchParams(prev)
+      if (val === 'all') next.delete('loc')
+      else next.set('loc', val)
+      return next
+    }, { replace: true })
+  }, [setSearchParams])
   const [selectedShop, setSelectedShop] = useState(null)
   const [showAll, setShowAll] = useState(false)
 

@@ -72,21 +72,85 @@ export default function LootDB() {
       return next
     }, { replace: true })
   }, [setSearchParams])
-  const [search, setSearch] = useState('')
-  const [category, setCategory] = useState('all')
-  const [brand, setBrand] = useState(null)
-  const [setName, setSetName] = useState(null)
-  const [rarities, setRarities] = useState(new Set())
-  const [sources, setSources] = useState(new Set())
-  const [viewMode, setViewMode] = useState('grid')
-  const [sortBy, setSortBy] = useState('name')
+
+  const search = searchParams.get('q') || ''
+  const category = searchParams.get('cat') || 'all'
+  const brand = searchParams.get('brand') || null
+  const setName = searchParams.get('set') || null
+  const raritiesParam = searchParams.get('rarities') || ''
+  const rarities = useMemo(() => raritiesParam ? new Set(raritiesParam.split(',')) : new Set(), [raritiesParam])
+  const sourcesParam = searchParams.get('sources') || ''
+  const sources = useMemo(() => sourcesParam ? new Set(sourcesParam.split(',')) : new Set(), [sourcesParam])
+  const viewMode = searchParams.get('view') || 'grid'
+  const sortBy = searchParams.get('sort') || 'name'
+  const page = parseInt(searchParams.get('page') || '1', 10)
+
+  const setSearch = useCallback((value) => {
+    setSearchParams(prev => {
+      if (value) prev.set('q', value); else prev.delete('q')
+      prev.delete('page')
+      return prev
+    }, { replace: true })
+  }, [setSearchParams])
+
+  const setCategory = useCallback((value) => {
+    setSearchParams(prev => {
+      if (value && value !== 'all') prev.set('cat', value); else prev.delete('cat')
+      prev.delete('brand')
+      prev.delete('set')
+      prev.delete('page')
+      return prev
+    }, { replace: true })
+  }, [setSearchParams])
+
+  const setBrand = useCallback((value) => {
+    setSearchParams(prev => {
+      if (value) prev.set('brand', value); else prev.delete('brand')
+      prev.delete('set')
+      prev.delete('page')
+      return prev
+    }, { replace: true })
+  }, [setSearchParams])
+
+  const setSetName = useCallback((value) => {
+    setSearchParams(prev => {
+      if (value) prev.set('set', value); else prev.delete('set')
+      prev.delete('page')
+      return prev
+    }, { replace: true })
+  }, [setSearchParams])
+
+  const setViewMode = useCallback((value) => {
+    setSearchParams(prev => {
+      if (value && value !== 'grid') prev.set('view', value); else prev.delete('view')
+      prev.delete('page')
+      return prev
+    }, { replace: true })
+  }, [setSearchParams])
+
+  const setSortBy = useCallback((value) => {
+    setSearchParams(prev => {
+      if (value && value !== 'name') prev.set('sort', value); else prev.delete('sort')
+      prev.delete('page')
+      return prev
+    }, { replace: true })
+  }, [setSearchParams])
+
+  const setPage = useCallback((updater) => {
+    setSearchParams(prev => {
+      const current = parseInt(prev.get('page') || '1', 10)
+      const next = typeof updater === 'function' ? updater(current) : updater
+      if (next <= 1) prev.delete('page'); else prev.set('page', String(next))
+      return prev
+    }, { replace: true })
+  }, [setSearchParams])
+
   const [detailUuid, setDetailUuid] = useState(routeUuid || null)
 
   // Auto-open detail panel when arriving via /loot/:uuid route
   useEffect(() => {
     if (routeUuid) setDetailUuid(routeUuid)
   }, [routeUuid])
-  const [page, setPage] = useState(1)
 
   // Collection tab state
   const [collSearch, setCollSearch] = useState('')
@@ -98,13 +162,6 @@ export default function LootDB() {
   const [collapsedWishGroups, setCollapsedWishGroups] = useState(new Set())
   const [wishShopSort, setWishShopSort] = useState('count') // 'alpha' | 'count'
   const [wishShopSortDesc, setWishShopSortDesc] = useState(true)
-
-  // Reset cascades
-  useEffect(() => { setBrand(null); setSetName(null) }, [category])
-  useEffect(() => { setSetName(null) }, [brand])
-
-  // Reset page on filter change
-  useEffect(() => { setPage(1) }, [search, category, brand, setName, rarities, sources])
 
   // Category counts
   const categoryCounts = useMemo(() => {
@@ -307,17 +364,25 @@ export default function LootDB() {
     }
   }, [refetchWishlist])
 
-  const toggleRarity = (r) => setRarities((prev) => {
-    const next = new Set(prev)
-    next.has(r) ? next.delete(r) : next.add(r)
-    return next
-  })
+  const toggleRarity = (r) => {
+    setSearchParams(prev => {
+      const current = prev.get('rarities') ? new Set(prev.get('rarities').split(',')) : new Set()
+      current.has(r) ? current.delete(r) : current.add(r)
+      if (current.size > 0) prev.set('rarities', [...current].join(',')); else prev.delete('rarities')
+      prev.delete('page')
+      return prev
+    }, { replace: true })
+  }
 
-  const toggleSource = (s) => setSources((prev) => {
-    const next = new Set(prev)
-    next.has(s) ? next.delete(s) : next.add(s)
-    return next
-  })
+  const toggleSource = (s) => {
+    setSearchParams(prev => {
+      const current = prev.get('sources') ? new Set(prev.get('sources').split(',')) : new Set()
+      current.has(s) ? current.delete(s) : current.add(s)
+      if (current.size > 0) prev.set('sources', [...current].join(',')); else prev.delete('sources')
+      prev.delete('page')
+      return prev
+    }, { replace: true })
+  }
 
   if (loading) return <LoadingState message="Loading items..." />
   if (error) return <ErrorState message={error} onRetry={refetch} />
@@ -560,7 +625,7 @@ export default function LootDB() {
               />
               <select
                 value={sortBy}
-                onChange={(e) => { setSortBy(e.target.value); setPage(1) }}
+                onChange={(e) => setSortBy(e.target.value)}
                 className="text-xs bg-sc-darker border border-sc-border rounded px-2 py-1.5 text-gray-300 focus:outline-none focus:border-sc-accent font-display tracking-wide"
               >
                 <option value="name">Name A-Z</option>

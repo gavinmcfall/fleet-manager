@@ -16,20 +16,29 @@ export default function ShipDB() {
   const { data: ships, loading, error, refetch } = useShips()
   const [searchParams, setSearchParams] = useSearchParams()
   const filter = searchParams.get('q') || ''
+  const mfrFilter = searchParams.get('mfr') || 'all'
+  const sizeFilter = searchParams.get('size') || 'all'
+  const classFilter = searchParams.get('class') || 'all'
+  const statusFilter = searchParams.get('status') || 'all'
+  const sortBy = searchParams.get('sort') || 'name'
+  const sortDir = searchParams.get('dir') || 'asc'
+  const page = parseInt(searchParams.get('page') || '1', 10)
+
   const setFilter = (val) => {
     setSearchParams((prev) => {
       const next = new URLSearchParams(prev)
       if (val) { next.set('q', val) } else { next.delete('q') }
+      next.set('page', '1')
       return next
     }, { replace: true })
   }
-  const [mfrFilter, setMfrFilter] = useState('all')
-  const [sizeFilter, setSizeFilter] = useState('all')
-  const [classFilter, setClassFilter] = useState('all')
-  const [statusFilter, setStatusFilter] = useState('all')
-  const [sortBy, setSortBy] = useState('name')
-  const [sortDir, setSortDir] = useState('asc')
-  const [page, setPage] = useState(1)
+  const setMfrFilter = (val) => setSearchParams((prev) => { const next = new URLSearchParams(prev); next.set('mfr', val); next.set('page', '1'); return next }, { replace: true })
+  const setSizeFilter = (val) => setSearchParams((prev) => { const next = new URLSearchParams(prev); next.set('size', val); next.set('page', '1'); return next }, { replace: true })
+  const setClassFilter = (val) => setSearchParams((prev) => { const next = new URLSearchParams(prev); next.set('class', val); next.set('page', '1'); return next }, { replace: true })
+  const setStatusFilter = (val) => setSearchParams((prev) => { const next = new URLSearchParams(prev); next.set('status', val); next.set('page', '1'); return next }, { replace: true })
+  const setSortBy = (val) => setSearchParams((prev) => { const next = new URLSearchParams(prev); next.set('sort', val); return next }, { replace: true })
+  const setSortDir = (val) => setSearchParams((prev) => { const next = new URLSearchParams(prev); next.set('dir', val); return next }, { replace: true })
+  const setPage = (val) => setSearchParams((prev) => { const next = new URLSearchParams(prev); next.set('page', String(typeof val === 'function' ? val(page) : val)); return next }, { replace: true })
 
   // For ships with no valid absolute image URL, find the base variant's image by
   // progressively shortening the ship name and looking for a match that has one.
@@ -146,9 +155,8 @@ export default function ShipDB() {
     }
   }
 
-  const resetPage = () => setPage(1)
-  const handleFilterChange = (setter) => (e) => { setter(e.target.value); resetPage() }
-  const handleSearchChange = (val) => { setFilter(val); resetPage() }
+  const handleFilterChange = (setter) => (e) => setter(e.target.value)
+  const handleSearchChange = (val) => setFilter(val)
 
   const totalPages = Math.ceil(filtered.length / PAGE_SIZE)
   const paged = filtered.slice((page - 1) * PAGE_SIZE, page * PAGE_SIZE)

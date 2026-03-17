@@ -1,4 +1,5 @@
-import React, { useState, useMemo } from 'react'
+import React, { useMemo } from 'react'
+import { useSearchParams } from 'react-router-dom'
 import { useAnalysis } from '../hooks/useAPI'
 import { Shield, ShieldAlert, ShieldQuestion, Calendar, DollarSign, Tag } from 'lucide-react'
 import PageHeader from '../components/PageHeader'
@@ -10,8 +11,9 @@ import InsuranceBadge from '../components/InsuranceBadge'
 
 export default function Insurance() {
   const { data: analysis, loading, error, refetch } = useAnalysis()
-  const [filterLTI, setFilterLTI] = useState('all')
-  const [filterWarbond, setFilterWarbond] = useState('all')
+  const [searchParams, setSearchParams] = useSearchParams()
+  const filterLTI = searchParams.get('lti') || 'all'
+  const filterWarbond = searchParams.get('warbond') || 'all'
 
   const ins = analysis?.insurance_summary
   const { lti, nonLTI, unknown } = useMemo(() => {
@@ -54,7 +56,7 @@ export default function Insurance() {
       <div className="flex flex-wrap gap-3 items-center">
         <FilterSelect
           value={filterLTI}
-          onChange={(e) => setFilterLTI(e.target.value)}
+          onChange={(e) => setSearchParams(prev => { e.target.value === 'all' ? prev.delete('lti') : prev.set('lti', e.target.value); return prev }, { replace: true })}
           options={[
             { value: 'all', label: 'All Insurance' },
             { value: 'lti', label: 'LTI Only' },
@@ -63,7 +65,7 @@ export default function Insurance() {
         />
         <FilterSelect
           value={filterWarbond}
-          onChange={(e) => setFilterWarbond(e.target.value)}
+          onChange={(e) => setSearchParams(prev => { e.target.value === 'all' ? prev.delete('warbond') : prev.set('warbond', e.target.value); return prev }, { replace: true })}
           options={[
             { value: 'all', label: 'All Purchases' },
             { value: 'warbond', label: 'Warbond Only' },

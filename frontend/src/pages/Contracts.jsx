@@ -336,8 +336,25 @@ function ContractsTab() {
 
 function MissionsTab() {
   const { data: missions, loading, error, refetch } = useAPI('/gamedata/missions')
-  const [search, setSearch] = useState('')
-  const [view, setView] = useState('types')
+  const [searchParams, setSearchParams] = useSearchParams()
+  const search = searchParams.get('q') || ''
+  const view = searchParams.get('mview') || 'types'
+  const setSearch = useCallback((val) => {
+    setSearchParams(prev => {
+      const next = new URLSearchParams(prev)
+      if (val) next.set('q', val)
+      else next.delete('q')
+      return next
+    }, { replace: true })
+  }, [setSearchParams])
+  const setView = useCallback((val) => {
+    setSearchParams(prev => {
+      const next = new URLSearchParams(prev)
+      if (val === 'types') next.delete('mview')
+      else next.set('mview', val)
+      return next
+    }, { replace: true })
+  }, [setSearchParams])
 
   const types = missions?.types || []
   const givers = missions?.givers || []

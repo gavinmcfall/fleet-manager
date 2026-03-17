@@ -1,5 +1,5 @@
-import React, { useState, useMemo } from 'react'
-import { useParams, Link } from 'react-router-dom'
+import React, { useMemo } from 'react'
+import { useParams, Link, useSearchParams } from 'react-router-dom'
 import { MapPin, ArrowLeft, Store, ChevronDown, ChevronRight } from 'lucide-react'
 import { useLootLocationDetail, useLocationShops } from '../hooks/useAPI'
 import useGameVersion from '../hooks/useGameVersion'
@@ -94,8 +94,19 @@ function ShopCard({ shop }) {
 // ── Detail page ────────────────────────────────────────────────────────────
 export default function POIDetail() {
   const { type, slug } = useParams()
-  const [search, setSearch] = useState('')
-  const [activeCategory, setActiveCategory] = useState('all')
+  const [searchParams, setSearchParams] = useSearchParams()
+  const search = searchParams.get('q') || ''
+  const activeCategory = searchParams.get('cat') || 'all'
+
+  const setSearch = (value) => setSearchParams(prev => {
+    if (value) prev.set('q', value); else prev.delete('q')
+    return prev
+  }, { replace: true })
+
+  const setActiveCategory = (cat) => setSearchParams(prev => {
+    if (cat && cat !== 'all') prev.set('cat', cat); else prev.delete('cat')
+    return prev
+  }, { replace: true })
 
   // Resolve the API type param from the URL structure
   // /poi/:slug → container, /poi/shop/:slug → shop, /poi/npc/:slug → npc

@@ -255,21 +255,48 @@ export default function POI() {
   const { data, loading, error, refetch } = useLootLocations(activeCode)
   const { data: allShops, loading: shopsLoading } = useAPI('/gamedata/shops')
   const [selectedShop, setSelectedShop] = useState(null)
-  const [search, setSearch] = useState('')
   const VALID_SECTIONS = ['containers', 'shops', 'npcs']
   const [searchParams, setSearchParams] = useSearchParams()
   const sectionParam = searchParams.get('section')
   const activeSection = VALID_SECTIONS.includes(sectionParam) ? sectionParam : 'containers'
+  const search = searchParams.get('q') || ''
+  const activeGroup = searchParams.get('group') || 'all'
+  const page = parseInt(searchParams.get('page') || '1', 10)
+
   const setActiveSection = useCallback((section) => {
     setSearchParams(prev => {
-      const next = new URLSearchParams(prev)
-      if (section === 'containers') next.delete('section')
-      else next.set('section', section)
-      return next
+      if (section === 'containers') prev.delete('section'); else prev.set('section', section)
+      prev.delete('q')
+      prev.delete('group')
+      prev.delete('page')
+      return prev
     }, { replace: true })
   }, [setSearchParams])
-  const [activeGroup, setActiveGroup] = useState('all')
-  const [page, setPage] = useState(1)
+
+  const setSearch = useCallback((value) => {
+    setSearchParams(prev => {
+      if (value) prev.set('q', value); else prev.delete('q')
+      prev.delete('page')
+      return prev
+    }, { replace: true })
+  }, [setSearchParams])
+
+  const setActiveGroup = useCallback((group) => {
+    setSearchParams(prev => {
+      if (group && group !== 'all') prev.set('group', group); else prev.delete('group')
+      prev.delete('page')
+      return prev
+    }, { replace: true })
+  }, [setSearchParams])
+
+  const setPage = useCallback((updater) => {
+    setSearchParams(prev => {
+      const current = parseInt(prev.get('page') || '1', 10)
+      const next = typeof updater === 'function' ? updater(current) : updater
+      if (next <= 1) prev.delete('page'); else prev.set('page', String(next))
+      return prev
+    }, { replace: true })
+  }, [setSearchParams])
 
   // Containers: grouped by location group
   const containerEntries = useMemo(() => {
@@ -372,8 +399,6 @@ export default function POI() {
     })
   }, [filteredContainers, activeGroup])
 
-  // Reset page when filters change
-  React.useEffect(() => { setPage(1) }, [activeSection, activeGroup, search])
 
   const currentList = activeSection === 'containers' ? filteredContainers
     : activeSection === 'shops' ? filteredShops
@@ -397,7 +422,7 @@ export default function POI() {
         {SECTIONS.map(({ key, label, icon: Icon }) => (
           <button
             key={key}
-            onClick={() => { setActiveSection(key); setActiveGroup('all') }}
+            onClick={() => setActiveSection(key)}
             className={`px-4 py-2 text-xs font-display uppercase tracking-wide border-b-2 transition-colors -mb-px flex items-center gap-1.5 ${
               activeSection === key
                 ? 'border-sc-accent text-sc-accent'

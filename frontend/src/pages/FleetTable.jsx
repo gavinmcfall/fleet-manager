@@ -1,4 +1,4 @@
-import React, { useState, useMemo, useEffect, useCallback } from 'react'
+import React, { useMemo } from 'react'
 import { useSearchParams, useNavigate } from 'react-router-dom'
 import { useFleet, useUserOrgs, updateShipVisibility } from '../hooks/useAPI'
 import { ArrowUpDown, SearchX, Rocket, Upload } from 'lucide-react'
@@ -48,10 +48,10 @@ export default function FleetTable() {
   const { data: orgsData } = useUserOrgs()
   const [searchParams, setSearchParams] = useSearchParams()
   const navigate = useNavigate()
-  const [sortKey, setSortKey] = useState('vehicle_name')
-  const [sortDir, setSortDir] = useState('asc')
-  const [filter, setFilter] = useState('')
-  const [sizeFilter, setSizeFilter] = useState('all')
+  const sortKey = searchParams.get('sort') || 'vehicle_name'
+  const sortDir = searchParams.get('dir') || 'asc'
+  const filter = searchParams.get('filter') || ''
+  const sizeFilter = searchParams.get('size') || 'all'
 
   const inOrgs = !!(orgsData?.orgs?.length > 0)
 
@@ -100,17 +100,23 @@ export default function FleetTable() {
   }, [fleet, filter, sizeFilter, sortKey, sortDir])
 
   const toggleSort = (key) => {
-    if (sortKey === key) {
-      setSortDir(sortDir === 'asc' ? 'desc' : 'asc')
-    } else {
-      setSortKey(key)
-      setSortDir('asc')
-    }
+    setSearchParams(prev => {
+      if (sortKey === key) {
+        prev.set('dir', sortDir === 'asc' ? 'desc' : 'asc')
+      } else {
+        prev.set('sort', key)
+        prev.set('dir', 'asc')
+      }
+      return prev
+    }, { replace: true })
   }
 
   const clearFilters = () => {
-    setFilter('')
-    setSizeFilter('all')
+    setSearchParams(prev => {
+      prev.delete('filter')
+      prev.delete('size')
+      return prev
+    }, { replace: true })
   }
 
   if (loading) return <LoadingState message="Loading fleet..." />
@@ -126,13 +132,13 @@ export default function FleetTable() {
       <div className="flex gap-3 items-center">
         <SearchInput
           value={filter}
-          onChange={setFilter}
+          onChange={(val) => setSearchParams(prev => { val ? prev.set('filter', val) : prev.delete('filter'); return prev }, { replace: true })}
           placeholder="Search ships..."
           className="flex-1 max-w-sm"
         />
         <FilterSelect
           value={sizeFilter}
-          onChange={(e) => setSizeFilter(e.target.value)}
+          onChange={(e) => setSearchParams(prev => { e.target.value === 'all' ? prev.delete('size') : prev.set('size', e.target.value); return prev }, { replace: true })}
           options={sizes}
           allLabel="All Sizes"
         />

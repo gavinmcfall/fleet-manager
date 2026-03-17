@@ -1,5 +1,5 @@
-import React, { useState, useMemo } from 'react'
-import { Link } from 'react-router-dom'
+import React, { useMemo } from 'react'
+import { Link, useSearchParams } from 'react-router-dom'
 import { Palette, LayoutGrid, List, ChevronLeft, ChevronRight, ChevronsLeft, ChevronsRight } from 'lucide-react'
 import { usePaints } from '../hooks/useAPI'
 import PageHeader from '../components/PageHeader'
@@ -12,10 +12,16 @@ const PAGE_SIZE = 36
 
 export default function PaintBrowser() {
   const { data: paints, loading, error, refetch } = usePaints()
-  const [search, setSearch] = useState('')
-  const [shipFilter, setShipFilter] = useState('all')
-  const [view, setView] = useState('grid')
-  const [page, setPage] = useState(1)
+  const [searchParams, setSearchParams] = useSearchParams()
+  const search = searchParams.get('q') || ''
+  const shipFilter = searchParams.get('ship') || 'all'
+  const view = searchParams.get('view') || 'grid'
+  const page = parseInt(searchParams.get('page') || '1', 10)
+
+  const setSearch = (val) => setSearchParams((prev) => { const next = new URLSearchParams(prev); if (val) { next.set('q', val) } else { next.delete('q') }; next.set('page', '1'); return next }, { replace: true })
+  const setShipFilter = (val) => setSearchParams((prev) => { const next = new URLSearchParams(prev); next.set('ship', val); next.set('page', '1'); return next }, { replace: true })
+  const setView = (val) => setSearchParams((prev) => { const next = new URLSearchParams(prev); next.set('view', val); return next }, { replace: true })
+  const setPage = (val) => setSearchParams((prev) => { const next = new URLSearchParams(prev); next.set('page', String(val)); return next }, { replace: true })
 
   // Build ship filter options from all paint vehicle associations
   const shipOptions = useMemo(() => {
@@ -57,9 +63,8 @@ export default function PaintBrowser() {
   const safePage = Math.min(page, totalPages)
   const paged = filtered.slice((safePage - 1) * PAGE_SIZE, safePage * PAGE_SIZE)
 
-  // Reset page when filters change
-  const handleSearch = (v) => { setSearch(v); setPage(1) }
-  const handleShipFilter = (e) => { setShipFilter(e.target.value); setPage(1) }
+  const handleSearch = (v) => setSearch(v)
+  const handleShipFilter = (e) => setShipFilter(e.target.value)
 
   if (loading) return <LoadingState variant="skeleton" />
   if (error) return <ErrorState message={error} onRetry={refetch} />

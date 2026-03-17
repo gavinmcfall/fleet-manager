@@ -1,5 +1,6 @@
 import React, { useState } from 'react'
 import ReactMarkdown from 'react-markdown'
+import { useSearchParams } from 'react-router-dom'
 import { useAIAnalysisHistory, deleteAIAnalysis } from '../hooks/useAPI'
 import useTimezone from '../hooks/useTimezone'
 import { formatDate } from '../lib/dates'
@@ -13,7 +14,8 @@ import ConfirmDialog from '../components/ConfirmDialog'
 export default function AnalysisHistory() {
   const { timezone } = useTimezone()
   const { data, loading, error, refetch } = useAIAnalysisHistory()
-  const [expandedId, setExpandedId] = useState(null)
+  const [searchParams, setSearchParams] = useSearchParams()
+  const expandedId = searchParams.get('id') ? Number(searchParams.get('id')) : null
   const [deleting, setDeleting] = useState(null)
   const [notification, setNotification] = useState(null)
   const [confirmDialog, setConfirmDialog] = useState({ open: false })
@@ -34,7 +36,7 @@ export default function AnalysisHistory() {
           await deleteAIAnalysis(id)
           await refetch()
           if (expandedId === id) {
-            setExpandedId(null)
+            setSearchParams(prev => { prev.delete('id'); return prev }, { replace: true })
           }
         } catch (err) {
           setNotification({ msg: 'Failed to delete analysis: ' + err.message, variant: 'error' })
@@ -89,7 +91,7 @@ export default function AnalysisHistory() {
           return (
             <div key={item.id} className="panel">
               <button
-                onClick={() => setExpandedId(isExpanded ? null : item.id)}
+                onClick={() => setSearchParams(prev => { isExpanded ? prev.delete('id') : prev.set('id', String(item.id)); return prev }, { replace: true })}
                 className="w-full p-4 flex items-center justify-between hover:bg-white/5 transition-colors"
               >
                 <div className="flex items-center gap-4 text-left">

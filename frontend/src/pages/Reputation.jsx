@@ -1,4 +1,5 @@
-import React, { useState, useMemo } from 'react'
+import React, { useMemo } from 'react'
+import { useSearchParams } from 'react-router-dom'
 import { useAPI } from '../hooks/useAPI'
 import PageHeader from '../components/PageHeader'
 import LoadingState from '../components/LoadingState'
@@ -236,8 +237,12 @@ function ScopeCard({ scope }) {
 
 export default function Reputation() {
   const { data, loading, error, refetch } = useAPI('/gamedata/reputation')
-  const [search, setSearch] = useState('')
-  const [factionFilter, setFactionFilter] = useState('all')
+  const [searchParams, setSearchParams] = useSearchParams()
+  const search = searchParams.get('q') || ''
+  const factionFilter = searchParams.get('faction') || 'all'
+
+  const setSearch = (val) => setSearchParams((prev) => { const next = new URLSearchParams(prev); if (val) { next.set('q', val) } else { next.delete('q') }; return next }, { replace: true })
+  const setFactionFilter = (val) => setSearchParams((prev) => { const next = new URLSearchParams(prev); next.set('faction', val); return next }, { replace: true })
 
   const scopes = data?.scopes || []
 
