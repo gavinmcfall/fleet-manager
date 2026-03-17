@@ -134,9 +134,12 @@ export default function Login() {
               {loading ? 'Signing in...' : 'Sign In'}
             </button>
 
-            <div className="text-center mt-3">
+            <div className="flex items-center justify-between mt-3">
+              <Link to="/forgot-password" className="text-xs font-mono text-gray-500 hover:text-gray-400 transition-colors tracking-wider">
+                Forgot password?
+              </Link>
               <Link to="/register" className="text-xs font-mono text-sc-accent hover:text-sc-accent/80 transition-colors tracking-wider">
-                New here? Create an account
+                Create an account
               </Link>
             </div>
           </form>

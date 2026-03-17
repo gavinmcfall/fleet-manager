@@ -802,6 +802,14 @@ export default function LootDB() {
         </div>
       )}
 
+      {/* ── Collection/Wishlist auth gate ── */}
+      {(activeTab === 'collection' || activeTab === 'wishlist') && !isAuthed && (
+        <div className="text-center py-16 space-y-3">
+          <p className="text-gray-400 font-mono text-sm">Sign in to track your collection and wishlist</p>
+          <a href="/login" className="inline-block text-sc-accent hover:text-sc-accent/80 text-sm font-mono transition-colors">Sign in</a>
+        </div>
+      )}
+
       {/* ── Collection tab ── */}
       {activeTab === 'collection' && isAuthed && (
         <div className="space-y-6">

@@ -95,7 +95,7 @@ function ContractCard({ contract, highlighted }) {
           {contract.title}
         </h3>
         <span className={`text-[10px] font-display uppercase tracking-wide px-2 py-0.5 rounded shrink-0 ${GIVER_BADGE[contract.giver_slug] || 'bg-gray-700 text-gray-300'}`}>
-          {contract.giver_slug === 'wikelo' ? 'Wikelo' : contract.giver_slug === 'gfs' ? 'GFS' : 'Ruto'}
+          {{ wikelo: 'Wikelo', gfs: 'GFS', ruto: 'Ruto' }[contract.giver_slug] || contract.giver_slug}
         </span>
       </div>
 

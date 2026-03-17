@@ -14,6 +14,8 @@ import useGameVersion from './hooks/useGameVersion'
 import Dashboard from './pages/Dashboard'
 import Login from './pages/Login'
 import Register from './pages/Register'
+import ForgotPassword from './pages/ForgotPassword'
+import ResetPassword from './pages/ResetPassword'
 
 const FleetTable = lazy(() => import('./pages/FleetTable'))
 const Insurance = lazy(() => import('./pages/Insurance'))
@@ -461,6 +463,8 @@ export default function App() {
       {/* Public auth routes — no sidebar */}
       <Route path="/login" element={<Login />} />
       <Route path="/register" element={<Register />} />
+      <Route path="/forgot-password" element={<ForgotPassword />} />
+      <Route path="/reset-password" element={<ResetPassword />} />
       <Route path="/2fa" element={<Suspense fallback={<LoadingState fullScreen />}><TwoFactorVerify /></Suspense>} />
       <Route path="/verify-email" element={<Suspense fallback={<LoadingState fullScreen />}><VerifyEmail /></Suspense>} />
       <Route path="/privacy" element={<Suspense fallback={<LoadingState fullScreen />}><Privacy /></Suspense>} />
