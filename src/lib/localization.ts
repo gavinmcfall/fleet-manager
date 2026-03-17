@@ -98,20 +98,28 @@ export function generateAsopOverrides(
   for (const entry of sorted) {
     if (!entry.className) continue;
     const pos = String(entry.sortPosition).padStart(padWidth, "0");
-    const label = entry.customLabel || entry.vehicleName;
-    const numbered = `${pos}. ${label}`;
+
+    // Full name: "07. Aegis Idris-P" or "07. Aegis Idris-P "James Holden""
+    const fullLabel = entry.customLabel
+      ? `${pos}. ${entry.vehicleName} "${entry.customLabel}"`
+      : `${pos}. ${entry.vehicleName}`;
 
     overrides.push({
       key: `vehicle_Name${entry.className}`,
-      value: numbered,
+      value: fullLabel,
       original: entry.vehicleName,
     });
 
-    const shortName = entry.customLabel || stripManufacturer(entry.vehicleName);
+    // Short name: "07. Idris-P" or "07. Idris-P "James Holden""
+    const short = stripManufacturer(entry.vehicleName);
+    const shortLabel = entry.customLabel
+      ? `${pos}. ${short} "${entry.customLabel}"`
+      : `${pos}. ${short}`;
+
     overrides.push({
       key: `vehicle_Name${entry.className}_short`,
-      value: `${pos}. ${shortName}`,
-      original: shortName,
+      value: shortLabel,
+      original: short,
     });
   }
 

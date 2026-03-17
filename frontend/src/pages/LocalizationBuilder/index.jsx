@@ -565,7 +565,9 @@ export default function LocalizationBuilder() {
                         className="w-3.5 h-3.5 text-gray-500 shrink-0 cursor-grab active:cursor-grabbing touch-none"
                         onPointerDown={(e) => shipDrag.startDrag(e, idx)}
                       />
-                      <span className="text-xs text-gray-200 flex-1 truncate">{ship.customLabel || ship.vehicleName}</span>
+                      <span className="text-xs text-gray-200 flex-1 truncate">
+                        {ship.vehicleName}{ship.customLabel && <span className="text-gray-400"> "{ship.customLabel}"</span>}
+                      </span>
                       <button onClick={() => removeShip(idx)} className="p-0.5 rounded hover:bg-red-500/20 opacity-0 group-hover:opacity-100 hover:!opacity-100">
                         <X className="w-3.5 h-3.5 text-gray-500 hover:text-red-400" />
                       </button>
