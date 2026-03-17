@@ -12,8 +12,6 @@ import {
   configFromRow,
   generateAsopOverrides,
   generateItemLabels,
-  mergeGlobalIni,
-  parseGlobalIniKeys,
   resolveCategoryFormat,
 } from "../lib/localization";
 
@@ -221,9 +219,10 @@ export function localizationRoutes() {
       return c.json({ error: "No default game version configured" }, 500);
     }
 
-    // Read base global.ini from KV as raw bytes to preserve encoding.
+    // Read base global.ini from KV as raw bytes.
     // The file has mixed encoding (UTF-8 BOM + stray latin-1 0xA0 bytes).
-    // We decode as latin1 (1:1 byte→char) so no bytes are lost during merge.
+    // We work at the byte level: only extract ASCII keys for matching,
+    // output untouched lines byte-for-byte, and only rewrite matched lines.
     const rawBuf = await kv.get(`localization:global-ini:${ver.code}`, "arrayBuffer");
     if (!rawBuf) {
       return c.json(
@@ -231,10 +230,7 @@ export function localizationRoutes() {
         404,
       );
     }
-
-    // Decode as latin1 to preserve all bytes including bare 0xA0
-    const decoder = new TextDecoder("latin1");
-    const baseContent = decoder.decode(rawBuf);
+    const raw = new Uint8Array(rawBuf);
 
     // Build overrides from user config
     const configRow = await db
@@ -246,8 +242,29 @@ export function localizationRoutes() {
       ? configFromRow(configRow)
       : DEFAULT_CONFIG;
 
-    // Parse valid keys from base file so we only override what exists
-    const validKeys = parseGlobalIniKeys(baseContent);
+    // Extract ASCII keys from the raw bytes for valid-key checking.
+    // Keys are always ASCII (before the '=' byte), so this is safe.
+    const validKeys = new Set<string>();
+    {
+      let lineStart = 0;
+      for (let i = 0; i <= raw.length; i++) {
+        if (i === raw.length || raw[i] === 0x0A) {
+          // Extract key from this line (bytes before '=')
+          for (let j = lineStart; j < i; j++) {
+            if (raw[j] === 0x3D) { // '='
+              let end = j;
+              while (end > lineStart && raw[end - 1] === 0x20) end--; // trim spaces
+              const keyBytes = raw.slice(lineStart, end);
+              // Skip BOM at start of file
+              const keyStr = String.fromCharCode(...(keyBytes[0] === 0xEF ? keyBytes.slice(3) : keyBytes));
+              validKeys.add(keyStr);
+              break;
+            }
+          }
+          lineStart = i + 1;
+        }
+      }
+    }
 
     const overrideList = await buildOverrides(db, userId, config, validKeys);
 
@@ -257,14 +274,53 @@ export function localizationRoutes() {
       overrideMap.set(o.key, o.value);
     }
 
-    // Merge and re-encode as latin1 to preserve original byte values
-    const merged = mergeGlobalIni(baseContent, overrideMap);
-    const bytes = new Uint8Array(merged.length);
-    for (let i = 0; i < merged.length; i++) {
-      bytes[i] = merged.charCodeAt(i) & 0xFF;
+    // Merge: scan raw bytes line by line. For lines with a matching key,
+    // emit the replacement. For all others, emit the original bytes untouched.
+    const chunks: Uint8Array[] = [];
+    const te = new TextEncoder();
+    let lineStart = 0;
+    for (let i = 0; i <= raw.length; i++) {
+      if (i === raw.length || raw[i] === 0x0A) {
+        const lineEnd = i;
+        // Find '=' in this line
+        let eqPos = -1;
+        for (let j = lineStart; j < lineEnd; j++) {
+          if (raw[j] === 0x3D) { eqPos = j; break; }
+        }
+        if (eqPos > lineStart) {
+          let keyEnd = eqPos;
+          while (keyEnd > lineStart && raw[keyEnd - 1] === 0x20) keyEnd--;
+          const keyBytes = raw.slice(lineStart, keyEnd);
+          const keyStr = String.fromCharCode(...(lineStart === 0 && keyBytes[0] === 0xEF ? keyBytes.slice(3) : keyBytes));
+          const override = overrideMap.get(keyStr);
+          if (override !== undefined) {
+            // Emit: original key bytes + '=' + override value + \r\n
+            chunks.push(raw.slice(lineStart, eqPos + 1));
+            chunks.push(te.encode(override));
+            if (lineEnd > 0 && raw[lineEnd - 1] === 0x0D) {
+              chunks.push(new Uint8Array([0x0D]));
+            }
+            if (i < raw.length) chunks.push(new Uint8Array([0x0A]));
+            lineStart = i + 1;
+            continue;
+          }
+        }
+        // Untouched line: emit original bytes
+        chunks.push(raw.slice(lineStart, i < raw.length ? i + 1 : i));
+        lineStart = i + 1;
+      }
     }
 
-    return new Response(bytes, {
+    // Concatenate chunks
+    const totalLen = chunks.reduce((s, c) => s + c.length, 0);
+    const output = new Uint8Array(totalLen);
+    let offset = 0;
+    for (const chunk of chunks) {
+      output.set(chunk, offset);
+      offset += chunk.length;
+    }
+
+    return new Response(output, {
       headers: {
         "Content-Type": "application/octet-stream",
         "Content-Disposition": `attachment; filename="global.ini"`,
