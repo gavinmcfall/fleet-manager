@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback, useMemo } from 'react'
+import React, { useState, useEffect, useCallback, useMemo, useRef } from 'react'
 import { Languages, Rocket, Tags, Download, Loader, Save, AlertCircle, CheckCircle, ChevronDown, ChevronUp, GripVertical, X, Eye, EyeOff, Plus, Search } from 'lucide-react'
 import PageHeader from '../../components/PageHeader'
 import PanelSection from '../../components/PanelSection'
@@ -106,13 +106,94 @@ function Toggle({ checked, onChange }) {
   )
 }
 
+// ── Drag Reorder Hook ───────────────────────────────────────────────
+// Pointer-event based drag with auto-scroll. Returns props to spread
+// on the container and each item's grip handle.
+
+function useDragReorder(items, onReorder) {
+  const [dragIdx, setDragIdx] = useState(null)
+  const [overIdx, setOverIdx] = useState(null)
+  const containerRef = useRef(null)
+  const scrollRAF = useRef(null)
+  const pointerY = useRef(0)
+
+  const autoScroll = useCallback(() => {
+    const el = containerRef.current
+    if (!el || dragIdx === null) { scrollRAF.current = null; return }
+    const rect = el.getBoundingClientRect()
+    const y = pointerY.current
+    const edge = 40
+    const speed = 6
+    if (y < rect.top + edge) {
+      el.scrollTop -= speed
+    } else if (y > rect.bottom - edge) {
+      el.scrollTop += speed
+    }
+    scrollRAF.current = requestAnimationFrame(autoScroll)
+  }, [dragIdx])
+
+  const startDrag = useCallback((e, idx) => {
+    e.preventDefault()
+    setDragIdx(idx)
+    setOverIdx(idx)
+    pointerY.current = e.clientY
+
+    const onMove = (e) => {
+      pointerY.current = e.clientY
+      const el = containerRef.current
+      if (!el) return
+      const children = Array.from(el.children)
+      for (let i = 0; i < children.length; i++) {
+        const r = children[i].getBoundingClientRect()
+        if (e.clientY >= r.top && e.clientY < r.bottom) {
+          setOverIdx(i)
+          break
+        }
+      }
+      if (!scrollRAF.current) scrollRAF.current = requestAnimationFrame(autoScroll)
+    }
+
+    const onUp = () => {
+      document.removeEventListener('pointermove', onMove)
+      document.removeEventListener('pointerup', onUp)
+      if (scrollRAF.current) { cancelAnimationFrame(scrollRAF.current); scrollRAF.current = null }
+
+      setDragIdx(curr => {
+        setOverIdx(over => {
+          if (curr !== null && over !== null && curr !== over) {
+            const next = [...items]
+            const [moved] = next.splice(curr, 1)
+            next.splice(over, 0, moved)
+            onReorder(next)
+          }
+          return null
+        })
+        return null
+      })
+    }
+
+    document.addEventListener('pointermove', onMove)
+    document.addEventListener('pointerup', onUp)
+  }, [items, onReorder, autoScroll])
+
+  useEffect(() => {
+    return () => { if (scrollRAF.current) cancelAnimationFrame(scrollRAF.current) }
+  }, [])
+
+  return { containerRef, dragIdx, overIdx, startDrag }
+}
+
 // ── Category Field Config ───────────────────────────────────────────
 
 function CategoryFieldConfig({ dbKey, catFormat, onChange }) {
   const available = CATEGORY_FIELDS[dbKey] || []
   const { fields, format } = catFormat
-  const [dragIdx, setDragIdx] = useState(null)
-  const [overIdx, setOverIdx] = useState(null)
+
+  const handleReorder = useCallback((newFields) => {
+    onChange({ ...catFormat, fields: newFields })
+  }, [catFormat, onChange])
+
+  const { containerRef, dragIdx, overIdx, startDrag } = useDragReorder(fields, handleReorder)
 
   const toggleField = (field) => {
     const next = fields.includes(field)
@@ -123,39 +204,11 @@ function CategoryFieldConfig({ dbKey, catFormat, onChange }) {
 
   const setFormat = (fmt) => onChange({ ...catFormat, format: fmt })
 
-  const handleDragStart = (e, idx) => {
-    setDragIdx(idx)
-    e.dataTransfer.effectAllowed = 'move'
-  }
-
-  const handleDragOver = (e, idx) => {
-    e.preventDefault()
-    e.dataTransfer.dropEffect = 'move'
-    setOverIdx(idx)
-  }
-
-  const handleDrop = (e, dropIdx) => {
-    e.preventDefault()
-    if (dragIdx === null || dragIdx === dropIdx) return
-    const next = [...fields]
-    const [moved] = next.splice(dragIdx, 1)
-    next.splice(dropIdx, 0, moved)
-    onChange({ ...catFormat, fields: next })
-    setDragIdx(null)
-    setOverIdx(null)
-  }
-
-  const handleDragEnd = () => {
-    setDragIdx(null)
-    setOverIdx(null)
-  }
-
   const preview = buildPreviewLabel(dbKey, fields, format)
   const inactive = available.filter(f => !fields.includes(f))
 
   return (
     <div className="px-4 pb-4 space-y-3">
-      {/* Live preview */}
       <div className="bg-black/40 rounded px-3 py-2">
         <p className="text-[10px] uppercase tracking-wider text-gray-500 mb-1">Preview</p>
         <p className="text-sm font-mono text-sc-accent">{preview}</p>
@@ -182,36 +235,34 @@ function CategoryFieldConfig({ dbKey, catFormat, onChange }) {
         </div>
       </div>
 
-      {/* Active fields — drag to reorder */}
       <div className="space-y-1">
         <p className="text-[10px] uppercase tracking-wider text-gray-500">Fields (drag to reorder, click eye to remove)</p>
-        {fields.map((field, idx) => (
-          <div
-            key={field}
-            draggable
-            onDragStart={(e) => handleDragStart(e, idx)}
-            onDragOver={(e) => handleDragOver(e, idx)}
-            onDrop={(e) => handleDrop(e, idx)}
-            onDragEnd={handleDragEnd}
-            className={`flex items-center gap-2 bg-sc-accent/5 border rounded px-2.5 py-1.5 transition-all select-none ${
-              dragIdx === idx ? 'opacity-40 border-sc-accent/40' :
-              overIdx === idx && dragIdx !== null ? 'border-sc-accent border-t-2' :
-              'border-sc-accent/20'
-            }`}
-          >
-            <GripVertical className="w-3.5 h-3.5 text-gray-500 shrink-0 cursor-grab active:cursor-grabbing" />
-            <span className="text-xs text-gray-200 flex-1">{FIELD_LABELS[field]}</span>
-            <button
-              onClick={() => toggleField(field)}
-              className="p-0.5 rounded hover:bg-red-500/20"
-              title="Remove field"
+        <div ref={containerRef} className="space-y-1">
+          {fields.map((field, idx) => (
+            <div
+              key={field}
+              className={`flex items-center gap-2 bg-sc-accent/5 border rounded px-2.5 py-1.5 select-none transition-colors ${
+                dragIdx === idx ? 'opacity-40 border-sc-accent/40' :
+                overIdx === idx && dragIdx !== null ? 'border-sc-accent bg-sc-accent/10' :
+                'border-sc-accent/20'
+              }`}
             >
-              <EyeOff className="w-3.5 h-3.5 text-gray-500 hover:text-red-400" />
-            </button>
-          </div>
-        ))}
+              <GripVertical
+                className="w-3.5 h-3.5 text-gray-500 shrink-0 cursor-grab active:cursor-grabbing touch-none"
+                onPointerDown={(e) => startDrag(e, idx)}
+              />
+              <span className="text-xs text-gray-200 flex-1">{FIELD_LABELS[field]}</span>
+              <button
+                onClick={() => toggleField(field)}
+                className="p-0.5 rounded hover:bg-red-500/20"
+                title="Remove field"
+              >
+                <EyeOff className="w-3.5 h-3.5 text-gray-500 hover:text-red-400" />
+              </button>
+            </div>
+          ))}
+        </div>
 
-        {/* Inactive fields */}
         {inactive.map(field => (
           <button
             key={field}
@@ -298,10 +349,14 @@ export default function LocalizationBuilder() {
   }
 
   // ── Ship order helpers ──────────────────────────────────────────
-  const [shipDragIdx, setShipDragIdx] = useState(null)
-  const [shipOverIdx, setShipOverIdx] = useState(null)
-
   const renumber = (list) => list.map((s, i) => ({ ...s, sortPosition: i + 1 }))
+
+  const handleShipReorder = useCallback((newList) => {
+    setOrderedShips(renumber(newList))
+    setDirty(true)
+  }, [])
+
+  const shipDrag = useDragReorder(orderedShips, handleShipReorder)
 
   const removeShip = (idx) => {
     setOrderedShips(renumber(orderedShips.filter((_, i) => i !== idx)))
@@ -320,32 +375,6 @@ export default function LocalizationBuilder() {
     setDirty(true)
   }
 
-  const handleShipDragStart = (e, idx) => {
-    setShipDragIdx(idx)
-    e.dataTransfer.effectAllowed = 'move'
-  }
-  const handleShipDragOver = (e, idx) => {
-    e.preventDefault()
-    e.dataTransfer.dropEffect = 'move'
-    setShipOverIdx(idx)
-  }
-  const handleShipDrop = (e, dropIdx) => {
-    e.preventDefault()
-    if (shipDragIdx === null || shipDragIdx === dropIdx) return
-    const next = [...orderedShips]
-    const [moved] = next.splice(shipDragIdx, 1)
-    next.splice(dropIdx, 0, moved)
-    setOrderedShips(renumber(next))
-    setShipDragIdx(null)
-    setShipOverIdx(null)
-    setDirty(true)
-  }
-  const handleShipDragEnd = () => {
-    setShipDragIdx(null)
-    setShipOverIdx(null)
-  }
-
-  // Zero-pad position numbers: "1" when <10, "01" when >=10
   const padPos = (n) => {
     const width = orderedShips.length >= 10 ? 2 : 1
     return String(n).padStart(width, '0')
@@ -478,23 +507,21 @@ export default function LocalizationBuilder() {
             <>
               {/* Ship list — drag to reorder */}
               {orderedShips.length > 0 && (
-                <div className="space-y-1 max-h-96 overflow-y-auto">
+                <div ref={shipDrag.containerRef} className="space-y-1 max-h-96 overflow-y-auto">
                   {orderedShips.map((ship, idx) => (
                     <div
                       key={`${ship.vehicleId}-${idx}`}
-                      draggable
-                      onDragStart={(e) => handleShipDragStart(e, idx)}
-                      onDragOver={(e) => handleShipDragOver(e, idx)}
-                      onDrop={(e) => handleShipDrop(e, idx)}
-                      onDragEnd={handleShipDragEnd}
-                      className={`flex items-center gap-2 px-3 py-1.5 rounded border transition-all select-none ${
-                        shipDragIdx === idx ? 'opacity-40 bg-black/20 border-sc-accent/40' :
-                        shipOverIdx === idx && shipDragIdx !== null ? 'bg-black/20 border-sc-accent border-t-2' :
+                      className={`flex items-center gap-2 px-3 py-1.5 rounded border select-none transition-colors group ${
+                        shipDrag.dragIdx === idx ? 'opacity-40 bg-black/20 border-sc-accent/40' :
+                        shipDrag.overIdx === idx && shipDrag.dragIdx !== null ? 'bg-sc-accent/10 border-sc-accent' :
                         'bg-black/20 border-sc-border hover:border-sc-accent/30'
                       }`}
                     >
                       <span className="text-sc-accent font-mono text-xs w-6 text-right shrink-0">{padPos(ship.sortPosition)}.</span>
-                      <GripVertical className="w-3.5 h-3.5 text-gray-500 shrink-0 cursor-grab active:cursor-grabbing" />
+                      <GripVertical
+                        className="w-3.5 h-3.5 text-gray-500 shrink-0 cursor-grab active:cursor-grabbing touch-none"
+                        onPointerDown={(e) => shipDrag.startDrag(e, idx)}
+                      />
                       <span className="text-xs text-gray-200 flex-1 truncate">{ship.customLabel || ship.vehicleName}</span>
                       <button onClick={() => removeShip(idx)} className="p-0.5 rounded hover:bg-red-500/20 opacity-0 group-hover:opacity-100 hover:!opacity-100">
                         <X className="w-3.5 h-3.5 text-gray-500 hover:text-red-400" />
