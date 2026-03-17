@@ -38,11 +38,13 @@ export function orgRoutes() {
     return c.json({ orgs: orgs.results });
   });
 
-  // GET /api/orgs/:slug — public org profile
+  // GET /api/orgs/:slug — org profile (members only)
   routes.get("/:slug", async (c) => {
     const slug = c.req.param("slug");
     const db = c.env.DB;
     const user = c.get("user");
+
+    if (!user) return c.json({ error: "Not found" }, 404);
 
     const org = await db
       .prepare("SELECT id, name, slug, logo, description, rsiSid, rsiUrl, homepage, discord, twitch, youtube, createdAt FROM organization WHERE slug = ?")
@@ -57,24 +59,22 @@ export function orgRoutes() {
 
     if (!org) return c.json({ error: "Not found" }, 404);
 
+    // Only members can view org profiles
+    const membership = await db
+      .prepare("SELECT role FROM member WHERE organizationId = ? AND userId = ?")
+      .bind(org.id, user.id)
+      .first<{ role: string }>();
+    if (!membership) return c.json({ error: "Not found" }, 404);
+
     const memberCount = await db
       .prepare("SELECT COUNT(*) as count FROM member WHERE organizationId = ?")
       .bind(org.id)
       .first<{ count: number }>();
 
-    let callerRole: string | null = null;
-    if (user) {
-      const membership = await db
-        .prepare("SELECT role FROM member WHERE organizationId = ? AND userId = ?")
-        .bind(org.id, user.id)
-        .first<{ role: string }>();
-      callerRole = membership?.role ?? null;
-    }
-
     return c.json({
       ...org,
       memberCount: memberCount?.count ?? 0,
-      callerRole,
+      callerRole: membership.role,
     });
   });
 
@@ -294,16 +294,25 @@ export function orgRoutes() {
     return c.json(analysis);
   });
 
-  // GET /api/orgs/:slug/stats — public fleet stats
+  // GET /api/orgs/:slug/stats — org fleet stats (members only)
   routes.get("/:slug/stats", async (c) => {
     const slug = c.req.param("slug");
     const db = c.env.DB;
+    const user = c.get("user");
+
+    if (!user) return c.json({ error: "Not found" }, 404);
 
     const org = await db
       .prepare("SELECT id FROM organization WHERE slug = ?")
       .bind(slug)
       .first<{ id: string }>();
     if (!org) return c.json({ error: "Not found" }, 404);
+
+    const membership = await db
+      .prepare("SELECT role FROM member WHERE organizationId = ? AND userId = ?")
+      .bind(org.id, user.id)
+      .first<{ role: string }>();
+    if (!membership) return c.json({ error: "Not found" }, 404);
 
     const stats = await db
       .prepare(
