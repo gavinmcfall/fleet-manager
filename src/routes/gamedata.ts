@@ -224,6 +224,8 @@ export function gamedataRoutes<E extends HonoEnv>() {
           .prepare(
             `SELECT * FROM mineable_elements
              WHERE game_version_id = ${DEFAULT_VERSION_SUBQUERY}
+               AND name NOT LIKE '%Template%'
+               AND name NOT LIKE '%Testelement%'
              ORDER BY name`,
           )
           .all(),
@@ -590,6 +592,8 @@ export function gamedataRoutes<E extends HonoEnv>() {
   })
 
   // GET /api/gamedata/missions — mission types + givers with faction/location data
+  // NOTE: intentionally API-only for now (no frontend page). The data exists (38 mission
+  // types) and is returned correctly; a Missions page is deferred to a future milestone.
   app.get("/missions", async (c) => {
     const db = c.env.DB
     const versionId = await resolveVersionId(db)
