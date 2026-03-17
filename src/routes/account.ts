@@ -504,6 +504,9 @@ export function accountRoutes() {
       db.prepare("DELETE FROM user_named_ships WHERE user_id = ?").bind(user.id),
       // Org verification pending (migration 0125)
       db.prepare("DELETE FROM org_verification_pending WHERE user_id = ?").bind(user.id),
+      // Localization builder (migration 0127)
+      db.prepare("DELETE FROM user_localization_configs WHERE user_id = ?").bind(user.id),
+      db.prepare("DELETE FROM user_localization_ship_order WHERE user_id = ?").bind(user.id),
       // Scrub PII from change history — keep rows (event log) but wipe values + IP
       db.prepare(
         `UPDATE user_change_history SET

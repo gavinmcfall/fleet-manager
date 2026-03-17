@@ -49,6 +49,9 @@ const USER_TABLES = [
   "user_change_history",
   // Org verification pending (0125)
   "org_verification_pending",
+  // Localization builder (0127)
+  "user_localization_configs",
+  "user_localization_ship_order",
 ] as const;
 
 // Tables with user_id that DON'T cascade (known exceptions).
