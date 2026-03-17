@@ -136,9 +136,13 @@ function extractLabelledValue(html: string, className: string): string | null {
 }
 
 function extractTabContent(html: string, tabName: string): string | null {
-  // Find the tab section start
-  const tabIdx = html.indexOf(`id="tab-${tabName}"`);
-  if (tabIdx === -1) return null;
+  // RSI pages have id="tab-{name}" on both a nav <a> (data_content_id) and
+  // the actual content <div>. We need the <div> — find it by looking for
+  // the pattern: <div ... id="tab-{name}">
+  const divPattern = new RegExp(`<div[^>]+id="tab-${tabName}"`, "i");
+  const divMatch = divPattern.exec(html);
+  if (!divMatch) return null;
+  const tabIdx = divMatch.index;
 
   // Find the markitup-text div within this tab (search a reasonable window)
   const window = html.slice(tabIdx, tabIdx + 50000);
