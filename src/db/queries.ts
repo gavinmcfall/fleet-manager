@@ -826,6 +826,12 @@ export async function getLootByUuid(db: D1Database, uuid: string, patchCode?: st
   const row = await db.prepare(sql).bind(...lv.params, uuid).first();
   if (!row) return null;
 
+  // Version subquery for detail lookups — must match the same version as the loot_map row
+  const versionSub = patchCode
+    ? `(SELECT id FROM game_versions WHERE code = ?)`
+    : `(SELECT id FROM game_versions WHERE is_default = 1)`;
+  const versionParams: unknown[] = patchCode ? [patchCode] : [];
+
   // Fetch linked item details based on which FK is set
   const item = row as Record<string, unknown>;
   let details: Record<string, unknown> | null = null;
@@ -840,10 +846,10 @@ export async function getLootByUuid(db: D1Database, uuid: string, patchCode?: st
         mag_lm.uuid as magazine_loot_uuid
         FROM fps_weapons fw
         LEFT JOIN fps_ammo_types fa ON fa.uuid = fw.magazine_uuid
-          AND fa.game_version_id = (SELECT id FROM game_versions WHERE is_default = 1)
+          AND fa.game_version_id = ${versionSub}
         LEFT JOIN loot_map mag_lm ON mag_lm.uuid = fw.magazine_uuid AND mag_lm.removed = 0
         WHERE fw.id = ?`)
-      .bind(item.fps_weapon_id)
+      .bind(...versionParams, item.fps_weapon_id)
       .first() as Record<string, unknown> | null;
   } else if (item.fps_armour_id) {
     details = await db
@@ -877,8 +883,8 @@ export async function getLootByUuid(db: D1Database, uuid: string, patchCode?: st
       .first() as Record<string, unknown> | null;
     if (details?.uuid) {
       const effects = await db
-        .prepare("SELECT effect_key, magnitude, duration_seconds FROM consumable_effects WHERE consumable_uuid = ? AND game_version_id = (SELECT id FROM game_versions WHERE is_default = 1)")
-        .bind(details.uuid as string)
+        .prepare(`SELECT effect_key, magnitude, duration_seconds FROM consumable_effects WHERE consumable_uuid = ? AND game_version_id = ${versionSub}`)
+        .bind(details.uuid as string, ...versionParams)
         .all();
       (details as Record<string, unknown>).effects = effects.results;
       delete (details as Record<string, unknown>).uuid;
@@ -888,8 +894,8 @@ export async function getLootByUuid(db: D1Database, uuid: string, patchCode?: st
   // Fallback: magazines have no FK from loot_map — match by UUID to fps_ammo_types
   if (!details && item.sub_type === 'Magazine') {
     details = await db
-      .prepare("SELECT COALESCE(display_name, name) as name, caliber, damage_per_round, damage_type, projectile_speed, magazine_capacity FROM fps_ammo_types WHERE uuid = ? AND game_version_id = (SELECT id FROM game_versions WHERE is_default = 1)")
-      .bind(uuid)
+      .prepare(`SELECT COALESCE(display_name, name) as name, caliber, damage_per_round, damage_type, projectile_speed, magazine_capacity FROM fps_ammo_types WHERE uuid = ? AND game_version_id = ${versionSub}`)
+      .bind(uuid, ...versionParams)
       .first() as Record<string, unknown> | null;
   }
 
@@ -897,8 +903,8 @@ export async function getLootByUuid(db: D1Database, uuid: string, patchCode?: st
   // (medical pens exist in consumable_effects but not in the consumables table)
   if (!details?.effects && (item.type === 'FPS_Consumable' || item.category === 'Consumable')) {
     const effects = await db
-      .prepare("SELECT effect_key, magnitude, duration_seconds FROM consumable_effects WHERE consumable_uuid = ? AND game_version_id = (SELECT id FROM game_versions WHERE is_default = 1)")
-      .bind(uuid)
+      .prepare(`SELECT effect_key, magnitude, duration_seconds FROM consumable_effects WHERE consumable_uuid = ? AND game_version_id = ${versionSub}`)
+      .bind(uuid, ...versionParams)
       .all();
     if (effects.results.length > 0) {
       if (!details) details = { name: item.name as string, type: item.type as string, sub_type: item.sub_type as string, description: item.description as string };
@@ -957,9 +963,9 @@ export async function getLootByUuid(db: D1Database, uuid: string, patchCode?: st
       JOIN npc_loadouts nl ON nl.id = nli.loadout_id
       JOIN npc_factions nf ON nf.id = nl.faction_id
       WHERE nli.item_name = ?
-        AND nl.game_version_id = (SELECT id FROM game_versions WHERE is_default = 1)
+        AND nl.game_version_id = ${versionSub}
       ORDER BY nf.name, nl.loadout_name
-    `).bind(itemName).all();
+    `).bind(itemName, ...versionParams).all();
 
     if (npcLoadouts.results.length > 0) {
       for (const npc of npcLoadouts.results) {
