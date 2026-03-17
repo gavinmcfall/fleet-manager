@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useCallback, useMemo } from 'react'
-import { Languages, Rocket, Tags, Download, Loader, Save, AlertCircle, CheckCircle, ChevronDown, ChevronUp, GripVertical, X, Eye, EyeOff } from 'lucide-react'
+import { Languages, Rocket, Tags, Download, Loader, Save, AlertCircle, CheckCircle, ChevronDown, ChevronUp, GripVertical, X, Eye, EyeOff, Plus, Search } from 'lucide-react'
 import PageHeader from '../../components/PageHeader'
 import PanelSection from '../../components/PanelSection'
 import {
@@ -8,6 +8,7 @@ import {
   useLocalizationShipOrder,
   saveLocalizationShipOrder,
   useFleet,
+  useShips,
 } from '../../hooks/useAPI'
 
 // ── Category definitions ────────────────────────────────────────────
@@ -233,6 +234,7 @@ export default function LocalizationBuilder() {
   const { data: serverConfig, loading: configLoading, refetch: refetchConfig } = useLocalizationConfig()
   const { data: shipOrder, loading: orderLoading, refetch: refetchOrder } = useLocalizationShipOrder()
   const { data: fleet, loading: fleetLoading } = useFleet()
+  const { data: allShips } = useShips()
 
   const [localConfig, setLocalConfig] = useState(null)
   const [orderedShips, setOrderedShips] = useState([])
@@ -240,6 +242,7 @@ export default function LocalizationBuilder() {
   const [downloading, setDownloading] = useState(false)
   const [notification, setNotification] = useState(null)
   const [dirty, setDirty] = useState(false)
+  const [shipSearch, setShipSearch] = useState('')
 
   const config = localConfig || serverConfig || {}
 
@@ -318,6 +321,32 @@ export default function LocalizationBuilder() {
     setOrderedShips(next)
     setDirty(true)
   }
+
+  const addShip = (vehicle) => {
+    if (orderedShips.some(s => s.vehicleId === vehicle.id)) return
+    const next = [...orderedShips, {
+      vehicleId: vehicle.id,
+      vehicleName: vehicle.name,
+      customLabel: null,
+      sortPosition: orderedShips.length + 1,
+    }]
+    setOrderedShips(next)
+    setShipSearch('')
+    setDirty(true)
+  }
+
+  // Ships available to add (not already in order)
+  const shipSearchResults = useMemo(() => {
+    if (!allShips || !shipSearch || shipSearch.length < 2) return []
+    const term = shipSearch.toLowerCase()
+    const existing = new Set(orderedShips.map(s => s.vehicleId))
+    return allShips
+      .filter(s => !existing.has(s.id) && (
+        s.name?.toLowerCase().includes(term) ||
+        s.manufacturer_name?.toLowerCase().includes(term)
+      ))
+      .slice(0, 8)
+  }, [allShips, shipSearch, orderedShips])
 
   // ── Save all ────────────────────────────────────────────────────
   const handleSave = async () => {
@@ -431,46 +460,78 @@ export default function LocalizationBuilder() {
 
           {config.asopEnabled && (
             <>
-              {orderedShips.length === 0 ? (
-                <p className="text-sm text-gray-500 py-4 text-center">No fleet data. Import your fleet first.</p>
-              ) : (
-                <>
-                  {/* Preview */}
-                  <div className="bg-black/40 rounded px-3 py-2">
-                    <p className="text-[10px] uppercase tracking-wider text-gray-500 mb-1">ASOP Preview</p>
-                    <div className="font-mono text-sm space-y-0.5">
-                      {orderedShips.slice(0, 5).map((ship, idx) => (
-                        <div key={idx} className="text-gray-300">
-                          <span className="text-sc-accent">{ship.sortPosition}.</span> {ship.customLabel || ship.vehicleName}
-                        </div>
-                      ))}
-                      {orderedShips.length > 5 && <div className="text-gray-500">... +{orderedShips.length - 5} more</div>}
-                    </div>
-                  </div>
-
-                  {/* Ship list */}
-                  <div className="space-y-1 max-h-80 overflow-y-auto">
-                    {orderedShips.map((ship, idx) => (
-                      <div key={`${ship.vehicleId}-${idx}`} className="flex items-center gap-2 px-3 py-1.5 rounded bg-black/20 border border-sc-border hover:border-sc-accent/30 transition-colors group">
-                        <span className="text-sc-accent font-mono text-xs w-6 text-right shrink-0">{ship.sortPosition}.</span>
-                        <GripVertical className="w-3.5 h-3.5 text-gray-600 shrink-0" />
-                        <span className="text-xs text-gray-200 flex-1 truncate">{ship.customLabel || ship.vehicleName}</span>
-                        <div className="flex items-center gap-0.5 opacity-0 group-hover:opacity-100 transition-opacity">
-                          <button onClick={() => moveShip(idx, -1)} disabled={idx === 0} className="p-0.5 rounded hover:bg-white/10 disabled:opacity-20">
-                            <ChevronUp className="w-3.5 h-3.5 text-gray-400" />
-                          </button>
-                          <button onClick={() => moveShip(idx, 1)} disabled={idx === orderedShips.length - 1} className="p-0.5 rounded hover:bg-white/10 disabled:opacity-20">
-                            <ChevronDown className="w-3.5 h-3.5 text-gray-400" />
-                          </button>
-                          <button onClick={() => removeShip(idx)} className="p-0.5 rounded hover:bg-red-500/20">
-                            <X className="w-3.5 h-3.5 text-gray-400 hover:text-red-400" />
-                          </button>
-                        </div>
+              {/* Preview */}
+              {orderedShips.length > 0 && (
+                <div className="bg-black/40 rounded px-3 py-2">
+                  <p className="text-[10px] uppercase tracking-wider text-gray-500 mb-1">ASOP Preview</p>
+                  <div className="font-mono text-sm space-y-0.5">
+                    {orderedShips.slice(0, 5).map((ship, idx) => (
+                      <div key={idx} className="text-gray-300">
+                        <span className="text-sc-accent">{ship.sortPosition}.</span> {ship.customLabel || ship.vehicleName}
                       </div>
                     ))}
+                    {orderedShips.length > 5 && <div className="text-gray-500">... +{orderedShips.length - 5} more</div>}
                   </div>
-                </>
+                </div>
               )}
+
+              {/* Ship list */}
+              {orderedShips.length > 0 && (
+                <div className="space-y-1 max-h-80 overflow-y-auto">
+                  {orderedShips.map((ship, idx) => (
+                    <div key={`${ship.vehicleId}-${idx}`} className="flex items-center gap-2 px-3 py-1.5 rounded bg-black/20 border border-sc-border hover:border-sc-accent/30 transition-colors group">
+                      <span className="text-sc-accent font-mono text-xs w-6 text-right shrink-0">{ship.sortPosition}.</span>
+                      <GripVertical className="w-3.5 h-3.5 text-gray-600 shrink-0" />
+                      <span className="text-xs text-gray-200 flex-1 truncate">{ship.customLabel || ship.vehicleName}</span>
+                      <div className="flex items-center gap-0.5 opacity-0 group-hover:opacity-100 transition-opacity">
+                        <button onClick={() => moveShip(idx, -1)} disabled={idx === 0} className="p-0.5 rounded hover:bg-white/10 disabled:opacity-20">
+                          <ChevronUp className="w-3.5 h-3.5 text-gray-400" />
+                        </button>
+                        <button onClick={() => moveShip(idx, 1)} disabled={idx === orderedShips.length - 1} className="p-0.5 rounded hover:bg-white/10 disabled:opacity-20">
+                          <ChevronDown className="w-3.5 h-3.5 text-gray-400" />
+                        </button>
+                        <button onClick={() => removeShip(idx)} className="p-0.5 rounded hover:bg-red-500/20">
+                          <X className="w-3.5 h-3.5 text-gray-400 hover:text-red-400" />
+                        </button>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )}
+
+              {/* Add ship search */}
+              <div className="space-y-2">
+                <p className="text-[10px] uppercase tracking-wider text-gray-500">
+                  Add ships purchased in-game with aUEC
+                </p>
+                <div className="relative">
+                  <Search className="w-3.5 h-3.5 text-gray-500 absolute left-3 top-1/2 -translate-y-1/2" />
+                  <input
+                    type="text"
+                    value={shipSearch}
+                    onChange={(e) => setShipSearch(e.target.value)}
+                    placeholder="Search ships to add..."
+                    className="w-full bg-black/30 border border-sc-border rounded pl-9 pr-3 py-2 text-sm text-gray-200 placeholder:text-gray-600 focus:outline-none focus:border-sc-accent/50"
+                  />
+                </div>
+                {shipSearchResults.length > 0 && (
+                  <div className="border border-sc-border rounded bg-black/40 overflow-hidden">
+                    {shipSearchResults.map(ship => (
+                      <button
+                        key={ship.id}
+                        onClick={() => addShip(ship)}
+                        className="flex items-center gap-2 w-full px-3 py-2 text-left hover:bg-sc-accent/10 transition-colors border-b border-sc-border last:border-b-0"
+                      >
+                        <Plus className="w-3.5 h-3.5 text-sc-accent shrink-0" />
+                        <span className="text-xs text-gray-200 flex-1">{ship.name}</span>
+                        {ship.manufacturer_name && (
+                          <span className="text-[10px] text-gray-500">{ship.manufacturer_name}</span>
+                        )}
+                      </button>
+                    ))}
+                  </div>
+                )}
+              </div>
             </>
           )}
         </div>
