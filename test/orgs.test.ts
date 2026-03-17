@@ -4,7 +4,7 @@ import { setupTestDatabase } from "./apply-migrations";
 import { createTestUser, authHeaders } from "./helpers";
 
 /**
- * Org system tests — covers the verify-then-create flow, join codes,
+ * Org system tests — covers the verify-then-create flow, RSI auto-join,
  * authorization checks, and security fixes identified by red team review.
  */
 
@@ -41,23 +41,6 @@ async function addMember(
     )
     .bind(id, orgId, userId, role, now)
     .run();
-}
-
-async function createJoinCode(
-  db: D1Database,
-  orgId: string,
-  userId: string,
-  overrides?: { code?: string; maxUses?: number; expiresAt?: string }
-): Promise<string> {
-  const code = overrides?.code ?? `TEST-${crypto.randomUUID().slice(0, 6)}`;
-  await db
-    .prepare(
-      `INSERT INTO org_join_codes (organization_id, code, created_by, max_uses, expires_at)
-       VALUES (?, ?, ?, ?, ?)`
-    )
-    .bind(orgId, code, userId, overrides?.maxUses ?? null, overrides?.expiresAt ?? null)
-    .run();
-  return code;
 }
 
 describe("Org Endpoints", () => {
@@ -122,131 +105,6 @@ describe("Org Endpoints", () => {
       expect(res.status).toBe(403);
     });
 
-    it("rejects non-owner/admin from managing join codes", async () => {
-      const orgId = await createOrg(env.DB, { slug: "no-codes-test" });
-      const { userId, sessionToken } = await createTestUser(env.DB);
-      await addMember(env.DB, orgId, userId, "member");
-
-      const res = await SELF.fetch("http://localhost/api/orgs/no-codes-test/join-codes", {
-        headers: await authHeaders(sessionToken),
-      });
-      expect(res.status).toBe(403);
-    });
-  });
-
-  // ── Join Codes ─────────────────────────────────────────────────────
-
-  describe("Join Codes", () => {
-    it("generates join codes with sufficient entropy (F3 fix)", async () => {
-      const orgId = await createOrg(env.DB, { slug: "entropy-test", rsiSid: "ENTR" });
-      const { userId, sessionToken } = await createTestUser(env.DB);
-      await addMember(env.DB, orgId, userId, "owner");
-
-      const res = await SELF.fetch("http://localhost/api/orgs/entropy-test/join-codes", {
-        method: "POST",
-        headers: {
-          ...(await authHeaders(sessionToken)),
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify({}),
-      });
-      expect(res.status).toBe(200);
-      const body = (await res.json()) as { code: string };
-      // Code should be PREFIX-16hexchars (8 bytes = 16 hex chars)
-      expect(body.code).toMatch(/^ENTR-[a-f0-9]{16}$/);
-    });
-
-    it("allows joining with valid code", async () => {
-      const orgId = await createOrg(env.DB, { slug: "join-test" });
-      const owner = await createTestUser(env.DB, { name: "Owner" });
-      await addMember(env.DB, orgId, owner.userId, "owner");
-      const code = await createJoinCode(env.DB, orgId, owner.userId);
-
-      const joiner = await createTestUser(env.DB, { name: "Joiner" });
-      const res = await SELF.fetch("http://localhost/api/orgs/join", {
-        method: "POST",
-        headers: {
-          ...(await authHeaders(joiner.sessionToken)),
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify({ code }),
-      });
-      expect(res.status).toBe(200);
-      const body = (await res.json()) as { ok: boolean; slug: string };
-      expect(body.ok).toBe(true);
-      expect(body.slug).toBe("join-test");
-    });
-
-    it("rejects expired join code", async () => {
-      const orgId = await createOrg(env.DB, { slug: "expired-code-test" });
-      const owner = await createTestUser(env.DB);
-      await addMember(env.DB, orgId, owner.userId, "owner");
-      const code = await createJoinCode(env.DB, orgId, owner.userId, {
-        expiresAt: "2020-01-01T00:00:00Z",
-      });
-
-      const joiner = await createTestUser(env.DB);
-      const res = await SELF.fetch("http://localhost/api/orgs/join", {
-        method: "POST",
-        headers: {
-          ...(await authHeaders(joiner.sessionToken)),
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify({ code }),
-      });
-      expect(res.status).toBe(410);
-    });
-
-    it("rejects join code at max uses (F5 fix)", async () => {
-      const orgId = await createOrg(env.DB, { slug: "maxed-code-test" });
-      const owner = await createTestUser(env.DB);
-      await addMember(env.DB, orgId, owner.userId, "owner");
-      const code = await createJoinCode(env.DB, orgId, owner.userId, { maxUses: 1 });
-
-      // First join succeeds
-      const joiner1 = await createTestUser(env.DB);
-      const res1 = await SELF.fetch("http://localhost/api/orgs/join", {
-        method: "POST",
-        headers: {
-          ...(await authHeaders(joiner1.sessionToken)),
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify({ code }),
-      });
-      expect(res1.status).toBe(200);
-
-      // Second join should fail
-      const joiner2 = await createTestUser(env.DB);
-      const res2 = await SELF.fetch("http://localhost/api/orgs/join", {
-        method: "POST",
-        headers: {
-          ...(await authHeaders(joiner2.sessionToken)),
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify({ code }),
-      });
-      expect(res2.status).toBe(410);
-    });
-
-    it("rejects duplicate member join", async () => {
-      const orgId = await createOrg(env.DB, { slug: "dupe-member-test" });
-      const owner = await createTestUser(env.DB);
-      await addMember(env.DB, orgId, owner.userId, "owner");
-
-      const joiner = await createTestUser(env.DB);
-      await addMember(env.DB, orgId, joiner.userId, "member");
-
-      const code = await createJoinCode(env.DB, orgId, owner.userId);
-      const res = await SELF.fetch("http://localhost/api/orgs/join", {
-        method: "POST",
-        headers: {
-          ...(await authHeaders(joiner.sessionToken)),
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify({ code }),
-      });
-      expect(res.status).toBe(409);
-    });
   });
 
   // ── Verification ───────────────────────────────────────────────────
@@ -339,7 +197,11 @@ describe("Org Endpoints", () => {
       const orgId = await createOrg(env.DB, { slug: "delete-cascade-test", rsiSid: "DELCASC" });
       const owner = await createTestUser(env.DB, { name: "Cascade Owner" });
       await addMember(env.DB, orgId, owner.userId, "owner");
-      await createJoinCode(env.DB, orgId, owner.userId);
+      // Seed a join code directly (table still exists even though endpoints removed)
+      await env.DB
+        .prepare("INSERT INTO org_join_codes (organization_id, code, created_by) VALUES (?, ?, ?)")
+        .bind(orgId, "DELCASC-test123", owner.userId)
+        .run();
 
       // Add a pending verification for this SID
       await env.DB

@@ -1,10 +1,10 @@
 import { useState, useEffect } from 'react'
 import { useParams, useNavigate, Link } from 'react-router-dom'
 import {
-  ArrowLeft, Save, Loader2, Copy, CheckCircle, AlertCircle,
-  RefreshCw, Trash2, KeyRound, Plus, X, Clock
+  ArrowLeft, Save, Loader2, CheckCircle, AlertCircle,
+  RefreshCw, Trash2, Clock
 } from 'lucide-react'
-import { useOrgProfile, updateOrgSettings, useOrgJoinCodes, generateJoinCode, revokeJoinCode, syncOrgFromRsi, deleteOrg } from '../hooks/useAPI'
+import { useOrgProfile, updateOrgSettings, syncOrgFromRsi, deleteOrg } from '../hooks/useAPI'
 import PageHeader from '../components/PageHeader'
 import LoadingState from '../components/LoadingState'
 import ErrorState from '../components/ErrorState'
@@ -16,117 +16,6 @@ const FIELDS = [
   { key: 'twitch', label: 'Twitch', placeholder: 'https://twitch.tv/channel', type: 'url' },
   { key: 'youtube', label: 'YouTube', placeholder: 'https://youtube.com/@channel', type: 'url' },
 ]
-
-// ── Join Code Management ──────────────────────────────────────────────
-
-function JoinCodePanel({ slug }) {
-  const { data, loading, refetch } = useOrgJoinCodes(slug)
-  const [generating, setGenerating] = useState(false)
-  const [revoking, setRevoking] = useState(null)
-  const [copiedCode, setCopiedCode] = useState(null)
-  const [error, setError] = useState(null)
-
-  const codes = data?.codes ?? []
-
-  const handleGenerate = async () => {
-    setGenerating(true)
-    setError(null)
-    try {
-      await generateJoinCode(slug)
-      refetch()
-    } catch (err) {
-      setError(err.message)
-    } finally {
-      setGenerating(false)
-    }
-  }
-
-  const handleRevoke = async (id) => {
-    setRevoking(id)
-    try {
-      await revokeJoinCode(slug, id)
-      refetch()
-    } catch (err) {
-      setError(err.message)
-    } finally {
-      setRevoking(null)
-    }
-  }
-
-  const copyCode = (code) => {
-    navigator.clipboard.writeText(code)
-    setCopiedCode(code)
-    setTimeout(() => setCopiedCode(null), 2000)
-  }
-
-  return (
-    <div className="panel p-5 space-y-4">
-      <div className="flex items-center justify-between">
-        <div className="flex items-center gap-2">
-          <KeyRound className="w-5 h-5 text-sc-accent" />
-          <h3 className="font-display font-semibold text-white text-sm uppercase tracking-wider">Join Codes</h3>
-        </div>
-        <button
-          onClick={handleGenerate}
-          disabled={generating}
-          className="btn-primary text-xs inline-flex items-center gap-1.5"
-        >
-          {generating ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Plus className="w-3.5 h-3.5" />}
-          Generate Code
-        </button>
-      </div>
-
-      <p className="text-xs text-gray-400">
-        Share join codes with members so they can join without an email invitation.
-      </p>
-
-      {error && (
-        <div className="flex items-center gap-2 p-3 bg-sc-danger/10 border border-sc-danger/30 rounded text-sc-danger text-sm">
-          <AlertCircle className="w-4 h-4 shrink-0" />
-          <span>{error}</span>
-        </div>
-      )}
-
-      {loading ? (
-        <div className="text-xs text-gray-500">Loading codes...</div>
-      ) : codes.length === 0 ? (
-        <div className="text-xs text-gray-500 py-3 text-center">No active join codes</div>
-      ) : (
-        <div className="space-y-2">
-          {codes.map((jc) => {
-            const isExpired = jc.expires_at && new Date(jc.expires_at + 'Z') < new Date()
-            const isMaxed = jc.max_uses !== null && jc.use_count >= jc.max_uses
-            const isInactive = isExpired || isMaxed
-
-            return (
-              <div key={jc.id} className={`flex items-center gap-3 p-3 rounded border ${isInactive ? 'border-sc-border/30 opacity-50' : 'border-sc-border'} bg-sc-darker`}>
-                <code className="text-sm font-mono text-sc-accent flex-1 select-all">{jc.code}</code>
-                <span className="text-[11px] text-gray-500 font-mono shrink-0">
-                  {jc.use_count}{jc.max_uses !== null ? `/${jc.max_uses}` : ''} uses
-                </span>
-                <button
-                  onClick={() => copyCode(jc.code)}
-                  className="p-1 text-gray-400 hover:text-white transition-colors shrink-0"
-                  title="Copy code"
-                >
-                  {copiedCode === jc.code ? <CheckCircle className="w-3.5 h-3.5 text-green-400" /> : <Copy className="w-3.5 h-3.5" />}
-                </button>
-                <button
-                  onClick={() => handleRevoke(jc.id)}
-                  disabled={revoking === jc.id}
-                  className="p-1 text-gray-500 hover:text-red-400 transition-colors shrink-0"
-                  title="Revoke code"
-                >
-                  {revoking === jc.id ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <X className="w-3.5 h-3.5" />}
-                </button>
-              </div>
-            )
-          })}
-        </div>
-      )}
-    </div>
-  )
-}
 
 // ── Sync from RSI Panel ───────────────────────────────────────────────
 
@@ -378,9 +267,6 @@ export default function OrgSettings() {
           {saveError && <span className="text-xs text-red-400">{saveError}</span>}
         </div>
       </form>
-
-      {/* Join Codes — owner/admin */}
-      <JoinCodePanel slug={slug} />
 
       {/* Sync from RSI — owner only */}
       {org.callerRole === 'owner' && org.rsiSid && (

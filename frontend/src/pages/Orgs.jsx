@@ -2,9 +2,9 @@ import React, { useState, useEffect } from 'react'
 import { Link, useNavigate } from 'react-router-dom'
 import {
   Building2, Plus, ExternalLink, Users, ChevronRight, X, AlertCircle, Loader2,
-  ShieldCheck, Copy, CheckCircle, Star, UserPlus, KeyRound
+  ShieldCheck, Copy, CheckCircle, Star, RefreshCw
 } from 'lucide-react'
-import { useUserOrgs, generateOrgVerification, checkOrgVerification, useOrgVerificationStatus, joinOrg, setPrimaryOrg } from '../hooks/useAPI'
+import { useUserOrgs, generateOrgVerification, checkOrgVerification, useOrgVerificationStatus, setPrimaryOrg } from '../hooks/useAPI'
 import PageHeader from '../components/PageHeader'
 import LoadingState from '../components/LoadingState'
 import ErrorState from '../components/ErrorState'
@@ -194,89 +194,11 @@ function CreateOrgModal({ open, onClose, onCreated }) {
   )
 }
 
-// ── Join Org Modal ────────────────────────────────────────────────────────
-
-function JoinOrgModal({ open, onClose, onJoined }) {
-  const navigate = useNavigate()
-  const [code, setCode] = useState('')
-  const [loading, setLoading] = useState(false)
-  const [error, setError] = useState('')
-
-  if (!open) return null
-
-  const handleJoin = async (e) => {
-    e.preventDefault()
-    if (!code.trim()) return
-    setLoading(true)
-    setError('')
-    try {
-      const data = await joinOrg(code.trim())
-      onJoined?.()
-      navigate(`/orgs/${data.slug}`)
-    } catch (err) {
-      setError(err.message)
-    } finally {
-      setLoading(false)
-    }
-  }
-
-  return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-4" onClick={onClose}>
-      <div className="fixed inset-0 bg-black/60" />
-      <div className="relative w-full max-w-md panel p-6 space-y-4" onClick={e => e.stopPropagation()}>
-        <div className="flex items-center justify-between">
-          <h2 className="font-display font-semibold tracking-wide text-white uppercase text-sm">Join Organisation</h2>
-          <button onClick={onClose} className="text-gray-500 hover:text-gray-300 transition-colors">
-            <X className="w-4 h-4" />
-          </button>
-        </div>
-
-        <p className="text-xs text-gray-400">
-          Enter a join code provided by the org admin to become a member.
-        </p>
-
-        <form onSubmit={handleJoin} className="space-y-4">
-          <div>
-            <label className="block text-xs font-display uppercase tracking-wider text-gray-400 mb-1.5">Join Code</label>
-            <input
-              type="text"
-              value={code}
-              onChange={e => setCode(e.target.value)}
-              placeholder="EXLS-a1b2c3"
-              autoFocus
-              required
-              className="w-full bg-sc-darker border border-sc-border rounded px-3 py-2 text-sm text-gray-200 placeholder:text-gray-600 focus:border-sc-accent focus:outline-none font-mono"
-            />
-          </div>
-
-          {error && (
-            <div className="flex items-center gap-2 p-3 bg-sc-danger/10 border border-sc-danger/30 rounded text-sc-danger text-sm">
-              <AlertCircle className="w-4 h-4 shrink-0" />
-              <span>{error}</span>
-            </div>
-          )}
-
-          <div className="flex gap-2">
-            <button type="submit" disabled={loading || !code.trim()} className="btn-primary text-xs flex items-center gap-1.5 flex-1 justify-center">
-              {loading ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <UserPlus className="w-3.5 h-3.5" />}
-              {loading ? 'Joining...' : 'Join Organisation'}
-            </button>
-            <button type="button" onClick={onClose} className="btn-secondary text-xs px-4">
-              Cancel
-            </button>
-          </div>
-        </form>
-      </div>
-    </div>
-  )
-}
-
 // ── Main Orgs Page ────────────────────────────────────────────────────────
 
 export default function Orgs() {
   const { data, loading, error, refetch } = useUserOrgs()
   const [showCreate, setShowCreate] = useState(false)
-  const [showJoin, setShowJoin] = useState(false)
   const [settingPrimary, setSettingPrimary] = useState(null)
 
   const orgs = data?.orgs ?? []
@@ -302,22 +224,13 @@ export default function Orgs() {
       <PageHeader
         title="MY ORGANISATIONS"
         actions={
-          <div className="flex gap-2">
-            <button
-              onClick={() => setShowJoin(true)}
-              className="btn-secondary flex items-center gap-2 text-xs"
-            >
-              <UserPlus className="w-3.5 h-3.5" />
-              Join Org
-            </button>
-            <button
-              onClick={() => setShowCreate(true)}
-              className="btn-primary flex items-center gap-2 text-xs"
-            >
-              <Plus className="w-3.5 h-3.5" />
-              Create Org
-            </button>
-          </div>
+          <button
+            onClick={() => setShowCreate(true)}
+            className="btn-primary flex items-center gap-2 text-xs"
+          >
+            <Plus className="w-3.5 h-3.5" />
+            Create Org
+          </button>
         }
       />
 
@@ -326,17 +239,12 @@ export default function Orgs() {
         onClose={() => setShowCreate(false)}
         onCreated={refetch}
       />
-      <JoinOrgModal
-        open={showJoin}
-        onClose={() => setShowJoin(false)}
-        onJoined={refetch}
-      />
 
       {orgs.length === 0 ? (
-        <div className="grid gap-4 sm:grid-cols-2 max-w-xl mx-auto">
+        <div className="max-w-md mx-auto space-y-4">
           <button
             onClick={() => setShowCreate(true)}
-            className="panel p-8 flex flex-col items-center gap-3 text-center hover:border-sc-accent/40 transition-colors group"
+            className="panel p-8 w-full flex flex-col items-center gap-3 text-center hover:border-sc-accent/40 transition-colors group"
           >
             <ShieldCheck className="w-10 h-10 text-gray-600 group-hover:text-sc-accent transition-colors" />
             <div>
@@ -344,16 +252,15 @@ export default function Orgs() {
               <p className="text-xs text-gray-500 mt-1">Verify your RSI org ownership</p>
             </div>
           </button>
-          <button
-            onClick={() => setShowJoin(true)}
-            className="panel p-8 flex flex-col items-center gap-3 text-center hover:border-sc-accent/40 transition-colors group"
-          >
-            <UserPlus className="w-10 h-10 text-gray-600 group-hover:text-sc-accent transition-colors" />
+          <div className="panel p-5 flex items-start gap-3">
+            <RefreshCw className="w-5 h-5 text-gray-500 shrink-0 mt-0.5" />
             <div>
-              <p className="font-display tracking-wide text-white group-hover:text-sc-accent transition-colors">Join Organisation</p>
-              <p className="text-xs text-gray-500 mt-1">Enter a code from an org admin</p>
+              <p className="text-sm text-gray-300">Looking to join an existing org?</p>
+              <p className="text-xs text-gray-500 mt-1">
+                <Link to="/account" className="text-sc-accent hover:underline">Sync your RSI profile</Link> from your account page — you'll be automatically added to any SC Bridge orgs that match your RSI affiliations.
+              </p>
             </div>
-          </button>
+          </div>
         </div>
       ) : (
         <div className="grid gap-3">

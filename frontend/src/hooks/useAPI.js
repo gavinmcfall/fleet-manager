@@ -210,24 +210,6 @@ export function useOrgVerificationStatus() {
   return useAPI('/orgs/verify/status')
 }
 
-// Org join
-export async function joinOrg(code) {
-  return postJSON('/orgs/join', { code })
-}
-
-// Org join codes (admin)
-export function useOrgJoinCodes(slug) {
-  return useAPI(slug ? `/orgs/${slug}/join-codes` : null, { skip: !slug })
-}
-
-export async function generateJoinCode(slug, opts = {}) {
-  return postJSON(`/orgs/${slug}/join-codes`, opts)
-}
-
-export async function revokeJoinCode(slug, id) {
-  return apiFetch('DELETE', `/orgs/${slug}/join-codes/${id}`)
-}
-
 // Org sync + delete + primary
 export async function syncOrgFromRsi(slug) {
   return postJSON(`/orgs/${slug}/sync-rsi`)

@@ -260,6 +260,41 @@ export function accountRoutes() {
         )
         .run();
 
+      // Auto-join SC Bridge orgs that match the user's RSI org affiliations.
+      // For each RSI org the user belongs to, if a verified SC Bridge org exists
+      // with that rsiSid, add the user as a member (INSERT OR IGNORE = no-op if already member).
+      if (profile.orgs.length > 0) {
+        const orgJoinStmts = [];
+        for (const rsiOrg of profile.orgs) {
+          const scbOrg = await db
+            .prepare("SELECT id FROM organization WHERE rsiSid = ?")
+            .bind(rsiOrg.slug)
+            .first<{ id: string }>();
+          if (scbOrg) {
+            orgJoinStmts.push(
+              db.prepare(
+                `INSERT OR IGNORE INTO member (id, organizationId, userId, role, createdAt)
+                 VALUES (?, ?, ?, 'member', datetime('now'))`,
+              ).bind(crypto.randomUUID(), scbOrg.id, user.id),
+            );
+          }
+        }
+        if (orgJoinStmts.length > 0) {
+          await db.batch(orgJoinStmts);
+          // Set primary org if user has none
+          const firstOrgId = (await db
+            .prepare("SELECT organizationId FROM member WHERE userId = ? ORDER BY createdAt LIMIT 1")
+            .bind(user.id)
+            .first<{ organizationId: string }>())?.organizationId;
+          if (firstOrgId) {
+            await db
+              .prepare("UPDATE user SET primary_org_id = ? WHERE id = ? AND primary_org_id IS NULL")
+              .bind(firstOrgId, user.id)
+              .run();
+          }
+        }
+      }
+
       // After upsert: if user has no avatar, try to auto-set from RSI
       const currentUser = await db
         .prepare("SELECT image, gravatar_opted_out FROM user WHERE id = ?")
