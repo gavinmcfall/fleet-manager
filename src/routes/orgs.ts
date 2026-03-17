@@ -333,5 +333,165 @@ export function orgRoutes() {
     return c.json({ stats });
   });
 
+  // POST /api/orgs/:slug/verify-rsi/generate — generate a verification key (owner only)
+  routes.post("/:slug/verify-rsi/generate",
+    validate("json", z.object({
+      rsiSid: z.string().min(2).max(20).regex(/^[A-Za-z0-9_-]+$/, "Invalid RSI org SID"),
+    })),
+    async (c) => {
+    const user = c.get("user");
+    if (!user) return c.json({ error: "Unauthorized" }, 401);
+
+    const slug = c.req.param("slug");
+    const db = c.env.DB;
+    const body = c.req.valid("json");
+
+    const org = await db
+      .prepare("SELECT id, rsiSid, verified_at FROM organization WHERE slug = ?")
+      .bind(slug)
+      .first<{ id: string; rsiSid: string | null; verified_at: string | null }>();
+    if (!org) return c.json({ error: "Not found" }, 404);
+
+    const membership = await db
+      .prepare("SELECT role FROM member WHERE organizationId = ? AND userId = ?")
+      .bind(org.id, user.id)
+      .first<{ role: string }>();
+    if (!membership || membership.role !== "owner") {
+      return c.json({ error: "Forbidden — owner role required" }, 403);
+    }
+
+    if (org.verified_at) {
+      return c.json({ error: "Org is already verified" }, 400);
+    }
+
+    // Generate a random verification key
+    const keyBytes = new Uint8Array(16);
+    crypto.getRandomValues(keyBytes);
+    const verificationKey = `scbridge-verify-${Array.from(keyBytes).map(b => b.toString(16).padStart(2, "0")).join("")}`;
+
+    // Store key and RSI SID on the org
+    await db
+      .prepare("UPDATE organization SET verification_key = ?, rsiSid = ? WHERE id = ?")
+      .bind(verificationKey, body.rsiSid.toUpperCase(), org.id)
+      .run();
+
+    return c.json({
+      ok: true,
+      verification_key: verificationKey,
+      rsiSid: body.rsiSid.toUpperCase(),
+      instructions: `Add this key anywhere in your RSI org charter at https://robertsspaceindustries.com/en/orgs/${body.rsiSid.toUpperCase()}, then click Verify.`,
+    });
+  });
+
+  // POST /api/orgs/:slug/verify-rsi/check — check if the key is in the RSI charter (owner only)
+  routes.post("/:slug/verify-rsi/check", async (c) => {
+    const user = c.get("user");
+    if (!user) return c.json({ error: "Unauthorized" }, 401);
+
+    const slug = c.req.param("slug");
+    const db = c.env.DB;
+
+    const org = await db
+      .prepare("SELECT id, rsiSid, verification_key, verified_at FROM organization WHERE slug = ?")
+      .bind(slug)
+      .first<{ id: string; rsiSid: string | null; verification_key: string | null; verified_at: string | null }>();
+    if (!org) return c.json({ error: "Not found" }, 404);
+
+    const membership = await db
+      .prepare("SELECT role FROM member WHERE organizationId = ? AND userId = ?")
+      .bind(org.id, user.id)
+      .first<{ role: string }>();
+    if (!membership || membership.role !== "owner") {
+      return c.json({ error: "Forbidden — owner role required" }, 403);
+    }
+
+    if (org.verified_at) {
+      return c.json({ error: "Org is already verified" }, 400);
+    }
+
+    if (!org.verification_key || !org.rsiSid) {
+      return c.json({ error: "No verification key generated — generate one first" }, 400);
+    }
+
+    // Fetch the RSI org page and check charter content
+    const rsiUrl = `https://robertsspaceindustries.com/en/orgs/${encodeURIComponent(org.rsiSid)}`;
+    let html: string;
+    try {
+      const resp = await fetch(rsiUrl, {
+        headers: {
+          "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
+          Accept: "text/html",
+        },
+      });
+      if (!resp.ok) {
+        return c.json({ error: `RSI returned ${resp.status} — check the org SID is correct` }, 502);
+      }
+      html = await resp.text();
+    } catch (err) {
+      return c.json({ error: "Failed to reach RSI — try again later" }, 502);
+    }
+
+    // Extract the charter tab content
+    const charterMatch = html.match(/id="tab-charter"[\s\S]*?<div class="markitup-text">([\s\S]*?)<\/div>/);
+    if (!charterMatch) {
+      return c.json({
+        ok: false,
+        verified: false,
+        message: "Could not find a charter section on the RSI org page. Make sure the org has a charter.",
+      });
+    }
+
+    const charterContent = charterMatch[1];
+    if (!charterContent.includes(org.verification_key)) {
+      return c.json({
+        ok: false,
+        verified: false,
+        message: `Verification key not found in charter. Add "${org.verification_key}" to your org charter at ${rsiUrl}, save it, then try again.`,
+      });
+    }
+
+    // Verified — mark the org
+    await db
+      .prepare("UPDATE organization SET verified_at = datetime('now'), verified_by = ? WHERE id = ?")
+      .bind(user.id, org.id)
+      .run();
+
+    return c.json({
+      ok: true,
+      verified: true,
+      message: "Org verified successfully! You can now remove the key from your charter.",
+    });
+  });
+
+  // GET /api/orgs/:slug/verify-rsi/status — check verification status (members)
+  routes.get("/:slug/verify-rsi/status", async (c) => {
+    const user = c.get("user");
+    if (!user) return c.json({ error: "Unauthorized" }, 401);
+
+    const slug = c.req.param("slug");
+    const db = c.env.DB;
+
+    const org = await db
+      .prepare("SELECT id, rsiSid, verification_key, verified_at FROM organization WHERE slug = ?")
+      .bind(slug)
+      .first<{ id: string; rsiSid: string | null; verification_key: string | null; verified_at: string | null }>();
+    if (!org) return c.json({ error: "Not found" }, 404);
+
+    const membership = await db
+      .prepare("SELECT role FROM member WHERE organizationId = ? AND userId = ?")
+      .bind(org.id, user.id)
+      .first<{ role: string }>();
+    if (!membership) return c.json({ error: "Not found" }, 404);
+
+    return c.json({
+      verified: !!org.verified_at,
+      verified_at: org.verified_at,
+      rsiSid: org.rsiSid,
+      // Only show the key to the owner
+      verification_key: membership.role === "owner" ? org.verification_key : undefined,
+      has_key: !!org.verification_key,
+    });
+  });
+
   return routes;
 }
