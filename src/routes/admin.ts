@@ -211,5 +211,49 @@ export function adminRoutes() {
     return c.json(result);
   });
 
+  /**
+   * PUT /api/admin/localization/global-ini
+   *
+   * Upload base global.ini for a game version. Stored in KV for the
+   * localization builder download endpoint.
+   * Body: raw text/plain content of global.ini
+   * Query: ?version_code=4.6.0-live.11319298
+   */
+  routes.put("/localization/global-ini",
+    validate("query", z.object({
+      version_code: z.string().min(1).max(100),
+    })),
+    async (c) => {
+    const { version_code } = c.req.valid("query");
+    const kv = c.env.SC_BRIDGE_CACHE;
+
+    // Verify the version exists
+    const ver = await c.env.DB
+      .prepare("SELECT id FROM game_versions WHERE code = ?")
+      .bind(version_code)
+      .first<{ id: number }>();
+    if (!ver) {
+      return c.json({ error: `Game version '${version_code}' not found` }, 404);
+    }
+
+    const body = await c.req.text();
+    if (!body || body.length < 1000) {
+      return c.json({ error: "Body too small to be a valid global.ini" }, 400);
+    }
+
+    const key = `localization:global-ini:${version_code}`;
+    await kv.put(key, body);
+
+    const lines = body.split("\n").length;
+    const sizeKB = Math.round(body.length / 1024);
+
+    return c.json({
+      ok: true,
+      message: `Stored global.ini for ${version_code}`,
+      lines,
+      sizeKB,
+    });
+  });
+
   return routes;
 }

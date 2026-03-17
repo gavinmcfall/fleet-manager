@@ -19,6 +19,7 @@ import { contractRoutes } from "./routes/contracts";
 import { lootRoutes } from "./routes/loot";
 import { patchRoutes } from "./routes/patches";
 import { gamedataRoutes } from "./routes/gamedata";
+import { localizationRoutes } from "./routes/localization";
 import { validateEncryptionKey } from "./lib/crypto";
 import { logEvent } from "./lib/logger";
 import { VEHICLE_VERSION_JOIN } from "./lib/constants";
@@ -259,10 +260,11 @@ function requireRole(...roles: string[]) {
   };
 }
 
-// Protected: user fleet, import, settings, analysis, LLM
+// Protected: user fleet, import, settings, localization, analysis, LLM
 app.use("/api/vehicles/*", requireAuth);
 app.use("/api/import/*", requireAuth);
 app.use("/api/settings/*", requireAuth);
+app.use("/api/localization/*", requireAuth);
 app.use("/api/analysis", requireAuth);
 app.use("/api/llm/*", async (c, next) => {
   if (c.req.method !== "POST" && c.req.method !== "DELETE") return next();
@@ -362,6 +364,7 @@ app.route("/api/contracts", contractRoutes<HonoEnv>());
 app.route("/api/loot", lootRoutes());
 app.route("/api/patches", patchRoutes());
 app.route("/api/gamedata", gamedataRoutes<HonoEnv>());
+app.route("/api/localization", localizationRoutes());
 
 // API fallthrough — return JSON 404 instead of HTML (prevents CF edge cache from caching HTML for API paths)
 // Must use app.use() — app.all() route wildcards don't match multi-segment paths in the Workers runtime

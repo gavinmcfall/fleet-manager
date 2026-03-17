@@ -1,6 +1,6 @@
 import React, { useState, Suspense, lazy } from 'react'
 import { Routes, Route, NavLink, useLocation, useNavigate } from 'react-router-dom'
-import { Rocket, BarChart3, Shield, Upload, RefreshCw, Database, Settings as SettingsIcon, ChevronDown, ChevronRight, ChevronLeft, History, Menu, X, LogOut, LogIn, User, Wrench, Users, Building2, FileText, Search, MapPin, Palette, ShoppingCart, Hammer, Briefcase, Star, Scale, Crosshair, BookOpen, Layers, TrendingUp } from 'lucide-react'
+import { Rocket, BarChart3, Shield, Upload, RefreshCw, Database, Settings as SettingsIcon, ChevronDown, ChevronRight, ChevronLeft, History, Menu, X, LogOut, LogIn, User, Wrench, Users, Building2, FileText, Search, MapPin, Palette, ShoppingCart, Hammer, Briefcase, Star, Scale, Crosshair, BookOpen, Layers, TrendingUp, Languages } from 'lucide-react'
 import LoadingState from './components/LoadingState'
 import ErrorBoundary from './components/ErrorBoundary'
 import RequireAuth from './components/RequireAuth'
@@ -49,6 +49,7 @@ const Careers = lazy(() => import('./pages/Careers'))
 const Reputation = lazy(() => import('./pages/Reputation'))
 const LawSystem = lazy(() => import('./pages/LawSystem'))
 const NPCLoadouts = lazy(() => import('./pages/NPCLoadouts'))
+const LocalizationBuilder = lazy(() => import('./pages/LocalizationBuilder'))
 const NotFound = lazy(() => import('./pages/NotFound'))
 
 const publicNavItems = [
@@ -85,6 +86,7 @@ const authNavItems = [
           { to: '/analysis/history', icon: History, label: 'History' },
         ],
       },
+      { to: '/localization', icon: Languages, label: 'Localization' },
       { to: '/sync-import', icon: Upload, label: 'Sync & Import' },
     ],
   },
@@ -577,6 +579,7 @@ export default function App() {
                       <Route path="/analysis" element={<RequireAuth><Analysis /></RequireAuth>} />
                       <Route path="/analysis/history" element={<RequireAuth><AnalysisHistory /></RequireAuth>} />
                       <Route path="/sync-import" element={<RequireAuth><Import /></RequireAuth>} />
+                      <Route path="/localization" element={<RequireAuth><Suspense fallback={<LoadingState fullScreen />}><LocalizationBuilder /></Suspense></RequireAuth>} />
                       <Route path="/settings" element={<RequireAuth><Settings /></RequireAuth>} />
                       <Route path="/account" element={<RequireAuth><Account /></RequireAuth>} />
                       <Route path="/admin" element={<RequireAuth><Admin /></RequireAuth>} />

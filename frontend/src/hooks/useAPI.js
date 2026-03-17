@@ -284,3 +284,25 @@ export function useLootSet(setSlug, patchCode) {
 export async function deleteAIAnalysis(id) {
   return apiFetch('DELETE', `/llm/analysis/${id}`)
 }
+
+// --- Localization Builder ---
+
+export function useLocalizationConfig() {
+  return useAPI('/localization/config')
+}
+
+export async function saveLocalizationConfig(config) {
+  return putJSON('/localization/config', config)
+}
+
+export function useLocalizationShipOrder() {
+  return useAPI('/localization/ship-order')
+}
+
+export async function saveLocalizationShipOrder(items) {
+  return putJSON('/localization/ship-order', { items })
+}
+
+export function useLocalizationPreview() {
+  return useAPI('/localization/preview')
+}
