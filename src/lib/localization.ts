@@ -3,7 +3,10 @@
  *
  * Generates override key/value pairs for:
  *   - ASOP fleet ordering: vehicle_Name{class_name} → "N. Original Name"
- *   - Component/item labels: item_Name{class_name} → "Name [Mfr | SN | Gr.X | Class]"
+ *   - Component/item labels: item_Name{class_name} → "Name [Mfr | SN | Gr.X | SubType]"
+ *
+ * Each label category has its own field config: which fields to include and
+ * in what order. Users configure this per-category via the frontend.
  */
 
 // ---------------------------------------------------------------------------
@@ -33,7 +36,50 @@ export interface ItemRow {
   subType: string | null;
 }
 
-type LabelFormat = "suffix" | "prefix";
+export type LabelFormat = "suffix" | "prefix";
+
+/** A field that can appear in a label tag */
+export type LabelField = "manufacturer" | "size" | "grade" | "subType";
+
+/** Per-category format configuration */
+export interface CategoryFormat {
+  fields: LabelField[];
+  format: LabelFormat;
+}
+
+/** Map of category key → format config */
+export type CategoryFormats = Record<string, CategoryFormat>;
+
+// ---------------------------------------------------------------------------
+// Available fields per category (what the DB actually has)
+// ---------------------------------------------------------------------------
+
+export const CATEGORY_AVAILABLE_FIELDS: Record<string, LabelField[]> = {
+  vehicle_components: ["manufacturer", "size", "grade", "subType"],
+  fps_weapons: ["manufacturer", "size", "subType"],
+  fps_armour: ["manufacturer", "size", "grade", "subType"],
+  fps_helmets: ["manufacturer", "grade", "subType"],
+  fps_attachments: ["manufacturer", "subType"],
+  fps_utilities: ["manufacturer", "subType"],
+  consumables: ["manufacturer", "subType"],
+  ship_missiles: ["manufacturer", "size", "subType"],
+};
+
+/** Human-readable field labels */
+export const FIELD_LABELS: Record<LabelField, string> = {
+  manufacturer: "Manufacturer",
+  size: "Size",
+  grade: "Grade",
+  subType: "Type",
+};
+
+/** Default format for a category: all available fields, suffix format */
+export function defaultCategoryFormat(category: string): CategoryFormat {
+  return {
+    fields: [...(CATEGORY_AVAILABLE_FIELDS[category] || [])],
+    format: "suffix",
+  };
+}
 
 // ---------------------------------------------------------------------------
 // ASOP fleet ordering
@@ -51,15 +97,12 @@ export function generateAsopOverrides(
     const label = entry.customLabel || entry.vehicleName;
     const numbered = `${pos}. ${label}`;
 
-    // Full name key: vehicle_Name{CLASS_NAME}
     overrides.push({
       key: `vehicle_Name${entry.className}`,
       value: numbered,
       original: entry.vehicleName,
     });
 
-    // Short name key: vehicle_Name{CLASS_NAME}_short
-    // Strip manufacturer prefix for short name (take last word(s) after first space)
     const shortName = entry.customLabel || stripManufacturer(entry.vehicleName);
     overrides.push({
       key: `vehicle_Name${entry.className}_short`,
@@ -72,10 +115,6 @@ export function generateAsopOverrides(
 }
 
 function stripManufacturer(fullName: string): string {
-  // Vehicle names are typically "Manufacturer Model" e.g. "Aegis Idris-P"
-  // The _short variant typically has just the model name
-  // We don't try to be clever here — the _short key in global.ini already exists
-  // and will be overwritten. This is just for preview.
   const parts = fullName.split(" ");
   return parts.length > 1 ? parts.slice(1).join(" ") : fullName;
 }
@@ -84,14 +123,28 @@ function stripManufacturer(fullName: string): string {
 // Component / item label generation
 // ---------------------------------------------------------------------------
 
+/** Build the detail tag using only the specified fields in order */
 function buildDetailTag(
-  row: { manufacturerCode: string | null; size: number | null; grade: string | null; subType: string | null },
+  row: ItemRow,
+  fields: LabelField[],
 ): string {
   const parts: string[] = [];
-  if (row.manufacturerCode) parts.push(row.manufacturerCode);
-  if (row.size != null) parts.push(`S${row.size}`);
-  if (row.grade) parts.push(`Gr.${row.grade}`);
-  if (row.subType) parts.push(row.subType);
+  for (const field of fields) {
+    switch (field) {
+      case "manufacturer":
+        if (row.manufacturerCode) parts.push(row.manufacturerCode);
+        break;
+      case "size":
+        if (row.size != null) parts.push(`S${row.size}`);
+        break;
+      case "grade":
+        if (row.grade) parts.push(`Gr.${row.grade}`);
+        break;
+      case "subType":
+        if (row.subType) parts.push(row.subType);
+        break;
+    }
+  }
   return parts.join(" | ");
 }
 
@@ -106,23 +159,22 @@ function formatLabel(
 
 export function generateItemLabels(
   rows: ItemRow[],
-  format: LabelFormat = "suffix",
+  catFormat: CategoryFormat,
 ): LabelOverride[] {
   const overrides: LabelOverride[] = [];
   for (const row of rows) {
     if (!row.className) continue;
-    const tag = buildDetailTag(row);
+    const tag = buildDetailTag(row, catFormat.fields);
     const key = `item_Name${row.className}`;
     overrides.push({
       key,
-      value: formatLabel(row.name, tag, format),
+      value: formatLabel(row.name, tag, catFormat.format),
       original: row.name,
     });
-    // Also generate the _SCItem variant key (some items use this suffix)
     if (!row.className.endsWith("_SCItem")) {
       overrides.push({
         key: `item_Name${row.className}_SCItem`,
-        value: formatLabel(row.name, tag, format),
+        value: formatLabel(row.name, tag, catFormat.format),
         original: row.name,
       });
     }
@@ -134,15 +186,10 @@ export function generateItemLabels(
 // Merge engine
 // ---------------------------------------------------------------------------
 
-/**
- * Merge overrides into the base global.ini content.
- * Case-insensitive key matching (global.ini keys have inconsistent casing).
- */
 export function mergeGlobalIni(
   baseContent: string,
   overrides: Map<string, string>,
 ): string {
-  // Build a lowercase → override value map for case-insensitive matching
   const lowerMap = new Map<string, string>();
   for (const [k, v] of overrides) {
     lowerMap.set(k.toLowerCase(), v);
@@ -170,7 +217,7 @@ export function mergeGlobalIni(
 }
 
 // ---------------------------------------------------------------------------
-// Config defaults
+// Config
 // ---------------------------------------------------------------------------
 
 export interface LocalizationConfig {
@@ -184,6 +231,7 @@ export interface LocalizationConfig {
   labelsConsumables: boolean;
   labelsShipMissiles: boolean;
   labelFormat: LabelFormat;
+  categoryFormats: CategoryFormats;
 }
 
 export const DEFAULT_CONFIG: LocalizationConfig = {
@@ -197,9 +245,19 @@ export const DEFAULT_CONFIG: LocalizationConfig = {
   labelsConsumables: false,
   labelsShipMissiles: false,
   labelFormat: "suffix",
+  categoryFormats: {},
 };
 
 export function configFromRow(row: Record<string, unknown>): LocalizationConfig {
+  let categoryFormats: CategoryFormats = {};
+  if (row.category_formats_json && typeof row.category_formats_json === "string") {
+    try {
+      categoryFormats = JSON.parse(row.category_formats_json);
+    } catch {
+      categoryFormats = {};
+    }
+  }
+
   return {
     asopEnabled: !!row.asop_enabled,
     labelsVehicleComponents: !!row.labels_vehicle_components,
@@ -211,5 +269,21 @@ export function configFromRow(row: Record<string, unknown>): LocalizationConfig 
     labelsConsumables: !!row.labels_consumables,
     labelsShipMissiles: !!row.labels_ship_missiles,
     labelFormat: (row.label_format as LabelFormat) || "suffix",
+    categoryFormats,
+  };
+}
+
+/** Resolve the format for a category: per-category override → global fallback */
+export function resolveCategoryFormat(
+  config: LocalizationConfig,
+  category: string,
+): CategoryFormat {
+  if (config.categoryFormats[category]) {
+    return config.categoryFormats[category];
+  }
+  // Fallback: all available fields with global format
+  return {
+    fields: [...(CATEGORY_AVAILABLE_FIELDS[category] || [])],
+    format: config.labelFormat,
   };
 }

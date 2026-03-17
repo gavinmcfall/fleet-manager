@@ -13,6 +13,7 @@ import {
   generateAsopOverrides,
   generateItemLabels,
   mergeGlobalIni,
+  resolveCategoryFormat,
 } from "../lib/localization";
 
 /**
@@ -52,6 +53,10 @@ export function localizationRoutes() {
         labelsConsumables: z.boolean().optional(),
         labelsShipMissiles: z.boolean().optional(),
         labelFormat: z.enum(["suffix", "prefix"]).optional(),
+        categoryFormats: z.record(z.string(), z.object({
+          fields: z.array(z.enum(["manufacturer", "size", "grade", "subType"])),
+          format: z.enum(["suffix", "prefix"]),
+        })).optional(),
       }),
     ),
     async (c) => {
@@ -59,14 +64,19 @@ export function localizationRoutes() {
       const userId = getAuthUser(c).id;
       const body = c.req.valid("json");
 
+      const categoryFormatsJson = body.categoryFormats
+        ? JSON.stringify(body.categoryFormats)
+        : null;
+
       await db
         .prepare(
           `INSERT INTO user_localization_configs (
             user_id, asop_enabled,
             labels_vehicle_components, labels_fps_weapons, labels_fps_armour,
             labels_fps_helmets, labels_fps_attachments, labels_fps_utilities,
-            labels_consumables, labels_ship_missiles, label_format, updated_at
-          ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, datetime('now'))
+            labels_consumables, labels_ship_missiles, label_format,
+            category_formats_json, updated_at
+          ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, datetime('now'))
           ON CONFLICT(user_id) DO UPDATE SET
             asop_enabled = excluded.asop_enabled,
             labels_vehicle_components = excluded.labels_vehicle_components,
@@ -78,6 +88,7 @@ export function localizationRoutes() {
             labels_consumables = excluded.labels_consumables,
             labels_ship_missiles = excluded.labels_ship_missiles,
             label_format = excluded.label_format,
+            category_formats_json = COALESCE(excluded.category_formats_json, user_localization_configs.category_formats_json),
             updated_at = excluded.updated_at`,
         )
         .bind(
@@ -92,6 +103,7 @@ export function localizationRoutes() {
           body.labelsConsumables ? 1 : 0,
           body.labelsShipMissiles ? 1 : 0,
           body.labelFormat ?? "suffix",
+          categoryFormatsJson,
         )
         .run();
 
@@ -345,7 +357,8 @@ async function buildOverrides(
       subType: r.sub_type,
     }));
 
-    overrides.push(...generateItemLabels(itemRows, config.labelFormat));
+    const catFormat = resolveCategoryFormat(config, cat.table);
+    overrides.push(...generateItemLabels(itemRows, catFormat));
   }
 
   return overrides;
