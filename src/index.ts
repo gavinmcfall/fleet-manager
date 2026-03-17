@@ -156,6 +156,10 @@ app.use("/api/auth/*", async (c, next) => {
 });
 
 // --- Session middleware — populate c.get('user') for all API routes ---
+// Also checks user status in DB to handle the 5-minute cookie cache window:
+// Better Auth's cookie cache may return a stale session for up to 5 min after
+// a user is banned/deleted. This DB check ensures banned/deleted users are
+// treated as unauthenticated immediately, not after cache expiry.
 app.use("/api/*", async (c, next) => {
   // Skip for auth routes (already handled above)
   if (c.req.path.startsWith("/api/auth/")) {
@@ -167,8 +171,24 @@ app.use("/api/*", async (c, next) => {
     headers: c.req.raw.headers,
   });
 
-  c.set("user", session?.user ?? null);
-  c.set("session", session?.session ?? null);
+  if (session?.user) {
+    // Verify user is still active (mitigates cookie cache staleness)
+    const record = await c.env.DB
+      .prepare("SELECT status FROM user WHERE id = ?")
+      .bind(session.user.id)
+      .first<{ status: string }>();
+    if (record?.status === "active") {
+      c.set("user", session.user);
+      c.set("session", session.session);
+    } else {
+      // User is banned/deleted/suspended — treat as unauthenticated
+      c.set("user", null);
+      c.set("session", null);
+    }
+  } else {
+    c.set("user", null);
+    c.set("session", null);
+  }
   return next();
 });
 
@@ -178,19 +198,11 @@ app.use("/api/*", async (c, next) => {
 // Protected routes require session auth OR API_TOKEN fallback
 
 // requireAuth middleware — session or API token
+// Note: user status (active/banned/deleted) is already checked in the session middleware.
+// If c.get("user") is set, the user is guaranteed active.
 async function requireAuth(c: Context<HonoEnv>, next: Next): Promise<Response | void> {
   const user = c.get("user");
-  if (user) {
-    // Reject deleted/suspended/banned users even if they have a valid session
-    const record = await c.env.DB
-      .prepare("SELECT status FROM user WHERE id = ?")
-      .bind(user.id)
-      .first<{ status: string }>();
-    if (!record || record.status !== 'active') {
-      return c.json({ error: "Unauthorized" }, 401);
-    }
-    return next();
-  }
+  if (user) return next();
 
   // Fallback: X-API-Key for external API consumers
   const token = c.env.API_TOKEN;
