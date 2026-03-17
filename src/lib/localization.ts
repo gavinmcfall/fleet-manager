@@ -54,10 +54,13 @@ export type CategoryFormats = Record<string, CategoryFormat>;
 // Available fields per category (what the DB actually has)
 // ---------------------------------------------------------------------------
 
+// Only fields with meaningful, varied data per category.
+// Excludes: columns that don't exist on the table, columns where every row
+// has the same value (e.g. grade=A only), or columns with unhelpful data.
 export const CATEGORY_AVAILABLE_FIELDS: Record<string, LabelField[]> = {
   vehicle_components: ["manufacturer", "size", "grade", "subType"],
   fps_weapons: ["manufacturer", "size", "subType"],
-  fps_armour: ["manufacturer", "size", "grade", "subType"],
+  fps_armour: ["manufacturer", "subType"],
   fps_helmets: ["manufacturer", "grade", "subType"],
   fps_attachments: ["manufacturer", "subType"],
   fps_utilities: ["manufacturer", "subType"],

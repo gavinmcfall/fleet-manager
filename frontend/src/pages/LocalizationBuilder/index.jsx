@@ -23,10 +23,11 @@ const LABEL_CATEGORIES = [
   { key: 'labelsShipMissiles', dbKey: 'ship_missiles', label: 'Ship Missiles', desc: 'Missiles and torpedoes' },
 ]
 
+// Only fields with meaningful, varied data per category
 const CATEGORY_FIELDS = {
   vehicle_components: ['manufacturer', 'size', 'grade', 'subType'],
   fps_weapons: ['manufacturer', 'size', 'subType'],
-  fps_armour: ['manufacturer', 'size', 'grade', 'subType'],
+  fps_armour: ['manufacturer', 'subType'],
   fps_helmets: ['manufacturer', 'grade', 'subType'],
   fps_attachments: ['manufacturer', 'subType'],
   fps_utilities: ['manufacturer', 'subType'],
@@ -44,8 +45,8 @@ const FIELD_LABELS = {
 const EXAMPLE_DATA = {
   vehicle_components: { name: 'FullStop', manufacturer: 'GODI', size: 2, grade: 'C', subType: 'Cooler' },
   fps_weapons: { name: 'Demeco LMG', manufacturer: 'KRIG', size: 2, grade: null, subType: 'LMG' },
-  fps_armour: { name: 'Morozov Core', manufacturer: 'AEGS', size: null, grade: 'B', subType: 'Torso' },
-  fps_helmets: { name: 'Calva Helmet', manufacturer: 'AEGS', size: null, grade: 'B', subType: 'Heavy' },
+  fps_armour: { name: 'Morozov Core', manufacturer: 'AEGS', size: null, grade: null, subType: 'Torso' },
+  fps_helmets: { name: 'Calva Helmet', manufacturer: 'AEGS', size: null, grade: 'A', subType: 'Heavy' },
   fps_attachments: { name: '4x Scope', manufacturer: 'KBAR', size: null, grade: null, subType: 'Sight' },
   fps_utilities: { name: 'ParaMed', manufacturer: 'CRUS', size: null, grade: null, subType: 'Medical' },
   consumables: { name: "Big Benny's", manufacturer: null, size: null, grade: null, subType: 'Food' },
