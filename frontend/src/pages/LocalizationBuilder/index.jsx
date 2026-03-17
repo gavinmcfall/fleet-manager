@@ -109,14 +109,8 @@ function Toggle({ checked, onChange }) {
 function CategoryFieldConfig({ dbKey, catFormat, onChange }) {
   const available = CATEGORY_FIELDS[dbKey] || []
   const { fields, format } = catFormat
-
-  const moveField = (idx, direction) => {
-    const next = [...fields]
-    const target = idx + direction
-    if (target < 0 || target >= next.length) return
-    ;[next[idx], next[target]] = [next[target], next[idx]]
-    onChange({ ...catFormat, fields: next })
-  }
+  const [dragIdx, setDragIdx] = useState(null)
+  const [overIdx, setOverIdx] = useState(null)
 
   const toggleField = (field) => {
     const next = fields.includes(field)
@@ -126,6 +120,33 @@ function CategoryFieldConfig({ dbKey, catFormat, onChange }) {
   }
 
   const setFormat = (fmt) => onChange({ ...catFormat, format: fmt })
+
+  const handleDragStart = (e, idx) => {
+    setDragIdx(idx)
+    e.dataTransfer.effectAllowed = 'move'
+  }
+
+  const handleDragOver = (e, idx) => {
+    e.preventDefault()
+    e.dataTransfer.dropEffect = 'move'
+    setOverIdx(idx)
+  }
+
+  const handleDrop = (e, dropIdx) => {
+    e.preventDefault()
+    if (dragIdx === null || dragIdx === dropIdx) return
+    const next = [...fields]
+    const [moved] = next.splice(dragIdx, 1)
+    next.splice(dropIdx, 0, moved)
+    onChange({ ...catFormat, fields: next })
+    setDragIdx(null)
+    setOverIdx(null)
+  }
+
+  const handleDragEnd = () => {
+    setDragIdx(null)
+    setOverIdx(null)
+  }
 
   const preview = buildPreviewLabel(dbKey, fields, format)
   const inactive = available.filter(f => !fields.includes(f))
@@ -139,7 +160,6 @@ function CategoryFieldConfig({ dbKey, catFormat, onChange }) {
       </div>
 
       <div className="flex gap-4">
-        {/* Format */}
         <div className="space-y-1.5">
           <p className="text-[10px] uppercase tracking-wider text-gray-500">Position</p>
           <div className="flex gap-1">
@@ -160,31 +180,29 @@ function CategoryFieldConfig({ dbKey, catFormat, onChange }) {
         </div>
       </div>
 
-      {/* Active fields */}
+      {/* Active fields — drag to reorder */}
       <div className="space-y-1">
-        <p className="text-[10px] uppercase tracking-wider text-gray-500">Fields (reorder with arrows, click eye to toggle)</p>
+        <p className="text-[10px] uppercase tracking-wider text-gray-500">Fields (drag to reorder, click eye to remove)</p>
         {fields.map((field, idx) => (
-          <div key={field} className="flex items-center gap-2 bg-sc-accent/5 border border-sc-accent/20 rounded px-2.5 py-1.5 group">
-            <GripVertical className="w-3.5 h-3.5 text-gray-600 shrink-0" />
+          <div
+            key={field}
+            draggable
+            onDragStart={(e) => handleDragStart(e, idx)}
+            onDragOver={(e) => handleDragOver(e, idx)}
+            onDrop={(e) => handleDrop(e, idx)}
+            onDragEnd={handleDragEnd}
+            className={`flex items-center gap-2 bg-sc-accent/5 border rounded px-2.5 py-1.5 transition-all select-none ${
+              dragIdx === idx ? 'opacity-40 border-sc-accent/40' :
+              overIdx === idx && dragIdx !== null ? 'border-sc-accent border-t-2' :
+              'border-sc-accent/20'
+            }`}
+          >
+            <GripVertical className="w-3.5 h-3.5 text-gray-500 shrink-0 cursor-grab active:cursor-grabbing" />
             <span className="text-xs text-gray-200 flex-1">{FIELD_LABELS[field]}</span>
-            <button
-              onClick={() => moveField(idx, -1)}
-              disabled={idx === 0}
-              className="p-0.5 rounded hover:bg-white/10 disabled:opacity-20"
-            >
-              <ChevronUp className="w-3.5 h-3.5 text-gray-400" />
-            </button>
-            <button
-              onClick={() => moveField(idx, 1)}
-              disabled={idx === fields.length - 1}
-              className="p-0.5 rounded hover:bg-white/10 disabled:opacity-20"
-            >
-              <ChevronDown className="w-3.5 h-3.5 text-gray-400" />
-            </button>
             <button
               onClick={() => toggleField(field)}
               className="p-0.5 rounded hover:bg-red-500/20"
-              title="Hide field"
+              title="Remove field"
             >
               <EyeOff className="w-3.5 h-3.5 text-gray-500 hover:text-red-400" />
             </button>
