@@ -38,7 +38,7 @@ export function syncRoutes<E extends { Bindings: Env }>() {
         console.error("[sync] RSI sync failed:", err),
       ),
     );
-    return c.json({ message: "RSI sync triggered" });
+    return c.json({ ok: true, message: "RSI sync triggered" });
   });
 
   // POST /api/sync/all — trigger full sync pipeline (background)
@@ -54,7 +54,7 @@ export function syncRoutes<E extends { Bindings: Env }>() {
         console.error("[sync] Full sync failed:", err),
       ),
     );
-    return c.json({ message: "Full sync pipeline triggered" });
+    return c.json({ ok: true, message: "Full sync pipeline triggered" });
   });
 
   return routes;

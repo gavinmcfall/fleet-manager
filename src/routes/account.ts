@@ -101,7 +101,7 @@ export function accountRoutes() {
       ipAddress: c.req.header("cf-connecting-ip") ?? c.req.header("x-forwarded-for"),
     });
 
-    return c.json({ status: true });
+    return c.json({ ok: true });
   });
 
   // POST /api/account/set-password — OAuth-only users: set initial password
@@ -145,7 +145,7 @@ export function accountRoutes() {
       ipAddress: c.req.header("cf-connecting-ip") ?? c.req.header("x-forwarded-for"),
     });
 
-    return c.json({ status: true });
+    return c.json({ ok: true });
   });
 
   // GET /api/account/export — Download all user data as JSON
@@ -179,7 +179,7 @@ export function accountRoutes() {
       html,
     );
 
-    return c.json({ message: "Export emailed to your registered address" });
+    return c.json({ ok: true, message: "Export emailed to your registered address" });
   });
 
   // GET /api/account/rsi-profile — return cached RSI profile for current user
@@ -499,7 +499,7 @@ export function accountRoutes() {
       .bind(user.id)
       .run();
 
-    return c.json({ message: "Account deleted" });
+    return c.json({ ok: true, message: "Account deleted" });
   });
 
   return routes;

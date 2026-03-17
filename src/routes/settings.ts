@@ -84,7 +84,7 @@ export function settingsRoutes() {
         newValue: "[cleared]",
         ipAddress: c.req.header("cf-connecting-ip") ?? c.req.header("x-forwarded-for"),
       });
-      return c.json({ message: "LLM configuration cleared" });
+      return c.json({ ok: true, message: "LLM configuration cleared" });
     }
 
     if (!body.provider) {
@@ -122,7 +122,7 @@ export function settingsRoutes() {
       ipAddress: c.req.header("cf-connecting-ip") ?? c.req.header("x-forwarded-for"),
     });
 
-    return c.json({ message: "LLM configuration saved" });
+    return c.json({ ok: true, message: "LLM configuration saved" });
   });
 
   // GET /api/settings/preferences
@@ -203,7 +203,7 @@ export function settingsRoutes() {
       }
     }
 
-    return c.json({ message: "Preferences saved" });
+    return c.json({ ok: true, message: "Preferences saved" });
   });
 
   // DELETE /api/settings/sync-data — remove all synced RSI data

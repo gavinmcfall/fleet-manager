@@ -71,7 +71,7 @@ export function analysisRoutes() {
         messages: [{ role: "user", content: "test" }],
       });
       logEvent("llm_test", { success: true, provider });
-      return c.json({ success: true, message: "Connection successful", models: PROVIDER_MODELS[provider] });
+      return c.json({ ok: true, message: "Connection successful", models: PROVIDER_MODELS[provider] });
     } catch (err) {
       return c.json(
         { error: `Connection failed: ${err instanceof Error ? err.message : String(err)}` },
@@ -239,7 +239,7 @@ export function analysisRoutes() {
     const userID = getAuthUser(c).id;
 
     await db.prepare("DELETE FROM ai_analyses WHERE id = ? AND user_id = ?").bind(id, userID).run();
-    return c.json({ success: true });
+    return c.json({ ok: true });
   });
 
   return routes;

@@ -59,7 +59,7 @@ export function fleetRoutes() {
       return c.json({ error: "Not found or not authorized" }, 404);
     }
 
-    return c.json({ success: true });
+    return c.json({ ok: true });
   });
 
   // GET /api/vehicles/:id/upgrades — get CCU chain for a fleet entry

@@ -26,7 +26,7 @@ export function migrateRoutes() {
     ).getMigrations(auth.options);
 
     if (toBeCreated.length === 0 && toBeAdded.length === 0) {
-      return c.json({ message: "No migrations needed" });
+      return c.json({ ok: true, message: "No migrations needed" });
     }
 
     await runMigrations();
