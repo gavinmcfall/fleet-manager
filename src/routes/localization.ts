@@ -13,6 +13,7 @@ import {
   generateAsopOverrides,
   generateItemLabels,
   mergeGlobalIni,
+  parseGlobalIniKeys,
   resolveCategoryFormat,
 } from "../lib/localization";
 
@@ -239,7 +240,10 @@ export function localizationRoutes() {
       ? configFromRow(configRow)
       : DEFAULT_CONFIG;
 
-    const overrideList = await buildOverrides(db, userId, config);
+    // Parse valid keys from base file so we only override what exists
+    const validKeys = parseGlobalIniKeys(baseContent);
+
+    const overrideList = await buildOverrides(db, userId, config, validKeys);
 
     // Build override map
     const overrideMap = new Map<string, string>();
@@ -271,6 +275,7 @@ async function buildOverrides(
   db: D1Database,
   userId: string,
   config: LocalizationConfig,
+  validKeys?: Set<string>,
 ): Promise<LabelOverride[]> {
   const versionId = await resolveVersionId(db);
   const overrides: LabelOverride[] = [];
@@ -357,7 +362,7 @@ async function buildOverrides(
     }));
 
     const catFormat = resolveCategoryFormat(config, cat.table);
-    overrides.push(...generateItemLabels(itemRows, catFormat));
+    overrides.push(...generateItemLabels(itemRows, catFormat, validKeys));
   }
 
   return overrides;

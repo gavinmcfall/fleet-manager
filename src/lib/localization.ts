@@ -169,27 +169,28 @@ function formatLabel(
   return format === "prefix" ? `[${detailTag}] ${name}` : `${name} [${detailTag}]`;
 }
 
+/**
+ * Generate item label overrides. Only produces overrides for keys that
+ * exist in validKeys (the actual global.ini key set). This prevents
+ * phantom keys from colliding with unrelated entries.
+ */
 export function generateItemLabels(
   rows: ItemRow[],
   catFormat: CategoryFormat,
+  validKeys?: Set<string>,
 ): LabelOverride[] {
   const overrides: LabelOverride[] = [];
   for (const row of rows) {
     if (!row.className) continue;
-    const tag = buildDetailTag(row, catFormat.fields);
     const key = `item_Name${row.className}`;
+    // Only override keys that actually exist in the base file
+    if (validKeys && !validKeys.has(key)) continue;
+    const tag = buildDetailTag(row, catFormat.fields);
     overrides.push({
       key,
       value: formatLabel(row.name, tag, catFormat.format),
       original: row.name,
     });
-    if (!row.className.endsWith("_SCItem")) {
-      overrides.push({
-        key: `item_Name${row.className}_SCItem`,
-        value: formatLabel(row.name, tag, catFormat.format),
-        original: row.name,
-      });
-    }
   }
   return overrides;
 }
@@ -198,15 +199,14 @@ export function generateItemLabels(
 // Merge engine
 // ---------------------------------------------------------------------------
 
+/**
+ * Merge overrides into the base global.ini content.
+ * Exact case matching — only replaces keys that match precisely.
+ */
 export function mergeGlobalIni(
   baseContent: string,
   overrides: Map<string, string>,
 ): string {
-  const lowerMap = new Map<string, string>();
-  for (const [k, v] of overrides) {
-    lowerMap.set(k.toLowerCase(), v);
-  }
-
   const lines = baseContent.split("\n");
   const result: string[] = [];
 
@@ -217,7 +217,7 @@ export function mergeGlobalIni(
       continue;
     }
     const key = line.substring(0, eqIdx).trim();
-    const override = lowerMap.get(key.toLowerCase());
+    const override = overrides.get(key);
     if (override !== undefined) {
       result.push(`${key}=${override}`);
     } else {
@@ -226,6 +226,21 @@ export function mergeGlobalIni(
   }
 
   return result.join("\n");
+}
+
+/**
+ * Parse all keys from a global.ini file content.
+ * Returns exact-case keys for validation.
+ */
+export function parseGlobalIniKeys(content: string): Set<string> {
+  const keys = new Set<string>();
+  const lines = content.split("\n");
+  for (const line of lines) {
+    const eqIdx = line.indexOf("=");
+    if (eqIdx === -1) continue;
+    keys.add(line.substring(0, eqIdx).trim());
+  }
+  return keys;
 }
 
 // ---------------------------------------------------------------------------
