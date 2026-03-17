@@ -97,6 +97,18 @@ app.use("/api/*", async (c, next) => {
   }
 });
 
+// Request body size limits — reject oversized payloads before parsing
+// Import/sync payloads can be large (2000 pledges × 50 items), avatar uploads are 2MB max.
+// Most API endpoints need < 100KB. The 5MB limit covers the largest legitimate sync payloads.
+const MAX_BODY_BYTES = 5 * 1024 * 1024; // 5MB
+app.use("/api/*", async (c, next) => {
+  const contentLength = c.req.header("Content-Length");
+  if (contentLength && parseInt(contentLength, 10) > MAX_BODY_BYTES) {
+    return c.json({ error: "Request body too large" }, 413);
+  }
+  return next();
+});
+
 // CORS — strict same-origin in production, localhost in dev, pinned extension IDs for SC Bridge Sync
 // Extension IDs are stable after store publication. Update these when publishing new extensions.
 const TRUSTED_EXTENSION_ORIGINS = new Set<string>([
