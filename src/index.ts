@@ -85,7 +85,7 @@ app.use("*", async (c, next) => {
     "Content-Security-Policy",
     "default-src 'self'; " +
     "script-src 'self' 'unsafe-inline' https://www.googletagmanager.com https://storage.ko-fi.com https://static.cloudflareinsights.com; " +
-    "style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; " +
+    "style-src 'self' 'unsafe-inline' https://fonts.googleapis.com https://storage.ko-fi.com; " +
     "font-src 'self' https://fonts.gstatic.com; " +
     "img-src 'self' https://imagedelivery.net https://robertsspaceindustries.com " +
     "https://media.robertsspaceindustries.com https://cdn.robertsspaceindustries.com https://www.gravatar.com https://www.googletagmanager.com https://storage.ko-fi.com data:; " +
