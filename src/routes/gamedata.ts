@@ -4,11 +4,16 @@ import { cachedJson, resolveVersionId, cacheSlug } from "../lib/cache"
 
 const DEFAULT_VERSION_SUBQUERY = "(SELECT id FROM game_versions WHERE is_default = 1)"
 
+/** Version-aware subquery — uses resolved versionId when available */
+function versionSub(versionId: number): string {
+  return versionId > 0 ? String(versionId) : DEFAULT_VERSION_SUBQUERY
+}
+
 /** SQL expression for shop display name — populated by extraction scripts */
 const SHOP_DISPLAY_NAME_EXPR = `COALESCE(s.display_name, REPLACE(REPLACE(REPLACE(s.name, 'Inv ', ''), '_', ' '), '  ', ' '))`
 
 /** Build the inventory query for a set of shop IDs */
-function buildInventoryQuery(placeholders: string): string {
+function buildInventoryQuery(placeholders: string, versionId: number = -1): string {
   return `SELECT si.shop_id, si.item_uuid, si.item_name, si.buy_price, si.sell_price,
        si.base_inventory, si.max_inventory,
        COALESCE(fi.name, tc.name, v.name, si.item_name) as resolved_name,
@@ -19,11 +24,11 @@ function buildInventoryQuery(placeholders: string): string {
          ELSE 'other'
        END as item_category
      FROM shop_inventory si
-     LEFT JOIN loot_map fi ON fi.uuid = si.item_uuid AND fi.game_version_id = ${DEFAULT_VERSION_SUBQUERY}
+     LEFT JOIN loot_map fi ON fi.uuid = si.item_uuid AND fi.game_version_id = ${versionSub(versionId)}
      LEFT JOIN trade_commodities tc ON tc.uuid = si.item_uuid
      LEFT JOIN vehicles v ON v.uuid = si.item_uuid
      WHERE si.shop_id IN (${placeholders})
-       AND si.game_version_id = ${DEFAULT_VERSION_SUBQUERY}
+       AND si.game_version_id = ${versionSub(versionId)}
      ORDER BY COALESCE(fi.name, tc.name, v.name, si.item_name)`
 }
 
@@ -119,7 +124,7 @@ export function gamedataRoutes<E extends HonoEnv>() {
       const { results: scopes } = await db
         .prepare(
           `SELECT * FROM reputation_scopes
-           WHERE game_version_id = ${DEFAULT_VERSION_SUBQUERY}
+           WHERE game_version_id = ${versionSub(versionId)}
              AND name NOT LIKE '%PLACEHOLDER%'
            ORDER BY name`,
         )
@@ -130,7 +135,7 @@ export function gamedataRoutes<E extends HonoEnv>() {
           `SELECT rs.*, rsc.name as scope_name, rsc.uuid as scope_uuid
            FROM reputation_standings rs
            JOIN reputation_scopes rsc ON rsc.id = rs.scope_id
-           WHERE rs.game_version_id = ${DEFAULT_VERSION_SUBQUERY}
+           WHERE rs.game_version_id = ${versionSub(versionId)}
              AND rs.name != '<= PLACEHOLDER =>'
            ORDER BY rs.scope_id, rs.sort_order`,
         )
@@ -141,7 +146,7 @@ export function gamedataRoutes<E extends HonoEnv>() {
           `SELECT frs.reputation_scope_id, frs.is_primary, f.id as faction_id, f.name as faction_name, f.slug as faction_slug
            FROM faction_reputation_scopes frs
            JOIN factions f ON f.id = frs.faction_id
-           WHERE frs.game_version_id = ${DEFAULT_VERSION_SUBQUERY}
+           WHERE frs.game_version_id = ${versionSub(versionId)}
            ORDER BY frs.is_primary DESC, f.name`,
         )
         .all()
@@ -179,14 +184,14 @@ export function gamedataRoutes<E extends HonoEnv>() {
         db
           .prepare(
             `SELECT * FROM law_infractions
-             WHERE game_version_id = ${DEFAULT_VERSION_SUBQUERY}
+             WHERE game_version_id = ${versionSub(versionId)}
              ORDER BY name`,
           )
           .all(),
         db
           .prepare(
             `SELECT * FROM law_jurisdictions
-             WHERE game_version_id = ${DEFAULT_VERSION_SUBQUERY}
+             WHERE game_version_id = ${versionSub(versionId)}
              ORDER BY name`,
           )
           .all(),
@@ -201,7 +206,7 @@ export function gamedataRoutes<E extends HonoEnv>() {
              FROM jurisdiction_infraction_overrides jio
              JOIN law_infractions li ON li.id = jio.infraction_id
              JOIN law_jurisdictions lj ON lj.id = jio.jurisdiction_id
-             WHERE jio.game_version_id = ${DEFAULT_VERSION_SUBQUERY}`,
+             WHERE jio.game_version_id = ${versionSub(versionId)}`,
           )
           .all(),
       ])
@@ -223,7 +228,7 @@ export function gamedataRoutes<E extends HonoEnv>() {
         db
           .prepare(
             `SELECT * FROM mineable_elements
-             WHERE game_version_id = ${DEFAULT_VERSION_SUBQUERY}
+             WHERE game_version_id = ${versionSub(versionId)}
                AND name NOT LIKE '%Template%'
                AND name NOT LIKE '%Testelement%'
              ORDER BY name`,
@@ -232,14 +237,14 @@ export function gamedataRoutes<E extends HonoEnv>() {
         db
           .prepare(
             `SELECT * FROM rock_compositions
-             WHERE game_version_id = ${DEFAULT_VERSION_SUBQUERY}
+             WHERE game_version_id = ${versionSub(versionId)}
              ORDER BY name`,
           )
           .all(),
         db
           .prepare(
             `SELECT * FROM refining_processes
-             WHERE game_version_id = ${DEFAULT_VERSION_SUBQUERY}
+             WHERE game_version_id = ${versionSub(versionId)}
              ORDER BY name`,
           )
           .all(),
@@ -265,7 +270,7 @@ export function gamedataRoutes<E extends HonoEnv>() {
              (SELECT COUNT(*) FROM shop_inventory si WHERE si.shop_id = s.id) as item_count,
              s.location_label as location_name
            FROM shops s
-           WHERE s.game_version_id = ${DEFAULT_VERSION_SUBQUERY}
+           WHERE s.game_version_id = ${versionSub(versionId)}
            ORDER BY s.name`,
         )
         .all()
@@ -285,11 +290,11 @@ export function gamedataRoutes<E extends HonoEnv>() {
           `SELECT si.*,
              COALESCE(fi.name, v.name, si.item_name) as resolved_name
            FROM shop_inventory si
-           LEFT JOIN loot_map fi ON fi.uuid = si.item_uuid AND fi.game_version_id = ${DEFAULT_VERSION_SUBQUERY}
+           LEFT JOIN loot_map fi ON fi.uuid = si.item_uuid AND fi.game_version_id = ${versionSub(versionId)}
            LEFT JOIN vehicles v ON v.uuid = si.item_uuid
            JOIN shops s ON s.id = si.shop_id
            WHERE s.slug = ?
-             AND s.game_version_id = ${DEFAULT_VERSION_SUBQUERY}
+             AND s.game_version_id = ${versionSub(versionId)}
            ORDER BY COALESCE(fi.name, v.name, si.item_name), si.buy_price DESC`,
         )
         .bind(slug)
@@ -308,7 +313,7 @@ export function gamedataRoutes<E extends HonoEnv>() {
         db
           .prepare(
             `SELECT * FROM trade_commodities
-             WHERE game_version_id = ${DEFAULT_VERSION_SUBQUERY}
+             WHERE game_version_id = ${versionSub(versionId)}
              ORDER BY category, name`,
           )
           .all(),
@@ -323,7 +328,7 @@ export function gamedataRoutes<E extends HonoEnv>() {
              JOIN shops s ON s.id = si.shop_id
              JOIN trade_commodities tc ON tc.uuid = si.item_uuid
              WHERE s.shop_type = 'admin'
-               AND s.game_version_id = ${DEFAULT_VERSION_SUBQUERY}
+               AND s.game_version_id = ${versionSub(versionId)}
              ORDER BY s.location_label, s.name`,
           )
           .all(),
@@ -364,7 +369,7 @@ export function gamedataRoutes<E extends HonoEnv>() {
           `SELECT id, name, slug, location_type
            FROM star_map_locations
            WHERE slug = ?
-             AND game_version_id = ${DEFAULT_VERSION_SUBQUERY}
+             AND game_version_id = ${versionSub(versionId)}
            LIMIT 1`,
         )
         .bind(slug)
@@ -378,9 +383,9 @@ export function gamedataRoutes<E extends HonoEnv>() {
         .prepare(
           `SELECT id FROM star_map_locations
            WHERE (id = ? OR parent_uuid = (
-             SELECT uuid FROM star_map_locations WHERE id = ? AND game_version_id = ${DEFAULT_VERSION_SUBQUERY}
+             SELECT uuid FROM star_map_locations WHERE id = ? AND game_version_id = ${versionSub(versionId)}
            ))
-           AND game_version_id = ${DEFAULT_VERSION_SUBQUERY}`,
+           AND game_version_id = ${versionSub(versionId)}`,
         )
         .bind(location.id, location.id)
         .all()
@@ -398,7 +403,7 @@ export function gamedataRoutes<E extends HonoEnv>() {
            FROM shops s
            JOIN shop_locations sl ON sl.shop_id = s.id
            WHERE sl.location_id IN (${placeholders})
-             AND s.game_version_id = ${DEFAULT_VERSION_SUBQUERY}
+             AND s.game_version_id = ${versionSub(versionId)}
            ORDER BY s.shop_type, s.name`,
         )
         .bind(...locationIds)
@@ -410,7 +415,7 @@ export function gamedataRoutes<E extends HonoEnv>() {
             `SELECT s.id, s.name, s.slug, s.shop_type, s.location_label, NULL as placement_name
              FROM shops s
              WHERE s.location_id IN (${placeholders})
-               AND s.game_version_id = ${DEFAULT_VERSION_SUBQUERY}
+               AND s.game_version_id = ${versionSub(versionId)}
              ORDER BY s.shop_type, s.name`,
           )
           .bind(...locationIds)
@@ -423,7 +428,7 @@ export function gamedataRoutes<E extends HonoEnv>() {
         const directShopIds = directShops.map((s) => s.id as number)
         const invPlaceholders = directShopIds.map(() => "?").join(",")
         const { results: inventory } = await db
-          .prepare(buildInventoryQuery(invPlaceholders))
+          .prepare(buildInventoryQuery(invPlaceholders, versionId))
           .bind(...directShopIds)
           .all()
 
@@ -433,7 +438,7 @@ export function gamedataRoutes<E extends HonoEnv>() {
       const shopIds = shops.map((s) => s.id as number)
       const invPlaceholders = shopIds.map(() => "?").join(",")
       const { results: inventory } = await db
-        .prepare(buildInventoryQuery(invPlaceholders))
+        .prepare(buildInventoryQuery(invPlaceholders, versionId))
         .bind(...shopIds)
         .all()
 
@@ -453,7 +458,7 @@ export function gamedataRoutes<E extends HonoEnv>() {
            FROM vehicle_weapon_racks wr
            LEFT JOIN vehicles v ON v.id = wr.vehicle_id
            LEFT JOIN manufacturers m ON m.id = v.manufacturer_id
-           WHERE wr.game_version_id = ${DEFAULT_VERSION_SUBQUERY}
+           WHERE wr.game_version_id = ${versionSub(versionId)}
            ORDER BY v.name, wr.rack_label`,
         )
         .all()
@@ -473,7 +478,7 @@ export function gamedataRoutes<E extends HonoEnv>() {
            FROM vehicle_suit_lockers sl
            LEFT JOIN vehicles v ON v.id = sl.vehicle_id
            LEFT JOIN manufacturers m ON m.id = v.manufacturer_id
-           WHERE sl.game_version_id = ${DEFAULT_VERSION_SUBQUERY}
+           WHERE sl.game_version_id = ${versionSub(versionId)}
            ORDER BY v.name, sl.locker_label`,
         )
         .all()
@@ -494,7 +499,7 @@ export function gamedataRoutes<E extends HonoEnv>() {
              SUM(nl.visible_item_count) as item_count
            FROM npc_factions f
            JOIN npc_loadouts nl ON nl.faction_id = f.id
-             AND nl.game_version_id = ${DEFAULT_VERSION_SUBQUERY}
+             AND nl.game_version_id = ${versionSub(versionId)}
              AND nl.visible_item_count > 0
            GROUP BY f.id
            HAVING item_count > 0
@@ -525,7 +530,7 @@ export function gamedataRoutes<E extends HonoEnv>() {
         .prepare(
           `SELECT COUNT(*) as total FROM npc_loadouts nl
            WHERE nl.faction_id = ?
-             AND nl.game_version_id = ${DEFAULT_VERSION_SUBQUERY}
+             AND nl.game_version_id = ${versionSub(versionId)}
              AND nl.visible_item_count > 0`,
         )
         .bind(faction.id)
@@ -541,7 +546,7 @@ export function gamedataRoutes<E extends HonoEnv>() {
           `SELECT nl.*
            FROM npc_loadouts nl
            WHERE nl.faction_id = ?
-             AND nl.game_version_id = ${DEFAULT_VERSION_SUBQUERY}
+             AND nl.game_version_id = ${versionSub(versionId)}
              AND nl.visible_item_count > 0
            ORDER BY nl.category, nl.sub_category, nl.loadout_name
            LIMIT ? OFFSET ?`,
@@ -601,7 +606,7 @@ export function gamedataRoutes<E extends HonoEnv>() {
       const [typesResult, giversResult] = await Promise.all([
         db.prepare(
           `SELECT * FROM mission_types
-           WHERE game_version_id = ${DEFAULT_VERSION_SUBQUERY}
+           WHERE game_version_id = ${versionSub(versionId)}
              AND name != '<= PLACEHOLDER =>'
            ORDER BY name`,
         ).all(),
@@ -612,7 +617,7 @@ export function gamedataRoutes<E extends HonoEnv>() {
            FROM mission_givers mg
            LEFT JOIN factions f ON f.id = mg.faction_id
            LEFT JOIN star_map_locations sml ON sml.id = mg.location_id
-           WHERE mg.game_version_id = ${DEFAULT_VERSION_SUBQUERY}
+           WHERE mg.game_version_id = ${versionSub(versionId)}
              AND mg.name != '<= PLACEHOLDER =>'
              AND mg.name != '<= UNINITIALIZED =>'
            ORDER BY mg.name`,
@@ -635,7 +640,7 @@ export function gamedataRoutes<E extends HonoEnv>() {
         db.prepare(
           `SELECT id, uuid, tag, name, type, sub_type, craft_time_seconds
            FROM crafting_blueprints
-           WHERE game_version_id <= ${DEFAULT_VERSION_SUBQUERY}
+           WHERE game_version_id <= ${versionSub(versionId)}
            ORDER BY type, sub_type, name`
         ).all(),
         db.prepare(
@@ -643,7 +648,7 @@ export function gamedataRoutes<E extends HonoEnv>() {
                   cbs.resource_name, cbs.quantity, cbs.min_quality
            FROM crafting_blueprint_slots cbs
            JOIN crafting_blueprints cb ON cb.id = cbs.crafting_blueprint_id
-           WHERE cb.game_version_id <= ${DEFAULT_VERSION_SUBQUERY}
+           WHERE cb.game_version_id <= ${versionSub(versionId)}
            ORDER BY cbs.crafting_blueprint_id, cbs.slot_index`
         ).all(),
         db.prepare(
@@ -653,12 +658,12 @@ export function gamedataRoutes<E extends HonoEnv>() {
            JOIN crafting_properties cp ON cp.id = csm.crafting_property_id
            JOIN crafting_blueprint_slots cbs ON cbs.id = csm.crafting_blueprint_slot_id
            JOIN crafting_blueprints cb ON cb.id = cbs.crafting_blueprint_id
-           WHERE cb.game_version_id <= ${DEFAULT_VERSION_SUBQUERY}`
+           WHERE cb.game_version_id <= ${versionSub(versionId)}`
         ).all(),
         db.prepare(`SELECT id, key, name, unit, category FROM crafting_properties ORDER BY id`).all(),
         db.prepare(
           `SELECT name FROM crafting_resources
-           WHERE game_version_id <= ${DEFAULT_VERSION_SUBQUERY}
+           WHERE game_version_id <= ${versionSub(versionId)}
            ORDER BY name`
         ).all(),
       ])
