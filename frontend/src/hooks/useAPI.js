@@ -69,6 +69,14 @@ export function useShipPaints(slug) {
   return useAPI(slug ? `/paints/ship/${slug}` : null, { skip: !slug })
 }
 
+export function useShipSalvage(slug) {
+  return useAPI(slug ? `/ships/${slug}/salvage` : null, { skip: !slug })
+}
+
+export function useSalvageableShips() {
+  return useAPI('/gamedata/salvageable-ships')
+}
+
 export function useWeaponRacks() {
   return useAPI('/gamedata/weapon-racks')
 }

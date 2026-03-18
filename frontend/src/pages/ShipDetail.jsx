@@ -1,10 +1,10 @@
 import React, { useState, useCallback } from 'react'
 import { useParams, useNavigate, useSearchParams } from 'react-router-dom'
 import {
-  ArrowLeft, ExternalLink, X,
+  ArrowLeft, ExternalLink, X, Wrench,
   Rocket, Zap, Box, Palette, LayoutGrid, List,
 } from 'lucide-react'
-import { useShip, useShipLoadout, useShipPaints, useWeaponRacks, useSuitLockers, useFleet, useFleetEntryUpgrades } from '../hooks/useAPI'
+import { useShip, useShipLoadout, useShipPaints, useShipSalvage, useWeaponRacks, useSuitLockers, useFleet, useFleetEntryUpgrades } from '../hooks/useAPI'
 import ShipImage from '../components/ShipImage'
 import StatusBadge from '../components/StatusBadge'
 import LoadingState from '../components/LoadingState'
@@ -22,6 +22,7 @@ const TABS = [
   { id: 'interior', label: 'Interior' },
   { id: 'performance', label: 'Performance' },
   { id: 'paints', label: 'Paints' },
+  { id: 'salvage', label: 'Salvage' },
 ]
 
 const COMPONENT_TYPES = new Set(['power', 'cooler', 'shield', 'quantum_drive', 'sensor', 'jump_drive'])
@@ -938,12 +939,82 @@ function PerformanceTab({ ship }) {
   )
 }
 
+// ─── Salvage tab ─────────────────────────────────────────────────────────────
+
+const VARIANT_LABELS = {
+  derelict_salvage: 'Derelict (Salvage)',
+  derelict: 'Derelict',
+  boarded: 'Boarded (Mission)',
+}
+
+function SalvageTab({ slug }) {
+  const { data: salvage, loading, error, refetch } = useShipSalvage(slug)
+  const { data: loadout } = useShipLoadout(slug)
+
+  if (loading) return <LoadingState message="Loading salvage data..." />
+  if (error) return <ErrorState message={error} onRetry={refetch} />
+  if (!salvage || !salvage.variants || salvage.variants.length === 0) {
+    return (
+      <div className="text-center py-12 text-gray-500">
+        <Wrench className="w-12 h-12 mx-auto mb-3 opacity-30" />
+        <p>This ship has no known derelict or salvageable variants.</p>
+      </div>
+    )
+  }
+
+  const components = (loadout || []).filter(r =>
+    COMPONENT_TYPES.has(r.port_type) || WEAPON_TYPES.has(r.port_type)
+  )
+
+  return (
+    <div className="space-y-6">
+      <div className="bg-amber-500/10 border border-amber-500/20 rounded-lg p-4">
+        <h3 className="text-amber-400 font-medium mb-2">Salvage Encounters</h3>
+        <p className="text-sm text-gray-400 mb-3">
+          This ship can be found as a derelict in space. Components from the base loadout can be stripped via salvage.
+        </p>
+        <div className="flex flex-wrap gap-2">
+          {salvage.variants.map((v, i) => (
+            <span key={i} className="px-3 py-1 bg-gray-800 rounded-full text-xs text-gray-300 border border-gray-700">
+              {VARIANT_LABELS[v.variant_type] || v.variant_type}
+            </span>
+          ))}
+        </div>
+      </div>
+
+      {components.length > 0 && (
+        <div>
+          <h3 className="text-sm font-medium text-gray-400 uppercase tracking-wider mb-3">
+            Salvageable Components ({components.length})
+          </h3>
+          <div className="grid gap-2">
+            {components.map((c, i) => (
+              <div key={i} className="flex items-center justify-between bg-gray-800/50 rounded-lg px-4 py-3 border border-gray-700/50">
+                <div>
+                  <p className="text-sm font-medium text-gray-200">{c.component_name || c.port_name}</p>
+                  <p className="text-xs text-gray-500">
+                    {c.port_type?.replace(/_/g, ' ')} &middot; Size {c.component_size || c.size_max}
+                    {c.manufacturer_name ? ` \u00b7 ${c.manufacturer_name}` : ''}
+                  </p>
+                </div>
+                <span className="text-xs px-2 py-1 rounded bg-gray-700 text-gray-400">
+                  {c.sub_type || c.component_type || c.port_type}
+                </span>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+    </div>
+  )
+}
+
 // ─── Page ─────────────────────────────────────────────────────────────────────
 
 export default function ShipDetail() {
   const { slug } = useParams()
   const navigate = useNavigate()
-  const VALID_TABS = ['overview', 'components', 'weapons', 'interior', 'performance', 'paints']
+  const VALID_TABS = ['overview', 'components', 'weapons', 'interior', 'performance', 'paints', 'salvage']
   const [searchParams, setSearchParams] = useSearchParams()
   const tabParam = searchParams.get('tab')
   const activeTab = VALID_TABS.includes(tabParam) ? tabParam : 'overview'
@@ -1032,6 +1103,7 @@ export default function ShipDetail() {
       {activeTab === 'interior' && <InteriorTab ship={ship} />}
       {activeTab === 'performance' && <PerformanceTab ship={ship} />}
       {activeTab === 'paints' && <PaintsTab slug={slug} />}
+      {activeTab === 'salvage' && <SalvageTab slug={slug} />}
     </div>
   )
 }
