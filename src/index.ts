@@ -347,9 +347,10 @@ app.get("/api/status", async (c) => {
 app.get("/api/ships/:slug/loadout", async (c) => {
   const slug = c.req.param("slug");
   const db = c.env.DB;
-  const versionId = await resolveVersionId(db);
+  const patch = c.req.query("patch");
+  const versionId = await resolveVersionId(db, patch);
   return cachedJson(c, `ships:loadout:${versionId}:${slug}`, () =>
-    getShipLoadout(db, slug),
+    getShipLoadout(db, slug, patch),
   );
 });
 
@@ -357,18 +358,20 @@ app.get("/api/ships/:slug/loadout", async (c) => {
 app.get("/api/ships/:slug/salvage", async (c) => {
   const slug = c.req.param("slug");
   const db = c.env.DB;
-  const versionId = await resolveVersionId(db);
+  const patch = c.req.query("patch");
+  const versionId = await resolveVersionId(db, patch);
   return cachedJson(c, `ships:salvage:${versionId}:${cacheSlug(slug)}`, () =>
-    getSalvageForShip(db, slug),
+    getSalvageForShip(db, slug, patch),
   );
 });
 
 // All salvageable ships
 app.get("/api/gamedata/salvageable-ships", async (c) => {
   const db = c.env.DB;
-  const versionId = await resolveVersionId(db);
+  const patch = c.req.query("patch");
+  const versionId = await resolveVersionId(db, patch);
   return cachedJson(c, `gd:salvageable-ships:${versionId}`, () =>
-    listSalvageableShips(db),
+    listSalvageableShips(db, patch),
   );
 });
 

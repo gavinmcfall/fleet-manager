@@ -14,7 +14,7 @@ import type {
   AIAnalysis,
 } from "../lib/types";
 import { extractSetName, makeSetSlug } from "../lib/loot-sets";
-import { VEHICLE_VERSION_JOIN, VEHICLE_VERSION_CAP } from "../lib/constants";
+import { VEHICLE_VERSION_JOIN, vehicleVersionJoin, vehicleVersionCap } from "../lib/constants";
 
 // --- Loot JSON "has_*" column expressions ---
 // Reusable SQL fragment for SELECT clauses that compute boolean flags from JSON blob columns.
@@ -171,7 +171,7 @@ export async function findVehicleIDsByNameContains(
 // Port Operations
 // ============================================================
 
-export async function getShipLoadout(db: D1Database, slug: string): Promise<Record<string, unknown>[]> {
+export async function getShipLoadout(db: D1Database, slug: string, patchCode?: string): Promise<Record<string, unknown>[]> {
   // Some ships mount weapons inside a weapon-mount bracket (fixed/gimbal). The bracket is
   // the direct equipped item on the gun port, but it is not in vehicle_components. The actual
   // weapon lives one level deeper in a child port. We use a CTE to pre-filter to just this
@@ -183,7 +183,7 @@ export async function getShipLoadout(db: D1Database, slug: string): Promise<Reco
     .prepare(
       `WITH ship_ports AS (
         SELECT * FROM vehicle_ports
-        WHERE vehicle_id = (SELECT v.id FROM vehicles v ${VEHICLE_VERSION_JOIN} WHERE v.slug = ?)
+        WHERE vehicle_id = (SELECT v.id FROM vehicles v ${vehicleVersionJoin(patchCode)} WHERE v.slug = ?)
       ),
       child_components AS (
         SELECT
@@ -1646,13 +1646,14 @@ export async function setVehicleCFImagesID(
 export async function getSalvageForShip(
   db: D1Database,
   slug: string,
+  patchCode?: string,
 ): Promise<Record<string, unknown> | null> {
   const { results: variants } = await db
     .prepare(
       `SELECT ss.id, ss.entity_name, ss.variant_type
        FROM salvageable_ships ss
        JOIN vehicles v ON v.id = ss.base_vehicle_id
-       WHERE v.slug = ? AND v.${VEHICLE_VERSION_CAP}
+       WHERE v.slug = ? AND v.${vehicleVersionCap(patchCode)}
        ORDER BY ss.variant_type`,
     )
     .bind(slug)
@@ -1668,6 +1669,7 @@ export async function getSalvageForShip(
  */
 export async function listSalvageableShips(
   db: D1Database,
+  patchCode?: string,
 ): Promise<Record<string, unknown>[]> {
   const { results } = await db
     .prepare(
@@ -1678,7 +1680,7 @@ export async function listSalvageableShips(
          COUNT(ss.id) as variant_count,
          GROUP_CONCAT(DISTINCT ss.variant_type) as variant_types
        FROM salvageable_ships ss
-       JOIN vehicles v ON v.id = ss.base_vehicle_id AND v.${VEHICLE_VERSION_CAP}
+       JOIN vehicles v ON v.id = ss.base_vehicle_id AND v.${vehicleVersionCap(patchCode)}
        LEFT JOIN manufacturers m ON m.id = v.manufacturer_id
        WHERE ss.base_vehicle_id IS NOT NULL
        GROUP BY v.id

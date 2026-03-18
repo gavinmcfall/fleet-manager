@@ -60,7 +60,7 @@ export function gamedataRoutes<E extends HonoEnv>() {
   // GET /api/gamedata/careers — vehicle careers + roles with linked vehicles
   app.get("/careers", async (c) => {
     const db = c.env.DB
-    const versionId = await resolveVersionId(db)
+    const versionId = await resolveVersionId(db, c.req.query("patch"))
     return cachedJson(c, `gd:careers:${versionId}`, async () => {
       const [careersResult, rolesResult, careerAssignments, roleAssignments] = await Promise.all([
         db.prepare("SELECT * FROM vehicle_careers WHERE name != '<= PLACEHOLDER =>' ORDER BY name").all(),
@@ -114,7 +114,7 @@ export function gamedataRoutes<E extends HonoEnv>() {
   // GET /api/gamedata/reputation — reputation scopes with nested standings
   app.get("/reputation", async (c) => {
     const db = c.env.DB
-    const versionId = await resolveVersionId(db)
+    const versionId = await resolveVersionId(db, c.req.query("patch"))
     return cachedJson(c, `gd:reputation:${versionId}`, async () => {
       const { results: scopes } = await db
         .prepare(
@@ -173,7 +173,7 @@ export function gamedataRoutes<E extends HonoEnv>() {
   // GET /api/gamedata/law — infractions, jurisdictions, overrides
   app.get("/law", async (c) => {
     const db = c.env.DB
-    const versionId = await resolveVersionId(db)
+    const versionId = await resolveVersionId(db, c.req.query("patch"))
     return cachedJson(c, `gd:law:${versionId}`, async () => {
       const [infractions, jurisdictions, overrides] = await Promise.all([
         db
@@ -217,7 +217,7 @@ export function gamedataRoutes<E extends HonoEnv>() {
   // GET /api/gamedata/mining — elements, compositions, refining processes
   app.get("/mining", async (c) => {
     const db = c.env.DB
-    const versionId = await resolveVersionId(db)
+    const versionId = await resolveVersionId(db, c.req.query("patch"))
     return cachedJson(c, `gd:mining:${versionId}`, async () => {
       const [elements, compositions, refining] = await Promise.all([
         db
@@ -256,7 +256,7 @@ export function gamedataRoutes<E extends HonoEnv>() {
   // GET /api/gamedata/shops — shop list with item counts
   app.get("/shops", async (c) => {
     const db = c.env.DB
-    const versionId = await resolveVersionId(db)
+    const versionId = await resolveVersionId(db, c.req.query("patch"))
     return cachedJson(c, `gd:shops:${versionId}`, async () => {
       const { results } = await db
         .prepare(
@@ -278,7 +278,7 @@ export function gamedataRoutes<E extends HonoEnv>() {
   app.get("/shops/:slug/inventory", async (c) => {
     const slug = c.req.param("slug")
     const db = c.env.DB
-    const versionId = await resolveVersionId(db)
+    const versionId = await resolveVersionId(db, c.req.query("patch"))
     return cachedJson(c, `gd:shop-inv:${versionId}:${cacheSlug(slug)}`, async () => {
       const { results } = await db
         .prepare(
@@ -302,7 +302,7 @@ export function gamedataRoutes<E extends HonoEnv>() {
   // GET /api/gamedata/trade — trade commodities with per-shop buy/sell/stock data
   app.get("/trade", async (c) => {
     const db = c.env.DB
-    const versionId = await resolveVersionId(db)
+    const versionId = await resolveVersionId(db, c.req.query("patch"))
     return cachedJson(c, `gd:trade:${versionId}`, async () => {
       const [commoditiesResult, listingsResult] = await Promise.all([
         db
@@ -357,7 +357,7 @@ export function gamedataRoutes<E extends HonoEnv>() {
   app.get("/locations/:slug/shops", async (c) => {
     const slug = c.req.param("slug")
     const db = c.env.DB
-    const versionId = await resolveVersionId(db)
+    const versionId = await resolveVersionId(db, c.req.query("patch"))
     return cachedJson(c, `gd:loc-shops:${versionId}:${cacheSlug(slug)}`, async () => {
       const location = await db
         .prepare(
@@ -444,7 +444,7 @@ export function gamedataRoutes<E extends HonoEnv>() {
   // GET /api/gamedata/weapon-racks — vehicle weapon racks grouped by vehicle
   app.get("/weapon-racks", async (c) => {
     const db = c.env.DB
-    const versionId = await resolveVersionId(db)
+    const versionId = await resolveVersionId(db, c.req.query("patch"))
     return cachedJson(c, `gd:weapon-racks:${versionId}`, async () => {
       const { results } = await db
         .prepare(
@@ -464,7 +464,7 @@ export function gamedataRoutes<E extends HonoEnv>() {
   // GET /api/gamedata/suit-lockers — vehicle suit lockers grouped by vehicle
   app.get("/suit-lockers", async (c) => {
     const db = c.env.DB
-    const versionId = await resolveVersionId(db)
+    const versionId = await resolveVersionId(db, c.req.query("patch"))
     return cachedJson(c, `gd:suit-lockers:${versionId}`, async () => {
       const { results } = await db
         .prepare(
@@ -485,7 +485,7 @@ export function gamedataRoutes<E extends HonoEnv>() {
   // GET /api/gamedata/npc-loadouts — list all factions with loadout counts
   app.get("/npc-loadouts", async (c) => {
     const db = c.env.DB
-    const versionId = await resolveVersionId(db)
+    const versionId = await resolveVersionId(db, c.req.query("patch"))
     return cachedJson(c, `gd:npc-loadouts:${versionId}`, async () => {
       const { results: factions } = await db
         .prepare(
@@ -511,7 +511,7 @@ export function gamedataRoutes<E extends HonoEnv>() {
     const page = Math.max(1, parseInt(c.req.query("page") || "1", 10))
     const perPage = Math.min(100, Math.max(1, parseInt(c.req.query("per_page") || "50", 10)))
     const db = c.env.DB
-    const versionId = await resolveVersionId(db)
+    const versionId = await resolveVersionId(db, c.req.query("patch"))
     return cachedJson(c, `gd:npc-loadout:${versionId}:${cacheSlug(factionCode)}:p${page}:pp${perPage}`, async () => {
       const faction = await db
         .prepare("SELECT * FROM npc_factions WHERE code = ? LIMIT 1")
@@ -596,7 +596,7 @@ export function gamedataRoutes<E extends HonoEnv>() {
   // types) and is returned correctly; a Missions page is deferred to a future milestone.
   app.get("/missions", async (c) => {
     const db = c.env.DB
-    const versionId = await resolveVersionId(db)
+    const versionId = await resolveVersionId(db, c.req.query("patch"))
     return cachedJson(c, `gd:missions:${versionId}`, async () => {
       const [typesResult, giversResult] = await Promise.all([
         db.prepare(
@@ -629,7 +629,7 @@ export function gamedataRoutes<E extends HonoEnv>() {
   // GET /api/gamedata/crafting — all blueprints with slots and modifiers
   app.get("/crafting", async (c) => {
     const db = c.env.DB
-    const versionId = await resolveVersionId(db)
+    const versionId = await resolveVersionId(db, c.req.query("patch"))
     return cachedJson(c, `gd:crafting:${versionId}`, async () => {
       const [bpResult, slotResult, modResult, propResult, resResult] = await Promise.all([
         db.prepare(

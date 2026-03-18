@@ -1,6 +1,20 @@
-import { useState, useEffect, useCallback } from 'react'
+import { useState, useEffect, useCallback, useSyncExternalStore } from 'react'
 
 const BASE = '/api'
+const VERSION_STORAGE_KEY = 'sc-bridge-active-version'
+
+/** Append ?patch= to a path when user has selected a non-default version */
+function withVersionParam(path) {
+  if (!path) return path
+  try {
+    const selected = localStorage.getItem(VERSION_STORAGE_KEY)
+    if (selected) {
+      const sep = path.includes('?') ? '&' : '?'
+      return `${path}${sep}patch=${encodeURIComponent(selected)}`
+    }
+  } catch { /* localStorage unavailable */ }
+  return path
+}
 
 async function apiFetch(method, path, body) {
   const opts = { method, credentials: 'same-origin' }
@@ -20,7 +34,7 @@ async function apiFetch(method, path, body) {
   return res.json()
 }
 
-const fetchJSON = (path) => apiFetch('GET', path)
+const fetchJSON = (path) => apiFetch('GET', withVersionParam(path))
 const postJSON = (path, body) => apiFetch('POST', path, body)
 const patchJSON = (path, body) => apiFetch('PATCH', path, body)
 const putJSON = (path, body) => apiFetch('PUT', path, body)

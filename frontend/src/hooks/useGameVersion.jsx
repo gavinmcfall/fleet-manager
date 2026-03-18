@@ -53,7 +53,8 @@ export function GameVersionProvider({ children }) {
         localStorage.removeItem(STORAGE_KEY)
       }
     } catch { /* localStorage unavailable */ }
-    setUserSelectedCode(code || null)
+    // Reload to re-fetch all data with the new version param
+    window.location.reload()
   }, [defaultVersion])
 
   const value = useMemo(() => ({

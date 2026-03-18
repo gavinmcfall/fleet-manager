@@ -14,7 +14,7 @@ export function contractRoutes<E extends HonoEnv>() {
   app.get("/", async (c) => {
     const db = c.env.DB
     const giver = c.req.query("giver")
-    const versionId = await resolveVersionId(db)
+    const versionId = await resolveVersionId(db, c.req.query("patch"))
 
     return cachedJson(c, `contracts:${versionId}:${cacheSlug(giver ?? "all")}`, async () => {
       let query = `SELECT c.*, v.slug AS reward_vehicle_slug, fw.uuid AS reward_item_uuid
