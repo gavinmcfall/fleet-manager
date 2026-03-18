@@ -696,6 +696,224 @@ export function opsRoutes() {
     return c.json({ types: results });
   });
 
+  // ── Rating endpoints ────────────────────────────────────────────────
+
+  // POST /:opId/rate/:userId — submit ratings for a participant
+  routes.post("/:opId/rate/:userId",
+    validate("json", z.object({
+      ratings: z.array(z.object({
+        category: z.string().min(1),
+        score: z.number().int().min(1).max(5),
+      })).min(1).max(10),
+      comment: z.string().max(2000).nullable().optional(),
+    })),
+    async (c) => {
+      const user = getAuthUser(c);
+      const slug = c.req.param("slug")!;
+      const opId = parseInt(c.req.param("opId"), 10);
+      const rateeUserId = c.req.param("userId");
+      const db = c.env.DB;
+      const ip = c.req.header("CF-Connecting-IP") ?? null;
+
+      // Cannot rate yourself
+      if (user.id === rateeUserId) {
+        return c.json({ error: "Cannot rate yourself" }, 400);
+      }
+
+      const ctx = await getOrgMembership(db, slug, user.id);
+      if (!ctx) return c.json({ error: "Not found" }, 404);
+
+      // Op must be completed
+      const op = await db
+        .prepare("SELECT id, status FROM org_ops WHERE id = ? AND org_id = ?")
+        .bind(opId, ctx.orgId)
+        .first<{ id: number; status: string }>();
+      if (!op || op.status !== "completed") {
+        return c.json({ error: "Can only rate participants of completed ops" }, 400);
+      }
+
+      // Both users must be participants
+      const raterPart = await db
+        .prepare("SELECT id FROM org_op_participants WHERE org_op_id = ? AND user_id = ?")
+        .bind(opId, user.id)
+        .first();
+      if (!raterPart) return c.json({ error: "You must be a participant to rate" }, 403);
+
+      const rateePart = await db
+        .prepare("SELECT id FROM org_op_participants WHERE org_op_id = ? AND user_id = ?")
+        .bind(opId, rateeUserId)
+        .first();
+      if (!rateePart) return c.json({ error: "Target user is not a participant" }, 400);
+
+      // Rater must have verified account
+      const verified = await db
+        .prepare("SELECT verified_at FROM user_rsi_profile WHERE user_id = ?")
+        .bind(user.id)
+        .first<{ verified_at: string | null }>();
+      if (!verified?.verified_at) {
+        return c.json({ error: "You must verify your RSI identity before rating" }, 403);
+      }
+
+      // Check account age (7 days)
+      const raterAccount = await db
+        .prepare("SELECT createdAt FROM user WHERE id = ?")
+        .bind(user.id)
+        .first<{ createdAt: string }>();
+      if (raterAccount) {
+        const accountAge = Date.now() - new Date(raterAccount.createdAt).getTime();
+        if (accountAge < 7 * 24 * 60 * 60 * 1000) {
+          return c.json({ error: "Account must be at least 7 days old to submit ratings" }, 403);
+        }
+      }
+
+      const body = c.req.valid("json");
+
+      // Resolve category keys to IDs
+      const { results: categories } = await db
+        .prepare("SELECT id, key FROM rating_categories")
+        .all();
+      const catMap = new Map(
+        (categories as { id: number; key: string }[]).map((c) => [c.key, c.id]),
+      );
+
+      const stmts: D1PreparedStatement[] = [];
+      const affectedCategories: number[] = [];
+
+      for (const r of body.ratings) {
+        const catId = catMap.get(r.category);
+        if (!catId) continue;
+        affectedCategories.push(catId);
+        stmts.push(
+          db.prepare(
+            `INSERT INTO player_ratings (rater_user_id, ratee_user_id, org_op_id, rating_category_id, score, ip_address)
+             VALUES (?, ?, ?, ?, ?, ?)
+             ON CONFLICT(rater_user_id, ratee_user_id, org_op_id, rating_category_id) DO UPDATE SET
+               score = excluded.score, ip_address = excluded.ip_address`,
+          ).bind(user.id, rateeUserId, opId, catId, r.score, ip),
+        );
+        // Audit log
+        stmts.push(
+          db.prepare(
+            "INSERT INTO rating_audit_log (action, actor_user_id, detail, ip_address) VALUES ('rate', ?, ?, ?)",
+          ).bind(user.id, `rated ${rateeUserId} cat=${r.category} score=${r.score} op=${opId}`, ip),
+        );
+      }
+
+      // Optional comment
+      if (body.comment) {
+        stmts.push(
+          db.prepare(
+            `INSERT INTO player_reviews (rater_user_id, ratee_user_id, org_op_id, comment, ip_address)
+             VALUES (?, ?, ?, ?, ?)
+             ON CONFLICT(rater_user_id, ratee_user_id, org_op_id) DO UPDATE SET
+               comment = excluded.comment, ip_address = excluded.ip_address`,
+          ).bind(user.id, rateeUserId, opId, body.comment, ip),
+        );
+      }
+
+      await db.batch(stmts);
+
+      // Recalculate median for affected categories
+      for (const catId of affectedCategories) {
+        const countResult = await db
+          .prepare("SELECT COUNT(*) as cnt FROM player_ratings WHERE ratee_user_id = ? AND rating_category_id = ?")
+          .bind(rateeUserId, catId)
+          .first<{ cnt: number }>();
+        const count = countResult?.cnt ?? 0;
+        const offset = Math.floor(count / 2);
+
+        const medianResult = await db
+          .prepare(
+            `SELECT score FROM player_ratings
+             WHERE ratee_user_id = ? AND rating_category_id = ?
+             ORDER BY score
+             LIMIT 1 OFFSET ?`,
+          )
+          .bind(rateeUserId, catId, offset)
+          .first<{ score: number }>();
+
+        const median = medianResult?.score ?? 0;
+
+        await db
+          .prepare(
+            `INSERT INTO player_reputation (user_id, rating_category_id, median_score, rating_count, updated_at)
+             VALUES (?, ?, ?, ?, datetime('now'))
+             ON CONFLICT(user_id, rating_category_id) DO UPDATE SET
+               median_score = excluded.median_score,
+               rating_count = excluded.rating_count,
+               updated_at = excluded.updated_at`,
+          )
+          .bind(rateeUserId, catId, median, count)
+          .run();
+      }
+
+      return c.json({ ok: true });
+    },
+  );
+
+  // GET /:opId/ratings — ratings for an op (own scores visible, raters anonymized)
+  routes.get("/:opId/ratings", async (c) => {
+    const user = getAuthUser(c);
+    const slug = c.req.param("slug")!;
+    const opId = parseInt(c.req.param("opId"), 10);
+    const db = c.env.DB;
+
+    const ctx = await getOrgMembership(db, slug, user.id);
+    if (!ctx) return c.json({ error: "Not found" }, 404);
+
+    // Must be a participant
+    const participant = await db
+      .prepare("SELECT id FROM org_op_participants WHERE org_op_id = ? AND user_id = ?")
+      .bind(opId, user.id)
+      .first();
+    if (!participant) return c.json({ error: "Must be a participant" }, 403);
+
+    // Get aggregate scores per user per category
+    const { results: aggregates } = await db
+      .prepare(
+        `SELECT pr.ratee_user_id, rc.key as category, rc.label as category_label,
+          AVG(pr.score) as avg_score, COUNT(pr.id) as count,
+          u.name as ratee_name
+        FROM player_ratings pr
+        JOIN rating_categories rc ON rc.id = pr.rating_category_id
+        JOIN user u ON u.id = pr.ratee_user_id
+        WHERE pr.org_op_id = ?
+        GROUP BY pr.ratee_user_id, pr.rating_category_id
+        ORDER BY u.name, rc.id`,
+      )
+      .bind(opId)
+      .all();
+
+    // Get reviews (anonymized — no rater info)
+    const { results: reviews } = await db
+      .prepare(
+        `SELECT prv.ratee_user_id, prv.comment, prv.created_at,
+          u.name as ratee_name
+        FROM player_reviews prv
+        JOIN user u ON u.id = prv.ratee_user_id
+        WHERE prv.org_op_id = ?
+        ORDER BY prv.created_at`,
+      )
+      .bind(opId)
+      .all();
+
+    // Check which users the caller has already rated
+    const { results: myRatings } = await db
+      .prepare(
+        `SELECT ratee_user_id, rating_category_id, score
+        FROM player_ratings
+        WHERE rater_user_id = ? AND org_op_id = ?`,
+      )
+      .bind(user.id, opId)
+      .all();
+
+    return c.json({
+      aggregates,
+      reviews,
+      my_ratings: myRatings,
+    });
+  });
+
   return routes;
 }
 

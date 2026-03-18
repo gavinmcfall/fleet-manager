@@ -255,5 +255,122 @@ export function adminRoutes() {
     });
   });
 
+  // ── Rating audit (super_admin) ──────────────────────────────────────
+
+  // GET /api/admin/ratings/user/:userId — all ratings for a user (not anonymized)
+  routes.get("/ratings/user/:userId", async (c) => {
+    const userId = c.req.param("userId");
+    const db = c.env.DB;
+
+    const { results: ratings } = await db
+      .prepare(
+        `SELECT pr.id, pr.rater_user_id, pr.ratee_user_id, pr.org_op_id,
+          pr.score, pr.ip_address, pr.created_at,
+          rc.key as category, rc.label as category_label,
+          rater.name as rater_name, ratee.name as ratee_name,
+          o.name as op_name
+        FROM player_ratings pr
+        JOIN rating_categories rc ON rc.id = pr.rating_category_id
+        JOIN user rater ON rater.id = pr.rater_user_id
+        JOIN user ratee ON ratee.id = pr.ratee_user_id
+        LEFT JOIN org_ops o ON o.id = pr.org_op_id
+        WHERE pr.ratee_user_id = ?
+        ORDER BY pr.created_at DESC`,
+      )
+      .bind(userId)
+      .all();
+
+    const { results: reviews } = await db
+      .prepare(
+        `SELECT prv.id, prv.rater_user_id, prv.ratee_user_id, prv.org_op_id,
+          prv.comment, prv.ip_address, prv.created_at,
+          rater.name as rater_name
+        FROM player_reviews prv
+        JOIN user rater ON rater.id = prv.rater_user_id
+        WHERE prv.ratee_user_id = ?
+        ORDER BY prv.created_at DESC`,
+      )
+      .bind(userId)
+      .all();
+
+    return c.json({ ratings, reviews });
+  });
+
+  // GET /api/admin/ratings/audit — audit log
+  routes.get("/ratings/audit", async (c) => {
+    const db = c.env.DB;
+    const page = parseInt(c.req.query("page") || "1", 10);
+    const perPage = 50;
+    const offset = (page - 1) * perPage;
+
+    const { results } = await db
+      .prepare(
+        `SELECT ral.*, u.name as actor_name
+        FROM rating_audit_log ral
+        JOIN user u ON u.id = ral.actor_user_id
+        ORDER BY ral.created_at DESC
+        LIMIT ? OFFSET ?`,
+      )
+      .bind(perPage, offset)
+      .all();
+
+    return c.json({ audit_log: results, page });
+  });
+
+  // DELETE /api/admin/ratings/:ratingId — remove abusive rating
+  routes.delete("/ratings/:ratingId", async (c) => {
+    const ratingId = parseInt(c.req.param("ratingId"), 10);
+    const db = c.env.DB;
+    const user = c.get("user");
+    const ip = c.req.header("CF-Connecting-IP") ?? null;
+
+    const rating = await db
+      .prepare("SELECT id, ratee_user_id, rating_category_id FROM player_ratings WHERE id = ?")
+      .bind(ratingId)
+      .first<{ id: number; ratee_user_id: string; rating_category_id: number }>();
+    if (!rating) return c.json({ error: "Rating not found" }, 404);
+
+    await db.batch([
+      db.prepare("DELETE FROM player_ratings WHERE id = ?").bind(ratingId),
+      db.prepare(
+        "INSERT INTO rating_audit_log (action, actor_user_id, target_rating_id, detail, ip_address) VALUES ('remove', ?, ?, 'Admin removed rating', ?)",
+      ).bind(user!.id, ratingId, ip),
+    ]);
+
+    // Recalculate median for affected category
+    const countResult = await db
+      .prepare("SELECT COUNT(*) as cnt FROM player_ratings WHERE ratee_user_id = ? AND rating_category_id = ?")
+      .bind(rating.ratee_user_id, rating.rating_category_id)
+      .first<{ cnt: number }>();
+    const count = countResult?.cnt ?? 0;
+
+    if (count === 0) {
+      await db
+        .prepare("DELETE FROM player_reputation WHERE user_id = ? AND rating_category_id = ?")
+        .bind(rating.ratee_user_id, rating.rating_category_id)
+        .run();
+    } else {
+      const offset = Math.floor(count / 2);
+      const medianResult = await db
+        .prepare("SELECT score FROM player_ratings WHERE ratee_user_id = ? AND rating_category_id = ? ORDER BY score LIMIT 1 OFFSET ?")
+        .bind(rating.ratee_user_id, rating.rating_category_id, offset)
+        .first<{ score: number }>();
+
+      await db
+        .prepare(
+          `INSERT INTO player_reputation (user_id, rating_category_id, median_score, rating_count, updated_at)
+           VALUES (?, ?, ?, ?, datetime('now'))
+           ON CONFLICT(user_id, rating_category_id) DO UPDATE SET
+             median_score = excluded.median_score,
+             rating_count = excluded.rating_count,
+             updated_at = excluded.updated_at`,
+        )
+        .bind(rating.ratee_user_id, rating.rating_category_id, medianResult?.score ?? 0, count)
+        .run();
+    }
+
+    return c.json({ ok: true });
+  });
+
   return routes;
 }

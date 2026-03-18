@@ -2,7 +2,7 @@ import React, { useState } from 'react'
 import { useParams, Link, useNavigate } from 'react-router-dom'
 import {
   ArrowLeft, Users, Ship, DollarSign, CheckCircle, Clock, Play, XCircle,
-  UserPlus, UserMinus, Plus, Loader2, AlertCircle, Check, Copy, ExternalLink,
+  UserPlus, UserMinus, Plus, Loader2, AlertCircle, Check, Copy, ExternalLink, Star,
 } from 'lucide-react'
 import { useOrgOp } from '../../hooks/useAPI'
 import { useSession } from '../../lib/auth-client'
@@ -10,6 +10,7 @@ import PageHeader from '../../components/PageHeader'
 import LoadingState from '../../components/LoadingState'
 import ErrorState from '../../components/ErrorState'
 import ShipImage from '../../components/ShipImage'
+import RatingModal from '../../components/RatingModal'
 import { formatDate } from '../../lib/dates'
 import useTimezone from '../../hooks/useTimezone'
 
@@ -28,6 +29,7 @@ export default function OpDetail() {
   const { timezone } = useTimezone()
   const { data, loading, error, refetch } = useOrgOp(slug, opId)
 
+  const [ratingTarget, setRatingTarget] = useState(null) // { userId, name }
   const [actionLoading, setActionLoading] = useState(null)
   const [actionError, setActionError] = useState(null)
   const [actionMsg, setActionMsg] = useState(null)
@@ -230,6 +232,15 @@ export default function OpDetail() {
                 {p.left_at && (
                   <span className="text-[10px] text-red-400">left</span>
                 )}
+                {r.status === 'completed' && p.user_id !== userId && isParticipant && (
+                  <button
+                    onClick={(e) => { e.stopPropagation(); setRatingTarget({ userId: p.user_id, name: p.user_name }) }}
+                    className="p-1 rounded hover:bg-amber-400/10 transition-colors"
+                    title={`Rate ${p.user_name}`}
+                  >
+                    <Star className="w-3.5 h-3.5 text-amber-400" />
+                  </button>
+                )}
               </div>
             ))}
           </div>
@@ -355,6 +366,18 @@ export default function OpDetail() {
         {r.started_at && <span>Started: {formatDate(r.started_at, timezone)}</span>}
         {r.completed_at && <span>Completed: {formatDate(r.completed_at, timezone)}</span>}
       </div>
+
+      {/* Rating modal */}
+      {ratingTarget && (
+        <RatingModal
+          slug={slug}
+          opId={opId}
+          rateeUserId={ratingTarget.userId}
+          rateeName={ratingTarget.name}
+          onClose={() => setRatingTarget(null)}
+          onRated={refetch}
+        />
+      )}
     </div>
   )
 }

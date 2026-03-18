@@ -668,6 +668,10 @@ export function accountRoutes() {
       db.prepare("DELETE FROM org_verification_pending WHERE user_id = ?").bind(user.id),
       // Profile verification (migration 0132)
       db.prepare("DELETE FROM profile_verification_pending WHERE user_id = ?").bind(user.id),
+      // Player reputation (migration 0134) — remove ratings by/about this user
+      db.prepare("DELETE FROM player_ratings WHERE rater_user_id = ? OR ratee_user_id = ?").bind(user.id, user.id),
+      db.prepare("DELETE FROM player_reviews WHERE rater_user_id = ? OR ratee_user_id = ?").bind(user.id, user.id),
+      db.prepare("DELETE FROM player_reputation WHERE user_id = ?").bind(user.id),
       // Org ops (migration 0133) — scrub user from ops tables
       db.prepare("DELETE FROM org_op_payouts WHERE user_id = ?").bind(user.id),
       db.prepare("DELETE FROM org_op_capital WHERE user_id = ?").bind(user.id),
