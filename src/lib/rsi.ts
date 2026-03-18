@@ -127,10 +127,14 @@ async function fetchViaSpectrum(handle: string): Promise<Partial<RsiProfile> | n
 }
 
 // ---------------------------------------------------------------------------
-// Citizen page HTML scraper
+// Public citizen page HTML fetcher (used by verification + profile scrape)
 // ---------------------------------------------------------------------------
 
-async function fetchViaCitizenPage(handle: string): Promise<Partial<RsiProfile> | null> {
+/**
+ * Fetch the raw HTML of an RSI citizen page.
+ * Used by profile verification to check for the verification key.
+ */
+export async function fetchCitizenPageHtml(handle: string): Promise<string> {
   const url = `${RSI_BASE}/en/citizens/${encodeURIComponent(handle)}`;
   const resp = await fetch(url, { headers: FETCH_HEADERS });
 
@@ -141,10 +145,19 @@ async function fetchViaCitizenPage(handle: string): Promise<Partial<RsiProfile> 
 
   const html = await resp.text();
 
-  // Check if we got redirected to a 404 or error page
   if (html.includes('class="page-not-found"') || html.includes("404")) {
     throw new Error(`Handle not found: ${handle}`);
   }
+
+  return html;
+}
+
+// ---------------------------------------------------------------------------
+// Citizen page HTML scraper
+// ---------------------------------------------------------------------------
+
+async function fetchViaCitizenPage(handle: string): Promise<Partial<RsiProfile> | null> {
+  const html = await fetchCitizenPageHtml(handle);
 
   return parseCitizenHtml(html, handle);
 }

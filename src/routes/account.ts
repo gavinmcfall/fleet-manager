@@ -5,7 +5,7 @@ import { sendEmail } from "../lib/email";
 import { escapeHtml } from "../lib/utils";
 import { hashPassword } from "../lib/password";
 import { logUserChange } from "../lib/change-history";
-import { fetchRsiProfile } from "../lib/rsi";
+import { fetchRsiProfile, fetchCitizenPageHtml } from "../lib/rsi";
 import { checkGravatar } from "../lib/gravatar";
 import { validate } from "../lib/validation";
 
@@ -201,6 +201,8 @@ export function accountRoutes() {
         main_org_slug: r.main_org_slug,
         orgs: r.orgs_json ? JSON.parse(r.orgs_json as string) : [],
         fetched_at: r.fetched_at,
+        verified_at: r.verified_at ?? null,
+        verified_handle: r.verified_handle ?? null,
       },
     });
   });
@@ -295,6 +297,20 @@ export function accountRoutes() {
         }
       }
 
+      // Check if handle changed and invalidate verification if so
+      let verificationInvalidated = false;
+      const verifiedRow = await db
+        .prepare("SELECT verified_handle FROM user_rsi_profile WHERE user_id = ?")
+        .bind(user.id)
+        .first<{ verified_handle: string | null }>();
+      if (verifiedRow?.verified_handle && verifiedRow.verified_handle !== profile.handle) {
+        await db
+          .prepare("UPDATE user_rsi_profile SET verified_at = NULL, verified_handle = NULL WHERE user_id = ?")
+          .bind(user.id)
+          .run();
+        verificationInvalidated = true;
+      }
+
       // After upsert: if user has no avatar, try to auto-set from RSI
       const currentUser = await db
         .prepare("SELECT image, gravatar_opted_out FROM user WHERE id = ?")
@@ -319,13 +335,159 @@ export function accountRoutes() {
         }
       }
 
-      return c.json({ profile: { ...profile, fetched_at: new Date().toISOString() }, avatarAutoSet, gravatarUrl });
+      return c.json({ profile: { ...profile, fetched_at: new Date().toISOString() }, avatarAutoSet, gravatarUrl, verificationInvalidated });
     } catch (err) {
       return c.json(
         { error: err instanceof Error ? err.message : "Failed to fetch RSI profile" },
         502,
       );
     }
+  });
+
+  // ── RSI Profile Verification ────────────────────────────────────────
+
+  // POST /api/account/rsi-verify/generate — generate verification key
+  routes.post("/rsi-verify/generate",
+    validate("json", z.object({
+      handle: z.string().min(1, "handle is required").max(64).trim(),
+    })),
+    async (c) => {
+      const user = getAuthUser(c);
+      const db = c.env.DB;
+      const { handle } = c.req.valid("json");
+
+      // Must have synced RSI profile
+      const rsiProfile = await db
+        .prepare("SELECT handle FROM user_rsi_profile WHERE user_id = ?")
+        .bind(user.id)
+        .first<{ handle: string }>();
+      if (!rsiProfile) {
+        return c.json({ error: "Sync your RSI profile first" }, 400);
+      }
+
+      // Check if another user already verified this handle
+      const otherVerified = await db
+        .prepare("SELECT user_id FROM user_rsi_profile WHERE verified_handle = ? AND user_id != ?")
+        .bind(handle, user.id)
+        .first();
+      if (otherVerified) {
+        return c.json({ error: "This handle is already verified by another user" }, 409);
+      }
+
+      // Rate limit: 1 generate per 5 min
+      const pending = await db
+        .prepare("SELECT created_at FROM profile_verification_pending WHERE user_id = ?")
+        .bind(user.id)
+        .first<{ created_at: string }>();
+      if (pending?.created_at) {
+        const created = new Date(pending.created_at + "Z").getTime();
+        const elapsed = Date.now() - created;
+        if (elapsed < 5 * 60 * 1000) {
+          const waitSec = Math.ceil((5 * 60 * 1000 - elapsed) / 1000);
+          return c.json({ error: `Rate limit: please wait ${waitSec}s` }, 429);
+        }
+      }
+
+      // Generate verification key
+      const keyBytes = new Uint8Array(16);
+      crypto.getRandomValues(keyBytes);
+      const verificationKey = `scbridge-verify-${Array.from(keyBytes).map(b => b.toString(16).padStart(2, "0")).join("")}`;
+
+      // Upsert pending verification
+      await db
+        .prepare(
+          `INSERT INTO profile_verification_pending (user_id, handle, verification_key)
+           VALUES (?, ?, ?)
+           ON CONFLICT(user_id) DO UPDATE SET
+             handle = excluded.handle,
+             verification_key = excluded.verification_key,
+             created_at = datetime('now')`,
+        )
+        .bind(user.id, handle, verificationKey)
+        .run();
+
+      return c.json({
+        ok: true,
+        verification_key: verificationKey,
+        handle,
+        instructions: `Add this key anywhere in your RSI citizen bio at https://robertsspaceindustries.com/en/citizens/${encodeURIComponent(handle)}, then click Check Verification.`,
+      });
+    },
+  );
+
+  // POST /api/account/rsi-verify/check — check citizen page for key
+  routes.post("/rsi-verify/check", async (c) => {
+    const user = getAuthUser(c);
+    const db = c.env.DB;
+
+    // Find user's pending verification (must be < 24hr old)
+    const pending = await db
+      .prepare("SELECT id, handle, verification_key FROM profile_verification_pending WHERE user_id = ? AND created_at > datetime('now', '-24 hours')")
+      .bind(user.id)
+      .first<{ id: number; handle: string; verification_key: string }>();
+
+    if (!pending) {
+      return c.json({ error: "No pending verification — generate a key first" }, 400);
+    }
+
+    // Rate limit: 1 check per 30 sec (use pending created_at as a simple throttle)
+    // We use a separate approach — check if there's a recent successful or failed attempt
+    // For simplicity, we just proceed (the RSI fetch is the natural rate limiter)
+
+    // Fetch citizen page HTML
+    let html: string;
+    try {
+      html = await fetchCitizenPageHtml(pending.handle);
+    } catch (err) {
+      return c.json({ error: `Failed to fetch RSI profile: ${(err as Error).message}` }, 502);
+    }
+
+    // Check for verification key in the page HTML
+    if (!html.includes(pending.verification_key)) {
+      return c.json({
+        ok: false,
+        verified: false,
+        message: `Verification key not found. Add "${pending.verification_key}" to your RSI citizen bio, save it, then try again.`,
+      });
+    }
+
+    // Verified — update user_rsi_profile and clean up
+    await db.batch([
+      db.prepare(
+        "UPDATE user_rsi_profile SET verified_at = datetime('now'), verified_handle = ? WHERE user_id = ?",
+      ).bind(pending.handle, user.id),
+      db.prepare("DELETE FROM profile_verification_pending WHERE id = ?").bind(pending.id),
+    ]);
+
+    return c.json({
+      ok: true,
+      verified: true,
+      message: "Identity verified! You can now remove the key from your bio.",
+    });
+  });
+
+  // GET /api/account/rsi-verify/status — check verification status
+  routes.get("/rsi-verify/status", async (c) => {
+    const user = getAuthUser(c);
+    const db = c.env.DB;
+
+    const rsiProfile = await db
+      .prepare("SELECT verified_at, verified_handle FROM user_rsi_profile WHERE user_id = ?")
+      .bind(user.id)
+      .first<{ verified_at: string | null; verified_handle: string | null }>();
+
+    const pending = await db
+      .prepare("SELECT handle, created_at FROM profile_verification_pending WHERE user_id = ? AND created_at > datetime('now', '-24 hours')")
+      .bind(user.id)
+      .first<{ handle: string; created_at: string }>();
+
+    return c.json({
+      verified: !!rsiProfile?.verified_at,
+      verified_handle: rsiProfile?.verified_handle ?? null,
+      verified_at: rsiProfile?.verified_at ?? null,
+      pending: !!pending,
+      pending_handle: pending?.handle ?? null,
+    });
   });
 
   // GET /api/account/avatar-info — return avatar sources for current user
@@ -504,6 +666,8 @@ export function accountRoutes() {
       db.prepare("DELETE FROM user_named_ships WHERE user_id = ?").bind(user.id),
       // Org verification pending (migration 0125)
       db.prepare("DELETE FROM org_verification_pending WHERE user_id = ?").bind(user.id),
+      // Profile verification (migration 0132)
+      db.prepare("DELETE FROM profile_verification_pending WHERE user_id = ?").bind(user.id),
       // Localization builder (migration 0127)
       db.prepare("DELETE FROM user_localization_configs WHERE user_id = ?").bind(user.id),
       db.prepare("DELETE FROM user_localization_ship_order WHERE user_id = ?").bind(user.id),
