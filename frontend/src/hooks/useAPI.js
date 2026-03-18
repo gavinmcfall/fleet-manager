@@ -77,6 +77,10 @@ export function useSalvageableShips() {
   return useAPI('/gamedata/salvageable-ships')
 }
 
+export function useCrafting() {
+  return useAPI('/gamedata/crafting')
+}
+
 export function useWeaponRacks() {
   return useAPI('/gamedata/weapon-racks')
 }

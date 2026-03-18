@@ -626,5 +626,72 @@ export function gamedataRoutes<E extends HonoEnv>() {
     })
   })
 
+  // GET /api/gamedata/crafting — all blueprints with slots and modifiers
+  app.get("/crafting", async (c) => {
+    const db = c.env.DB
+    const versionId = await resolveVersionId(db)
+    return cachedJson(c, `gd:crafting:${versionId}`, async () => {
+      const [bpResult, slotResult, modResult, propResult, resResult] = await Promise.all([
+        db.prepare(
+          `SELECT id, uuid, tag, name, type, sub_type, craft_time_seconds
+           FROM crafting_blueprints
+           WHERE game_version_id <= ${DEFAULT_VERSION_SUBQUERY}
+           ORDER BY type, sub_type, name`
+        ).all(),
+        db.prepare(
+          `SELECT cbs.id, cbs.crafting_blueprint_id, cbs.slot_index, cbs.name,
+                  cbs.resource_name, cbs.quantity, cbs.min_quality
+           FROM crafting_blueprint_slots cbs
+           JOIN crafting_blueprints cb ON cb.id = cbs.crafting_blueprint_id
+           WHERE cb.game_version_id <= ${DEFAULT_VERSION_SUBQUERY}
+           ORDER BY cbs.crafting_blueprint_id, cbs.slot_index`
+        ).all(),
+        db.prepare(
+          `SELECT csm.crafting_blueprint_slot_id, cp.key, cp.name, cp.unit, cp.category,
+                  csm.start_quality, csm.end_quality, csm.modifier_at_start, csm.modifier_at_end
+           FROM crafting_slot_modifiers csm
+           JOIN crafting_properties cp ON cp.id = csm.crafting_property_id
+           JOIN crafting_blueprint_slots cbs ON cbs.id = csm.crafting_blueprint_slot_id
+           JOIN crafting_blueprints cb ON cb.id = cbs.crafting_blueprint_id
+           WHERE cb.game_version_id <= ${DEFAULT_VERSION_SUBQUERY}`
+        ).all(),
+        db.prepare(`SELECT id, key, name, unit, category FROM crafting_properties ORDER BY id`).all(),
+        db.prepare(
+          `SELECT name FROM crafting_resources
+           WHERE game_version_id <= ${DEFAULT_VERSION_SUBQUERY}
+           ORDER BY name`
+        ).all(),
+      ])
+
+      // Nest slots and modifiers into blueprints
+      const modsBySlot = new Map<number, Record<string, unknown>[]>()
+      for (const mod of modResult.results) {
+        const slotId = mod.crafting_blueprint_slot_id as number
+        if (!modsBySlot.has(slotId)) modsBySlot.set(slotId, [])
+        modsBySlot.get(slotId)!.push(mod)
+      }
+
+      const slotsByBp = new Map<number, Record<string, unknown>[]>()
+      for (const slot of slotResult.results) {
+        const bpId = slot.crafting_blueprint_id as number
+        const slotId = slot.id as number
+        const enriched = { ...slot, modifiers: modsBySlot.get(slotId) ?? [] }
+        if (!slotsByBp.has(bpId)) slotsByBp.set(bpId, [])
+        slotsByBp.get(bpId)!.push(enriched)
+      }
+
+      const blueprints = bpResult.results.map((bp) => ({
+        ...bp,
+        slots: slotsByBp.get(bp.id as number) ?? [],
+      }))
+
+      return {
+        blueprints,
+        properties: propResult.results,
+        resources: resResult.results.map((r) => r.name),
+      }
+    })
+  })
+
   return app
 }

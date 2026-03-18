@@ -1,6 +1,6 @@
 import React, { useState, Suspense, lazy } from 'react'
 import { Routes, Route, NavLink, useLocation, useNavigate } from 'react-router-dom'
-import { Rocket, BarChart3, Shield, Upload, RefreshCw, Database, Settings as SettingsIcon, ChevronDown, ChevronRight, ChevronLeft, History, Menu, X, LogOut, LogIn, User, Wrench, Users, Building2, FileText, Search, MapPin, Palette, ShoppingCart, Hammer, Briefcase, Star, Scale, Crosshair, BookOpen, Layers, TrendingUp, Languages, Heart } from 'lucide-react'
+import { Rocket, BarChart3, Shield, Upload, RefreshCw, Database, Settings as SettingsIcon, ChevronDown, ChevronRight, ChevronLeft, History, Menu, X, LogOut, LogIn, User, Wrench, Users, Building2, FileText, Search, MapPin, Palette, ShoppingCart, Hammer, Briefcase, Star, Scale, Crosshair, BookOpen, Layers, TrendingUp, Languages, Heart, FlaskConical } from 'lucide-react'
 import LoadingState from './components/LoadingState'
 import ErrorBoundary from './components/ErrorBoundary'
 import RequireAuth from './components/RequireAuth'
@@ -47,6 +47,7 @@ const ArmorSetDetail = lazy(() => import('./pages/ArmorSetDetail'))
 const Shops = lazy(() => import('./pages/Shops'))
 const TradeCommodities = lazy(() => import('./pages/TradeCommodities'))
 const MiningGuide = lazy(() => import('./pages/MiningGuide'))
+const Crafting = lazy(() => import('./pages/Crafting'))
 const Careers = lazy(() => import('./pages/Careers'))
 const Reputation = lazy(() => import('./pages/Reputation'))
 const LawSystem = lazy(() => import('./pages/LawSystem'))
@@ -70,6 +71,7 @@ const authNavItems = [
       { to: '/shops', icon: ShoppingCart, label: 'Shops' },
       { to: '/trade', icon: TrendingUp, label: 'Trade' },
       { to: '/mining', icon: Hammer, label: 'Mining Guide' },
+      { to: '/crafting', icon: FlaskConical, label: 'Crafting' },
       { to: '/npc-loadouts', icon: Users, label: 'NPC Loadouts' },
     ],
   },
@@ -594,6 +596,7 @@ export default function App() {
                       <Route path="/shops" element={<RequireAuth><Shops /></RequireAuth>} />
                       <Route path="/trade" element={<RequireAuth><TradeCommodities /></RequireAuth>} />
                       <Route path="/mining" element={<RequireAuth><MiningGuide /></RequireAuth>} />
+                      <Route path="/crafting" element={<RequireAuth><Suspense fallback={<LoadingState fullScreen />}><Crafting /></Suspense></RequireAuth>} />
                       <Route path="/careers" element={<RequireAuth><Careers /></RequireAuth>} />
                       <Route path="/reputation" element={<RequireAuth><Reputation /></RequireAuth>} />
                       <Route path="/law" element={<RequireAuth><LawSystem /></RequireAuth>} />
