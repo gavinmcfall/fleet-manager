@@ -1,6 +1,6 @@
 import React, { useState, Suspense, lazy } from 'react'
 import { Routes, Route, NavLink, useLocation, useNavigate } from 'react-router-dom'
-import { Rocket, BarChart3, Shield, Upload, RefreshCw, Database, Settings as SettingsIcon, ChevronDown, ChevronRight, ChevronLeft, History, Menu, X, LogOut, LogIn, User, Wrench, Users, Building2, FileText, Search, MapPin, Palette, ShoppingCart, Hammer, Briefcase, Star, Scale, Crosshair, BookOpen, Layers, TrendingUp, Languages } from 'lucide-react'
+import { Rocket, BarChart3, Shield, Upload, RefreshCw, Database, Settings as SettingsIcon, ChevronDown, ChevronRight, ChevronLeft, History, Menu, X, LogOut, LogIn, User, Wrench, Users, Building2, FileText, Search, MapPin, Palette, ShoppingCart, Hammer, Briefcase, Star, Scale, Crosshair, BookOpen, Layers, TrendingUp, Languages, Heart } from 'lucide-react'
 import LoadingState from './components/LoadingState'
 import ErrorBoundary from './components/ErrorBoundary'
 import RequireAuth from './components/RequireAuth'
@@ -338,6 +338,15 @@ function SidebarContent({ expandedMenu, setExpandedMenu, onNavClick }) {
           {' · '}
           <NavLink to="/terms" className="hover:text-gray-400 transition-colors">Terms</NavLink>
         </p>
+        <a
+          href="https://ko-fi.com/scbridge"
+          target="_blank"
+          rel="noopener noreferrer"
+          className="flex items-center justify-center gap-1.5 mt-2 px-2 py-1 rounded border border-sc-border text-[10px] text-gray-500 hover:text-sc-accent hover:border-sc-accent/30 transition-colors"
+        >
+          <Heart className="w-3 h-3 fill-current" />
+          Support
+        </a>
         <a
           href="https://robertsspaceindustries.com/en/community/fan-kit-usage-policy"
           target="_blank"
