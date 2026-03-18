@@ -271,12 +271,14 @@ export default function LootDB() {
     }
 
     if (search.trim()) {
-      const q = search.toLowerCase()
-      items = items.filter((i) =>
-        i.name.toLowerCase().includes(q) ||
-        (i.type && i.type.toLowerCase().includes(q)) ||
-        (i.sub_type && i.sub_type.toLowerCase().includes(q))
-      )
+      const tokens = search.toLowerCase().split(/\s+/).filter(Boolean)
+      items = items.filter((i) => {
+        const name = i.name.toLowerCase()
+        const type = i.type ? i.type.toLowerCase() : ''
+        const subType = i.sub_type ? i.sub_type.toLowerCase() : ''
+        const haystack = `${name} ${type} ${subType}`
+        return tokens.every((t) => haystack.includes(t))
+      })
     }
 
     // Sort
