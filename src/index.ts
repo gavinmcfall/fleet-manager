@@ -83,10 +83,11 @@ app.use("*", async (c, next) => {
   c.header("Strict-Transport-Security", "max-age=31536000; includeSubDomains");
   c.header(
     "Content-Security-Policy",
-    "default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; " +
+    "default-src 'self'; script-src 'self' https://www.googletagmanager.com https://storage.ko-fi.com; style-src 'self' 'unsafe-inline'; " +
     "img-src 'self' https://imagedelivery.net https://robertsspaceindustries.com " +
-    "https://media.robertsspaceindustries.com https://cdn.robertsspaceindustries.com https://www.gravatar.com data:; " +
-    "connect-src 'self'; frame-ancestors 'none'; base-uri 'self'; form-action 'self'",
+    "https://media.robertsspaceindustries.com https://cdn.robertsspaceindustries.com https://www.gravatar.com https://www.googletagmanager.com https://storage.ko-fi.com data:; " +
+    "connect-src 'self' https://www.google-analytics.com https://*.google-analytics.com https://*.analytics.google.com https://www.googletagmanager.com https://ko-fi.com; " +
+    "frame-src https://ko-fi.com; frame-ancestors 'none'; base-uri 'self'; form-action 'self'",
   );
 });
 

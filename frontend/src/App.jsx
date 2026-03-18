@@ -338,6 +338,19 @@ function SidebarContent({ expandedMenu, setExpandedMenu, onNavClick }) {
           {' · '}
           <NavLink to="/terms" className="hover:text-gray-400 transition-colors">Terms</NavLink>
         </p>
+        <a
+          href="https://robertsspaceindustries.com/en/community/fan-kit-usage-policy"
+          target="_blank"
+          rel="noopener noreferrer"
+          className="block mt-2"
+        >
+          <img
+            src="/made-by-community.png"
+            alt="Made by the Community"
+            className="w-8 mx-auto opacity-50 hover:opacity-80 transition-opacity"
+            style={{ filter: 'invert(1) brightness(2)' }}
+          />
+        </a>
       </div>
     </>
   )
