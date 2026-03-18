@@ -21,6 +21,15 @@
     <link rel="preconnect" href="https://fonts.googleapis.com" />
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
     <link href="https://fonts.googleapis.com/css2?family=Atkinson+Hyperlegible:wght@400;700&family=Electrolize&family=Inter:wght@300;400;500;600&family=JetBrains+Mono:wght@400;500&family=Lexend:wght@300;400;500;600;700&display=swap" rel="stylesheet" />
+    <style>
+      /* Ko-fi widget: force fixed positioning so it floats over the page */
+      body > [id^="kofi-widget-overlay"] {
+        position: fixed !important;
+        bottom: 0 !important;
+        right: 0 !important;
+        z-index: 9999 !important;
+      }
+    </style>
   </head>
   <body class="bg-sc-dark text-gray-100 font-body">
     <div id="root"></div>
