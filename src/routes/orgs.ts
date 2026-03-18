@@ -5,6 +5,7 @@ import { validate } from "../lib/validation";
 import { analyzeFleet } from "./analysis";
 import { VEHICLE_VERSION_JOIN } from "../lib/constants";
 import { scrapeRsiOrg } from "../lib/rsi-org-scraper";
+import { opsRoutes } from "./ops";
 
 /**
  * /api/orgs/* — Organisation endpoints
@@ -468,13 +469,32 @@ export function orgRoutes() {
       .first<{ rsiSid: string | null }>();
 
     // Clean up atomically via batch — prevents race with concurrent join
-    const stmts = [
+    // Get all op IDs for this org first (for cascade cleanup)
+    const { results: orgOps } = await db
+      .prepare("SELECT id FROM org_ops WHERE org_id = ?")
+      .bind(org.id)
+      .all();
+    const opIds = orgOps.map((r: Record<string, unknown>) => r.id as number);
+
+    const stmts: D1PreparedStatement[] = [];
+    // Cascade delete ops tables
+    for (const opIdVal of opIds) {
+      stmts.push(
+        db.prepare("DELETE FROM org_op_payouts WHERE org_op_id = ?").bind(opIdVal),
+        db.prepare("DELETE FROM org_op_earnings WHERE org_op_id = ?").bind(opIdVal),
+        db.prepare("DELETE FROM org_op_capital WHERE org_op_id = ?").bind(opIdVal),
+        db.prepare("DELETE FROM org_op_ships WHERE org_op_id = ?").bind(opIdVal),
+        db.prepare("DELETE FROM org_op_participants WHERE org_op_id = ?").bind(opIdVal),
+      );
+    }
+    stmts.push(
+      db.prepare("DELETE FROM org_ops WHERE org_id = ?").bind(org.id),
       db.prepare("DELETE FROM org_join_codes WHERE organization_id = ?").bind(org.id),
       db.prepare("DELETE FROM invitation WHERE organizationId = ?").bind(org.id),
       db.prepare("DELETE FROM member WHERE organizationId = ?").bind(org.id),
       db.prepare("UPDATE user SET primary_org_id = NULL WHERE primary_org_id = ?").bind(org.id),
       db.prepare("DELETE FROM organization WHERE id = ?").bind(org.id),
-    ];
+    );
     // Also clean up any pending verification for this SID
     if (orgFull?.rsiSid) {
       stmts.push(
@@ -687,6 +707,9 @@ export function orgRoutes() {
 
     return c.json({ stats });
   });
+
+  // ── Ops sub-router ──────────────────────────────────────────────────
+  routes.route("/:slug/ops", opsRoutes());
 
   return routes;
 }

@@ -35,6 +35,8 @@ const Terms = lazy(() => import('./pages/Terms'))
 const Orgs = lazy(() => import('./pages/Orgs'))
 const OrgProfile = lazy(() => import('./pages/OrgProfile'))
 const OrgSettings = lazy(() => import('./pages/OrgSettings'))
+const OpDetail = lazy(() => import('./pages/OrgOps/OpDetail'))
+const JoinOp = lazy(() => import('./pages/JoinOp'))
 const AcceptInvitation = lazy(() => import('./pages/AcceptInvitation'))
 const Contracts = lazy(() => import('./pages/Contracts'))
 const LootDB = lazy(() => import('./pages/LootDB'))
@@ -609,6 +611,8 @@ export default function App() {
                       <Route path="/orgs" element={<RequireAuth><Orgs /></RequireAuth>} />
                       <Route path="/orgs/:slug" element={<RequireAuth><OrgProfile /></RequireAuth>} />
                       <Route path="/orgs/:slug/settings" element={<RequireAuth><OrgSettings /></RequireAuth>} />
+                      <Route path="/orgs/:slug/ops/:opId" element={<RequireAuth><OpDetail /></RequireAuth>} />
+                      <Route path="/join/:code" element={<JoinOp />} />
                       <Route path="*" element={<NotFound />} />
                     </Routes>
                   </Suspense>

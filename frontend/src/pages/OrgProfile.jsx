@@ -2,7 +2,7 @@ import React, { useState, useCallback } from 'react'
 import { useParams, Link, useSearchParams } from 'react-router-dom'
 import {
   ExternalLink, Users, Rocket, BarChart3, Building2, Globe,
-  MessageSquare, Tv, Youtube, Settings, ShieldCheck, ChevronDown
+  MessageSquare, Tv, Youtube, Settings, ShieldCheck, ChevronDown, Crosshair
 } from 'lucide-react'
 import { useOrgProfile, useOrgFleet, useOrgMembers, useOrgAnalysis } from '../hooks/useAPI'
 import { useSession } from '../lib/auth-client'
@@ -10,11 +10,14 @@ import PageHeader from '../components/PageHeader'
 import LoadingState from '../components/LoadingState'
 import ErrorState from '../components/ErrorState'
 import ShipImage from '../components/ShipImage'
+import OrgOpsList from './OrgOps/index'
+import CreateOp from './OrgOps/CreateOp'
 
 const RSI_BASE = 'https://robertsspaceindustries.com'
 
 const TABS = [
   { id: 'fleet', label: 'Fleet', icon: Rocket },
+  { id: 'ops', label: 'Ops', icon: Crosshair },
   { id: 'members', label: 'Members', icon: Users },
   { id: 'analysis', label: 'Analysis', icon: BarChart3 },
   { id: 'about', label: 'About', icon: Building2 },
@@ -274,7 +277,8 @@ export default function OrgProfile() {
   const { slug } = useParams()
   const { data: session } = useSession()
   const { data: org, loading, error, refetch } = useOrgProfile(slug)
-  const VALID_TABS = ['fleet', 'members', 'analysis', 'about']
+  const VALID_TABS = ['fleet', 'ops', 'members', 'analysis', 'about']
+  const [showCreateOp, setShowCreateOp] = useState(false)
   const [searchParams, setSearchParams] = useSearchParams()
   const tabParam = searchParams.get('tab')
   const activeTab = VALID_TABS.includes(tabParam) ? tabParam : 'fleet'
@@ -415,6 +419,11 @@ export default function OrgProfile() {
         </div>
 
         {activeTab === 'fleet' && <OrgFleet slug={slug} callerRole={callerRole} />}
+        {activeTab === 'ops' && (
+          showCreateOp
+            ? <CreateOp slug={slug} onClose={() => setShowCreateOp(false)} />
+            : <OrgOpsList slug={slug} callerRole={callerRole} onCreateOp={() => setShowCreateOp(true)} />
+        )}
         {activeTab === 'members' && (
           isLoggedIn
             ? <OrgMembers slug={slug} />

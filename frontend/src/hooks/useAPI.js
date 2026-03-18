@@ -197,6 +197,23 @@ export function useOrgStats(slug) {
   return useAPI(slug ? `/orgs/${slug}/stats` : null, { skip: !slug })
 }
 
+export function useOrgOps(slug, status) {
+  const path = slug ? `/orgs/${slug}/ops${status ? `?status=${status}` : ''}` : null
+  return useAPI(path, { skip: !slug })
+}
+
+export function useOrgOp(slug, opId) {
+  return useAPI(slug && opId ? `/orgs/${slug}/ops/${opId}` : null, { skip: !slug || !opId })
+}
+
+export function useOpTypes(slug) {
+  return useAPI(slug ? `/orgs/${slug}/ops/types` : null, { skip: !slug })
+}
+
+export function usePublicOp(code) {
+  return useAPI(code ? `/ops/join/${code}` : null, { skip: !code })
+}
+
 export async function updateShipVisibility(fleetEntryId, updates) {
   return patchJSON(`/vehicles/${fleetEntryId}/visibility`, updates)
 }
