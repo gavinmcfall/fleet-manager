@@ -126,23 +126,18 @@ function InvitePanel() {
 }
 
 function DataVersionsPanel() {
-  const { versions, defaultVersion, activeCode, isPreview, setPreviewPatch } = useGameVersion()
+  const { versions, defaultVersion } = useGameVersion()
   const [selectedDefault, setSelectedDefault] = useState('')
-  const [selectedPreview, setSelectedPreview] = useState('')
-  const [saving, setSaving] = useState(null)
+  const [saving, setSaving] = useState(false)
   const [error, setError] = useState(null)
 
   useEffect(() => {
     if (defaultVersion) setSelectedDefault(defaultVersion.code)
   }, [defaultVersion])
 
-  useEffect(() => {
-    if (isPreview) setSelectedPreview(activeCode)
-  }, [isPreview, activeCode])
-
   const handleSetDefault = async () => {
     if (!selectedDefault) return
-    setSaving('default')
+    setSaving(true)
     setError(null)
     try {
       const res = await fetch('/api/admin/versions/default', {
@@ -159,108 +154,46 @@ function DataVersionsPanel() {
     } catch (err) {
       setError(err.message)
     } finally {
-      setSaving(null)
-    }
-  }
-
-  const handleSetPreview = async () => {
-    if (!selectedPreview) return
-    setSaving('preview')
-    setError(null)
-    try {
-      await setPreviewPatch(selectedPreview)
-    } catch (err) {
-      setError(err.message)
-      setSaving(null)
-    }
-  }
-
-  const handleClearPreview = async () => {
-    setSaving('clear')
-    setError(null)
-    try {
-      await setPreviewPatch(null)
-    } catch (err) {
-      setError(err.message)
-      setSaving(null)
+      setSaving(false)
     }
   }
 
   if (versions.length === 0) return null
 
+  // Only show LIVE versions for default selection
+  const liveVersions = versions.filter(v => v.channel === 'LIVE' || v.is_default)
+
   return (
-    <PanelSection title="Data Versions" icon={Database}>
-      <div className="p-4 space-y-4">
+    <PanelSection title="Default LIVE Version" icon={Database}>
+      <div className="p-4 space-y-3">
         {error && (
           <div className="flex items-center gap-2 p-2 bg-sc-danger/10 border border-sc-danger/30 rounded text-sc-danger text-xs">
             <AlertCircle className="w-3.5 h-3.5 shrink-0" />
             <span>{error}</span>
           </div>
         )}
-
-        {/* Public default */}
-        <div className="space-y-2">
-          <label className="text-xs font-medium text-gray-400 uppercase tracking-wider">Public Game Version</label>
-          <div className="flex items-center gap-2">
-            <select
-              value={selectedDefault}
-              onChange={(e) => setSelectedDefault(e.target.value)}
-              className="flex-1 px-3 py-2 bg-sc-darker border border-sc-border rounded text-sm text-gray-200 focus:outline-none focus:ring-1 focus:ring-sc-accent/50"
-            >
-              {versions.map((v) => (
-                <option key={v.code} value={v.code}>
-                  {formatVersionFull(v.code, v.channel)}{v.is_default ? ' (current)' : ''}
-                </option>
-              ))}
-            </select>
-            <button
-              onClick={handleSetDefault}
-              disabled={saving || selectedDefault === defaultVersion?.code}
-              className="btn-primary text-sm px-3 py-2 disabled:opacity-50"
-            >
-              {saving === 'default' ? 'Saving...' : 'Set Default'}
-            </button>
-          </div>
-        </div>
-
-        {/* Admin preview */}
-        <div className="space-y-2">
-          <label className="text-xs font-medium text-gray-400 uppercase tracking-wider">Admin Preview Version</label>
-          <div className="flex items-center gap-2">
-            <select
-              value={selectedPreview}
-              onChange={(e) => setSelectedPreview(e.target.value)}
-              className="flex-1 px-3 py-2 bg-sc-darker border border-sc-border rounded text-sm text-gray-200 focus:outline-none focus:ring-1 focus:ring-sc-accent/50"
-            >
-              <option value="">None (use public default)</option>
-              {versions.map((v) => (
-                <option key={v.code} value={v.code}>
-                  {formatVersionFull(v.code, v.channel)}
-                </option>
-              ))}
-            </select>
-            <button
-              onClick={handleSetPreview}
-              disabled={saving || !selectedPreview}
-              className="btn-primary text-sm px-3 py-2 disabled:opacity-50"
-            >
-              {saving === 'preview' ? 'Saving...' : 'Preview'}
-            </button>
-            {isPreview && (
-              <button
-                onClick={handleClearPreview}
-                disabled={saving}
-                className="px-3 py-2 text-sm border border-sc-border rounded text-gray-400 hover:text-white hover:border-sc-accent/40 transition-colors disabled:opacity-50"
-              >
-                {saving === 'clear' ? 'Clearing...' : 'Clear'}
-              </button>
-            )}
-          </div>
-          {isPreview && (
-            <p className="text-[10px] text-amber-400">
-              Preview active — you are viewing {formatVersionFull(activeCode)} data instead of the public default.
-            </p>
-          )}
+        <p className="text-xs text-gray-500">
+          Sets the default game version for all users. Users can switch to PTU/EPTU versions via the sidebar version selector.
+        </p>
+        <div className="flex items-center gap-2">
+          <select
+            value={selectedDefault}
+            onChange={(e) => setSelectedDefault(e.target.value)}
+            className="flex-1 px-3 py-2 bg-sc-darker border border-sc-border rounded text-sm text-gray-200 focus:outline-none focus:ring-1 focus:ring-sc-accent/50"
+          >
+            {liveVersions.map((v) => (
+              <option key={v.code} value={v.code}>
+                {formatVersionFull(v.code, v.channel)}{v.is_default ? ' (current)' : ''}
+              </option>
+            ))}
+          </select>
+          <button
+            onClick={handleSetDefault}
+            disabled={saving || selectedDefault === defaultVersion?.code}
+            className="btn-primary text-sm px-3 py-2 disabled:opacity-50"
+          >
+            {saving ? 'Saving...' : 'Set Default'}
+          </button>
         </div>
       </div>
     </PanelSection>

@@ -1,25 +1,24 @@
 import React, { createContext, useContext, useState, useEffect, useCallback, useMemo } from 'react'
-import { usePreferences, setPreferences } from './useAPI'
-import { useSession } from '../lib/auth-client'
+import { formatVersionLabel } from '../lib/gameVersion'
 
 const GameVersionContext = createContext({
   versions: [],
   defaultVersion: null,
   activeCode: null,
+  activeVersion: null,
   isPreview: false,
-  setPreviewPatch: () => {},
+  setActiveVersion: () => {},
   loading: false,
 })
 
-export function GameVersionProvider({ children }) {
-  const { data: session } = useSession()
-  const isLoggedIn = !!session?.user
-  const userRole = session?.user?.role || 'user'
-  const isAdmin = userRole === 'admin' || userRole === 'super_admin'
-  const { data: prefs } = usePreferences({ skip: !isLoggedIn })
+const STORAGE_KEY = 'sc-bridge-active-version'
 
+export function GameVersionProvider({ children }) {
   const [versions, setVersions] = useState([])
   const [loading, setLoading] = useState(true)
+  const [userSelectedCode, setUserSelectedCode] = useState(() => {
+    try { return localStorage.getItem(STORAGE_KEY) || null } catch { return null }
+  })
 
   useEffect(() => {
     fetch('/api/patches')
@@ -36,24 +35,36 @@ export function GameVersionProvider({ children }) {
     [versions]
   )
 
-  const adminPreviewPatch = isAdmin ? (prefs?.adminPreviewPatch || null) : null
-  const activeCode = adminPreviewPatch || defaultVersion?.code || null
-  const isPreview = !!adminPreviewPatch
+  // Validate that user-selected version still exists in the list
+  const validUserSelection = useMemo(() => {
+    if (!userSelectedCode) return null
+    return versions.find(v => v.code === userSelectedCode) || null
+  }, [versions, userSelectedCode])
 
-  const setPreviewPatch = useCallback(async (code) => {
-    await setPreferences({ adminPreviewPatch: code })
-    // Force a page reload to clear all cached SWR data with old version
-    window.location.reload()
-  }, [])
+  const activeVersion = validUserSelection || defaultVersion
+  const activeCode = activeVersion?.code || null
+  const isPreview = !!validUserSelection && validUserSelection.code !== defaultVersion?.code
+
+  const setActiveVersion = useCallback((code) => {
+    try {
+      if (code && code !== defaultVersion?.code) {
+        localStorage.setItem(STORAGE_KEY, code)
+      } else {
+        localStorage.removeItem(STORAGE_KEY)
+      }
+    } catch { /* localStorage unavailable */ }
+    setUserSelectedCode(code || null)
+  }, [defaultVersion])
 
   const value = useMemo(() => ({
     versions,
     defaultVersion,
     activeCode,
+    activeVersion,
     isPreview,
-    setPreviewPatch,
+    setActiveVersion,
     loading,
-  }), [versions, defaultVersion, activeCode, isPreview, setPreviewPatch, loading])
+  }), [versions, defaultVersion, activeCode, activeVersion, isPreview, setActiveVersion, loading])
 
   return (
     <GameVersionContext.Provider value={value}>

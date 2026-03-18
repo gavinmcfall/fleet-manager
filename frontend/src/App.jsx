@@ -129,19 +129,63 @@ function getNavItems(role, isLoggedIn) {
   return items
 }
 
-function VersionBadge() {
-  const { activeCode, isPreview, loading } = useGameVersion()
+function VersionSelector() {
+  const { versions, activeCode, activeVersion, defaultVersion, isPreview, setActiveVersion, loading } = useGameVersion()
+  const [open, setOpen] = useState(false)
+
   if (loading || !activeCode) return null
-  const label = formatVersionLabel(activeCode)
-  if (!label) return null
+
+  const label = formatVersionLabel(activeCode, activeVersion?.channel)
+
   return (
-    <p className={`text-[10px] font-mono mt-1 tracking-wider ${
-      isPreview
-        ? 'text-amber-400 bg-amber-400/10 border border-amber-400/30 rounded px-1.5 py-0.5 inline-block'
-        : 'text-gray-600'
-    }`}>
-      {isPreview ? `PREVIEW: ${label}` : label}
-    </p>
+    <div className="relative">
+      <button
+        onClick={() => setOpen(!open)}
+        className={`text-[10px] font-mono mt-1 tracking-wider flex items-center gap-1 transition-colors ${
+          isPreview
+            ? 'text-amber-400 bg-amber-400/10 border border-amber-400/30 rounded px-1.5 py-0.5'
+            : 'text-gray-500 hover:text-gray-300'
+        }`}
+      >
+        {isPreview && <span className="w-1.5 h-1.5 rounded-full bg-amber-400 animate-pulse" />}
+        {label}
+        <ChevronDown className="w-3 h-3" />
+      </button>
+      {open && (
+        <>
+          <div className="fixed inset-0 z-40" onClick={() => setOpen(false)} />
+          <div className="absolute left-0 top-full mt-1 z-50 bg-gray-800 border border-gray-700 rounded-lg shadow-xl py-1 min-w-[200px]">
+            {versions.map(v => {
+              const vLabel = formatVersionLabel(v.code, v.channel)
+              const isDefault = v.code === defaultVersion?.code
+              const isActive = v.code === activeCode
+              return (
+                <button
+                  key={v.code}
+                  onClick={() => { setActiveVersion(isDefault ? null : v.code); setOpen(false) }}
+                  className={`w-full text-left px-3 py-2 text-xs font-mono flex items-center justify-between gap-3 transition-colors ${
+                    isActive ? 'bg-sc-accent/10 text-sc-accent' : 'text-gray-400 hover:bg-gray-700 hover:text-gray-200'
+                  }`}
+                >
+                  <span>{vLabel}</span>
+                  <div className="flex items-center gap-1.5">
+                    {v.channel === 'PTU' && (
+                      <span className="text-[9px] px-1 py-0.5 rounded bg-amber-500/20 text-amber-400 uppercase">PTU</span>
+                    )}
+                    {v.channel === 'EPTU' && (
+                      <span className="text-[9px] px-1 py-0.5 rounded bg-purple-500/20 text-purple-400 uppercase">EPTU</span>
+                    )}
+                    {isDefault && (
+                      <span className="text-[9px] px-1 py-0.5 rounded bg-emerald-500/20 text-emerald-400">LIVE</span>
+                    )}
+                  </div>
+                </button>
+              )
+            })}
+          </div>
+        </>
+      )}
+    </div>
   )
 }
 
@@ -241,7 +285,7 @@ function SidebarContent({ expandedMenu, setExpandedMenu, onNavClick }) {
           SC BRIDGE
         </h1>
         <p className="text-xs font-mono text-gray-500 mt-1 tracking-widest">STAR CITIZEN COMPANION</p>
-        <VersionBadge />
+        <VersionSelector />
       </div>
       <div className="flex flex-col gap-0.5 p-2 flex-1 overflow-y-auto" role="list">
         {navItems.map((item) => {
