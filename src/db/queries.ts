@@ -14,7 +14,7 @@ import type {
   AIAnalysis,
 } from "../lib/types";
 import { extractSetName, makeSetSlug } from "../lib/loot-sets";
-import { VEHICLE_VERSION_JOIN } from "../lib/constants";
+import { VEHICLE_VERSION_JOIN, VEHICLE_VERSION_CAP } from "../lib/constants";
 
 // --- Loot JSON "has_*" column expressions ---
 // Reusable SQL fragment for SELECT clauses that compute boolean flags from JSON blob columns.
@@ -1635,4 +1635,56 @@ export async function setVehicleCFImagesID(
         vehicleId,
       ),
   ]);
+}
+
+// ── Salvageable Ships ─────────────────────────────────────────────────
+
+/**
+ * Get salvage variants for a specific ship by slug.
+ * Returns the derelict/boarded variants and what components the base ship has.
+ */
+export async function getSalvageForShip(
+  db: D1Database,
+  slug: string,
+): Promise<Record<string, unknown> | null> {
+  const { results: variants } = await db
+    .prepare(
+      `SELECT ss.id, ss.entity_name, ss.variant_type
+       FROM salvageable_ships ss
+       JOIN vehicles v ON v.id = ss.base_vehicle_id
+       WHERE v.slug = ? AND v.${VEHICLE_VERSION_CAP}
+       ORDER BY ss.variant_type`,
+    )
+    .bind(slug)
+    .all();
+
+  if (!variants || variants.length === 0) return null;
+
+  return { variants };
+}
+
+/**
+ * List all salvageable ships grouped by base vehicle.
+ */
+export async function listSalvageableShips(
+  db: D1Database,
+): Promise<Record<string, unknown>[]> {
+  const { results } = await db
+    .prepare(
+      `SELECT
+         v.slug, v.name, v.class_name,
+         v.image_url_small,
+         m.name as manufacturer_name, m.code as manufacturer_code,
+         COUNT(ss.id) as variant_count,
+         GROUP_CONCAT(DISTINCT ss.variant_type) as variant_types
+       FROM salvageable_ships ss
+       JOIN vehicles v ON v.id = ss.base_vehicle_id AND v.${VEHICLE_VERSION_CAP}
+       LEFT JOIN manufacturers m ON m.id = v.manufacturer_id
+       WHERE ss.base_vehicle_id IS NOT NULL
+       GROUP BY v.id
+       ORDER BY v.name`,
+    )
+    .all();
+
+  return results;
 }

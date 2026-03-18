@@ -4,7 +4,7 @@ import type { Env, HonoEnv } from "./lib/types";
 import { createAuth } from "./lib/auth";
 import { fleetRoutes } from "./routes/fleet";
 import { vehicleRoutes } from "./routes/vehicles";
-import { getShipLoadout } from "./db/queries";
+import { getShipLoadout, getSalvageForShip, listSalvageableShips } from "./db/queries";
 import { paintRoutes } from "./routes/paints";
 import { importRoutes } from "./routes/import";
 import { settingsRoutes } from "./routes/settings";
@@ -23,7 +23,7 @@ import { localizationRoutes } from "./routes/localization";
 import { validateEncryptionKey } from "./lib/crypto";
 import { logEvent } from "./lib/logger";
 import { VEHICLE_VERSION_JOIN } from "./lib/constants";
-import { cachedJson, resolveVersionId } from "./lib/cache";
+import { cachedJson, resolveVersionId, cacheSlug } from "./lib/cache";
 
 const app = new Hono<HonoEnv>();
 
@@ -348,6 +348,25 @@ app.get("/api/ships/:slug/loadout", async (c) => {
   const versionId = await resolveVersionId(db);
   return cachedJson(c, `ships:loadout:${versionId}:${slug}`, () =>
     getShipLoadout(db, slug),
+  );
+});
+
+// Salvage data for a specific ship
+app.get("/api/ships/:slug/salvage", async (c) => {
+  const slug = c.req.param("slug");
+  const db = c.env.DB;
+  const versionId = await resolveVersionId(db);
+  return cachedJson(c, `ships:salvage:${versionId}:${cacheSlug(slug)}`, () =>
+    getSalvageForShip(db, slug),
+  );
+});
+
+// All salvageable ships
+app.get("/api/gamedata/salvageable-ships", async (c) => {
+  const db = c.env.DB;
+  const versionId = await resolveVersionId(db);
+  return cachedJson(c, `gd:salvageable-ships:${versionId}`, () =>
+    listSalvageableShips(db),
   );
 });
 
