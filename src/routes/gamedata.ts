@@ -748,10 +748,141 @@ export function gamedataRoutes<E extends HonoEnv>() {
         }
       })
 
+      // Fetch resource location data (where each crafting resource can be mined)
+      const [depositResult, qualityResult] = await Promise.all([
+        db
+          .prepare(
+            `SELECT rc.class_name, rc.composition_json,
+                    ml.name as location_name, ml.system, ml.location_type,
+                    mld.group_probability, mld.relative_probability
+             FROM mining_location_deposits mld
+             JOIN rock_compositions rc ON rc.id = mld.rock_composition_id
+             JOIN mining_locations ml ON ml.id = mld.mining_location_id
+             WHERE rc.game_version_id <= ${versionSub(versionId)}
+               AND ml.game_version_id <= ${versionSub(versionId)}
+               AND rc.class_name LIKE '%ShipMineables%'`
+          )
+          .all(),
+        db
+          .prepare(
+            `SELECT name, min_quality, max_quality, mean, stddev
+             FROM mining_quality_distributions
+             WHERE game_version_id <= ${versionSub(versionId)}
+               AND name LIKE '%ShipMineable%'`
+          )
+          .all(),
+      ])
+
+      // Build quality distribution lookup: { "Common_Default": {...}, "Common_Pyro": {...} }
+      const qualityMap = new Map<string, Record<string, unknown>>()
+      for (const q of qualityResult.results) {
+        const name = q.name as string
+        // Extract tier + system from names like "CommonShipMineable_QualityDistribution_Default"
+        // or "CommonShipMineable_QualityOverride_Pyro"
+        const tierMatch = name.match(
+          /^(Common|Uncommon|Rare|Epic|Legendary)ShipMineable_Quality(?:Distribution|Override)_(\w+)$/
+        )
+        if (tierMatch) {
+          qualityMap.set(`${tierMatch[1]}_${tierMatch[2]}`, {
+            min_quality: q.min_quality,
+            max_quality: q.max_quality,
+            mean: q.mean,
+            stddev: q.stddev,
+          })
+        }
+      }
+
+      // Element name → crafting resource name mapping
+      const elementToResource = (element: string): string | null => {
+        // Strip _ore / _raw suffix
+        const base = element.replace(/_(ore|raw)$/, "")
+        // Handle British → American spelling
+        const name = base === "aluminium" ? "aluminum" : base
+        // Capitalize first letter
+        const capitalized = name.charAt(0).toUpperCase() + name.slice(1)
+        // Verify it's a known crafting resource
+        const knownResources = new Set(
+          resResult.results.map((r) => r.name as string)
+        )
+        return knownResources.has(capitalized) ? capitalized : null
+      }
+
+      // Build resource_locations: { "Aluminum": [{ location, system, type, rock_tier, quality }] }
+      type LocationEntry = {
+        location: string
+        system: string
+        type: string
+        rock_tier: string
+        element_pct: { min: number; max: number }
+        quality: Record<string, unknown> | null
+      }
+      const resourceLocations: Record<string, LocationEntry[]> = {}
+
+      for (const dep of depositResult.results) {
+        const className = dep.class_name as string
+        const compositionJson = dep.composition_json as string
+        if (!compositionJson) continue
+
+        // Extract rock tier from class_name
+        const tierMatch = className.match(
+          /^(Common|Uncommon|Rare|Epic|Legendary)ShipMineables/
+        )
+        if (!tierMatch) continue
+        const tier = tierMatch[1]
+
+        // Parse composition to find elements
+        let elements: {
+          element: string
+          minPct: number
+          maxPct: number
+          probability?: number
+        }[]
+        try {
+          elements = JSON.parse(compositionJson)
+        } catch {
+          continue
+        }
+
+        // Get quality distribution for this tier + location system
+        const system = dep.system as string
+        const qualityKey =
+          system === "Pyro" ? `${tier}_Pyro` : `${tier}_Default`
+        const quality = qualityMap.get(qualityKey) ?? null
+
+        for (const el of elements) {
+          const resourceName = elementToResource(el.element)
+          if (!resourceName) continue
+
+          if (!resourceLocations[resourceName])
+            resourceLocations[resourceName] = []
+
+          // Deduplicate: same resource + location + tier
+          const locName = dep.location_name as string
+          const existing = resourceLocations[resourceName].find(
+            (e) =>
+              e.location === locName &&
+              e.rock_tier === tier &&
+              e.element_pct.min === el.minPct &&
+              e.element_pct.max === el.maxPct
+          )
+          if (!existing) {
+            resourceLocations[resourceName].push({
+              location: locName,
+              system,
+              type: dep.location_type as string,
+              rock_tier: tier,
+              element_pct: { min: el.minPct, max: el.maxPct },
+              quality,
+            })
+          }
+        }
+      }
+
       return {
         blueprints,
         properties: propResult.results,
         resources: resResult.results.map((r) => r.name),
+        resource_locations: resourceLocations,
       }
     })
   })

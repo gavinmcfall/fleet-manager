@@ -264,3 +264,114 @@ export function formatActualValue(value, decimals = 0) {
   if (value == null) return null
   return Number(value).toFixed(decimals)
 }
+
+// --- Mining location helpers ---
+
+// Error function approximation (Abramowitz & Stegun)
+function erf(x) {
+  const sign = x >= 0 ? 1 : -1
+  const a = Math.abs(x)
+  const t = 1 / (1 + 0.3275911 * a)
+  const y = 1 - (((((1.061405429 * t - 1.453152027) * t) + 1.421413741) * t - 0.284496736) * t + 0.254829592) * t * Math.exp(-a * a)
+  return sign * y
+}
+
+// Gaussian CDF: probability that X <= x given mean/stddev
+function normalCDF(x, mean, stddev) {
+  if (stddev <= 0) return x >= mean ? 1 : 0
+  return 0.5 * (1 + erf((x - mean) / (stddev * Math.SQRT2)))
+}
+
+// Compute probability for each quality band, clamped to [min_quality, max_quality]
+// Returns array of { label, probability } for bands 0-200, 200-400, etc.
+export const QUALITY_BANDS = [
+  { label: '0–200', min: 0, max: 200 },
+  { label: '200–400', min: 200, max: 400 },
+  { label: '400–600', min: 400, max: 600 },
+  { label: '600–800', min: 600, max: 800 },
+  { label: '800–1000', min: 800, max: 1000 },
+]
+
+export function qualityBandProbabilities(quality) {
+  if (!quality) return null
+  const { min_quality, max_quality, mean, stddev } = quality
+  // Total probability mass within the clamped range
+  const totalMass = normalCDF(max_quality, mean, stddev) - normalCDF(min_quality, mean, stddev)
+  if (totalMass < 0.0001) return null
+
+  return QUALITY_BANDS.map(band => {
+    // Intersect band with [min_quality, max_quality]
+    const lo = Math.max(band.min, min_quality)
+    const hi = Math.min(band.max, max_quality)
+    if (lo >= hi) return { ...band, probability: 0 }
+    const mass = normalCDF(hi, mean, stddev) - normalCDF(lo, mean, stddev)
+    return { ...band, probability: mass / totalMass }
+  })
+}
+
+// Location name humanization
+const LOCATION_NAMES = {
+  HPP_Stanton1: 'Hurston Orbit',
+  HPP_Stanton1a: 'Aberdeen',
+  HPP_Stanton1b: 'Arial',
+  HPP_Stanton1c: 'Ita',
+  HPP_Stanton1d: 'Magda',
+  HPP_Stanton2a: 'Cellin',
+  HPP_Stanton2b: 'Daymar',
+  HPP_Stanton2c: 'Yela',
+  HPP_Stanton2c_Belt: 'Yela Belt',
+  HPP_Stanton3a: 'Lyria',
+  HPP_Stanton3b: 'Wala',
+  HPP_Stanton4: 'microTech Orbit',
+  HPP_Stanton4a: 'Calliope',
+  HPP_Stanton4b: 'Clio',
+  HPP_Stanton4c: 'Euterpe',
+  HPP_AaronHalo: 'Aaron Halo Belt',
+  HPP_Lagrange_A: 'Lagrange A (HUR-L1)',
+  HPP_Lagrange_B: 'Lagrange B (HUR-L2)',
+  HPP_Lagrange_C: 'Lagrange C (CRU-L1)',
+  HPP_Lagrange_D: 'Lagrange D (ARC-L1)',
+  HPP_Lagrange_E: 'Lagrange E (MIC-L1)',
+  HPP_Lagrange_F: 'Lagrange F (HUR-L3)',
+  HPP_Lagrange_G: 'Lagrange G (HUR-L4)',
+  HPP_Lagrange_Occupied: 'Lagrange (Occupied)',
+  HPP_ShipGraveyard_001: 'Ship Graveyard',
+  HPP_SpaceDerelict_General: 'Space Derelict',
+  HPP_ResourceRush_Gold: 'Gold Rush Event',
+  HPP_ResourceRush_Gold_HighDensity: 'Gold Rush (High)',
+  AsteroidCluster_Low_Yield: 'Low Yield Cluster',
+  AsteroidCluster_Medium_Yield: 'Medium Yield Cluster',
+  HPP_Pyro1: 'Pyro I',
+  HPP_Pyro2: 'Pyro II',
+  HPP_Pyro3: 'Pyro III',
+  HPP_Pyro4: 'Pyro IV',
+  HPP_Pyro5a: 'Ignis',
+  HPP_Pyro5b: 'Vatra',
+  HPP_Pyro5c: 'Adir',
+  HPP_Pyro5d: 'Fairo',
+  HPP_Pyro5e: 'Fuego',
+  HPP_Pyro5f: 'Vuur',
+  HPP_Pyro6: 'Pyro VI',
+  HPP_Pyro_AkiroCluster: 'Akiro Cluster',
+  HPP_Pyro_Cool01: 'Pyro Cool Belt 1',
+  HPP_Pyro_Cool02: 'Pyro Cool Belt 2',
+  HPP_Pyro_DeepSpaceAsteroids: 'Deep Space Asteroids',
+  HPP_Pyro_Warm01: 'Pyro Warm Belt 1',
+  HPP_Pyro_Warm02: 'Pyro Warm Belt 2',
+  HPP_Nyx_GlaciemRing: 'Glaciem Ring',
+  HPP_Nyx_KeegerBelt: 'Keeger Belt',
+}
+
+export function humanizeLocationName(raw) {
+  if (LOCATION_NAMES[raw]) return LOCATION_NAMES[raw]
+  return raw.replace(/^HPP_/, '').replace(/_/g, ' ')
+}
+
+// Rock tier display labels and colors
+export const ROCK_TIER_INFO = {
+  Common:    { label: 'Common',    color: 'text-gray-400',   bg: 'bg-gray-500/10',   border: 'border-gray-500/20' },
+  Uncommon:  { label: 'Uncommon',  color: 'text-green-400',  bg: 'bg-green-500/10',  border: 'border-green-500/20' },
+  Rare:      { label: 'Rare',      color: 'text-blue-400',   bg: 'bg-blue-500/10',   border: 'border-blue-500/20' },
+  Epic:      { label: 'Epic',      color: 'text-purple-400', bg: 'bg-purple-500/10', border: 'border-purple-500/20' },
+  Legendary: { label: 'Legendary', color: 'text-amber-400',  bg: 'bg-amber-500/10',  border: 'border-amber-500/20' },
+}

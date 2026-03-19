@@ -198,7 +198,7 @@ export default function BlueprintDetail() {
         <div className="space-y-3">
           {blueprint.slots?.length > 0 ? (
             blueprint.slots.map((slot, i) => (
-              <SlotCard key={i} slot={slot} index={i} />
+              <SlotCard key={i} slot={slot} index={i} resourceLocations={data?.resource_locations} />
             ))
           ) : (
             <p className="text-center py-8 text-gray-500">No material slots.</p>

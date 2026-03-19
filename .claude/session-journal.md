@@ -1,14 +1,40 @@
 # Session Journal
 
 ## Current Focus
-RSI verification flow restructured: verification now gates sync, extension auto-verifies, consolidated API endpoint.
+Crafting Materials tab — mining location + quality source data feature complete, awaiting deploy to staging.
 
 ## What's Next
-1. Deploy to staging and test all 3 verification paths (extension, manual, no-data)
-2. Test edge cases: handle change invalidation, duplicate handle prevention, expired pending
-3. Verify consolidated `/api/account/rsi-profile` returns all sections
+1. Deploy to staging and visual check crafting detail Materials tab
+2. Verify resource_locations data populates for all 22 crafting resources
+3. Test quality band probability display and location humanization
 
 ## Log
+
+### 2026-03-20 08:55 — Completed: Crafting Materials tab — mining location + quality data
+- Backend: Added resource location query to crafting endpoint in `gamedata.ts` — joins deposits→compositions→locations with quality distributions
+- Element→resource mapping: strips `_ore`/`_raw` suffix, capitalizes, handles aluminium→aluminum spelling
+- Quality distribution matching: extracts rock tier from class_name, matches to system-specific distribution (Default vs Pyro)
+- Frontend: `SlotCard.jsx` — collapsible "Where to find" per material with location table + quality band probabilities
+- `craftingUtils.js` — Added normalCDF (erf approximation), qualityBandProbabilities, 49-entry LOCATION_NAMES map, ROCK_TIER_INFO
+- `BlueprintDetail.jsx` — passes `data.resource_locations` to SlotCard
+- Response adds `resource_locations` map: resource_name → [{location, system, type, rock_tier, element_pct, quality}]
+- Build + typecheck clean
+
+### 2026-03-19 19:54 — Completed: Crafting system visual overhaul
+- Deleted `Crafting.jsx` monolith, replaced with `Crafting/` directory (8 files)
+- `index.jsx` — Hero with HUD corners, animated stats row, pill-chip filters, responsive 4→1 col card grid with stagger animations
+- `BlueprintDetail.jsx` — Detail page with craft time ring, tabbed Materials/Quality Sim
+- `BlueprintCard.jsx` — Glassmorphic cards with type badges, hover glow, resource color dots
+- `FilterBar.jsx` — Search + type/subtype pills + resource chips with deterministic HSL colors
+- `StatsRow.jsx` — 4 animated stat cards with count-up numbers
+- `SlotCard.jsx` — Material slots with colored resource chips + modifier bars
+- `QualitySim.jsx` — Per-slot quality sliders (0-1000) with gradient tracks, real-time stat diff
+- `craftingUtils.js` — Shared helpers (formatTime, resourceColor hash, interpolateModifier)
+- Added `/crafting/:id` route in App.jsx, `stagger-fade-up` + `glow-pulse` in tailwind config
+- No backend changes — uses existing `/api/gamedata/crafting` endpoint
+- Build passes clean
+
+
 
 ### 2026-03-19 18:55 — Completed: RSI Profile Verification Flow Restructure
 - Created `src/lib/rsi-sync.ts` — extracted sync helper from account.ts (zero behavior change)
