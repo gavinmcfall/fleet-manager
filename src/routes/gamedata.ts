@@ -698,5 +698,176 @@ export function gamedataRoutes<E extends HonoEnv>() {
     })
   })
 
+  // GET /api/gamedata/planner — consolidated crafting + mining planner data
+  app.get("/planner", async (c) => {
+    const db = c.env.DB
+    const versionId = await resolveVersionId(db, c.req.query("patch"))
+    return cachedJson(c, `gd:planner:${versionId}`, async () => {
+      const vs = versionSub(versionId)
+
+      const [
+        bpResult, slotResult, modResult, resResult,
+        elemResult, compResult, locResult, depositResult,
+        laserResult, moduleResult, gadgetResult,
+        qualityResult, refineResult,
+      ] = await Promise.all([
+        // Crafting: blueprints
+        db.prepare(
+          `SELECT id, uuid, tag, name, type, sub_type, craft_time_seconds
+           FROM crafting_blueprints WHERE game_version_id <= ${vs}
+           ORDER BY type, sub_type, name`
+        ).all(),
+        // Crafting: slots
+        db.prepare(
+          `SELECT cbs.id, cbs.crafting_blueprint_id, cbs.slot_index, cbs.name,
+                  cbs.resource_name, cbs.quantity, cbs.min_quality
+           FROM crafting_blueprint_slots cbs
+           JOIN crafting_blueprints cb ON cb.id = cbs.crafting_blueprint_id
+           WHERE cb.game_version_id <= ${vs}
+           ORDER BY cbs.crafting_blueprint_id, cbs.slot_index`
+        ).all(),
+        // Crafting: modifiers
+        db.prepare(
+          `SELECT csm.crafting_blueprint_slot_id, cp.key, cp.name, cp.unit, cp.category,
+                  csm.start_quality, csm.end_quality, csm.modifier_at_start, csm.modifier_at_end
+           FROM crafting_slot_modifiers csm
+           JOIN crafting_properties cp ON cp.id = csm.crafting_property_id
+           JOIN crafting_blueprint_slots cbs ON cbs.id = csm.crafting_blueprint_slot_id
+           JOIN crafting_blueprints cb ON cb.id = cbs.crafting_blueprint_id
+           WHERE cb.game_version_id <= ${vs}`
+        ).all(),
+        // Crafting: resources
+        db.prepare(
+          `SELECT name FROM crafting_resources WHERE game_version_id <= ${vs} ORDER BY name`
+        ).all(),
+        // Mining: elements
+        db.prepare(
+          `SELECT id, name, class_name, instability, resistance,
+                  optimal_window_midpoint, optimal_window_randomness,
+                  optimal_window_thinness, explosion_multiplier, cluster_factor
+           FROM mineable_elements
+           WHERE game_version_id = ${vs}
+             AND name NOT LIKE '%Template%' AND name NOT LIKE '%Testelement%'
+           ORDER BY name`
+        ).all(),
+        // Mining: compositions
+        db.prepare(
+          `SELECT id, class_name, name, rock_type, composition_json
+           FROM rock_compositions WHERE game_version_id = ${vs}
+           ORDER BY name`
+        ).all(),
+        // Mining: locations
+        db.prepare(
+          `SELECT id, name, system, location_type
+           FROM mining_locations WHERE game_version_id = ${vs}
+           ORDER BY system, name`
+        ).all(),
+        // Mining: deposits
+        db.prepare(
+          `SELECT mld.mining_location_id, mld.group_probability, mld.relative_probability,
+                  mld.rock_composition_id, rc.name as composition_name
+           FROM mining_location_deposits mld
+           LEFT JOIN rock_compositions rc ON rc.id = mld.rock_composition_id
+           WHERE mld.mining_location_id IN (
+             SELECT id FROM mining_locations WHERE game_version_id = ${vs}
+           )`
+        ).all(),
+        // Mining: lasers
+        db.prepare(
+          `SELECT * FROM mining_lasers WHERE game_version_id = ${vs} ORDER BY name`
+        ).all(),
+        // Mining: modules
+        db.prepare(
+          `SELECT * FROM mining_modules WHERE game_version_id = ${vs} ORDER BY name`
+        ).all(),
+        // Mining: gadgets
+        db.prepare(
+          `SELECT * FROM mining_gadgets WHERE game_version_id = ${vs} ORDER BY name`
+        ).all(),
+        // Mining: quality distributions
+        db.prepare(
+          `SELECT * FROM mining_quality_distributions WHERE game_version_id = ${vs} ORDER BY name`
+        ).all(),
+        // Mining: refining processes
+        db.prepare(
+          `SELECT * FROM refining_processes WHERE game_version_id = ${vs} ORDER BY name`
+        ).all(),
+      ])
+
+      // Nest crafting data
+      const modsBySlot = new Map<number, Record<string, unknown>[]>()
+      for (const mod of modResult.results) {
+        const slotId = mod.crafting_blueprint_slot_id as number
+        if (!modsBySlot.has(slotId)) modsBySlot.set(slotId, [])
+        modsBySlot.get(slotId)!.push(mod)
+      }
+
+      const slotsByBp = new Map<number, Record<string, unknown>[]>()
+      for (const slot of slotResult.results) {
+        const bpId = slot.crafting_blueprint_id as number
+        const slotId = slot.id as number
+        const enriched = { ...slot, modifiers: modsBySlot.get(slotId) ?? [] }
+        if (!slotsByBp.has(bpId)) slotsByBp.set(bpId, [])
+        slotsByBp.get(bpId)!.push(enriched)
+      }
+
+      const blueprints = bpResult.results.map((bp) => ({
+        ...bp,
+        slots: slotsByBp.get(bp.id as number) ?? [],
+      }))
+
+      // Nest deposits under locations
+      const depositsByLocation = new Map<number, Record<string, unknown>[]>()
+      for (const d of depositResult.results) {
+        const locId = d.mining_location_id as number
+        if (!depositsByLocation.has(locId)) depositsByLocation.set(locId, [])
+        depositsByLocation.get(locId)!.push(d)
+      }
+
+      const locations = locResult.results.map((loc) => ({
+        ...loc,
+        deposits: depositsByLocation.get(loc.id as number) ?? [],
+      }))
+
+      // Build resource → element class_name mapping
+      // Most resources map directly to element class_name via lowercase + _ore suffix
+      const resourceElementMap: Record<string, string> = {}
+      const elementClassNames = elemResult.results.map((e) => (e.class_name as string) || "")
+      for (const r of resResult.results) {
+        const name = r.name as string
+        // Try direct match: "Lindinium" → "lindinium_ore"
+        const normalized = name.toLowerCase().replace(/ /g, "_")
+        const match = elementClassNames.find(
+          (cn) => cn.toLowerCase() === normalized || cn.toLowerCase() === `${normalized}_ore`
+        )
+        if (match) {
+          resourceElementMap[name] = match
+          continue
+        }
+        // Hard-code known aliases
+        if (name.toLowerCase() === "aluminum") {
+          const alMatch = elementClassNames.find((cn) => cn.toLowerCase().includes("aluminium"))
+          if (alMatch) resourceElementMap[name] = alMatch
+        }
+      }
+
+      return {
+        blueprints,
+        resources: resResult.results.map((r) => r.name),
+        elements: elemResult.results,
+        compositions: compResult.results,
+        locations,
+        equipment: {
+          lasers: laserResult.results,
+          modules: moduleResult.results,
+          gadgets: gadgetResult.results,
+        },
+        qualityDistributions: qualityResult.results,
+        refining: refineResult.results,
+        resourceElementMap,
+      }
+    })
+  })
+
   return app
 }
