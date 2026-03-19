@@ -26,6 +26,17 @@ export default function Crafting() {
     })
   }
 
+  const setFilters = (updates) => {
+    setSearchParams(prev => {
+      const next = new URLSearchParams(prev)
+      for (const [key, value] of Object.entries(updates)) {
+        if (value) next.set(key, value)
+        else next.delete(key)
+      }
+      return next
+    })
+  }
+
   const blueprints = data?.blueprints || []
   const resources = data?.resources || []
 
@@ -94,9 +105,7 @@ export default function Crafting() {
         typeFilter={typeFilter}
         subtypeFilter={subtypeFilter}
         resourceFilter={resourceFilter}
-        onTypeChange={v => { setFilter('type', v); setFilter('subtype', '') }}
-        onSubtypeChange={v => setFilter('subtype', v)}
-        onResourceChange={v => setFilter('resource', v)}
+        onFilterChange={setFilters}
         blueprints={blueprints}
         resources={resources}
       />

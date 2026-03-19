@@ -55,7 +55,7 @@ function ActiveTag({ label, onRemove }) {
 export default function FilterBar({
   search, onSearchChange,
   typeFilter, subtypeFilter, resourceFilter,
-  onTypeChange, onSubtypeChange, onResourceChange,
+  onFilterChange,
   blueprints, resources,
 }) {
   const types = useMemo(() => [...new Set(blueprints.map(b => b.type))].sort(), [blueprints])
@@ -86,7 +86,7 @@ export default function FilterBar({
           label="All Types"
           active={!typeFilter}
           color={{ bg: 'bg-sc-accent/15', text: 'text-sc-accent', border: 'border-sc-accent/30' }}
-          onClick={() => { onTypeChange(''); onSubtypeChange('') }}
+          onClick={() => onFilterChange({ type: '', subtype: '' })}
         />
         {types.map(t => (
           <TypePill
@@ -94,10 +94,7 @@ export default function FilterBar({
             label={TYPE_LABELS[t] || t}
             active={typeFilter === t}
             color={TYPE_COLORS[t] || { bg: 'bg-gray-500/15', text: 'text-gray-400', border: 'border-gray-500/30' }}
-            onClick={() => {
-              onTypeChange(typeFilter === t ? '' : t)
-              onSubtypeChange('')
-            }}
+            onClick={() => onFilterChange({ type: typeFilter === t ? '' : t, subtype: '' })}
           />
         ))}
       </div>
@@ -109,7 +106,7 @@ export default function FilterBar({
             label="All Subtypes"
             active={!subtypeFilter}
             color={{ bg: 'bg-sc-accent/15', text: 'text-sc-accent', border: 'border-sc-accent/30' }}
-            onClick={() => onSubtypeChange('')}
+            onClick={() => onFilterChange({ subtype: '' })}
           />
           {subtypes.map(st => (
             <TypePill
@@ -117,7 +114,7 @@ export default function FilterBar({
               label={SUBTYPE_LABELS[st] || st}
               active={subtypeFilter === st}
               color={TYPE_COLORS[typeFilter] || { bg: 'bg-gray-500/15', text: 'text-gray-400', border: 'border-gray-500/30' }}
-              onClick={() => onSubtypeChange(subtypeFilter === st ? '' : st)}
+              onClick={() => onFilterChange({ subtype: subtypeFilter === st ? '' : st })}
             />
           ))}
         </div>
@@ -130,7 +127,7 @@ export default function FilterBar({
             key={r}
             name={r}
             active={resourceFilter === r}
-            onClick={() => onResourceChange(resourceFilter === r ? '' : r)}
+            onClick={() => onFilterChange({ resource: resourceFilter === r ? '' : r })}
           />
         ))}
       </div>
@@ -139,11 +136,11 @@ export default function FilterBar({
       {hasActiveFilters && (
         <div className="flex flex-wrap items-center gap-2">
           <span className="text-xs text-gray-600">Active:</span>
-          {typeFilter && <ActiveTag label={TYPE_LABELS[typeFilter] || typeFilter} onRemove={() => { onTypeChange(''); onSubtypeChange('') }} />}
-          {subtypeFilter && <ActiveTag label={SUBTYPE_LABELS[subtypeFilter] || subtypeFilter} onRemove={() => onSubtypeChange('')} />}
-          {resourceFilter && <ActiveTag label={resourceFilter} onRemove={() => onResourceChange('')} />}
+          {typeFilter && <ActiveTag label={TYPE_LABELS[typeFilter] || typeFilter} onRemove={() => onFilterChange({ type: '', subtype: '' })} />}
+          {subtypeFilter && <ActiveTag label={SUBTYPE_LABELS[subtypeFilter] || subtypeFilter} onRemove={() => onFilterChange({ subtype: '' })} />}
+          {resourceFilter && <ActiveTag label={resourceFilter} onRemove={() => onFilterChange({ resource: '' })} />}
           <button
-            onClick={() => { onTypeChange(''); onSubtypeChange(''); onResourceChange('') }}
+            onClick={() => onFilterChange({ type: '', subtype: '', resource: '' })}
             className="text-xs text-gray-500 hover:text-gray-300 transition-colors"
           >
             Clear all

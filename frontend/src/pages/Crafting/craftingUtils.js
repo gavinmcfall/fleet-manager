@@ -78,3 +78,52 @@ export function interpolateModifier(mod, quality) {
   const t = (quality - mod.start_quality) / (mod.end_quality - mod.start_quality)
   return mod.modifier_at_start + (mod.modifier_at_end - mod.modifier_at_start) * t
 }
+
+// Format quantity — these are fractional resource units
+// 0.02 → "2%", 0.1 → "10%", 1 → "100%"
+export function formatQuantity(qty) {
+  if (qty == null) return '—'
+  const pct = qty * 100
+  if (Number.isInteger(pct)) return `${pct}%`
+  return `${pct.toFixed(1)}%`
+}
+
+// Modifier values are multipliers (1.0 = base, 1.2 = 120% of base, 0.8 = 80% of base)
+// For display, show as percentage change from base: 1.2 → "+20%", 0.8 → "−20%"
+export function formatModifierChange(value) {
+  const change = (value - 1) * 100
+  if (Math.abs(change) < 0.05) return '0%'
+  const sign = change > 0 ? '+' : '−'
+  return `${sign}${Math.abs(change).toFixed(0)}%`
+}
+
+// Whether a modifier's direction is "good" depends on the stat
+// For recoil/spread/kick: lower multiplier = better (less recoil)
+// For damage/fire rate/reload: higher multiplier = better
+const LOWER_IS_BETTER = new Set([
+  'weapon_recoil_smoothness',
+  'weapon_recoil_handling',
+  'weapon_recoil_kick',
+  'weapon_spread',
+])
+
+export function isModifierBeneficial(key, multiplier) {
+  if (LOWER_IS_BETTER.has(key)) return multiplier < 1
+  return multiplier > 1
+}
+
+// Human-readable descriptions for stat keys
+export const STAT_DESCRIPTIONS = {
+  weapon_recoil_handling: 'How quickly the weapon recovers between shots',
+  weapon_recoil_smoothness: 'How predictable the recoil pattern is',
+  weapon_recoil_kick: 'How much the weapon jumps when fired',
+  weapon_spread: 'Bullet spread / accuracy cone',
+  weapon_damage: 'Base damage per shot',
+  weapon_firerate: 'Rounds per minute',
+  weapon_reloadspeed: 'How fast you reload',
+  armour_resist_physical: 'Damage reduction vs ballistic rounds',
+  armour_resist_energy: 'Damage reduction vs energy weapons',
+  armour_resist_distortion: 'Damage reduction vs distortion damage',
+  armour_resist_thermal: 'Damage reduction vs heat/fire',
+  armour_resist_stun: 'Damage reduction vs stun effects',
+}

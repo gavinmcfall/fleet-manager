@@ -1,12 +1,30 @@
 import React, { useState, useMemo } from 'react'
-import { interpolateModifier } from './craftingUtils'
+import { Gem } from 'lucide-react'
+import {
+  interpolateModifier, formatModifierChange, isModifierBeneficial,
+  resourceColor, resourceBgColor, resourceBorderColor,
+  STAT_DESCRIPTIONS,
+} from './craftingUtils'
 
 function QualitySlider({ slot, value, onChange }) {
   const pct = (value / 1000) * 100
   return (
     <div className="bg-white/[0.02] border border-white/[0.05] rounded-lg p-4">
       <div className="flex items-center justify-between mb-2">
-        <span className="text-sm font-medium text-gray-300">{slot.name}</span>
+        <div className="flex items-center gap-2">
+          <span className="text-sm font-medium text-gray-300">{slot.name}</span>
+          <span
+            className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded-full text-[10px] font-medium border"
+            style={{
+              backgroundColor: resourceBgColor(slot.resource_name),
+              borderColor: resourceBorderColor(slot.resource_name),
+              color: resourceColor(slot.resource_name),
+            }}
+          >
+            <Gem className="w-2.5 h-2.5" />
+            {slot.resource_name}
+          </span>
+        </div>
         <span className="text-sm font-mono text-sc-accent">{value}</span>
       </div>
       <div className="relative">
@@ -22,48 +40,49 @@ function QualitySlider({ slot, value, onChange }) {
           className="absolute inset-0 w-full h-2 opacity-0 cursor-pointer"
           style={{ top: '0' }}
         />
-        {/* Thumb indicator */}
         <div
           className="absolute top-1/2 -translate-y-1/2 w-3 h-3 rounded-full bg-white border-2 border-sc-accent shadow-[0_0_6px_rgba(34,211,238,0.5)] pointer-events-none transition-all duration-100"
           style={{ left: `calc(${pct}% - 6px)` }}
         />
       </div>
       <div className="flex justify-between mt-1 text-[10px] text-gray-600">
-        <span>0</span>
+        <span>0 (worst)</span>
         <span>500</span>
-        <span>1000</span>
+        <span>1000 (best)</span>
       </div>
     </div>
   )
 }
 
-function StatRow({ name, baseValue, craftedValue, unit }) {
-  const diff = craftedValue - baseValue
-  const diffPct = baseValue !== 0 ? ((diff / Math.abs(baseValue)) * 100) : (diff * 100)
-  const isPositive = diff > 0
-  const isZero = Math.abs(diff) < 0.0001
+function StatRow({ name, statKey, baseMultiplier, craftedMultiplier }) {
+  const isBeneficial = isModifierBeneficial(statKey, craftedMultiplier)
+  const baseChange = formatModifierChange(baseMultiplier)
+  const craftedChange = formatModifierChange(craftedMultiplier)
+  const isChanged = Math.abs(craftedMultiplier - baseMultiplier) > 0.0001
+  const description = STAT_DESCRIPTIONS[statKey]
 
   return (
-    <div className="flex items-center gap-3 py-1.5 border-b border-white/[0.03] last:border-0">
-      <span className="text-xs text-gray-400 flex-1 truncate">{name}</span>
-      <span className="text-xs text-gray-600 font-mono w-20 text-right">
-        {(baseValue * 100).toFixed(1)}%
+    <div className="group flex items-center gap-3 py-2 border-b border-white/[0.03] last:border-0">
+      <div className="flex-1 min-w-0">
+        <span className="text-xs text-gray-400 truncate block">{name}</span>
+        {description && (
+          <span className="text-[10px] text-gray-600 truncate block opacity-0 group-hover:opacity-100 transition-opacity">
+            {description}
+          </span>
+        )}
+      </div>
+      <span className="text-xs text-gray-600 font-mono w-16 text-right">
+        {baseChange}
       </span>
       <span className="text-gray-600">→</span>
       <span
-        className={`text-xs font-mono w-20 text-right font-medium ${
-          isZero ? 'text-gray-400' : isPositive ? 'text-emerald-400' : 'text-red-400'
+        className={`text-xs font-mono w-16 text-right font-medium ${
+          !isChanged ? 'text-gray-400' : isBeneficial ? 'text-emerald-400' : 'text-red-400'
         }`}
-        style={!isZero ? { textShadow: `0 0 8px ${isPositive ? 'rgba(52,211,153,0.3)' : 'rgba(239,68,68,0.3)'}` } : undefined}
+        style={isChanged ? { textShadow: `0 0 8px ${isBeneficial ? 'rgba(52,211,153,0.3)' : 'rgba(239,68,68,0.3)'}` } : undefined}
       >
-        {(craftedValue * 100).toFixed(1)}%
+        {craftedChange}
       </span>
-      {!isZero && (
-        <span className={`text-[10px] font-mono w-16 text-right ${isPositive ? 'text-emerald-500' : 'text-red-500'}`}>
-          {isPositive ? '+' : ''}{diffPct.toFixed(1)}%
-        </span>
-      )}
-      {isZero && <span className="w-16" />}
     </div>
   )
 }
@@ -71,7 +90,6 @@ function StatRow({ name, baseValue, craftedValue, unit }) {
 export default function QualitySim({ blueprint }) {
   const slots = blueprint.slots || []
 
-  // Initialize all slot qualities to 500 (midpoint)
   const [qualities, setQualities] = useState(() =>
     Object.fromEntries(slots.map((s, i) => [i, 500]))
   )
@@ -80,7 +98,7 @@ export default function QualitySim({ blueprint }) {
     setQualities(prev => ({ ...prev, [index]: value }))
   }
 
-  // Compute all unique modifiers across all slots, with base (0 quality) and crafted values
+  // Compute all unique modifiers across all slots
   const statPreview = useMemo(() => {
     const statMap = new Map()
 
@@ -89,11 +107,12 @@ export default function QualitySim({ blueprint }) {
       slot.modifiers.forEach(mod => {
         const key = mod.key || mod.name
         if (!statMap.has(key)) {
-          statMap.set(key, { name: mod.name, unit: mod.unit, base: 0, crafted: 0 })
+          statMap.set(key, { name: mod.name, key, base: 1, crafted: 1 })
         }
         const entry = statMap.get(key)
-        entry.base += mod.modifier_at_start
-        entry.crafted += interpolateModifier(mod, qualities[slotIndex] || 0)
+        // Multipliers compound: if two slots each give 1.2x, total is 1.2 * 1.2 = 1.44x
+        entry.base *= mod.modifier_at_start
+        entry.crafted *= interpolateModifier(mod, qualities[slotIndex] || 0)
       })
     })
 
@@ -117,6 +136,9 @@ export default function QualitySim({ blueprint }) {
       {/* Left: Quality sliders */}
       <div>
         <h4 className="text-xs uppercase tracking-wider text-gray-500 mb-3">Material Quality</h4>
+        <p className="text-[10px] text-gray-600 mb-3">
+          Higher quality resources produce better stats. Drag to preview the effect.
+        </p>
         <div className="space-y-3">
           {slots.map((slot, i) => (
             <QualitySlider
@@ -131,26 +153,28 @@ export default function QualitySim({ blueprint }) {
 
       {/* Right: Stat preview */}
       <div>
-        <h4 className="text-xs uppercase tracking-wider text-gray-500 mb-3">Stat Modifiers</h4>
+        <h4 className="text-xs uppercase tracking-wider text-gray-500 mb-3">Combined Stat Effect</h4>
+        <p className="text-[10px] text-gray-600 mb-3">
+          Shows the combined change to each stat vs the base weapon. Hover stats for descriptions.
+        </p>
         <div className="bg-white/[0.02] border border-white/[0.05] rounded-lg p-4">
           {statPreview.length === 0 ? (
             <p className="text-sm text-gray-600 text-center py-4">No modifiers on this blueprint.</p>
           ) : (
-            <div className="space-y-0">
+            <div>
               <div className="flex items-center gap-3 pb-2 mb-2 border-b border-white/[0.06]">
-                <span className="text-[10px] uppercase tracking-wider text-gray-600 flex-1">Property</span>
-                <span className="text-[10px] uppercase tracking-wider text-gray-600 w-20 text-right">Base</span>
+                <span className="text-[10px] uppercase tracking-wider text-gray-600 flex-1">Stat</span>
+                <span className="text-[10px] uppercase tracking-wider text-gray-600 w-16 text-right">Q0</span>
                 <span className="w-4" />
-                <span className="text-[10px] uppercase tracking-wider text-gray-600 w-20 text-right">Crafted</span>
-                <span className="text-[10px] uppercase tracking-wider text-gray-600 w-16 text-right">Change</span>
+                <span className="text-[10px] uppercase tracking-wider text-gray-600 w-16 text-right">Current</span>
               </div>
               {statPreview.map(stat => (
                 <StatRow
-                  key={stat.name}
+                  key={stat.key}
                   name={stat.name}
-                  baseValue={stat.base}
-                  craftedValue={stat.crafted}
-                  unit={stat.unit}
+                  statKey={stat.key}
+                  baseMultiplier={stat.base}
+                  craftedMultiplier={stat.crafted}
                 />
               ))}
             </div>
