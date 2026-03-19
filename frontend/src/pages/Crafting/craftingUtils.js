@@ -106,37 +106,106 @@ export function quantityUnits(qty) {
   ]
 }
 
-// Modifier values are multipliers (1.0 = base, 1.2 = 120% of base, 0.8 = 80% of base)
-// For display, show as percentage change from base: 1.2 → "+20%", 0.8 → "−20%"
-export function formatModifierChange(value) {
-  const change = (value - 1) * 100
-  if (Math.abs(change) < 0.05) return '0%'
-  const sign = change > 0 ? '+' : '−'
-  return `${sign}${Math.abs(change).toFixed(0)}%`
+// --- Stat display system ---
+// Raw modifiers are engine multipliers (0.8 = 80% of raw stat, 1.2 = 120%).
+// Players don't care about multipliers — they care about gameplay effects.
+// Q1000 (modifier_at_end) is ALWAYS the best crafting outcome.
+//
+// STAT_INFO maps engine keys to:
+//   label: human-readable stat name (describes the EFFECT, not the parameter)
+//   description: what this means in gameplay
+//   invertDisplay: if true, the multiplier goes DOWN at best quality but the
+//     effect is POSITIVE (e.g. recoil multiplier 0.8 = "20% less recoil")
+
+export const STAT_INFO = {
+  weapon_recoil_kick: {
+    label: 'Recoil Kick',
+    description: 'How much the weapon jumps when fired',
+    invertDisplay: true,
+  },
+  weapon_recoil_handling: {
+    label: 'Recoil Recovery',
+    description: 'How fast the weapon settles after firing',
+    invertDisplay: true,
+  },
+  weapon_recoil_smoothness: {
+    label: 'Recoil Stability',
+    description: 'How predictable and tight the recoil pattern is',
+    invertDisplay: true,
+  },
+  weapon_spread: {
+    label: 'Accuracy',
+    description: 'Bullet grouping tightness',
+    invertDisplay: true,
+  },
+  weapon_damage: {
+    label: 'Damage',
+    description: 'Damage dealt per hit',
+    invertDisplay: false,
+  },
+  weapon_firerate: {
+    label: 'Fire Rate',
+    description: 'Rounds fired per minute',
+    invertDisplay: false,
+  },
+  weapon_reloadspeed: {
+    label: 'Reload Speed',
+    description: 'Time to reload a magazine',
+    invertDisplay: false,
+  },
+  armor_damagemitigation: {
+    label: 'Damage Mitigation',
+    description: 'How much damage is absorbed by armour',
+    invertDisplay: false,
+  },
+  armor_temperaturemax: {
+    label: 'Heat Tolerance',
+    description: 'Maximum temperature before taking heat damage',
+    invertDisplay: false,
+  },
+  armor_temperaturemin: {
+    label: 'Cold Tolerance',
+    description: 'Minimum temperature before taking cold damage',
+    invertDisplay: false,
+  },
 }
 
-// Quality determines color, not direction.
-// Q1000 (modifier_at_end) is ALWAYS the best outcome.
-// Q0 (modifier_at_start) is ALWAYS the worst outcome.
-// Color is based on how close the current value is to the best outcome.
+// Get the user-facing label for a stat
+export function getStatLabel(key, fallbackName) {
+  return STAT_INFO[key]?.label || fallbackName || key
+}
+
+export function getStatDescription(key) {
+  return STAT_INFO[key]?.description || null
+}
+
+// Convert a raw multiplier into a user-facing improvement percentage.
+// For inverted stats (recoil): multiplier 0.8 → +20% improvement (less recoil)
+// For normal stats (damage):   multiplier 1.1 → +10% improvement (more damage)
+// Returns a number where positive = better, negative = worse.
+export function multiplierToImprovement(key, multiplier) {
+  const info = STAT_INFO[key]
+  const change = (multiplier - 1) * 100
+  if (info?.invertDisplay) return -change  // flip: 0.8 (−20% raw) → +20% improvement
+  return change                             // 1.1 (+10% raw) → +10% improvement
+}
+
+// Format an improvement value for display
+// +20 → "+20%", -10 → "−10%", 0 → "±0%"
+export function formatImprovement(improvement) {
+  if (Math.abs(improvement) < 0.05) return '±0%'
+  const sign = improvement > 0 ? '+' : '−'
+  return `${sign}${Math.abs(improvement).toFixed(0)}%`
+}
+
+// What's the maximum possible improvement at Q1000?
+export function maxImprovement(key, bestMultiplier) {
+  return multiplierToImprovement(key, bestMultiplier)
+}
+
+// Quality progress: 0 = Q0 (worst), 1 = Q1000 (best)
 export function qualityProgress(mod, currentMultiplier) {
   const range = mod.modifier_at_end - mod.modifier_at_start
   if (Math.abs(range) < 0.0001) return 0.5
   return (currentMultiplier - mod.modifier_at_start) / range
-}
-
-// Human-readable descriptions for stat keys
-export const STAT_DESCRIPTIONS = {
-  weapon_recoil_handling: 'How quickly the weapon recovers between shots',
-  weapon_recoil_smoothness: 'How predictable the recoil pattern is',
-  weapon_recoil_kick: 'How much the weapon jumps when fired',
-  weapon_spread: 'Bullet spread / accuracy cone',
-  weapon_damage: 'Base damage per shot',
-  weapon_firerate: 'Rounds per minute',
-  weapon_reloadspeed: 'How fast you reload',
-  armour_resist_physical: 'Damage reduction vs ballistic rounds',
-  armour_resist_energy: 'Damage reduction vs energy weapons',
-  armour_resist_distortion: 'Damage reduction vs distortion damage',
-  armour_resist_thermal: 'Damage reduction vs heat/fire',
-  armour_resist_stun: 'Damage reduction vs stun effects',
 }

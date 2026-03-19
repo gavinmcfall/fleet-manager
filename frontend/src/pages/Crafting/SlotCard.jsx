@@ -2,8 +2,8 @@ import React from 'react'
 import { Gem, Info } from 'lucide-react'
 import {
   resourceColor, resourceBgColor, resourceBorderColor,
-  formatQuantity, quantityUnits, formatModifierChange,
-  STAT_DESCRIPTIONS,
+  formatQuantity, quantityUnits,
+  getStatLabel, getStatDescription, multiplierToImprovement, formatImprovement,
 } from './craftingUtils'
 
 function QuantityBadge({ quantity }) {
@@ -26,42 +26,42 @@ function QuantityBadge({ quantity }) {
   )
 }
 
-function ModifierBar({ mod }) {
-  // Q0 (start) = worst quality, Q1000 (end) = best quality. Always.
-  const worstValue = mod.modifier_at_start
-  const bestValue = mod.modifier_at_end
+function ModifierRow({ mod }) {
+  const label = getStatLabel(mod.key, mod.name)
+  const description = getStatDescription(mod.key)
 
-  // Bar shows the magnitude of improvement from worst → best
-  const improvementRange = Math.abs(bestValue - worstValue) * 100
-  const barWidth = Math.min(improvementRange * 2, 100)
+  // Show the improvement range: Q0 (worst) → Q1000 (best)
+  const worstImprovement = multiplierToImprovement(mod.key, mod.modifier_at_start)
+  const bestImprovement = multiplierToImprovement(mod.key, mod.modifier_at_end)
 
-  const description = STAT_DESCRIPTIONS[mod.key]
+  // Bar width based on best possible improvement magnitude
+  const barWidth = Math.min(Math.abs(bestImprovement) * 2.5, 100)
 
   return (
     <div className="group/mod">
       <div className="flex items-center gap-2 text-xs">
         <span className="text-gray-400 w-36 truncate flex items-center gap-1" title={description}>
-          {mod.name}
+          {label}
           {description && <Info className="w-3 h-3 text-gray-600 opacity-0 group-hover/mod:opacity-100 transition-opacity" />}
         </span>
-        <div className="flex-1 h-1.5 rounded-full overflow-hidden" style={{ background: 'linear-gradient(to right, rgba(239,68,68,0.3), rgba(34,211,238,0.3))' }}>
+        <div className="flex-1 h-1.5 rounded-full overflow-hidden" style={{ background: 'linear-gradient(to right, rgba(239,68,68,0.15), rgba(34,211,238,0.15))' }}>
           <div
-            className="h-full rounded-full bg-gradient-to-r from-red-500/80 to-sc-accent/80 transition-all duration-500 ease-out"
+            className="h-full rounded-full bg-gradient-to-r from-red-500/60 to-sc-accent/60 transition-all duration-500 ease-out"
             style={{ width: `${barWidth}%` }}
           />
         </div>
-        <div className="w-24 text-right font-mono flex items-center justify-end gap-1">
-          <span className="text-red-400/70">
-            {formatModifierChange(worstValue)}
+        <div className="w-36 text-right font-mono flex items-center justify-end gap-1.5">
+          <span className="text-red-400/70 text-[11px]">
+            {formatImprovement(worstImprovement)}
           </span>
-          <span className="text-gray-600">→</span>
-          <span className="text-sc-accent">
-            {formatModifierChange(bestValue)}
+          <span className="text-gray-600 text-[10px]">→</span>
+          <span className="text-sc-accent text-[11px]">
+            {formatImprovement(bestImprovement)}
           </span>
         </div>
       </div>
       {description && (
-        <p className="text-[10px] text-gray-600 mt-0.5 ml-0 opacity-0 group-hover/mod:opacity-100 transition-opacity pl-0">
+        <p className="text-[10px] text-gray-600 mt-0.5 opacity-0 group-hover/mod:opacity-100 transition-opacity">
           {description}
         </p>
       )}
@@ -101,10 +101,10 @@ export default function SlotCard({ slot, index = 0 }) {
       {slot.modifiers && slot.modifiers.length > 0 && (
         <div className="space-y-2 pt-2 border-t border-white/[0.04]">
           <p className="text-[10px] uppercase tracking-wider text-gray-600">
-            Quality 0 → 1000 effect range
+            Quality effect range (Q0 → Q1000)
           </p>
           {slot.modifiers.map((mod, j) => (
-            <ModifierBar key={j} mod={mod} />
+            <ModifierRow key={j} mod={mod} />
           ))}
         </div>
       )}

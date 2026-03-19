@@ -1,9 +1,9 @@
 import React, { useState, useMemo } from 'react'
 import { Gem } from 'lucide-react'
 import {
-  interpolateModifier, formatModifierChange,
+  interpolateModifier, multiplierToImprovement, formatImprovement,
+  getStatLabel, getStatDescription,
   resourceColor, resourceBgColor, resourceBorderColor,
-  STAT_DESCRIPTIONS,
 } from './craftingUtils'
 
 function QualitySlider({ slot, value, onChange }) {
@@ -54,47 +54,55 @@ function QualitySlider({ slot, value, onChange }) {
   )
 }
 
-function StatRow({ name, statKey, baseMultiplier, craftedMultiplier, bestMultiplier }) {
-  const baseChange = formatModifierChange(baseMultiplier)
-  const craftedChange = formatModifierChange(craftedMultiplier)
-  const isChanged = Math.abs(craftedMultiplier - baseMultiplier) > 0.0001
-  const description = STAT_DESCRIPTIONS[statKey]
+function StatRow({ statKey, fallbackName, worstImprovement, currentImprovement, bestImprovement }) {
+  const label = getStatLabel(statKey, fallbackName)
+  const description = getStatDescription(statKey)
 
-  // Color based on how close to best (Q1000) outcome
-  const totalRange = bestMultiplier - baseMultiplier
-  const progress = Math.abs(totalRange) > 0.0001
-    ? (craftedMultiplier - baseMultiplier) / totalRange
+  // Progress: how much of the max improvement are we getting? (0–1)
+  const totalRange = bestImprovement - worstImprovement
+  const progress = Math.abs(totalRange) > 0.01
+    ? (currentImprovement - worstImprovement) / totalRange
     : 0.5
-  // 0 = worst (Q0), 1 = best (Q1000)
-  const colorClass = !isChanged ? 'text-gray-400'
-    : progress > 0.6 ? 'text-sc-accent'
-    : progress > 0.3 ? 'text-amber-400'
-    : 'text-red-400'
-  const glowColor = !isChanged ? undefined
-    : progress > 0.6 ? 'rgba(34,211,238,0.3)'
-    : progress > 0.3 ? 'rgba(245,158,11,0.3)'
-    : 'rgba(239,68,68,0.3)'
+  const progressPct = Math.round(progress * 100)
+
+  // Color: red at Q0 side, amber mid, cyan at Q1000 side
+  const barColor = progress > 0.6 ? 'bg-sc-accent' : progress > 0.3 ? 'bg-amber-400' : 'bg-red-400'
+  const textColor = progress > 0.6 ? 'text-sc-accent' : progress > 0.3 ? 'text-amber-400' : 'text-red-400'
+  const glowColor = progress > 0.6 ? 'rgba(34,211,238,0.3)' : progress > 0.3 ? 'rgba(245,158,11,0.3)' : 'rgba(239,68,68,0.3)'
 
   return (
-    <div className="group flex items-center gap-3 py-2 border-b border-white/[0.03] last:border-0">
-      <div className="flex-1 min-w-0">
-        <span className="text-xs text-gray-400 truncate block">{name}</span>
-        {description && (
-          <span className="text-[10px] text-gray-600 truncate block opacity-0 group-hover:opacity-100 transition-opacity">
-            {description}
-          </span>
-        )}
+    <div className="group py-2.5 border-b border-white/[0.03] last:border-0">
+      <div className="flex items-center justify-between mb-1.5">
+        <div className="flex-1 min-w-0">
+          <span className="text-xs text-gray-300 font-medium">{label}</span>
+          {description && (
+            <span className="text-[10px] text-gray-600 block opacity-0 group-hover:opacity-100 transition-opacity">
+              {description}
+            </span>
+          )}
+        </div>
+        <span
+          className={`text-sm font-mono font-bold ${textColor}`}
+          style={{ textShadow: `0 0 8px ${glowColor}` }}
+        >
+          {formatImprovement(currentImprovement)}
+        </span>
       </div>
-      <span className="text-xs text-red-400/70 font-mono w-16 text-right">
-        {baseChange}
-      </span>
-      <span className="text-gray-600">→</span>
-      <span
-        className={`text-xs font-mono w-16 text-right font-medium ${colorClass}`}
-        style={glowColor ? { textShadow: `0 0 8px ${glowColor}` } : undefined}
-      >
-        {craftedChange}
-      </span>
+      {/* Progress bar: worst → best */}
+      <div className="flex items-center gap-2">
+        <span className="text-[10px] text-red-400/60 font-mono w-10">
+          {formatImprovement(worstImprovement)}
+        </span>
+        <div className="flex-1 h-1.5 bg-white/[0.04] rounded-full overflow-hidden">
+          <div
+            className={`h-full rounded-full ${barColor} transition-all duration-200`}
+            style={{ width: `${progressPct}%` }}
+          />
+        </div>
+        <span className="text-[10px] text-sc-accent/60 font-mono w-10 text-right">
+          {formatImprovement(bestImprovement)}
+        </span>
+      </div>
     </div>
   )
 }
@@ -110,7 +118,7 @@ export default function QualitySim({ blueprint }) {
     setQualities(prev => ({ ...prev, [index]: value }))
   }
 
-  // Compute all unique modifiers across all slots
+  // Compute improvement values for each stat
   const statPreview = useMemo(() => {
     const statMap = new Map()
 
@@ -119,21 +127,25 @@ export default function QualitySim({ blueprint }) {
       slot.modifiers.forEach(mod => {
         const key = mod.key || mod.name
         if (!statMap.has(key)) {
-          statMap.set(key, { name: mod.name, key, base: 1, crafted: 1, best: 1 })
+          statMap.set(key, { name: mod.name, key, worst: 1, crafted: 1, best: 1 })
         }
         const entry = statMap.get(key)
-        // Multipliers compound across slots
-        entry.base *= mod.modifier_at_start
+        entry.worst *= mod.modifier_at_start
         entry.crafted *= interpolateModifier(mod, qualities[slotIndex] || 0)
-        entry.best *= mod.modifier_at_end  // Q1000 = best possible
+        entry.best *= mod.modifier_at_end
       })
     })
 
-    return [...statMap.values()].sort((a, b) => {
-      const aDiff = Math.abs(a.crafted - a.base)
-      const bDiff = Math.abs(b.crafted - b.base)
-      return bDiff - aDiff
-    })
+    // Convert compounded multipliers → user-facing improvement percentages
+    return [...statMap.values()]
+      .map(stat => ({
+        key: stat.key,
+        name: stat.name,
+        worstImprovement: multiplierToImprovement(stat.key, stat.worst),
+        currentImprovement: multiplierToImprovement(stat.key, stat.crafted),
+        bestImprovement: multiplierToImprovement(stat.key, stat.best),
+      }))
+      .sort((a, b) => Math.abs(b.bestImprovement) - Math.abs(a.bestImprovement))
   }, [slots, qualities])
 
   if (slots.length === 0) {
@@ -164,34 +176,26 @@ export default function QualitySim({ blueprint }) {
         </div>
       </div>
 
-      {/* Right: Stat preview */}
+      {/* Right: Stat effects */}
       <div>
-        <h4 className="text-xs uppercase tracking-wider text-gray-500 mb-3">Combined Stat Effect</h4>
+        <h4 className="text-xs uppercase tracking-wider text-gray-500 mb-3">Crafted vs Base</h4>
         <p className="text-[10px] text-gray-600 mb-3">
-          Shows the combined change to each stat vs the base weapon. Hover stats for descriptions.
+          How the crafted item compares to an unmodified weapon. Positive = better than stock.
         </p>
         <div className="bg-white/[0.02] border border-white/[0.05] rounded-lg p-4">
           {statPreview.length === 0 ? (
             <p className="text-sm text-gray-600 text-center py-4">No modifiers on this blueprint.</p>
           ) : (
-            <div>
-              <div className="flex items-center gap-3 pb-2 mb-2 border-b border-white/[0.06]">
-                <span className="text-[10px] uppercase tracking-wider text-gray-600 flex-1">Stat</span>
-                <span className="text-[10px] uppercase tracking-wider text-gray-600 w-16 text-right">Q0</span>
-                <span className="w-4" />
-                <span className="text-[10px] uppercase tracking-wider text-gray-600 w-16 text-right">Current</span>
-              </div>
-              {statPreview.map(stat => (
-                <StatRow
-                  key={stat.key}
-                  name={stat.name}
-                  statKey={stat.key}
-                  baseMultiplier={stat.base}
-                  craftedMultiplier={stat.crafted}
-                  bestMultiplier={stat.best}
-                />
-              ))}
-            </div>
+            statPreview.map(stat => (
+              <StatRow
+                key={stat.key}
+                statKey={stat.key}
+                fallbackName={stat.name}
+                worstImprovement={stat.worstImprovement}
+                currentImprovement={stat.currentImprovement}
+                bestImprovement={stat.bestImprovement}
+              />
+            ))
           )}
         </div>
       </div>
