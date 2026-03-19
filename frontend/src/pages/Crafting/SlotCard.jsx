@@ -2,7 +2,7 @@ import React from 'react'
 import { Gem, Info } from 'lucide-react'
 import {
   resourceColor, resourceBgColor, resourceBorderColor,
-  formatQuantity, quantityUnits, formatModifierChange, isModifierBeneficial,
+  formatQuantity, quantityUnits, formatModifierChange,
   STAT_DESCRIPTIONS,
 } from './craftingUtils'
 
@@ -27,17 +27,13 @@ function QuantityBadge({ quantity }) {
 }
 
 function ModifierBar({ mod }) {
-  // At max quality, what's the change from base (1.0)?
-  const bestValue = mod.modifier_at_end
+  // Q0 (start) = worst quality, Q1000 (end) = best quality. Always.
   const worstValue = mod.modifier_at_start
-  const isBeneficialAtBest = isModifierBeneficial(mod.key, bestValue)
-  const isBeneficialAtWorst = isModifierBeneficial(mod.key, worstValue)
+  const bestValue = mod.modifier_at_end
 
-  // Bar shows the range of change from worst to best quality
-  const worstChange = Math.abs(worstValue - 1) * 100
-  const bestChange = Math.abs(bestValue - 1) * 100
-  const maxChange = Math.max(worstChange, bestChange)
-  const barWidth = Math.min(maxChange * 2, 100) // scale so 50% change fills the bar
+  // Bar shows the magnitude of improvement from worst → best
+  const improvementRange = Math.abs(bestValue - worstValue) * 100
+  const barWidth = Math.min(improvementRange * 2, 100)
 
   const description = STAT_DESCRIPTIONS[mod.key]
 
@@ -48,20 +44,18 @@ function ModifierBar({ mod }) {
           {mod.name}
           {description && <Info className="w-3 h-3 text-gray-600 opacity-0 group-hover/mod:opacity-100 transition-opacity" />}
         </span>
-        <div className="flex-1 h-1.5 bg-white/[0.04] rounded-full overflow-hidden">
+        <div className="flex-1 h-1.5 rounded-full overflow-hidden" style={{ background: 'linear-gradient(to right, rgba(239,68,68,0.3), rgba(34,211,238,0.3))' }}>
           <div
-            className={`h-full rounded-full transition-all duration-500 ease-out ${
-              isBeneficialAtBest ? 'bg-emerald-500/80' : 'bg-red-500/80'
-            }`}
+            className="h-full rounded-full bg-gradient-to-r from-red-500/80 to-sc-accent/80 transition-all duration-500 ease-out"
             style={{ width: `${barWidth}%` }}
           />
         </div>
         <div className="w-24 text-right font-mono flex items-center justify-end gap-1">
-          <span className={`${isBeneficialAtWorst ? 'text-emerald-400/60' : 'text-red-400/60'}`}>
+          <span className="text-red-400/70">
             {formatModifierChange(worstValue)}
           </span>
           <span className="text-gray-600">→</span>
-          <span className={`${isBeneficialAtBest ? 'text-emerald-400' : 'text-red-400'}`}>
+          <span className="text-sc-accent">
             {formatModifierChange(bestValue)}
           </span>
         </div>

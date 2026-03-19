@@ -115,19 +115,14 @@ export function formatModifierChange(value) {
   return `${sign}${Math.abs(change).toFixed(0)}%`
 }
 
-// Whether a modifier's direction is "good" depends on the stat
-// For recoil/spread/kick: lower multiplier = better (less recoil)
-// For damage/fire rate/reload: higher multiplier = better
-const LOWER_IS_BETTER = new Set([
-  'weapon_recoil_smoothness',
-  'weapon_recoil_handling',
-  'weapon_recoil_kick',
-  'weapon_spread',
-])
-
-export function isModifierBeneficial(key, multiplier) {
-  if (LOWER_IS_BETTER.has(key)) return multiplier < 1
-  return multiplier > 1
+// Quality determines color, not direction.
+// Q1000 (modifier_at_end) is ALWAYS the best outcome.
+// Q0 (modifier_at_start) is ALWAYS the worst outcome.
+// Color is based on how close the current value is to the best outcome.
+export function qualityProgress(mod, currentMultiplier) {
+  const range = mod.modifier_at_end - mod.modifier_at_start
+  if (Math.abs(range) < 0.0001) return 0.5
+  return (currentMultiplier - mod.modifier_at_start) / range
 }
 
 // Human-readable descriptions for stat keys

@@ -1,7 +1,7 @@
 import React, { useState, useMemo } from 'react'
 import { Gem } from 'lucide-react'
 import {
-  interpolateModifier, formatModifierChange, isModifierBeneficial,
+  interpolateModifier, formatModifierChange,
   resourceColor, resourceBgColor, resourceBorderColor,
   STAT_DESCRIPTIONS,
 } from './craftingUtils'
@@ -54,12 +54,26 @@ function QualitySlider({ slot, value, onChange }) {
   )
 }
 
-function StatRow({ name, statKey, baseMultiplier, craftedMultiplier }) {
-  const isBeneficial = isModifierBeneficial(statKey, craftedMultiplier)
+function StatRow({ name, statKey, baseMultiplier, craftedMultiplier, bestMultiplier }) {
   const baseChange = formatModifierChange(baseMultiplier)
   const craftedChange = formatModifierChange(craftedMultiplier)
   const isChanged = Math.abs(craftedMultiplier - baseMultiplier) > 0.0001
   const description = STAT_DESCRIPTIONS[statKey]
+
+  // Color based on how close to best (Q1000) outcome
+  const totalRange = bestMultiplier - baseMultiplier
+  const progress = Math.abs(totalRange) > 0.0001
+    ? (craftedMultiplier - baseMultiplier) / totalRange
+    : 0.5
+  // 0 = worst (Q0), 1 = best (Q1000)
+  const colorClass = !isChanged ? 'text-gray-400'
+    : progress > 0.6 ? 'text-sc-accent'
+    : progress > 0.3 ? 'text-amber-400'
+    : 'text-red-400'
+  const glowColor = !isChanged ? undefined
+    : progress > 0.6 ? 'rgba(34,211,238,0.3)'
+    : progress > 0.3 ? 'rgba(245,158,11,0.3)'
+    : 'rgba(239,68,68,0.3)'
 
   return (
     <div className="group flex items-center gap-3 py-2 border-b border-white/[0.03] last:border-0">
@@ -71,15 +85,13 @@ function StatRow({ name, statKey, baseMultiplier, craftedMultiplier }) {
           </span>
         )}
       </div>
-      <span className="text-xs text-gray-600 font-mono w-16 text-right">
+      <span className="text-xs text-red-400/70 font-mono w-16 text-right">
         {baseChange}
       </span>
       <span className="text-gray-600">→</span>
       <span
-        className={`text-xs font-mono w-16 text-right font-medium ${
-          !isChanged ? 'text-gray-400' : isBeneficial ? 'text-emerald-400' : 'text-red-400'
-        }`}
-        style={isChanged ? { textShadow: `0 0 8px ${isBeneficial ? 'rgba(52,211,153,0.3)' : 'rgba(239,68,68,0.3)'}` } : undefined}
+        className={`text-xs font-mono w-16 text-right font-medium ${colorClass}`}
+        style={glowColor ? { textShadow: `0 0 8px ${glowColor}` } : undefined}
       >
         {craftedChange}
       </span>
@@ -107,12 +119,13 @@ export default function QualitySim({ blueprint }) {
       slot.modifiers.forEach(mod => {
         const key = mod.key || mod.name
         if (!statMap.has(key)) {
-          statMap.set(key, { name: mod.name, key, base: 1, crafted: 1 })
+          statMap.set(key, { name: mod.name, key, base: 1, crafted: 1, best: 1 })
         }
         const entry = statMap.get(key)
-        // Multipliers compound: if two slots each give 1.2x, total is 1.2 * 1.2 = 1.44x
+        // Multipliers compound across slots
         entry.base *= mod.modifier_at_start
         entry.crafted *= interpolateModifier(mod, qualities[slotIndex] || 0)
+        entry.best *= mod.modifier_at_end  // Q1000 = best possible
       })
     })
 
@@ -175,6 +188,7 @@ export default function QualitySim({ blueprint }) {
                   statKey={stat.key}
                   baseMultiplier={stat.base}
                   craftedMultiplier={stat.crafted}
+                  bestMultiplier={stat.best}
                 />
               ))}
             </div>
