@@ -40,43 +40,41 @@ const MODIFIER_KEYS = [
   'mod_catastrophic_charge_rate',
 ]
 
-// Scoring: equipment modifiers that counteract element difficulty score higher.
-// Modifiers range roughly -70 to +100 (integers, not fractions).
-// Element instability ranges 0-1000, resistance -1 to 1, explosion -36 to 26000.
-// We normalize each contribution to a small increment on a 0-100 scale.
-const SCORING_RULES = [
-  // key, desiredDirection (-1 = lower is better), weight, normFactor for element value
-  { key: 'mod_instability', elementKey: 'instability', desired: -1, weight: 3, normEl: 1000 },
-  { key: 'mod_resistance', elementKey: 'resistance', desired: -1, weight: 2, normEl: 1 },
-  { key: 'mod_optimal_window_size', elementKey: 'optimal_window_thinness', desired: 1, weight: 2, normEl: 5 },
-  { key: 'mod_shatter_damage', elementKey: 'explosion_multiplier', desired: -1, weight: 1, normEl: 200 },
-  { key: 'mod_cluster_factor', elementKey: 'cluster_factor', desired: 1, weight: 1, normEl: 1 },
-  { key: 'mod_optimal_charge_rate', elementKey: null, desired: 1, weight: 1, normEl: 1 },
-  { key: 'mod_catastrophic_charge_rate', elementKey: null, desired: -1, weight: 1.5, normEl: 1 },
-]
+// Higher element instability/resistance = harder to mine
+// Equipment that reduces instability (negative mod_instability) helps
+// Equipment that increases optimal_window_size (positive) helps
+const COUNTER_WEIGHTS = {
+  mod_instability: { elementKey: 'instability', direction: -1, weight: 3 },
+  mod_resistance: { elementKey: 'resistance', direction: -1, weight: 2 },
+  mod_optimal_window_size: { elementKey: 'optimal_window_thinness', direction: 1, weight: 2 },
+  mod_shatter_damage: { elementKey: 'explosion_multiplier', direction: -1, weight: 1 },
+  mod_cluster_factor: { elementKey: 'cluster_factor', direction: 1, weight: 1 },
+  mod_optimal_charge_rate: { elementKey: null, direction: 1, weight: 1 },
+  mod_catastrophic_charge_rate: { elementKey: null, direction: -1, weight: 1.5 },
+}
 
 export function scoreEquipment(equipment, element) {
   if (!element) return 50
   let score = 50
-  const normMod = 100 // equipment mod values range roughly -100 to +100
+  let totalWeight = 0
 
-  for (const rule of SCORING_RULES) {
-    const mod = equipment[rule.key] ?? 0
+  for (const key of MODIFIER_KEYS) {
+    const mod = equipment[key] ?? 0
     if (mod === 0) continue
 
-    // How much the element needs help on this axis (0-1)
-    const rawEl = rule.elementKey ? Math.abs(element[rule.elementKey] ?? 0) : 0.5
-    const elNeed = Math.min(rawEl / rule.normEl, 1)
+    const cw = COUNTER_WEIGHTS[key]
+    if (!cw) continue
+    totalWeight += cw.weight
 
-    // How effective is this equipment modifier? (positive = helps)
-    const modNorm = mod / normMod // -1 to +1
-    const effectiveness = modNorm * rule.desired // positive when mod counteracts difficulty
+    // Check if the modifier counteracts element difficulty
+    const elementDifficulty = cw.elementKey ? (element[cw.elementKey] ?? 0) : 0.5
+    const effectiveness = mod * cw.direction
 
-    // Each rule contributes up to ±(weight * 4) points to the score
-    score += effectiveness * elNeed * rule.weight * 4
+    // Positive effectiveness = equipment helps
+    score += effectiveness * elementDifficulty * cw.weight * 50
   }
 
-  return Math.max(0, Math.min(100, Math.round(score)))
+  return Math.max(0, Math.min(100, score))
 }
 
 export function getTopEquipment(equipment, element) {

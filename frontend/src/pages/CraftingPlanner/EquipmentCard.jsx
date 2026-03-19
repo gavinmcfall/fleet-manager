@@ -14,13 +14,12 @@ const MODIFIER_LABELS = {
 function ModifierRow({ label, value }) {
   if (value === 0 || value == null) return null
   const isPositive = value > 0
-  // Values are raw integers (e.g. -35, +25), display directly
-  const display = Math.abs(value) >= 1 ? Math.round(value) : value.toFixed(1)
+  const pct = (value * 100).toFixed(0)
   return (
     <div className="flex items-center justify-between text-[10px]">
       <span className="text-gray-500">{label}</span>
       <span className={isPositive ? 'text-emerald-400' : 'text-red-400'}>
-        {isPositive ? '+' : ''}{display}
+        {isPositive ? '+' : ''}{pct}%
       </span>
     </div>
   )
