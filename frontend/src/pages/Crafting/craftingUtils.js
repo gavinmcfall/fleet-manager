@@ -79,13 +79,13 @@ export function interpolateModifier(mod, quality) {
   return mod.modifier_at_start + (mod.modifier_at_end - mod.modifier_at_start) * t
 }
 
-// Format quantity — these are fractional resource units
-// 0.02 → "2%", 0.1 → "10%", 1 → "100%"
+// Format quantity — values are in SCU (Standard Cargo Units)
+// 0.02 → "0.02 SCU", 0.1 → "0.1 SCU"
 export function formatQuantity(qty) {
   if (qty == null) return '—'
-  const pct = qty * 100
-  if (Number.isInteger(pct)) return `${pct}%`
-  return `${pct.toFixed(1)}%`
+  // Remove trailing zeros: 0.020 → 0.02, 0.100 → 0.1
+  const formatted = parseFloat(qty.toFixed(3))
+  return `${formatted} SCU`
 }
 
 // Modifier values are multipliers (1.0 = base, 1.2 = 120% of base, 0.8 = 80% of base)
