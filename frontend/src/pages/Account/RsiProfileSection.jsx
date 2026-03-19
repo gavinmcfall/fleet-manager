@@ -103,10 +103,10 @@ export default function RsiProfileSection({
             <span>{rsiError}</span>
           </div>
         )}
-        {rsiMsg && (
+        {(rsiMsg || verifyMsg) && (
           <div className="flex items-center gap-2 p-3 bg-sc-success/10 border border-sc-success/30 rounded text-sc-success text-sm">
             <Check className="w-4 h-4 shrink-0" />
-            <span>{rsiMsg}</span>
+            <span>{verifyMsg || rsiMsg}</span>
           </div>
         )}
 
