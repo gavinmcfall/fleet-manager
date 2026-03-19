@@ -55,7 +55,7 @@ function QualitySlider({ slot, value, onChange }) {
   )
 }
 
-function StatRow({ statKey, fallbackName, worstImprovement, currentImprovement, bestImprovement, actualValues }) {
+function StatRow({ statKey, fallbackName, worstImprovement, currentImprovement, bestImprovement, actualValues, multiplier }) {
   const label = getStatLabel(statKey, fallbackName)
   const description = getStatDescription(statKey)
 
@@ -89,13 +89,17 @@ function StatRow({ statKey, fallbackName, worstImprovement, currentImprovement, 
           >
             {formatImprovementWithWord(statKey, currentImprovement)}
           </span>
-          {actualValues && (
+          {actualValues ? (
             <span className="block text-[10px] text-gray-500 font-mono">
               {formatActualValue(actualValues.base, actualValues.decimals)} → {' '}
               <span className={textColor}>
                 {formatActualValue(actualValues.crafted, actualValues.decimals)}
               </span>
               {' '}{actualValues.unit}
+            </span>
+          ) : (
+            <span className="block text-[10px] text-gray-500 font-mono">
+              base × <span className={textColor}>{multiplier.toFixed(3)}</span>
             </span>
           )}
         </div>
@@ -159,6 +163,7 @@ export default function QualitySim({ blueprint }) {
         currentImprovement: multiplierToImprovement(stat.key, stat.crafted),
         bestImprovement: multiplierToImprovement(stat.key, stat.best),
         actualValues: computeActualValue(stat.key, baseStats, stat.crafted),
+        multiplier: stat.crafted,
       }))
       .sort((a, b) => Math.abs(b.bestImprovement) - Math.abs(a.bestImprovement))
   }, [slots, qualities, blueprint.base_stats])
@@ -210,6 +215,7 @@ export default function QualitySim({ blueprint }) {
                 currentImprovement={stat.currentImprovement}
                 bestImprovement={stat.bestImprovement}
                 actualValues={stat.actualValues}
+                multiplier={stat.multiplier}
               />
             ))
           )}
