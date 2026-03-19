@@ -80,12 +80,17 @@ export function interpolateModifier(mod, quality) {
 }
 
 // Format quantity — values are in SCU (Standard Cargo Units)
-// 0.02 → "0.02 SCU", 0.1 → "0.1 SCU"
+// 1 SCU = 100 cSCU. Sub-SCU amounts shown in cSCU for readability.
+// 0.02 SCU → "2 cSCU", 0.1 SCU → "10 cSCU", 1.5 SCU → "1.5 SCU"
 export function formatQuantity(qty) {
   if (qty == null) return '—'
-  // Remove trailing zeros: 0.020 → 0.02, 0.100 → 0.1
-  const formatted = parseFloat(qty.toFixed(3))
-  return `${formatted} SCU`
+  if (qty >= 1) {
+    const formatted = parseFloat(qty.toFixed(2))
+    return `${formatted} SCU`
+  }
+  const cscu = qty * 100
+  const formatted = parseFloat(cscu.toFixed(1))
+  return `${formatted} cSCU`
 }
 
 // Modifier values are multipliers (1.0 = base, 1.2 = 120% of base, 0.8 = 80% of base)
