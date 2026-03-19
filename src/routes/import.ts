@@ -356,6 +356,38 @@ export function importRoutes() {
         )
         .run();
       hasProfile = true;
+
+      // Extension runs from the user's authenticated RSI session — auto-verify
+      if (acct.nickname) {
+        await db
+          .prepare(
+            `INSERT INTO user_rsi_profile (user_id, handle, display_name, avatar_url, enlisted_at, verified_at, verified_handle, fetched_at)
+             VALUES (?, ?, ?, ?, ?, datetime('now'), ?, datetime('now'))
+             ON CONFLICT(user_id) DO UPDATE SET
+               handle = excluded.handle,
+               display_name = excluded.display_name,
+               avatar_url = COALESCE(excluded.avatar_url, user_rsi_profile.avatar_url),
+               enlisted_at = COALESCE(excluded.enlisted_at, user_rsi_profile.enlisted_at),
+               verified_at = datetime('now'),
+               verified_handle = excluded.verified_handle,
+               fetched_at = excluded.fetched_at`,
+          )
+          .bind(
+            userID,
+            acct.nickname,
+            acct.displayname || null,
+            acct.avatar_url || null,
+            acct.enlisted_since || null,
+            acct.nickname,
+          )
+          .run();
+
+        // Clean up any pending manual verification
+        await db
+          .prepare("DELETE FROM profile_verification_pending WHERE user_id = ?")
+          .bind(userID)
+          .run();
+      }
     }
 
     // --- Buy-back pledges: insert-then-swap ---

@@ -5,8 +5,9 @@ import { sendEmail } from "../lib/email";
 import { escapeHtml } from "../lib/utils";
 import { hashPassword } from "../lib/password";
 import { logUserChange } from "../lib/change-history";
-import { fetchRsiProfile, fetchCitizenPageHtml } from "../lib/rsi";
+import { fetchCitizenPageHtml } from "../lib/rsi";
 import { checkGravatar } from "../lib/gravatar";
+import { syncRsiProfileToDb } from "../lib/rsi-sync";
 import { validate } from "../lib/validation";
 
 /** Returns the list of social OAuth provider IDs that have CLIENT_ID configured */
@@ -182,27 +183,63 @@ export function accountRoutes() {
     return c.json({ ok: true, message: "Export emailed to your registered address" });
   });
 
-  // GET /api/account/rsi-profile — return cached RSI profile for current user
+  // GET /api/account/rsi-profile — consolidated profile + extension profile + verification status
   routes.get("/rsi-profile", async (c) => {
     const user = getAuthUser(c);
-    const row = await c.env.DB
-      .prepare("SELECT * FROM user_rsi_profile WHERE user_id = ?")
-      .bind(user.id)
-      .first();
-    if (!row) return c.json({ profile: null });
-    const r = row as Record<string, unknown>;
+    const db = c.env.DB;
+
+    const [row, extRow, pending] = await Promise.all([
+      db.prepare("SELECT * FROM user_rsi_profile WHERE user_id = ?")
+        .bind(user.id).first(),
+      db.prepare("SELECT * FROM user_rsi_profiles WHERE user_id = ?")
+        .bind(user.id).first(),
+      db.prepare("SELECT handle, verification_key FROM profile_verification_pending WHERE user_id = ? AND created_at > datetime('now', '-24 hours')")
+        .bind(user.id).first<{ handle: string; verification_key: string }>(),
+    ]);
+
+    const r = row as Record<string, unknown> | null;
+    const profile = r ? {
+      handle: r.handle,
+      display_name: r.display_name,
+      citizen_record: r.citizen_record,
+      enlisted_at: r.enlisted_at,
+      avatar_url: r.avatar_url,
+      main_org_slug: r.main_org_slug,
+      orgs: r.orgs_json ? JSON.parse(r.orgs_json as string) : [],
+      fetched_at: r.fetched_at,
+      verified_at: r.verified_at ?? null,
+      verified_handle: r.verified_handle ?? null,
+    } : null;
+
+    const e = extRow as Record<string, unknown> | null;
+    const extensionProfile = e ? {
+      rsi_handle: e.rsi_handle,
+      rsi_displayname: e.rsi_displayname,
+      avatar_url: e.avatar_url,
+      enlisted_since: e.enlisted_since,
+      concierge_level: e.concierge_level,
+      synced_at: e.synced_at,
+    } : null;
+
+    // Determine verification source
+    const isManualVerified = !!r?.verified_at;
+    const isExtensionVerified = !!e;
+    const verified = isManualVerified || isExtensionVerified;
+
     return c.json({
-      profile: {
-        handle: r.handle,
-        display_name: r.display_name,
-        citizen_record: r.citizen_record,
-        enlisted_at: r.enlisted_at,
-        avatar_url: r.avatar_url,
-        main_org_slug: r.main_org_slug,
-        orgs: r.orgs_json ? JSON.parse(r.orgs_json as string) : [],
-        fetched_at: r.fetched_at,
-        verified_at: r.verified_at ?? null,
-        verified_handle: r.verified_handle ?? null,
+      profile,
+      extensionProfile,
+      verification: {
+        verified,
+        verified_handle: isManualVerified
+          ? (r?.verified_handle as string)
+          : isExtensionVerified
+            ? (e?.rsi_handle as string)
+            : null,
+        source: isManualVerified ? "manual" : isExtensionVerified ? "extension" : null,
+        pending: !!pending,
+        pending_handle: pending?.handle ?? null,
+        pending_key: pending?.verification_key ?? null,
       },
     });
   });
@@ -235,107 +272,8 @@ export function accountRoutes() {
     }
 
     try {
-      const profile = await fetchRsiProfile(handle);
-
-      await db
-        .prepare(`INSERT INTO user_rsi_profile
-            (user_id, handle, display_name, citizen_record, enlisted_at, avatar_url, main_org_slug, orgs_json, fetched_at)
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?, datetime('now'))
-            ON CONFLICT(user_id) DO UPDATE SET
-              handle        = excluded.handle,
-              display_name  = excluded.display_name,
-              citizen_record = excluded.citizen_record,
-              enlisted_at   = excluded.enlisted_at,
-              avatar_url    = excluded.avatar_url,
-              main_org_slug = excluded.main_org_slug,
-              orgs_json     = excluded.orgs_json,
-              fetched_at    = excluded.fetched_at`)
-        .bind(
-          user.id,
-          profile.handle,
-          profile.display_name,
-          profile.citizen_record,
-          profile.enlisted_at,
-          profile.avatar_url,
-          profile.main_org_slug,
-          JSON.stringify(profile.orgs),
-        )
-        .run();
-
-      // Auto-join SC Bridge orgs that match the user's RSI org affiliations.
-      // For each RSI org the user belongs to, if a verified SC Bridge org exists
-      // with that rsiSid, add the user as a member (INSERT OR IGNORE = no-op if already member).
-      if (profile.orgs.length > 0) {
-        const orgJoinStmts = [];
-        for (const rsiOrg of profile.orgs) {
-          const scbOrg = await db
-            .prepare("SELECT id FROM organization WHERE rsiSid = ?")
-            .bind(rsiOrg.slug)
-            .first<{ id: string }>();
-          if (scbOrg) {
-            orgJoinStmts.push(
-              db.prepare(
-                `INSERT OR IGNORE INTO member (id, organizationId, userId, role, createdAt)
-                 VALUES (?, ?, ?, 'member', datetime('now'))`,
-              ).bind(crypto.randomUUID(), scbOrg.id, user.id),
-            );
-          }
-        }
-        if (orgJoinStmts.length > 0) {
-          await db.batch(orgJoinStmts);
-          // Set primary org if user has none
-          const firstOrgId = (await db
-            .prepare("SELECT organizationId FROM member WHERE userId = ? ORDER BY createdAt LIMIT 1")
-            .bind(user.id)
-            .first<{ organizationId: string }>())?.organizationId;
-          if (firstOrgId) {
-            await db
-              .prepare("UPDATE user SET primary_org_id = ? WHERE id = ? AND primary_org_id IS NULL")
-              .bind(firstOrgId, user.id)
-              .run();
-          }
-        }
-      }
-
-      // Check if handle changed and invalidate verification if so
-      let verificationInvalidated = false;
-      const verifiedRow = await db
-        .prepare("SELECT verified_handle FROM user_rsi_profile WHERE user_id = ?")
-        .bind(user.id)
-        .first<{ verified_handle: string | null }>();
-      if (verifiedRow?.verified_handle && verifiedRow.verified_handle !== profile.handle) {
-        await db
-          .prepare("UPDATE user_rsi_profile SET verified_at = NULL, verified_handle = NULL WHERE user_id = ?")
-          .bind(user.id)
-          .run();
-        verificationInvalidated = true;
-      }
-
-      // After upsert: if user has no avatar, try to auto-set from RSI
-      const currentUser = await db
-        .prepare("SELECT image, gravatar_opted_out FROM user WHERE id = ?")
-        .bind(user.id)
-        .first<{ image: string | null; gravatar_opted_out: number }>();
-
-      let avatarAutoSet: string | null = null;
-      let gravatarUrl: string | null = null;
-
-      if (!currentUser?.image && profile.avatar_url) {
-        const gravatar = currentUser?.gravatar_opted_out
-          ? null
-          : await checkGravatar(user.email);
-        if (!gravatar) {
-          await db
-            .prepare("UPDATE user SET image = ? WHERE id = ?")
-            .bind(profile.avatar_url, user.id)
-            .run();
-          avatarAutoSet = profile.avatar_url;
-        } else {
-          gravatarUrl = gravatar;
-        }
-      }
-
-      return c.json({ profile: { ...profile, fetched_at: new Date().toISOString() }, avatarAutoSet, gravatarUrl, verificationInvalidated });
+      const result = await syncRsiProfileToDb(db, user.id, user.email, handle);
+      return c.json(result);
     } catch (err) {
       return c.json(
         { error: err instanceof Error ? err.message : "Failed to fetch RSI profile" },
@@ -355,15 +293,6 @@ export function accountRoutes() {
       const user = getAuthUser(c);
       const db = c.env.DB;
       const { handle } = c.req.valid("json");
-
-      // Must have synced RSI profile
-      const rsiProfile = await db
-        .prepare("SELECT handle FROM user_rsi_profile WHERE user_id = ?")
-        .bind(user.id)
-        .first<{ handle: string }>();
-      if (!rsiProfile) {
-        return c.json({ error: "Sync your RSI profile first" }, 400);
-      }
 
       // Check if another user already verified this handle
       const otherVerified = await db
@@ -410,7 +339,7 @@ export function accountRoutes() {
         ok: true,
         verification_key: verificationKey,
         handle,
-        instructions: `Add this key anywhere in your RSI citizen bio at https://robertsspaceindustries.com/en/citizens/${encodeURIComponent(handle)}, then click Check Verification.`,
+        instructions: `Add this key to your Short Bio at https://robertsspaceindustries.com/en/account/profile, save it, then click Check.`,
       });
     },
   );
@@ -442,51 +371,51 @@ export function accountRoutes() {
       return c.json({ error: `Failed to fetch RSI profile: ${(err as Error).message}` }, 502);
     }
 
-    // Check for verification key in the page HTML
-    if (!html.includes(pending.verification_key)) {
+    // Strict bio parsing — look for the bio div specifically
+    const bioMatch = html.match(/<div class="entry bio">[\s\S]*?<div class="value">([\s\S]*?)<\/div>/);
+    if (!bioMatch) {
       return c.json({
         ok: false,
         verified: false,
-        message: `Verification key not found. Add "${pending.verification_key}" to your RSI citizen bio, save it, then try again.`,
+        message: "Could not find bio section on your RSI page. Make sure your profile is public.",
       });
     }
 
-    // Verified — update user_rsi_profile and clean up
+    const bioContent = bioMatch[1].trim();
+    if (!bioContent.includes(pending.verification_key)) {
+      return c.json({
+        ok: false,
+        verified: false,
+        message: `Verification key not found in your bio. Add "${pending.verification_key}" to your Short Bio at robertsspaceindustries.com/en/account/profile, save it, then try again.`,
+      });
+    }
+
+    // Verified — update user_rsi_profile and clean up pending
     await db.batch([
       db.prepare(
-        "UPDATE user_rsi_profile SET verified_at = datetime('now'), verified_handle = ? WHERE user_id = ?",
-      ).bind(pending.handle, user.id),
+        `INSERT INTO user_rsi_profile (user_id, handle, verified_at, verified_handle, fetched_at)
+         VALUES (?, ?, datetime('now'), ?, datetime('now'))
+         ON CONFLICT(user_id) DO UPDATE SET
+           handle = excluded.handle,
+           verified_at = datetime('now'),
+           verified_handle = excluded.verified_handle`,
+      ).bind(user.id, pending.handle, pending.handle),
       db.prepare("DELETE FROM profile_verification_pending WHERE id = ?").bind(pending.id),
     ]);
+
+    // Auto-sync RSI data now that identity is verified
+    let syncResult = null;
+    try {
+      syncResult = await syncRsiProfileToDb(db, user.id, user.email, pending.handle);
+    } catch {
+      // Sync failure shouldn't block verification success
+    }
 
     return c.json({
       ok: true,
       verified: true,
       message: "Identity verified! You can now remove the key from your bio.",
-    });
-  });
-
-  // GET /api/account/rsi-verify/status — check verification status
-  routes.get("/rsi-verify/status", async (c) => {
-    const user = getAuthUser(c);
-    const db = c.env.DB;
-
-    const rsiProfile = await db
-      .prepare("SELECT verified_at, verified_handle FROM user_rsi_profile WHERE user_id = ?")
-      .bind(user.id)
-      .first<{ verified_at: string | null; verified_handle: string | null }>();
-
-    const pending = await db
-      .prepare("SELECT handle, created_at FROM profile_verification_pending WHERE user_id = ? AND created_at > datetime('now', '-24 hours')")
-      .bind(user.id)
-      .first<{ handle: string; created_at: string }>();
-
-    return c.json({
-      verified: !!rsiProfile?.verified_at,
-      verified_handle: rsiProfile?.verified_handle ?? null,
-      verified_at: rsiProfile?.verified_at ?? null,
-      pending: !!pending,
-      pending_handle: pending?.handle ?? null,
+      profile: syncResult?.profile ?? null,
     });
   });
 

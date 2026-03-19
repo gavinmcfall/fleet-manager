@@ -80,6 +80,8 @@ export default function Account() {
 
   // RSI Profile
   const [rsiProfile, setRsiProfile] = useState(null)
+  const [rsiExtensionProfile, setRsiExtensionProfile] = useState(null)
+  const [rsiVerification, setRsiVerification] = useState(null)
   const [rsiLoading, setRsiLoading] = useState(true)
   const [rsiHandle, setRsiHandle] = useState('')
   const [rsiSyncing, setRsiSyncing] = useState(false)
@@ -163,7 +165,10 @@ export default function Account() {
       if (resp.ok) {
         const data = await resp.json()
         setRsiProfile(data.profile)
+        setRsiExtensionProfile(data.extensionProfile)
+        setRsiVerification(data.verification)
         if (data.profile?.handle) setRsiHandle(data.profile.handle)
+        else if (data.extensionProfile?.rsi_handle) setRsiHandle(data.extensionProfile.rsi_handle)
       }
     } catch {
       // Non-critical
@@ -730,10 +735,13 @@ export default function Account() {
 
       <RsiProfileSection
         timezone={timezone}
-        rsiProfile={rsiProfile} rsiLoading={rsiLoading}
+        rsiProfile={rsiProfile} extensionProfile={rsiExtensionProfile}
+        verification={rsiVerification}
+        rsiLoading={rsiLoading}
         rsiHandle={rsiHandle} setRsiHandle={setRsiHandle}
         rsiSyncing={rsiSyncing} rsiError={rsiError} rsiMsg={rsiMsg}
         onRsiSync={handleRsiSync}
+        onRefresh={fetchRsiProfile}
       />
 
       <LinkedAccountsSection

@@ -1,17 +1,25 @@
 # Session Journal
 
 ## Current Focus
-All 4 features from identity/ops plan implemented (#71, #68, #69, #70). Ready for staging deploy + testing.
+RSI verification flow restructured: verification now gates sync, extension auto-verifies, consolidated API endpoint.
 
 ## What's Next
-1. Deploy to staging: apply migrations 0132-0134, build frontend, deploy
-2. Test verification flow end-to-end
-3. Test org ops lifecycle: create → join → start → earnings → complete → payouts
-4. Test public op join via code
-5. Test rating flow on completed op
-6. Register scb.gg domain for short URLs (optional)
+1. Deploy to staging and test all 3 verification paths (extension, manual, no-data)
+2. Test edge cases: handle change invalidation, duplicate handle prevention, expired pending
+3. Verify consolidated `/api/account/rsi-profile` returns all sections
 
 ## Log
+
+### 2026-03-19 18:55 — Completed: RSI Profile Verification Flow Restructure
+- Created `src/lib/rsi-sync.ts` — extracted sync helper from account.ts (zero behavior change)
+- Updated `POST /api/import/hangar-sync` — extension sync now auto-verifies user_rsi_profile
+- Updated `POST /api/account/rsi-verify/generate` — removed sync prerequisite, updated instructions URL
+- Updated `POST /api/account/rsi-verify/check` — strict bio div parsing + auto-sync after verify
+- Consolidated `GET /api/account/rsi-profile` — returns profile + extensionProfile + verification
+- Removed `GET /api/account/rsi-verify/status` (now part of consolidated endpoint)
+- Rewrote `RsiProfileSection.jsx` — 4 UI states: verified, pending, unverified+data, no-data
+- No-data state shows two cards: "Via Extension" / "Verify Manually"
+- Build + typecheck pass clean
 
 ### 2026-03-19 07:33 — Completed: Identity verification, org ops, public ops, reputation (#71, #68, #69, #70)
 - Migration 0132: profile_verification_pending + verified_at/verified_handle on user_rsi_profile
