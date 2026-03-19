@@ -6,15 +6,16 @@ import {
   cleanElementName, friendlyElementName,
 } from './plannerHelpers'
 
-function DifficultyBadge({ label, value, icon: Icon, thresholds }) {
+function DifficultyBadge({ label, value, icon: Icon, thresholds, format }) {
   if (value == null) return null
   const color = value >= thresholds[1] ? 'bg-red-500/20 text-red-400 border-red-500/30'
     : value >= thresholds[0] ? 'bg-amber-500/20 text-amber-400 border-amber-500/30'
     : 'bg-emerald-500/20 text-emerald-400 border-emerald-500/30'
+  const display = format === 'pct' ? `${(value * 100).toFixed(0)}%` : String(Math.round(value))
   return (
     <span className={`inline-flex items-center gap-1 text-[10px] font-mono px-2 py-0.5 rounded border ${color}`}>
       <Icon className="w-3 h-3" />
-      {label}: {(value * 100).toFixed(0)}%
+      {label}: {display}
     </span>
   )
 }
@@ -98,7 +99,7 @@ function LocationRow({ location, score, compositions, isSelected, onSelect, reso
         {concentration && (
           <>
             <span className="text-gray-700">&middot;</span>
-            <span className="text-cyan-400">{(concentration.avgPct * 100).toFixed(1)}% avg</span>
+            <span className="text-cyan-400">{concentration.avgPct.toFixed(1)}% avg</span>
             <span className="text-gray-700">&middot;</span>
             <span>{(concentration.probability * 100).toFixed(0)}% chance</span>
           </>
@@ -166,10 +167,10 @@ export default function MiningPlan({
           <span className="text-sm font-medium text-gray-300">
             {cleanElementName(element.name)}
           </span>
-          <DifficultyBadge label="Instability" value={element.instability} icon={Zap} thresholds={[0.4, 0.7]} />
-          <DifficultyBadge label="Resistance" value={element.resistance} icon={Shield} thresholds={[0.3, 0.6]} />
+          <DifficultyBadge label="Instability" value={element.instability} icon={Zap} thresholds={[300, 600]} />
+          <DifficultyBadge label="Resistance" value={element.resistance} icon={Shield} thresholds={[0.3, 0.6]} format="pct" />
           {element.explosion_multiplier > 0 && (
-            <DifficultyBadge label="Explosion" value={element.explosion_multiplier} icon={AlertTriangle} thresholds={[0.3, 0.6]} />
+            <DifficultyBadge label="Explosion" value={element.explosion_multiplier} icon={AlertTriangle} thresholds={[50, 200]} />
           )}
         </div>
       )}
