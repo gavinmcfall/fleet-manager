@@ -238,3 +238,29 @@ export function qualityProgress(mod, currentMultiplier) {
   if (Math.abs(range) < 0.0001) return 0.5
   return (currentMultiplier - mod.modifier_at_start) / range
 }
+
+// Map modifier keys → base_stats field + display unit
+// Used to show actual values (e.g. "650 RPM → 728 RPM") alongside percentages
+export const STAT_BASE_FIELD = {
+  weapon_firerate: { field: 'rounds_per_minute', unit: 'RPM', decimals: 0 },
+  weapon_damage: { field: 'damage', unit: 'dmg', decimals: 1 },
+}
+
+// Compute the actual value from base stat × multiplier
+export function computeActualValue(key, baseStats, multiplier) {
+  const mapping = STAT_BASE_FIELD[key]
+  if (!mapping || !baseStats) return null
+  const baseVal = baseStats[mapping.field]
+  if (baseVal == null) return null
+  return {
+    base: baseVal,
+    crafted: baseVal * multiplier,
+    unit: mapping.unit,
+    decimals: mapping.decimals,
+  }
+}
+
+export function formatActualValue(value, decimals = 0) {
+  if (value == null) return null
+  return Number(value).toFixed(decimals)
+}

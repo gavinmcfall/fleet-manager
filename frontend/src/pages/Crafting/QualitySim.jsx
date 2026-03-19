@@ -4,6 +4,7 @@ import {
   interpolateModifier, multiplierToImprovement, formatImprovementWithWord, formatImprovementPct,
   getStatLabel, getStatDescription,
   resourceColor, resourceBgColor, resourceBorderColor,
+  computeActualValue, formatActualValue,
 } from './craftingUtils'
 
 function QualitySlider({ slot, value, onChange }) {
@@ -54,7 +55,7 @@ function QualitySlider({ slot, value, onChange }) {
   )
 }
 
-function StatRow({ statKey, fallbackName, worstImprovement, currentImprovement, bestImprovement }) {
+function StatRow({ statKey, fallbackName, worstImprovement, currentImprovement, bestImprovement, actualValues }) {
   const label = getStatLabel(statKey, fallbackName)
   const description = getStatDescription(statKey)
 
@@ -81,12 +82,23 @@ function StatRow({ statKey, fallbackName, worstImprovement, currentImprovement, 
             </span>
           )}
         </div>
-        <span
-          className={`text-sm font-bold ${textColor}`}
-          style={{ textShadow: `0 0 8px ${glowColor}` }}
-        >
-          {formatImprovementWithWord(statKey, currentImprovement)}
-        </span>
+        <div className="text-right">
+          <span
+            className={`text-sm font-bold ${textColor}`}
+            style={{ textShadow: `0 0 8px ${glowColor}` }}
+          >
+            {formatImprovementWithWord(statKey, currentImprovement)}
+          </span>
+          {actualValues && (
+            <span className="block text-[10px] text-gray-500 font-mono">
+              {formatActualValue(actualValues.base, actualValues.decimals)} → {' '}
+              <span className={textColor}>
+                {formatActualValue(actualValues.crafted, actualValues.decimals)}
+              </span>
+              {' '}{actualValues.unit}
+            </span>
+          )}
+        </div>
       </div>
       {/* Progress bar: worst → best */}
       <div className="flex items-center gap-2">
@@ -136,6 +148,8 @@ export default function QualitySim({ blueprint }) {
       })
     })
 
+    const baseStats = blueprint.base_stats || null
+
     // Convert compounded multipliers → user-facing improvement percentages
     return [...statMap.values()]
       .map(stat => ({
@@ -144,9 +158,10 @@ export default function QualitySim({ blueprint }) {
         worstImprovement: multiplierToImprovement(stat.key, stat.worst),
         currentImprovement: multiplierToImprovement(stat.key, stat.crafted),
         bestImprovement: multiplierToImprovement(stat.key, stat.best),
+        actualValues: computeActualValue(stat.key, baseStats, stat.crafted),
       }))
       .sort((a, b) => Math.abs(b.bestImprovement) - Math.abs(a.bestImprovement))
-  }, [slots, qualities])
+  }, [slots, qualities, blueprint.base_stats])
 
   if (slots.length === 0) {
     return (
@@ -194,6 +209,7 @@ export default function QualitySim({ blueprint }) {
                 worstImprovement={stat.worstImprovement}
                 currentImprovement={stat.currentImprovement}
                 bestImprovement={stat.bestImprovement}
+                actualValues={stat.actualValues}
               />
             ))
           )}

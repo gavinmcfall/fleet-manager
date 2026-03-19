@@ -1,6 +1,6 @@
 import React, { useMemo, useState } from 'react'
 import { useParams, useNavigate, useSearchParams } from 'react-router-dom'
-import { ArrowLeft, Clock, Layers, FlaskConical } from 'lucide-react'
+import { ArrowLeft, Clock, Layers, FlaskConical, Crosshair, Zap, Target } from 'lucide-react'
 import { useCrafting } from '../../hooks/useAPI'
 import LoadingState from '../../components/LoadingState'
 import ErrorState from '../../components/ErrorState'
@@ -127,11 +127,46 @@ export default function BlueprintDetail() {
               {blueprint.name}
             </h1>
 
-            {/* Slot count */}
-            <div className="flex items-center gap-1.5 text-sm text-gray-500">
-              <Layers className="w-4 h-4" />
-              {blueprint.slots?.length || 0} material {blueprint.slots?.length === 1 ? 'slot' : 'slots'}
+            {/* Slot count + base weapon info */}
+            <div className="flex items-center gap-4 text-sm text-gray-500">
+              <span className="flex items-center gap-1.5">
+                <Layers className="w-4 h-4" />
+                {blueprint.slots?.length || 0} material {blueprint.slots?.length === 1 ? 'slot' : 'slots'}
+              </span>
+              {blueprint.base_stats?.item_name && (
+                <span className="text-gray-600">
+                  Base: <span className="text-gray-400">{blueprint.base_stats.item_name}</span>
+                </span>
+              )}
             </div>
+            {/* Base weapon stats */}
+            {blueprint.base_stats && (
+              <div className="flex flex-wrap gap-3 mt-3">
+                {blueprint.base_stats.rounds_per_minute && (
+                  <span className="inline-flex items-center gap-1 px-2 py-1 rounded bg-white/[0.04] border border-white/[0.06] text-xs text-gray-400">
+                    <Zap className="w-3 h-3 text-amber-400" />
+                    {blueprint.base_stats.rounds_per_minute} RPM
+                  </span>
+                )}
+                {blueprint.base_stats.damage && (
+                  <span className="inline-flex items-center gap-1 px-2 py-1 rounded bg-white/[0.04] border border-white/[0.06] text-xs text-gray-400">
+                    <Crosshair className="w-3 h-3 text-red-400" />
+                    {blueprint.base_stats.damage} dmg
+                  </span>
+                )}
+                {blueprint.base_stats.dps && (
+                  <span className="inline-flex items-center gap-1 px-2 py-1 rounded bg-white/[0.04] border border-white/[0.06] text-xs text-gray-400">
+                    <Target className="w-3 h-3 text-sc-accent" />
+                    {blueprint.base_stats.dps} DPS
+                  </span>
+                )}
+                {blueprint.base_stats.ammo_capacity && (
+                  <span className="inline-flex items-center gap-1 px-2 py-1 rounded bg-white/[0.04] border border-white/[0.06] text-xs text-gray-400">
+                    {blueprint.base_stats.ammo_capacity} rounds
+                  </span>
+                )}
+              </div>
+            )}
           </div>
 
           <CraftTimeRing seconds={blueprint.craft_time_seconds} />

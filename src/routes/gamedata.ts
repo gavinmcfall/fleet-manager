@@ -685,10 +685,68 @@ export function gamedataRoutes<E extends HonoEnv>() {
         slotsByBp.get(bpId)!.push(enriched)
       }
 
-      const blueprints = bpResult.results.map((bp) => ({
-        ...bp,
-        slots: slotsByBp.get(bp.id as number) ?? [],
-      }))
+      // Look up base stats for weapon/armour blueprints by matching
+      // blueprint tag (BP_CRAFT_xxx) → fps_weapons/fps_armour class_name (xxx)
+      const weaponTags = bpResult.results
+        .filter((bp) => bp.type === "weapons")
+        .map((bp) => (bp.tag as string).replace("BP_CRAFT_", ""))
+      // TODO: add armour base stats lookup when fps_armour has relevant columns
+      // const armourTags = bpResult.results
+      //   .filter((bp) => bp.type === "armour")
+      //   .map((bp) => (bp.tag as string).replace("BP_CRAFT_", ""))
+
+      const baseStatsMap = new Map<string, Record<string, unknown>>()
+
+      if (weaponTags.length > 0) {
+        // Batch query — D1 doesn't support large IN clauses well, so use a JOIN approach
+        const weaponResult = await db.prepare(
+          `SELECT class_name, name, rounds_per_minute, damage, dps,
+                  effective_range, projectile_speed, ammo_capacity,
+                  spread_min, spread_max
+           FROM fps_weapons
+           WHERE game_version_id <= ${versionSub(versionId)}
+           ORDER BY game_version_id DESC`
+        ).all()
+        for (const w of weaponResult.results) {
+          const cn = w.class_name as string
+          if (weaponTags.includes(cn) && !baseStatsMap.has(cn)) {
+            baseStatsMap.set(cn, {
+              item_name: w.name,
+              rounds_per_minute: w.rounds_per_minute,
+              damage: w.damage,
+              dps: w.dps,
+              effective_range: w.effective_range,
+              projectile_speed: w.projectile_speed,
+              ammo_capacity: w.ammo_capacity,
+              spread_min: w.spread_min,
+              spread_max: w.spread_max,
+            })
+          }
+        }
+      }
+
+      const blueprints = bpResult.results.map((bp) => {
+        const tag = bp.tag as string
+        const className = tag.replace("BP_CRAFT_", "")
+        // Strip variant suffixes to find the base weapon
+        // e.g. behr_lmg_ballistic_01_tint01 → behr_lmg_ballistic_01
+        let baseStats = baseStatsMap.get(className)
+        if (!baseStats) {
+          // Try matching base weapon by removing trailing _suffix patterns
+          // Variants: _tint01, _xenothreat01, _yellow_grey01, _collector01, etc.
+          for (const [cn, stats] of baseStatsMap) {
+            if (className.startsWith(cn + "_") || className === cn) {
+              baseStats = stats
+              break
+            }
+          }
+        }
+        return {
+          ...bp,
+          slots: slotsByBp.get(bp.id as number) ?? [],
+          ...(baseStats ? { base_stats: baseStats } : {}),
+        }
+      })
 
       return {
         blueprints,
