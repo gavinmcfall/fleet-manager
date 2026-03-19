@@ -3,7 +3,7 @@ import { Gem, Info } from 'lucide-react'
 import {
   resourceColor, resourceBgColor, resourceBorderColor,
   formatQuantity, quantityUnits,
-  getStatLabel, getStatDescription, multiplierToImprovement, formatImprovement,
+  getStatLabel, getStatDescription, multiplierToImprovement, formatImprovementWithWord,
 } from './craftingUtils'
 
 function QuantityBadge({ quantity }) {
@@ -50,13 +50,13 @@ function ModifierRow({ mod }) {
             style={{ width: `${barWidth}%` }}
           />
         </div>
-        <div className="w-36 text-right font-mono flex items-center justify-end gap-1.5">
+        <div className="w-40 text-right flex items-center justify-end gap-1.5">
           <span className="text-red-400/70 text-[11px]">
-            {formatImprovement(worstImprovement)}
+            {formatImprovementWithWord(mod.key, worstImprovement)}
           </span>
           <span className="text-gray-600 text-[10px]">→</span>
           <span className="text-sc-accent text-[11px]">
-            {formatImprovement(bestImprovement)}
+            {formatImprovementWithWord(mod.key, bestImprovement)}
           </span>
         </div>
       </div>

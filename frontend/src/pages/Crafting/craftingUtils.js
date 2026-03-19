@@ -122,51 +122,71 @@ export const STAT_INFO = {
     label: 'Recoil Kick',
     description: 'How much the weapon jumps when fired',
     invertDisplay: true,
+    goodWord: 'less',    // "36% less recoil kick"
+    badWord: 'more',     // "20% more recoil kick"
   },
   weapon_recoil_handling: {
     label: 'Recoil Recovery',
     description: 'How fast the weapon settles after firing',
     invertDisplay: true,
+    goodWord: 'faster',
+    badWord: 'slower',
   },
   weapon_recoil_smoothness: {
     label: 'Recoil Stability',
     description: 'How predictable and tight the recoil pattern is',
     invertDisplay: true,
+    goodWord: 'smoother',
+    badWord: 'rougher',
   },
   weapon_spread: {
     label: 'Accuracy',
     description: 'Bullet grouping tightness',
     invertDisplay: true,
+    goodWord: 'tighter',
+    badWord: 'wider',
   },
   weapon_damage: {
     label: 'Damage',
     description: 'Damage dealt per hit',
     invertDisplay: false,
+    goodWord: 'more',
+    badWord: 'less',
   },
   weapon_firerate: {
     label: 'Fire Rate',
     description: 'Rounds fired per minute',
     invertDisplay: false,
+    goodWord: 'faster',
+    badWord: 'slower',
   },
   weapon_reloadspeed: {
     label: 'Reload Speed',
     description: 'Time to reload a magazine',
     invertDisplay: false,
+    goodWord: 'faster',
+    badWord: 'slower',
   },
   armor_damagemitigation: {
     label: 'Damage Mitigation',
     description: 'How much damage is absorbed by armour',
     invertDisplay: false,
+    goodWord: 'more',
+    badWord: 'less',
   },
   armor_temperaturemax: {
     label: 'Heat Tolerance',
     description: 'Maximum temperature before taking heat damage',
     invertDisplay: false,
+    goodWord: 'higher',
+    badWord: 'lower',
   },
   armor_temperaturemin: {
     label: 'Cold Tolerance',
     description: 'Minimum temperature before taking cold damage',
     invertDisplay: false,
+    goodWord: 'higher',
+    badWord: 'lower',
   },
 }
 
@@ -190,12 +210,21 @@ export function multiplierToImprovement(key, multiplier) {
   return change                             // 1.1 (+10% raw) → +10% improvement
 }
 
-// Format an improvement value for display
-// +20 → "+20%", -10 → "−10%", 0 → "±0%"
-export function formatImprovement(improvement) {
-  if (Math.abs(improvement) < 0.05) return '±0%'
-  const sign = improvement > 0 ? '+' : '−'
-  return `${sign}${Math.abs(improvement).toFixed(0)}%`
+// Format an improvement value as a bare number (no sign, no word)
+export function formatImprovementPct(improvement) {
+  return `${Math.abs(improvement).toFixed(0)}%`
+}
+
+// Format an improvement with a word describing the effect
+// e.g. "36% less" for recoil kick, "12% faster" for fire rate
+export function formatImprovementWithWord(key, improvement) {
+  const info = STAT_INFO[key]
+  const pct = Math.abs(improvement).toFixed(0)
+  if (Math.abs(improvement) < 0.05) return 'no change'
+  const word = improvement > 0
+    ? (info?.goodWord || 'better')
+    : (info?.badWord || 'worse')
+  return `${pct}% ${word}`
 }
 
 // What's the maximum possible improvement at Q1000?

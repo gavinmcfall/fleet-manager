@@ -1,7 +1,7 @@
 import React, { useState, useMemo } from 'react'
 import { Gem } from 'lucide-react'
 import {
-  interpolateModifier, multiplierToImprovement, formatImprovement,
+  interpolateModifier, multiplierToImprovement, formatImprovementWithWord, formatImprovementPct,
   getStatLabel, getStatDescription,
   resourceColor, resourceBgColor, resourceBorderColor,
 } from './craftingUtils'
@@ -82,16 +82,16 @@ function StatRow({ statKey, fallbackName, worstImprovement, currentImprovement, 
           )}
         </div>
         <span
-          className={`text-sm font-mono font-bold ${textColor}`}
+          className={`text-sm font-bold ${textColor}`}
           style={{ textShadow: `0 0 8px ${glowColor}` }}
         >
-          {formatImprovement(currentImprovement)}
+          {formatImprovementWithWord(statKey, currentImprovement)}
         </span>
       </div>
       {/* Progress bar: worst → best */}
       <div className="flex items-center gap-2">
-        <span className="text-[10px] text-red-400/60 font-mono w-10">
-          {formatImprovement(worstImprovement)}
+        <span className="text-[10px] text-red-400/60 w-12">
+          {formatImprovementPct(worstImprovement)}
         </span>
         <div className="flex-1 h-1.5 bg-white/[0.04] rounded-full overflow-hidden">
           <div
@@ -99,8 +99,8 @@ function StatRow({ statKey, fallbackName, worstImprovement, currentImprovement, 
             style={{ width: `${progressPct}%` }}
           />
         </div>
-        <span className="text-[10px] text-sc-accent/60 font-mono w-10 text-right">
-          {formatImprovement(bestImprovement)}
+        <span className="text-[10px] text-sc-accent/60 w-12 text-right">
+          {formatImprovementPct(bestImprovement)}
         </span>
       </div>
     </div>
