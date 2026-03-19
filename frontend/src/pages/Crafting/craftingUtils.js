@@ -265,6 +265,24 @@ export function formatActualValue(value, decimals = 0) {
   return Number(value).toFixed(decimals)
 }
 
+// Compute DPS from damage and RPM
+export function computeDPS(damage, rpm) {
+  if (!damage || !rpm) return null
+  return damage * rpm / 60
+}
+
+// Base weapon stats to display as a reference panel
+// Only stats that exist on fps_weapons and are useful context
+export const BASE_STAT_DISPLAY = [
+  { field: 'damage', label: 'Damage', unit: 'dmg', decimals: 1 },
+  { field: 'rounds_per_minute', label: 'RPM', unit: '', decimals: 0 },
+  { field: 'dps', label: 'DPS', unit: '', decimals: 1 },
+  { field: 'spread_min', label: 'Spread', unit: '', decimals: 1, paired: 'spread_max' },
+  { field: 'effective_range', label: 'Range', unit: 'm', decimals: 0 },
+  { field: 'projectile_speed', label: 'Proj Speed', unit: 'm/s', decimals: 0 },
+  { field: 'ammo_capacity', label: 'Ammo', unit: 'rds', decimals: 0 },
+]
+
 // --- Mining location helpers ---
 
 // Error function approximation (Abramowitz & Stegun)

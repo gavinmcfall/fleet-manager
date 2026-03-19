@@ -4,7 +4,7 @@ import {
   interpolateModifier, multiplierToImprovement, formatImprovementWithWord, formatImprovementPct,
   getStatLabel, getStatDescription,
   resourceColor, resourceBgColor, resourceBorderColor,
-  computeActualValue, formatActualValue,
+  computeActualValue, formatActualValue, computeDPS, BASE_STAT_DISPLAY,
 } from './craftingUtils'
 
 function QualitySlider({ slot, value, onChange }) {
@@ -50,6 +50,36 @@ function QualitySlider({ slot, value, onChange }) {
         <span>0 (worst)</span>
         <span>500</span>
         <span>1000 (best)</span>
+      </div>
+    </div>
+  )
+}
+
+function BaseStatsPanel({ baseStats }) {
+  if (!baseStats) return null
+
+  const stats = BASE_STAT_DISPLAY.filter(s => {
+    if (s.paired) return baseStats[s.field] != null && baseStats[s.paired] != null
+    return baseStats[s.field] != null
+  })
+
+  if (stats.length === 0) return null
+
+  return (
+    <div className="bg-white/[0.02] border border-white/[0.05] rounded-lg p-3 mb-4">
+      <h5 className="text-[10px] uppercase tracking-wider text-gray-600 mb-2">Base Weapon Stats</h5>
+      <div className="grid grid-cols-3 sm:grid-cols-4 gap-x-4 gap-y-1.5">
+        {stats.map(s => (
+          <div key={s.field} className="flex flex-col">
+            <span className="text-[10px] text-gray-600">{s.label}</span>
+            <span className="text-xs font-mono text-gray-300">
+              {s.paired
+                ? `${formatActualValue(baseStats[s.field], s.decimals)}–${formatActualValue(baseStats[s.paired], s.decimals)}`
+                : `${formatActualValue(baseStats[s.field], s.decimals)}${s.unit ? ` ${s.unit}` : ''}`
+              }
+            </span>
+          </div>
+        ))}
       </div>
     </div>
   )
@@ -123,6 +153,61 @@ function StatRow({ statKey, fallbackName, worstImprovement, currentImprovement, 
   )
 }
 
+function DPSRow({ baseStats, dmgMultiplier, rpmMultiplier }) {
+  const baseDPS = baseStats?.dps
+  if (!baseDPS) return null
+
+  const craftedDPS = computeDPS(
+    (baseStats.damage || 0) * dmgMultiplier,
+    (baseStats.rounds_per_minute || 0) * rpmMultiplier
+  )
+  if (!craftedDPS) return null
+
+  const improvement = ((craftedDPS / baseDPS) - 1) * 100
+  const progress = Math.max(0, Math.min(1, improvement / 30)) // rough scale: 0-30% range
+  const textColor = improvement > 5 ? 'text-sc-accent' : improvement > 0 ? 'text-amber-400' : 'text-red-400'
+  const barColor = improvement > 5 ? 'bg-sc-accent' : improvement > 0 ? 'bg-amber-400' : 'bg-red-400'
+  const glowColor = improvement > 5 ? 'rgba(34,211,238,0.3)' : improvement > 0 ? 'rgba(245,158,11,0.3)' : 'rgba(239,68,68,0.3)'
+  const word = improvement >= 0.05 ? 'more' : improvement <= -0.05 ? 'less' : ''
+  const label = Math.abs(improvement) < 0.05 ? 'no change' : `${Math.abs(improvement).toFixed(0)}% ${word}`
+
+  return (
+    <div className="group py-2.5 border-b border-white/[0.03] last:border-0">
+      <div className="flex items-center justify-between mb-1.5">
+        <div className="flex-1 min-w-0">
+          <span className="text-xs text-gray-300 font-medium">DPS</span>
+          <span className="text-[10px] text-gray-600 block opacity-0 group-hover:opacity-100 transition-opacity">
+            Derived from damage × fire rate
+          </span>
+        </div>
+        <div className="text-right">
+          <span
+            className={`text-sm font-bold ${textColor}`}
+            style={{ textShadow: `0 0 8px ${glowColor}` }}
+          >
+            {label}
+          </span>
+          <span className="block text-[10px] text-gray-500 font-mono">
+            {formatActualValue(baseDPS, 1)} → {' '}
+            <span className={textColor}>{formatActualValue(craftedDPS, 1)}</span>
+            {' '}DPS
+          </span>
+        </div>
+      </div>
+      <div className="flex items-center gap-2">
+        <span className="text-[10px] text-red-400/60 w-12">0%</span>
+        <div className="flex-1 h-1.5 bg-white/[0.04] rounded-full overflow-hidden">
+          <div
+            className={`h-full rounded-full ${barColor} transition-all duration-200`}
+            style={{ width: `${Math.round(progress * 100)}%` }}
+          />
+        </div>
+        <span className="text-[10px] text-sc-accent/60 w-12 text-right">&nbsp;</span>
+      </div>
+    </div>
+  )
+}
+
 export default function QualitySim({ blueprint }) {
   const slots = blueprint.slots || []
 
@@ -135,7 +220,7 @@ export default function QualitySim({ blueprint }) {
   }
 
   // Compute improvement values for each stat
-  const statPreview = useMemo(() => {
+  const { statPreview, dmgMultiplier, rpmMultiplier } = useMemo(() => {
     const statMap = new Map()
 
     slots.forEach((slot, slotIndex) => {
@@ -154,8 +239,12 @@ export default function QualitySim({ blueprint }) {
 
     const baseStats = blueprint.base_stats || null
 
+    // Extract multipliers for DPS computation
+    const dmg = statMap.get('weapon_damage')?.crafted ?? 1
+    const rpm = statMap.get('weapon_firerate')?.crafted ?? 1
+
     // Convert compounded multipliers → user-facing improvement percentages
-    return [...statMap.values()]
+    const preview = [...statMap.values()]
       .map(stat => ({
         key: stat.key,
         name: stat.name,
@@ -166,6 +255,8 @@ export default function QualitySim({ blueprint }) {
         multiplier: stat.crafted,
       }))
       .sort((a, b) => Math.abs(b.bestImprovement) - Math.abs(a.bestImprovement))
+
+    return { statPreview: preview, dmgMultiplier: dmg, rpmMultiplier: rpm }
   }, [slots, qualities, blueprint.base_stats])
 
   if (slots.length === 0) {
@@ -175,6 +266,9 @@ export default function QualitySim({ blueprint }) {
       </div>
     )
   }
+
+  const baseStats = blueprint.base_stats || null
+  const hasDPS = baseStats?.dps != null
 
   return (
     <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
@@ -198,6 +292,8 @@ export default function QualitySim({ blueprint }) {
 
       {/* Right: Stat effects */}
       <div>
+        <BaseStatsPanel baseStats={baseStats} />
+
         <h4 className="text-xs uppercase tracking-wider text-gray-500 mb-3">Crafted vs Base</h4>
         <p className="text-[10px] text-gray-600 mb-3">
           How the crafted item compares to an unmodified weapon. Positive = better than stock.
@@ -206,18 +302,27 @@ export default function QualitySim({ blueprint }) {
           {statPreview.length === 0 ? (
             <p className="text-sm text-gray-600 text-center py-4">No modifiers on this blueprint.</p>
           ) : (
-            statPreview.map(stat => (
-              <StatRow
-                key={stat.key}
-                statKey={stat.key}
-                fallbackName={stat.name}
-                worstImprovement={stat.worstImprovement}
-                currentImprovement={stat.currentImprovement}
-                bestImprovement={stat.bestImprovement}
-                actualValues={stat.actualValues}
-                multiplier={stat.multiplier}
-              />
-            ))
+            <>
+              {statPreview.map(stat => (
+                <StatRow
+                  key={stat.key}
+                  statKey={stat.key}
+                  fallbackName={stat.name}
+                  worstImprovement={stat.worstImprovement}
+                  currentImprovement={stat.currentImprovement}
+                  bestImprovement={stat.bestImprovement}
+                  actualValues={stat.actualValues}
+                  multiplier={stat.multiplier}
+                />
+              ))}
+              {hasDPS && (
+                <DPSRow
+                  baseStats={baseStats}
+                  dmgMultiplier={dmgMultiplier}
+                  rpmMultiplier={rpmMultiplier}
+                />
+              )}
+            </>
           )}
         </div>
       </div>
