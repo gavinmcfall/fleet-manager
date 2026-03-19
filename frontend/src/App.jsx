@@ -48,6 +48,7 @@ const Shops = lazy(() => import('./pages/Shops'))
 const TradeCommodities = lazy(() => import('./pages/TradeCommodities'))
 const MiningGuide = lazy(() => import('./pages/MiningGuide'))
 const Crafting = lazy(() => import('./pages/Crafting'))
+const BlueprintDetail = lazy(() => import('./pages/Crafting/BlueprintDetail'))
 const Careers = lazy(() => import('./pages/Careers'))
 const Reputation = lazy(() => import('./pages/Reputation'))
 const LawSystem = lazy(() => import('./pages/LawSystem'))
@@ -641,6 +642,7 @@ export default function App() {
                       <Route path="/trade" element={<RequireAuth><TradeCommodities /></RequireAuth>} />
                       <Route path="/mining" element={<RequireAuth><MiningGuide /></RequireAuth>} />
                       <Route path="/crafting" element={<RequireAuth><Suspense fallback={<LoadingState fullScreen />}><Crafting /></Suspense></RequireAuth>} />
+                      <Route path="/crafting/:id" element={<RequireAuth><Suspense fallback={<LoadingState fullScreen />}><BlueprintDetail /></Suspense></RequireAuth>} />
                       <Route path="/careers" element={<RequireAuth><Careers /></RequireAuth>} />
                       <Route path="/reputation" element={<RequireAuth><Reputation /></RequireAuth>} />
                       <Route path="/law" element={<RequireAuth><LawSystem /></RequireAuth>} />
