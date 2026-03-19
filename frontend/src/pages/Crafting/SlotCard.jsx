@@ -2,9 +2,29 @@ import React from 'react'
 import { Gem, Info } from 'lucide-react'
 import {
   resourceColor, resourceBgColor, resourceBorderColor,
-  formatQuantity, formatModifierChange, isModifierBeneficial,
+  formatQuantity, quantityUnits, formatModifierChange, isModifierBeneficial,
   STAT_DESCRIPTIONS,
 } from './craftingUtils'
+
+function QuantityBadge({ quantity }) {
+  const units = quantityUnits(quantity)
+  return (
+    <span className="relative group/qty">
+      <span className="text-xs text-gray-400 font-mono cursor-help border-b border-dashed border-gray-700">
+        {formatQuantity(quantity)}
+      </span>
+      <span className="absolute bottom-full left-1/2 -translate-x-1/2 mb-2 hidden group-hover/qty:flex flex-col items-end gap-0.5 px-3 py-2 rounded-lg bg-gray-900/95 border border-white/[0.08] shadow-xl shadow-black/40 backdrop-blur-sm z-10 whitespace-nowrap">
+        {units.map(({ value, unit }) => (
+          <span key={unit} className="flex items-center gap-2 text-xs">
+            <span className="text-gray-200 font-mono font-medium">{value}</span>
+            <span className="text-gray-500">{unit}</span>
+          </span>
+        ))}
+        <span className="absolute -bottom-1 left-1/2 -translate-x-1/2 w-2 h-2 bg-gray-900/95 border-b border-r border-white/[0.08] rotate-45" />
+      </span>
+    </span>
+  )
+}
 
 function ModifierBar({ mod }) {
   // At max quality, what's the change from base (1.0)?
@@ -75,7 +95,7 @@ export default function SlotCard({ slot, index = 0 }) {
             <Gem className="w-3 h-3" />
             {slot.resource_name}
           </span>
-          <span className="text-xs text-gray-400 font-mono">{formatQuantity(slot.quantity)}</span>
+          <QuantityBadge quantity={slot.quantity} />
           {slot.min_quality > 0 && (
             <span className="text-xs font-mono px-1.5 py-0.5 rounded bg-amber-500/10 text-amber-400 border border-amber-500/20">
               Q{slot.min_quality}+
