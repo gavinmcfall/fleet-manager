@@ -1,33 +1,17 @@
 # Session Journal
 
 ## Current Focus
-Crafting & Mining Planner implemented. New `/planner` route with 4-stage vertical mission pipeline. Build passes.
+All 4 features from identity/ops plan implemented (#71, #68, #69, #70). Ready for staging deploy + testing.
 
 ## What's Next
-1. Deploy to staging and test planner workflow end-to-end
-2. Test deep linking: `/planner?item=1&material=Lindinium`
-3. Test mobile responsiveness at 375px
-4. Verify KV cache: second load shows `X-Cache: HIT`
-5. Consider redirecting `/crafting` and `/mining` to `/planner` after validation
+1. Deploy to staging: apply migrations 0132-0134, build frontend, deploy
+2. Test verification flow end-to-end
+3. Test org ops lifecycle: create → join → start → earnings → complete → payouts
+4. Test public op join via code
+5. Test rating flow on completed op
+6. Register scb.gg domain for short URLs (optional)
 
 ## Log
-
-### 2026-03-19 13:25 — Completed: Crafting & Mining Planner feature
-- New consolidated endpoint `GET /api/gamedata/planner` with KV caching (13 parallel queries)
-- `usePlanner()` hook added to useAPI.js
-- 7 new files in `frontend/src/pages/CraftingPlanner/`:
-  - `index.jsx` — Main page with URL state, stage visibility logic
-  - `BlueprintPicker.jsx` — Stage 1: search, filter, select blueprint
-  - `MaterialSlots.jsx` — Stage 2: horizontal material cards with modifier bars
-  - `MiningPlan.jsx` — Stage 3: location ranking + equipment scoring
-  - `QualityImpact.jsx` — Stage 4: quality distribution chart, slider, stat calculator
-  - `EquipmentCard.jsx` — Equipment recommendation card with score bar
-  - `plannerHelpers.js` — Pure functions: scoring, interpolation, distribution, parsing
-- Route `/planner` added to App.jsx with lazy loading
-- Nav item added under "Game Data" group (Crosshair icon, "Planner")
-- Existing `/crafting` and `/mining` pages preserved (not redirected yet)
-- Resource→element mapping built server-side with alias handling (Aluminum→Aluminium)
-- Build + typecheck clean
 
 ### 2026-03-19 07:33 — Completed: Identity verification, org ops, public ops, reputation (#71, #68, #69, #70)
 - Migration 0132: profile_verification_pending + verified_at/verified_handle on user_rsi_profile
