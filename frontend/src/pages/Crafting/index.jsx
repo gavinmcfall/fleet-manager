@@ -52,7 +52,7 @@ export default function Crafting() {
     if (search.trim()) {
       const tokens = search.toLowerCase().split(/\s+/).filter(Boolean)
       items = items.filter(b => {
-        const haystack = `${b.name} ${b.type} ${b.sub_type}`.toLowerCase()
+        const haystack = `${b.base_stats?.item_name || ''} ${b.name} ${b.type} ${b.sub_type}`.toLowerCase()
         return tokens.every(t => haystack.includes(t))
       })
     }

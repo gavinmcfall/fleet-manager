@@ -31,7 +31,7 @@ export default function BlueprintCard({ bp, index = 0 }) {
 
       {/* Name */}
       <h3 className="text-sm font-semibold text-gray-200 tracking-wide mb-3 group-hover:text-white transition-colors line-clamp-2">
-        {bp.name}
+        {bp.base_stats?.item_name || bp.name}
       </h3>
 
       {/* Bottom row: stats + resources */}

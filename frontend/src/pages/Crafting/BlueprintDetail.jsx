@@ -124,20 +124,15 @@ export default function BlueprintDetail() {
               className="text-2xl font-bold text-white tracking-wide mb-2"
               style={{ textShadow: '0 0 20px rgba(34, 211, 238, 0.15)' }}
             >
-              {blueprint.name}
+              {blueprint.base_stats?.item_name || blueprint.name}
             </h1>
 
-            {/* Slot count + base weapon info */}
+            {/* Slot count */}
             <div className="flex items-center gap-4 text-sm text-gray-500">
               <span className="flex items-center gap-1.5">
                 <Layers className="w-4 h-4" />
                 {blueprint.slots?.length || 0} material {blueprint.slots?.length === 1 ? 'slot' : 'slots'}
               </span>
-              {blueprint.base_stats?.item_name && (
-                <span className="text-gray-600">
-                  Base: <span className="text-gray-400">{blueprint.base_stats.item_name}</span>
-                </span>
-              )}
             </div>
             {/* Base weapon stats */}
             {blueprint.base_stats && (
