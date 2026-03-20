@@ -120,9 +120,9 @@ app.use("/api/*", async (c, next) => {
 // CORS — strict same-origin in production, localhost in dev, pinned extension IDs for SC Bridge Sync
 // Extension IDs are stable after store publication. Update these when publishing new extensions.
 const TRUSTED_EXTENSION_ORIGINS = new Set<string>([
-  // Add published extension IDs here:
-  // "chrome-extension://YOUR_CHROME_EXTENSION_ID",
-  // "moz-extension://YOUR_FIREFOX_EXTENSION_UUID",
+  "chrome-extension://edndedmmbdbofdphimpcofdccbpbgjib", // Microsoft Edge Add-ons
+  // Add Chrome Web Store ID once approved:
+  // "chrome-extension://gcokkoamjodagagbojhkimfbjjpdfefi",
 ]);
 const isTrustedExtension = (origin: string) =>
   TRUSTED_EXTENSION_ORIGINS.has(origin) ||
