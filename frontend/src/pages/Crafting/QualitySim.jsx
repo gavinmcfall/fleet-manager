@@ -216,7 +216,13 @@ export default function QualitySim({ blueprint }) {
 
       {/* Stats table */}
       <div className="border border-white/[0.06] rounded-lg overflow-hidden">
-        <table className="w-full text-sm">
+        <table className="w-full text-sm table-fixed">
+          <colgroup>
+            <col className="w-[28%]" />
+            <col className="w-[22%]" />
+            <col className="w-[22%]" />
+            <col className="w-[28%]" />
+          </colgroup>
           <thead>
             <tr className="border-b border-white/[0.08] bg-white/[0.02]">
               <th className="text-left text-[10px] uppercase tracking-wider text-gray-500 font-medium px-4 py-2.5">Stat</th>
@@ -231,8 +237,8 @@ export default function QualitySim({ blueprint }) {
               return (
                 <tr key={i} className="border-b border-white/[0.04] last:border-0 hover:bg-white/[0.02] transition-colors">
                   <td className="px-4 py-2 text-xs text-gray-300 font-medium">{row.label}</td>
-                  <td className="px-4 py-2 text-xs font-mono text-gray-400">{row.base}</td>
-                  <td className="px-4 py-2 text-xs font-mono">
+                  <td className="px-4 py-2 text-xs font-mono text-gray-400 tabular-nums">{row.base}</td>
+                  <td className="px-4 py-2 text-xs font-mono tabular-nums">
                     {row.crafted ? (
                       <span
                         className={row.modified ? c.text : 'text-gray-600'}
