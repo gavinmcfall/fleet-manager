@@ -1,5 +1,5 @@
 import React, { useState, useMemo } from 'react'
-import { Gem, ChevronDown, MapPin } from 'lucide-react'
+import { Gem, ChevronDown, MapPin, Filter } from 'lucide-react'
 import {
   resourceColor, resourceBgColor, resourceBorderColor,
   formatQuantity, quantityUnits,
@@ -51,17 +51,52 @@ function QualityBandRow({ bands }) {
   )
 }
 
+const TIER_OPTIONS = ['Common', 'Uncommon', 'Rare', 'Epic', 'Legendary']
+const SYSTEM_OPTIONS = ['Stanton', 'Pyro', 'Nyx']
+
+function FilterPill({ label, active, onClick }) {
+  return (
+    <button
+      onClick={onClick}
+      className={`px-2 py-0.5 rounded-full text-[10px] font-medium border transition-all cursor-pointer ${
+        active
+          ? 'bg-sc-accent/15 text-sc-accent border-sc-accent/30'
+          : 'bg-white/[0.03] text-gray-500 border-white/[0.06] hover:border-white/[0.12] hover:text-gray-400'
+      }`}
+    >
+      {label}
+    </button>
+  )
+}
+
 function ResourceLocations({ locations }) {
   const [open, setOpen] = useState(false)
+  const [systemFilter, setSystemFilter] = useState('')
+  const [tierFilter, setTierFilter] = useState('')
+  const [qualityBandFilter, setQualityBandFilter] = useState(-1) // -1 = no filter, 0-4 = band index
+
+  // Filter locations
+  const filteredLocations = useMemo(() => {
+    let locs = locations
+    if (systemFilter) locs = locs.filter(l => l.system === systemFilter)
+    if (tierFilter) locs = locs.filter(l => l.rock_tier === tierFilter)
+    if (qualityBandFilter >= 0) {
+      locs = locs.filter(l => {
+        const bands = qualityBandProbabilities(l.quality)
+        if (!bands) return false
+        return bands[qualityBandFilter].probability > 0.05
+      })
+    }
+    return locs
+  }, [locations, systemFilter, tierFilter, qualityBandFilter])
 
   // Group by system, sort by tier rarity
   const grouped = useMemo(() => {
     const bySystem = {}
-    for (const loc of locations) {
+    for (const loc of filteredLocations) {
       if (!bySystem[loc.system]) bySystem[loc.system] = []
       bySystem[loc.system].push(loc)
     }
-    // Sort locations within each system by tier then name
     const tierOrder = { Common: 0, Uncommon: 1, Rare: 2, Epic: 3, Legendary: 4 }
     for (const sys of Object.keys(bySystem)) {
       bySystem[sys].sort((a, b) => {
@@ -70,21 +105,21 @@ function ResourceLocations({ locations }) {
         return a.location.localeCompare(b.location)
       })
     }
-    // Sort systems: Stanton first, then alphabetically
     return Object.entries(bySystem).sort(([a], [b]) => {
       if (a === 'Stanton') return -1
       if (b === 'Stanton') return 1
       return a.localeCompare(b)
     })
-  }, [locations])
+  }, [filteredLocations])
 
   const totalLocations = locations.length
+  const hasFilters = systemFilter || tierFilter || qualityBandFilter >= 0
 
   return (
     <div className="mt-2">
       <button
         onClick={() => setOpen(!open)}
-        className="flex items-center gap-1.5 text-xs text-gray-500 hover:text-gray-300 transition-colors"
+        className="flex items-center gap-1.5 text-xs text-gray-500 hover:text-gray-300 transition-colors cursor-pointer"
       >
         <MapPin className="w-3 h-3" />
         <span>{totalLocations} mining {totalLocations === 1 ? 'location' : 'locations'}</span>
@@ -93,6 +128,42 @@ function ResourceLocations({ locations }) {
 
       {open && (
         <div className="mt-2 space-y-3 animate-fade-in">
+          {/* Filters */}
+          <div className="space-y-2 px-2">
+            {/* System filter */}
+            <div className="flex items-center gap-1.5 flex-wrap">
+              <Filter className="w-3 h-3 text-gray-600" />
+              <FilterPill label="All Systems" active={!systemFilter} onClick={() => setSystemFilter('')} />
+              {SYSTEM_OPTIONS.map(sys => (
+                <FilterPill key={sys} label={sys} active={systemFilter === sys} onClick={() => setSystemFilter(systemFilter === sys ? '' : sys)} />
+              ))}
+            </div>
+            {/* Tier filter */}
+            <div className="flex items-center gap-1.5 flex-wrap">
+              <span className="w-3" />
+              <FilterPill label="All Tiers" active={!tierFilter} onClick={() => setTierFilter('')} />
+              {TIER_OPTIONS.map(tier => (
+                <FilterPill key={tier} label={tier} active={tierFilter === tier} onClick={() => setTierFilter(tierFilter === tier ? '' : tier)} />
+              ))}
+            </div>
+            {/* Quality band filter */}
+            <div className="flex items-center gap-1.5 flex-wrap">
+              <span className="w-3" />
+              <FilterPill label="Any Quality" active={qualityBandFilter < 0} onClick={() => setQualityBandFilter(-1)} />
+              {QUALITY_BANDS.map((b, i) => (
+                <FilterPill key={i} label={`Q${b.label}`} active={qualityBandFilter === i} onClick={() => setQualityBandFilter(qualityBandFilter === i ? -1 : i)} />
+              ))}
+            </div>
+            {hasFilters && (
+              <div className="flex items-center gap-2 text-[10px]">
+                <span className="text-gray-500">{filteredLocations.length} of {totalLocations} locations</span>
+                <button onClick={() => { setSystemFilter(''); setTierFilter(''); setQualityBandFilter(-1) }} className="text-sc-accent hover:text-sc-accent/80 transition-colors cursor-pointer">
+                  Clear filters
+                </button>
+              </div>
+            )}
+          </div>
+
           {/* Quality band header */}
           <div className="flex items-end gap-2 pl-2">
             <div className="w-40 shrink-0" />
@@ -106,34 +177,38 @@ function ResourceLocations({ locations }) {
             </div>
           </div>
 
-          {grouped.map(([system, locs]) => (
-            <div key={system}>
-              <div className="text-[10px] font-semibold uppercase tracking-wider text-gray-600 mb-1 px-2">
-                {system}
+          {grouped.length === 0 ? (
+            <div className="text-center py-4 text-xs text-gray-600">No locations match filters.</div>
+          ) : (
+            grouped.map(([system, locs]) => (
+              <div key={system}>
+                <div className="text-[10px] font-semibold uppercase tracking-wider text-gray-600 mb-1 px-2">
+                  {system}
+                </div>
+                <div className="space-y-0.5">
+                  {locs.map((loc, i) => {
+                    const tier = ROCK_TIER_INFO[loc.rock_tier] || ROCK_TIER_INFO.Common
+                    const bands = qualityBandProbabilities(loc.quality)
+                    return (
+                      <div key={`${loc.location}-${loc.rock_tier}-${i}`} className="flex items-center gap-2 px-2 py-1 rounded hover:bg-white/[0.02]">
+                        <div className="w-40 shrink-0 truncate text-xs text-gray-300" title={loc.location}>
+                          {humanizeLocationName(loc.location)}
+                        </div>
+                        <div className="w-20 shrink-0">
+                          <span className={`inline-block text-[10px] px-1.5 py-0.5 rounded ${tier.bg} ${tier.color} ${tier.border} border`}>
+                            {tier.label}
+                          </span>
+                        </div>
+                        <div className="flex-1">
+                          <QualityBandRow bands={bands} />
+                        </div>
+                      </div>
+                    )
+                  })}
+                </div>
               </div>
-              <div className="space-y-0.5">
-                {locs.map((loc, i) => {
-                  const tier = ROCK_TIER_INFO[loc.rock_tier] || ROCK_TIER_INFO.Common
-                  const bands = qualityBandProbabilities(loc.quality)
-                  return (
-                    <div key={`${loc.location}-${loc.rock_tier}-${i}`} className="flex items-center gap-2 px-2 py-1 rounded hover:bg-white/[0.02]">
-                      <div className="w-40 shrink-0 truncate text-xs text-gray-300" title={loc.location}>
-                        {humanizeLocationName(loc.location)}
-                      </div>
-                      <div className="w-20 shrink-0">
-                        <span className={`inline-block text-[10px] px-1.5 py-0.5 rounded ${tier.bg} ${tier.color} ${tier.border} border`}>
-                          {tier.label}
-                        </span>
-                      </div>
-                      <div className="flex-1">
-                        <QualityBandRow bands={bands} />
-                      </div>
-                    </div>
-                  )
-                })}
-              </div>
-            </div>
-          ))}
+            ))
+          )}
         </div>
       )}
     </div>

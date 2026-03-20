@@ -792,10 +792,9 @@ export function gamedataRoutes<E extends HonoEnv>() {
       const weaponTags = bpResult.results
         .filter((bp) => bp.type === "weapons")
         .map((bp) => (bp.tag as string).replace("BP_CRAFT_", ""))
-      // TODO: add armour base stats lookup when fps_armour has relevant columns
-      // const armourTags = bpResult.results
-      //   .filter((bp) => bp.type === "armour")
-      //   .map((bp) => (bp.tag as string).replace("BP_CRAFT_", ""))
+      const armourTags = bpResult.results
+        .filter((bp) => bp.type === "armour")
+        .map((bp) => (bp.tag as string).replace("BP_CRAFT_", ""))
 
       const baseStatsMap = new Map<string, Record<string, unknown>>()
 
@@ -824,6 +823,32 @@ export function gamedataRoutes<E extends HonoEnv>() {
               spread_max: w.spread_max,
               damage_type: w.damage_type,
               fire_modes: w.fire_modes,
+            })
+          }
+        }
+      }
+
+      if (armourTags.length > 0) {
+        const armourResult = await db.prepare(
+          `SELECT class_name, name, sub_type,
+                  resist_physical, resist_energy, resist_distortion,
+                  resist_thermal, resist_biochemical, resist_stun
+           FROM fps_armour
+           WHERE game_version_id <= ${versionSub(versionId)}
+           ORDER BY game_version_id DESC`
+        ).all()
+        for (const a of armourResult.results) {
+          const cn = a.class_name as string
+          if (armourTags.includes(cn) && !baseStatsMap.has(cn)) {
+            baseStatsMap.set(cn, {
+              item_name: a.name,
+              sub_type: a.sub_type,
+              resist_physical: a.resist_physical,
+              resist_energy: a.resist_energy,
+              resist_distortion: a.resist_distortion,
+              resist_thermal: a.resist_thermal,
+              resist_biochemical: a.resist_biochemical,
+              resist_stun: a.resist_stun,
             })
           }
         }

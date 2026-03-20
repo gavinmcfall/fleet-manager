@@ -1,12 +1,12 @@
 import React, { useMemo, useState } from 'react'
 import { useParams, useNavigate, useSearchParams } from 'react-router-dom'
-import { ArrowLeft, Clock, Layers, FlaskConical, Crosshair, Zap, Target } from 'lucide-react'
+import { ArrowLeft, Clock, Layers, FlaskConical, Crosshair, Zap, Target, MapPin } from 'lucide-react'
 import { useCrafting } from '../../hooks/useAPI'
 import LoadingState from '../../components/LoadingState'
 import ErrorState from '../../components/ErrorState'
 import SlotCard from './SlotCard'
 import QualitySim from './QualitySim'
-import { TYPE_LABELS, SUBTYPE_LABELS, TYPE_COLORS, formatTime } from './craftingUtils'
+import { TYPE_LABELS, SUBTYPE_LABELS, TYPE_COLORS, formatTime, humanizeLocationName } from './craftingUtils'
 
 const TABS = [
   { key: 'materials', label: 'Materials' },
@@ -42,6 +42,74 @@ function CraftTimeRing({ seconds }) {
         >
           {formatTime(seconds)}
         </span>
+      </div>
+    </div>
+  )
+}
+
+function BestLocations({ slots, resourceLocations }) {
+  const overlap = useMemo(() => {
+    if (!resourceLocations || !slots || slots.length === 0) return []
+    const resourceNames = [...new Set(slots.map(s => s.resource_name))]
+    if (resourceNames.length < 2) return [] // no overlap to find with 1 resource
+
+    // Build location → set of resources available there
+    const locationResources = new Map() // location name → Set<resource>
+    for (const resName of resourceNames) {
+      const locs = resourceLocations[resName] || []
+      for (const loc of locs) {
+        const key = loc.location
+        if (!locationResources.has(key)) locationResources.set(key, { system: loc.system, resources: new Set() })
+        locationResources.get(key).resources.add(resName)
+      }
+    }
+
+    // Find locations that have ALL resources (or as many as possible)
+    const results = []
+    for (const [locName, data] of locationResources) {
+      if (data.resources.size >= 2) {
+        results.push({
+          location: locName,
+          system: data.system,
+          matchCount: data.resources.size,
+          totalNeeded: resourceNames.length,
+          resources: [...data.resources],
+        })
+      }
+    }
+
+    return results.sort((a, b) => b.matchCount - a.matchCount || a.location.localeCompare(b.location))
+  }, [slots, resourceLocations])
+
+  if (overlap.length === 0) return null
+
+  return (
+    <div className="bg-white/[0.02] border border-white/[0.05] rounded-lg p-4">
+      <h4 className="text-xs uppercase tracking-wider text-gray-400 mb-3 flex items-center gap-2">
+        <MapPin className="w-3.5 h-3.5" />
+        Best Mining Locations
+        <span className="text-[10px] text-gray-600 normal-case tracking-normal">
+          — locations with multiple required materials
+        </span>
+      </h4>
+      <div className="space-y-1">
+        {overlap.slice(0, 10).map((loc, i) => (
+          <div key={i} className="flex items-center justify-between px-2 py-1.5 rounded hover:bg-white/[0.02]">
+            <div className="flex items-center gap-2">
+              <span className="text-xs text-gray-300">{humanizeLocationName(loc.location)}</span>
+              <span className="text-[10px] text-gray-600">{loc.system}</span>
+            </div>
+            <div className="flex items-center gap-1.5">
+              <span className={`text-[10px] font-mono px-1.5 py-0.5 rounded ${
+                loc.matchCount === loc.totalNeeded
+                  ? 'bg-emerald-500/10 text-emerald-400 border border-emerald-500/20'
+                  : 'bg-amber-500/10 text-amber-400 border border-amber-500/20'
+              }`}>
+                {loc.matchCount}/{loc.totalNeeded} materials
+              </span>
+            </div>
+          </div>
+        ))}
       </div>
     </div>
   )
@@ -192,9 +260,12 @@ export default function BlueprintDetail() {
       {activeTab === 'materials' && (
         <div className="space-y-3">
           {blueprint.slots?.length > 0 ? (
-            blueprint.slots.map((slot, i) => (
-              <SlotCard key={i} slot={slot} index={i} resourceLocations={data?.resource_locations} />
-            ))
+            <>
+              {blueprint.slots.map((slot, i) => (
+                <SlotCard key={i} slot={slot} index={i} resourceLocations={data?.resource_locations} />
+              ))}
+              <BestLocations slots={blueprint.slots} resourceLocations={data?.resource_locations} />
+            </>
           ) : (
             <p className="text-center py-8 text-gray-500">No material slots.</p>
           )}
