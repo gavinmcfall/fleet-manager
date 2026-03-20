@@ -185,7 +185,7 @@ export default function QualitySim({ blueprint }) {
         label: getStatLabel(stat.key, stat.name),
         _key: stat.key,
         base: 'Base',
-        _baseTooltip: 'This stat has no numeric base value — the game applies it as a multiplier to the weapon\'s internal recoil parameters. "Base" means the unmodified weapon behavior (×1.000).',
+        _baseTooltip: 'Recoil in Star Citizen is driven by Bézier curves that define the kick pattern over time — there\'s no single numeric value to show. The crafting multiplier scales the curve output: ×0.800 means 80% of the original curve amplitude, reducing felt recoil by 20%. "Base" = unmodified curve (×1.000).',
         crafted: `×${stat.multiplier.toFixed(3)}`,
         description: formatDescription(stat.key, stat.improvement),
         modified: true,
