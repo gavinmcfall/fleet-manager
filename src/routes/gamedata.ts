@@ -219,16 +219,30 @@ export function gamedataRoutes<E extends HonoEnv>() {
     })
   })
 
-  // GET /api/gamedata/mining — elements, compositions, refining processes
+  // GET /api/gamedata/mining — full mining data: elements, compositions, refining,
+  // locations, deposits, quality distributions, clustering, equipment
   app.get("/mining", async (c) => {
     const db = c.env.DB
     const versionId = await resolveVersionId(db, c.req.query("patch"))
     return cachedJson(c, `gd:mining:${versionId}`, async () => {
-      const [elements, compositions, refining] = await Promise.all([
+      const vs = versionSub(versionId)
+      const [
+        elements,
+        compositions,
+        refining,
+        locations,
+        deposits,
+        qualityDistributions,
+        clusteringPresets,
+        clusteringParams,
+        lasers,
+        modules,
+        gadgets,
+      ] = await Promise.all([
         db
           .prepare(
             `SELECT * FROM mineable_elements
-             WHERE game_version_id = ${versionSub(versionId)}
+             WHERE game_version_id = ${vs}
                AND name NOT LIKE '%Template%'
                AND name NOT LIKE '%Testelement%'
              ORDER BY name`,
@@ -237,23 +251,101 @@ export function gamedataRoutes<E extends HonoEnv>() {
         db
           .prepare(
             `SELECT * FROM rock_compositions
-             WHERE game_version_id = ${versionSub(versionId)}
+             WHERE game_version_id = ${vs}
              ORDER BY name`,
           )
           .all(),
         db
           .prepare(
             `SELECT * FROM refining_processes
-             WHERE game_version_id = ${versionSub(versionId)}
+             WHERE game_version_id = ${vs}
+             ORDER BY name`,
+          )
+          .all(),
+        db
+          .prepare(
+            `SELECT * FROM mining_locations
+             WHERE game_version_id = ${vs}
+             ORDER BY system, name`,
+          )
+          .all(),
+        db
+          .prepare(
+            `SELECT d.*, rc.id as rock_composition_id, rc.name as composition_name,
+                    rc.rock_type, rc.composition_json
+             FROM mining_location_deposits d
+             JOIN mining_locations ml ON ml.id = d.mining_location_id
+             LEFT JOIN rock_compositions rc ON rc.uuid = d.composition_guid
+               AND rc.game_version_id = ${vs}
+             WHERE ml.game_version_id = ${vs}
+             ORDER BY d.mining_location_id, d.group_name`,
+          )
+          .all(),
+        db
+          .prepare(
+            `SELECT * FROM mining_quality_distributions
+             WHERE game_version_id = ${vs}`,
+          )
+          .all(),
+        db
+          .prepare(
+            `SELECT * FROM mining_clustering_presets
+             WHERE game_version_id = ${vs}
+             ORDER BY name`,
+          )
+          .all(),
+        db
+          .prepare(
+            `SELECT * FROM mining_clustering_params
+             ORDER BY mining_clustering_preset_id, relative_probability DESC`,
+          )
+          .all(),
+        db
+          .prepare(
+            `SELECT * FROM mining_lasers
+             WHERE game_version_id = ${vs}
+             ORDER BY size, name`,
+          )
+          .all(),
+        db
+          .prepare(
+            `SELECT * FROM mining_modules
+             WHERE game_version_id = ${vs}
+             ORDER BY type, size, name`,
+          )
+          .all(),
+        db
+          .prepare(
+            `SELECT * FROM mining_gadgets
+             WHERE game_version_id = ${vs}
              ORDER BY name`,
           )
           .all(),
       ])
 
+      // Nest clustering params into their parent presets
+      const paramsByPreset = new Map<number, typeof clusteringParams.results>()
+      for (const p of clusteringParams.results) {
+        const pid = p.mining_clustering_preset_id as number
+        if (!paramsByPreset.has(pid)) paramsByPreset.set(pid, [])
+        paramsByPreset.get(pid)!.push(p)
+      }
+      const presetsWithParams = clusteringPresets.results.map((preset) => ({
+        ...preset,
+        params: paramsByPreset.get(preset.id as number) || [],
+      }))
+
       return {
         elements: elements.results,
         compositions: compositions.results,
         refining: refining.results,
+        locations: locations.results,
+        deposits: deposits.results,
+        quality_distributions: qualityDistributions.results,
+        clustering_presets: presetsWithParams,
+        lasers: lasers.results,
+        modules: modules.results,
+        gadgets: gadgets.results,
       }
     })
   })

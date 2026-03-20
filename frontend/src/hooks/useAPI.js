@@ -95,6 +95,10 @@ export function useCrafting() {
   return useAPI('/gamedata/crafting')
 }
 
+export function useMining() {
+  return useAPI('/gamedata/mining')
+}
+
 export function useWeaponRacks() {
   return useAPI('/gamedata/weapon-racks')
 }

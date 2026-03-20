@@ -46,7 +46,10 @@ const PaintBrowser = lazy(() => import('./pages/PaintBrowser'))
 const ArmorSetDetail = lazy(() => import('./pages/ArmorSetDetail'))
 const Shops = lazy(() => import('./pages/Shops'))
 const TradeCommodities = lazy(() => import('./pages/TradeCommodities'))
-const MiningGuide = lazy(() => import('./pages/MiningGuide'))
+const Mining = lazy(() => import('./pages/Mining'))
+const MiningElementDetail = lazy(() => import('./pages/Mining/ElementDetail'))
+const MiningLocationDetail = lazy(() => import('./pages/Mining/LocationDetail'))
+const MiningEquipmentDetail = lazy(() => import('./pages/Mining/EquipmentDetail'))
 const Crafting = lazy(() => import('./pages/Crafting'))
 const BlueprintDetail = lazy(() => import('./pages/Crafting/BlueprintDetail'))
 const Careers = lazy(() => import('./pages/Careers'))
@@ -650,7 +653,10 @@ export default function App() {
                       <Route path="/contracts" element={<RequireAuth><Contracts /></RequireAuth>} />
                       <Route path="/shops" element={<RequireAuth><Shops /></RequireAuth>} />
                       <Route path="/trade" element={<RequireAuth><TradeCommodities /></RequireAuth>} />
-                      <Route path="/mining" element={<RequireAuth><MiningGuide /></RequireAuth>} />
+                      <Route path="/mining" element={<RequireAuth><Mining /></RequireAuth>} />
+                      <Route path="/mining/element/:id" element={<RequireAuth><MiningElementDetail /></RequireAuth>} />
+                      <Route path="/mining/location/:id" element={<RequireAuth><MiningLocationDetail /></RequireAuth>} />
+                      <Route path="/mining/:type/:id" element={<RequireAuth><MiningEquipmentDetail /></RequireAuth>} />
                       <Route path="/crafting" element={<RequireAuth><Suspense fallback={<LoadingState fullScreen />}><Crafting /></Suspense></RequireAuth>} />
                       <Route path="/crafting/:id" element={<RequireAuth><Suspense fallback={<LoadingState fullScreen />}><BlueprintDetail /></Suspense></RequireAuth>} />
                       <Route path="/careers" element={<RequireAuth><Careers /></RequireAuth>} />
