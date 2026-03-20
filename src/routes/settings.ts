@@ -150,6 +150,7 @@ export function settingsRoutes() {
       fontPreference: z.string().max(200).optional(),
       adminPreviewPatch: z.string().max(100).nullable().optional(),
       sync_consent: z.string().max(100).nullable().optional(),
+      preferredGameVersion: z.string().max(100).nullable().optional(),
     }).strict()),
     async (c) => {
     const db = c.env.DB;

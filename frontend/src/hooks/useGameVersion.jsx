@@ -1,4 +1,6 @@
-import React, { createContext, useContext, useState, useEffect, useCallback, useMemo } from 'react'
+import React, { createContext, useContext, useState, useEffect, useCallback, useMemo, useRef } from 'react'
+import { useSession } from '../lib/auth-client'
+import { usePreferences, setPreferences } from './useAPI'
 import { formatVersionLabel } from '../lib/gameVersion'
 
 const GameVersionContext = createContext({
@@ -14,11 +16,38 @@ const GameVersionContext = createContext({
 const STORAGE_KEY = 'sc-bridge-active-version'
 
 export function GameVersionProvider({ children }) {
+  const { data: session } = useSession()
+  const isLoggedIn = !!session?.user
+  const { data: prefs, loading: prefsLoading } = usePreferences({ skip: !isLoggedIn })
+
   const [versions, setVersions] = useState([])
   const [loading, setLoading] = useState(true)
   const [userSelectedCode, setUserSelectedCode] = useState(() => {
     try { return localStorage.getItem(STORAGE_KEY) || null } catch { return null }
   })
+
+  // Track whether we've already synced from API to avoid re-triggering
+  const hasSyncedFromAPI = useRef(false)
+
+  // Sync from API preference on initial load (logged-in users only)
+  useEffect(() => {
+    if (prefsLoading || !isLoggedIn || hasSyncedFromAPI.current) return
+    hasSyncedFromAPI.current = true
+
+    const apiVersion = prefs?.preferredGameVersion || null
+    const localVersion = (() => {
+      try { return localStorage.getItem(STORAGE_KEY) || null } catch { return null }
+    })()
+
+    if (apiVersion !== localVersion) {
+      // API disagrees with localStorage — sync localStorage and reload
+      try {
+        if (apiVersion) localStorage.setItem(STORAGE_KEY, apiVersion)
+        else localStorage.removeItem(STORAGE_KEY)
+      } catch {}
+      window.location.reload()
+    }
+  }, [prefs, prefsLoading, isLoggedIn])
 
   useEffect(() => {
     fetch('/api/patches')
@@ -46,16 +75,22 @@ export function GameVersionProvider({ children }) {
   const isPreview = !!validUserSelection && validUserSelection.code !== defaultVersion?.code
 
   const setActiveVersion = useCallback((code) => {
+    const newCode = code && code !== defaultVersion?.code ? code : null
+
+    // Update localStorage synchronously (for withVersionParam in useAPI.js)
     try {
-      if (code && code !== defaultVersion?.code) {
-        localStorage.setItem(STORAGE_KEY, code)
-      } else {
-        localStorage.removeItem(STORAGE_KEY)
-      }
-    } catch { /* localStorage unavailable */ }
+      if (newCode) localStorage.setItem(STORAGE_KEY, newCode)
+      else localStorage.removeItem(STORAGE_KEY)
+    } catch {}
+
+    // Persist to API for logged-in users (fire and forget)
+    if (isLoggedIn) {
+      setPreferences({ preferredGameVersion: newCode }).catch(() => {})
+    }
+
     // Reload to re-fetch all data with the new version param
     window.location.reload()
-  }, [defaultVersion])
+  }, [defaultVersion, isLoggedIn])
 
   const value = useMemo(() => ({
     versions,
