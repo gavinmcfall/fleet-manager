@@ -29,43 +29,51 @@ function CompositionCard({ composition }) {
   }, [composition.composition_json])
 
   const ROCK_TYPE_STYLES = {
-    asteroid: 'bg-violet-900/40 text-violet-300 border-violet-700/50',
-    surface:  'bg-emerald-900/40 text-emerald-300 border-emerald-700/50',
-    unknown:  'bg-gray-700/60 text-gray-400 border-gray-600/50',
+    asteroid: { badge: 'bg-violet-900/40 text-violet-300 border-violet-700/50', label: 'Asteroid' },
+    surface:  { badge: 'bg-emerald-900/40 text-emerald-300 border-emerald-700/50', label: 'Surface' },
+    fps:      { badge: 'bg-amber-900/40 text-amber-300 border-amber-700/50', label: 'Hand Mining' },
   }
-  const rockStyle = ROCK_TYPE_STYLES[composition.rock_type] || ROCK_TYPE_STYLES.unknown
+  const rockInfo = ROCK_TYPE_STYLES[composition.rock_type] || { badge: 'bg-gray-700/60 text-gray-400 border-gray-600/50', label: composition.rock_type }
+
+  // Use primary element as the card title (what players care about)
+  const primaryElement = elements.length > 0 ? friendlyElementName(elements[0].element) : composition.name
 
   return (
     <div className="bg-white/[0.03] backdrop-blur-md border border-white/[0.06] rounded-xl p-4 shadow-lg shadow-black/20 space-y-3">
       <div className="flex items-start justify-between gap-2">
-        <h3 className="font-display font-semibold text-white text-sm leading-tight">{composition.name}</h3>
-        {composition.rock_type && (
-          <span className={`text-[10px] font-display uppercase tracking-wide px-2 py-0.5 rounded border shrink-0 ${rockStyle}`}>
-            {composition.rock_type}
-          </span>
-        )}
-      </div>
-      <div className="flex items-center gap-3 text-xs font-mono text-gray-400">
-        <span>Min elements: {composition.min_elements ?? '--'}</span>
+        <div>
+          <h3 className="font-display font-semibold text-white text-sm leading-tight">{primaryElement}</h3>
+          <p className="text-[10px] text-gray-600 mt-0.5">{composition.name}</p>
+        </div>
+        <span className={`text-[10px] font-display uppercase tracking-wide px-2 py-0.5 rounded border shrink-0 ${rockInfo.badge}`}>
+          {rockInfo.label}
+        </span>
       </div>
       {elements.length > 0 && (
         <div className="space-y-1.5 pt-1 border-t border-white/[0.04]">
-          <span className="text-[10px] font-display uppercase tracking-wider text-gray-500">Composition</span>
-          {elements.map((el, i) => (
-            <div key={el.element || i} className="flex items-center justify-between text-xs gap-2">
-              <span className="font-mono text-gray-300 truncate">{friendlyElementName(el.element)}</span>
-              <div className="flex items-center gap-2 shrink-0">
-                <span className="font-mono text-gray-500">
-                  {el.minPct != null ? `${(el.minPct * 100).toFixed(1)}–${(el.maxPct * 100).toFixed(1)}%` : '--'}
-                </span>
-                {el.probability != null && (
-                  <span className="font-mono text-gray-600 text-[10px]">
-                    ({(el.probability * 100).toFixed(0)}% chance)
-                  </span>
-                )}
+          {elements.map((el, i) => {
+            const pct = el.maxPct != null ? `${(el.minPct * 100).toFixed(1)}–${(el.maxPct * 100).toFixed(1)}%` : null
+            return (
+              <div key={el.element || i} className="flex items-center justify-between text-xs gap-2">
+                <span className="text-gray-300 truncate">{friendlyElementName(el.element)}</span>
+                <div className="flex items-center gap-2 shrink-0">
+                  {pct && (
+                    <div className="flex items-center gap-1">
+                      <div className="w-16 h-1.5 bg-white/[0.06] rounded-full overflow-hidden">
+                        <div className="h-full bg-sc-accent/50 rounded-full" style={{ width: `${(el.maxPct || 0) * 100}%` }} />
+                      </div>
+                      <span className="font-mono text-gray-500 text-[11px]">{pct}</span>
+                    </div>
+                  )}
+                  {el.probability != null && el.probability < 1 && (
+                    <span className="font-mono text-gray-600 text-[10px]">
+                      {(el.probability * 100).toFixed(0)}%
+                    </span>
+                  )}
+                </div>
               </div>
-            </div>
-          ))}
+            )
+          })}
         </div>
       )}
     </div>
