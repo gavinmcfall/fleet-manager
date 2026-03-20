@@ -298,10 +298,10 @@ export default function RockCalculator({ data }) {
     <div className="space-y-6">
       {/* Two-column layout: Setup | Results */}
       <div className="grid grid-cols-1 lg:grid-cols-[1fr_1fr] gap-6">
-        {/* LEFT: Setup */}
+        {/* LEFT: Setup — descending z-index so dropdowns overlay cards below */}
         <div className="space-y-5">
           {/* Ship selector */}
-          <div className="bg-white/[0.03] backdrop-blur-md border border-white/[0.06] rounded-xl p-5">
+          <div className="relative z-40 bg-white/[0.03] border border-white/[0.06] rounded-xl p-5">
             <h3 className="text-xs uppercase tracking-wider text-gray-400 mb-3 font-display">Ship / Platform</h3>
             <div className="flex flex-wrap gap-2">
               {SHIP_PRESETS.map((preset, i) => (
@@ -324,7 +324,7 @@ export default function RockCalculator({ data }) {
           {ship.slots.map((slot, i) => {
             const laser = laserIds[i]
             return (
-              <div key={i} className="bg-white/[0.03] backdrop-blur-md border border-white/[0.06] rounded-xl p-5 space-y-3">
+              <div key={i} className="relative z-30 bg-white/[0.03] border border-white/[0.06] rounded-xl p-5 space-y-3">
                 <CustomSelect
                   label={slot.label}
                   value={laser ? String(laser.id) : ''}
@@ -357,7 +357,7 @@ export default function RockCalculator({ data }) {
           })}
 
           {/* Gadget */}
-          <div className="bg-white/[0.03] backdrop-blur-md border border-white/[0.06] rounded-xl p-5">
+          <div className="relative z-20 bg-white/[0.03] border border-white/[0.06] rounded-xl p-5">
             <CustomSelect
               label="Gadget (consumable)"
               value={gadget ? String(gadget.id) : ''}
@@ -371,7 +371,7 @@ export default function RockCalculator({ data }) {
           </div>
 
           {/* Rock selector */}
-          <div className="bg-white/[0.03] backdrop-blur-md border border-white/[0.06] rounded-xl p-5">
+          <div className="relative z-10 bg-white/[0.03] border border-white/[0.06] rounded-xl p-5">
             <CustomSelect
               label="Rock Composition"
               value={selectedCompId}
