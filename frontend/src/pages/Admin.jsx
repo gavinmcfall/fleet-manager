@@ -1,9 +1,8 @@
 import React, { useState, useEffect, useRef } from 'react'
-import { RefreshCw, Globe, Play, AlertCircle, Ticket, Copy, Check, Database, Trash2 } from 'lucide-react'
+import { RefreshCw, Globe, Play, AlertCircle, Ticket, Copy, Check, Trash2 } from 'lucide-react'
 import { useSyncStatus, triggerRSISync, triggerFullSync, setPreferences } from '../hooks/useAPI'
 import useTimezone from '../hooks/useTimezone'
-import useGameVersion from '../hooks/useGameVersion'
-import { formatVersionLabel, formatVersionFull } from '../lib/gameVersion'
+
 import { formatDate } from '../lib/dates'
 import PageHeader from '../components/PageHeader'
 import LoadingState from '../components/LoadingState'
@@ -125,80 +124,6 @@ function InvitePanel() {
   )
 }
 
-function DataVersionsPanel() {
-  const { versions, defaultVersion } = useGameVersion()
-  const [selectedDefault, setSelectedDefault] = useState('')
-  const [saving, setSaving] = useState(false)
-  const [error, setError] = useState(null)
-
-  useEffect(() => {
-    if (defaultVersion) setSelectedDefault(defaultVersion.code)
-  }, [defaultVersion])
-
-  const handleSetDefault = async () => {
-    if (!selectedDefault) return
-    setSaving(true)
-    setError(null)
-    try {
-      const res = await fetch('/api/admin/versions/default', {
-        method: 'PUT',
-        headers: { 'Content-Type': 'application/json' },
-        credentials: 'same-origin',
-        body: JSON.stringify({ code: selectedDefault }),
-      })
-      if (!res.ok) {
-        const err = await res.json().catch(() => ({}))
-        throw new Error(err.error || 'Failed to set default version')
-      }
-      window.location.reload()
-    } catch (err) {
-      setError(err.message)
-    } finally {
-      setSaving(false)
-    }
-  }
-
-  if (versions.length === 0) return null
-
-  // Only show LIVE versions for default selection
-  const liveVersions = versions.filter(v => v.channel === 'LIVE' || v.is_default)
-
-  return (
-    <PanelSection title="Default LIVE Version" icon={Database}>
-      <div className="p-4 space-y-3">
-        {error && (
-          <div className="flex items-center gap-2 p-2 bg-sc-danger/10 border border-sc-danger/30 rounded text-sc-danger text-xs">
-            <AlertCircle className="w-3.5 h-3.5 shrink-0" />
-            <span>{error}</span>
-          </div>
-        )}
-        <p className="text-xs text-gray-500">
-          Sets the default game version for all users. Users can switch to PTU/EPTU versions via the sidebar version selector.
-        </p>
-        <div className="flex items-center gap-2">
-          <select
-            value={selectedDefault}
-            onChange={(e) => setSelectedDefault(e.target.value)}
-            className="flex-1 px-3 py-2 bg-sc-darker border border-sc-border rounded text-sm text-gray-200 focus:outline-none focus:ring-1 focus:ring-sc-accent/50"
-          >
-            {liveVersions.map((v) => (
-              <option key={v.code} value={v.code}>
-                {formatVersionFull(v.code, v.channel)}{v.is_default ? ' (current)' : ''}
-              </option>
-            ))}
-          </select>
-          <button
-            onClick={handleSetDefault}
-            disabled={saving || selectedDefault === defaultVersion?.code}
-            className="btn-primary text-sm px-3 py-2 disabled:opacity-50"
-          >
-            {saving ? 'Saving...' : 'Set Default'}
-          </button>
-        </div>
-      </div>
-    </PanelSection>
-  )
-}
 
 const CACHE_PREFIXES = [
   { value: '',               label: 'All Cache' },
@@ -330,9 +255,6 @@ export default function Admin() {
           <span>{triggerError}</span>
         </div>
       )}
-
-      {/* Data Versions */}
-      <DataVersionsPanel />
 
       {/* KV Cache */}
       <CachePurgePanel />

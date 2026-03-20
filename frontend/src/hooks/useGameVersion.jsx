@@ -39,13 +39,13 @@ export function GameVersionProvider({ children }) {
       try { return localStorage.getItem(STORAGE_KEY) || null } catch { return null }
     })()
 
-    if (apiVersion !== localVersion) {
-      // API disagrees with localStorage — sync localStorage and reload
-      try {
-        if (apiVersion) localStorage.setItem(STORAGE_KEY, apiVersion)
-        else localStorage.removeItem(STORAGE_KEY)
-      } catch {}
+    if (apiVersion && apiVersion !== localVersion) {
+      // API has a preference that differs from localStorage — API wins
+      try { localStorage.setItem(STORAGE_KEY, apiVersion) } catch {}
       window.location.reload()
+    } else if (!apiVersion && localVersion && prefs) {
+      // API has no preference but localStorage does — migrate localStorage to API
+      setPreferences({ preferredGameVersion: localVersion }).catch(() => {})
     }
   }, [prefs, prefsLoading, isLoggedIn])
 
