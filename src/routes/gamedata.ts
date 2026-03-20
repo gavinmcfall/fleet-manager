@@ -226,6 +226,14 @@ export function gamedataRoutes<E extends HonoEnv>() {
     const versionId = await resolveVersionId(db, c.req.query("patch"))
     return cachedJson(c, `gd:mining:${versionId}`, async () => {
       const vs = versionSub(versionId)
+      // 4.7-only tables (locations, equipment) may not have data for the
+      // resolved version (e.g. user on LIVE 4.6). Fall back to latest version
+      // that has mining location data so the page always shows content.
+      const mvs = `COALESCE(
+        (SELECT game_version_id FROM mining_locations WHERE game_version_id = ${vs} LIMIT 1),
+        (SELECT game_version_id FROM mining_locations ORDER BY game_version_id DESC LIMIT 1),
+        ${vs}
+      )`
       const [
         elements,
         compositions,
@@ -265,7 +273,7 @@ export function gamedataRoutes<E extends HonoEnv>() {
         db
           .prepare(
             `SELECT * FROM mining_locations
-             WHERE game_version_id = ${vs}
+             WHERE game_version_id = ${mvs}
              ORDER BY system, name`,
           )
           .all(),
@@ -276,48 +284,50 @@ export function gamedataRoutes<E extends HonoEnv>() {
              FROM mining_location_deposits d
              JOIN mining_locations ml ON ml.id = d.mining_location_id
              LEFT JOIN rock_compositions rc ON rc.uuid = d.composition_guid
-               AND rc.game_version_id = ${vs}
-             WHERE ml.game_version_id = ${vs}
+               AND rc.game_version_id = ${mvs}
+             WHERE ml.game_version_id = ${mvs}
              ORDER BY d.mining_location_id, d.group_name`,
           )
           .all(),
         db
           .prepare(
             `SELECT * FROM mining_quality_distributions
-             WHERE game_version_id = ${vs}`,
+             WHERE game_version_id = ${mvs}`,
           )
           .all(),
         db
           .prepare(
             `SELECT * FROM mining_clustering_presets
-             WHERE game_version_id = ${vs}
+             WHERE game_version_id = ${mvs}
              ORDER BY name`,
           )
           .all(),
         db
           .prepare(
-            `SELECT * FROM mining_clustering_params
-             ORDER BY mining_clustering_preset_id, relative_probability DESC`,
+            `SELECT mcp.* FROM mining_clustering_params mcp
+             JOIN mining_clustering_presets p ON p.id = mcp.mining_clustering_preset_id
+             WHERE p.game_version_id = ${mvs}
+             ORDER BY mcp.mining_clustering_preset_id, mcp.relative_probability DESC`,
           )
           .all(),
         db
           .prepare(
             `SELECT * FROM mining_lasers
-             WHERE game_version_id = ${vs}
+             WHERE game_version_id = ${mvs}
              ORDER BY size, name`,
           )
           .all(),
         db
           .prepare(
             `SELECT * FROM mining_modules
-             WHERE game_version_id = ${vs}
+             WHERE game_version_id = ${mvs}
              ORDER BY type, size, name`,
           )
           .all(),
         db
           .prepare(
             `SELECT * FROM mining_gadgets
-             WHERE game_version_id = ${vs}
+             WHERE game_version_id = ${mvs}
              ORDER BY name`,
           )
           .all(),
