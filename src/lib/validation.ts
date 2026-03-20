@@ -96,9 +96,9 @@ const NamedShipSchema = z.object({
 const RsiPledgeSchema = z.object({
   id: z.number(),
   name: z.string().max(STR.short).default(""),
-  value: z.string().max(100).default("$0.00"),
+  value: z.string().max(STR.medium).default("$0.00"),
   valueCents: z.number().int().min(0).default(0),
-  configurationValue: z.string().max(100).optional().default(""),
+  configurationValue: z.string().max(STR.medium).optional().default(""),
   currency: z.string().max(100).optional().default(""),
   date: z.string().max(50).default(""),
   isUpgraded: z.boolean().default(false),
@@ -120,7 +120,7 @@ const RsiPledgeSchema = z.object({
 const RsiBuyBackPledgeSchema = z.object({
   id: z.number(),
   name: z.string().max(STR.short).default(""),
-  value: z.string().max(100).default("$0.00"),
+  value: z.string().max(STR.medium).default("$0.00"),
   value_cents: z.number().int().min(0).max(1_000_000_00).optional(),
   date: z.string().max(50).default(""),
   date_parsed: z.string().max(50).optional(),
@@ -134,7 +134,7 @@ const RsiUpgradeSchema = z.object({
   pledge_id: z.number(),
   name: z.string().max(STR.short).default(""),
   applied_at: z.string().max(50).default(""),
-  new_value: z.string().max(100).default(""),
+  new_value: z.string().max(STR.medium).default(""),
 }).passthrough();
 
 /** RSI account info — lenient since RSI dashboard data varies, but capped */
