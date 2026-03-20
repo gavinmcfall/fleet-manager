@@ -75,7 +75,7 @@ const authNavItems = [
       { to: '/npc-loadouts', icon: Users, label: 'NPC Loadouts' },
     ],
   },
-  { to: '/crafting', icon: FlaskConical, label: 'Crafting' },
+  { to: '/crafting', icon: FlaskConical, label: 'Crafting', minVersion: '4.7' },
   {
     group: 'My Fleet',
     icon: Rocket,
@@ -118,9 +118,18 @@ const superAdminNavItems = [
   { to: '/users', icon: Users, label: 'Users' },
 ]
 
-function getNavItems(role, isLoggedIn) {
+function meetsMinVersion(minVersion, activeCode) {
+  if (!minVersion) return true
+  if (!activeCode) return true // show by default if version unknown
+  // Compare major.minor from "4.7.0-ptu.12345" against "4.7"
+  const match = activeCode.match(/^(\d+\.\d+)/)
+  if (!match) return true
+  return match[1] >= minVersion
+}
+
+function getNavItems(role, isLoggedIn, activeCode) {
   if (!isLoggedIn) return [...publicNavItems]
-  const items = [...authNavItems]
+  const items = [...authNavItems].filter(item => meetsMinVersion(item.minVersion, activeCode))
   if (role === 'admin' || role === 'super_admin') {
     items.push(...adminNavItems)
   }
@@ -271,7 +280,8 @@ function SidebarContent({ expandedMenu, setExpandedMenu, onNavClick }) {
   const { data: session } = useSession()
   const isLoggedIn = !!session?.user
   const userRole = session?.user?.role || 'user'
-  const navItems = getNavItems(userRole, isLoggedIn)
+  const { activeCode } = useGameVersion()
+  const navItems = getNavItems(userRole, isLoggedIn, activeCode)
 
   const handleSignOut = async () => {
     await signOut()
