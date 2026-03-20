@@ -127,6 +127,7 @@ export default function Mining() {
   const search = searchParams.get('q') || ''
   const systemFilter = searchParams.get('system') || ''
   const typeFilter = searchParams.get('type') || ''
+  const sizeFilter = searchParams.get('size') || ''
 
   const setFilter = (updates) => {
     setSearchParams(prev => {
@@ -233,19 +234,26 @@ export default function Mining() {
     if (!typeFilter || typeFilter === 'laser') items.push(...lasers.map(l => ({ ...l, _type: 'laser' })))
     if (!typeFilter || typeFilter === 'module') items.push(...modules.map(m => ({ ...m, _type: 'module' })))
     if (!typeFilter || typeFilter === 'gadget') items.push(...gadgets.map(g => ({ ...g, _type: 'gadget' })))
+    if (sizeFilter) items = items.filter(i => i.size != null && String(i.size) === sizeFilter)
     if (search.trim()) {
       const q = search.toLowerCase()
       items = items.filter(i => i.name.toLowerCase().includes(q) || (i.manufacturer || '').toLowerCase().includes(q))
     }
     return items
-  }, [lasers, modules, gadgets, typeFilter, search])
+  }, [lasers, modules, gadgets, typeFilter, sizeFilter, search])
 
   const filteredCompositions = useMemo(() => {
-    if (!search.trim()) return compositions
-    const q = search.toLowerCase()
-    return compositions.filter(c =>
-      c.name.toLowerCase().includes(q) || (c.rock_type || '').toLowerCase().includes(q)
+    // Filter out unknown/salvage compositions that have no useful data
+    let items = compositions.filter(c =>
+      c.rock_type && c.rock_type !== 'unknown' && !c.name.toLowerCase().includes('salvage')
     )
+    if (search.trim()) {
+      const q = search.toLowerCase()
+      items = items.filter(c =>
+        c.name.toLowerCase().includes(q) || (c.rock_type || '').toLowerCase().includes(q)
+      )
+    }
+    return items
   }, [compositions, search])
 
   const filteredRefining = useMemo(() => {
@@ -325,6 +333,7 @@ export default function Mining() {
           tab={tab}
           systemFilter={systemFilter}
           typeFilter={typeFilter}
+          sizeFilter={sizeFilter}
           onFilterChange={setFilter}
         />
       )}

@@ -30,7 +30,7 @@ function ActiveTag({ label, onRemove }) {
 
 const accentPill = { bg: 'bg-sc-accent/15', text: 'text-sc-accent', border: 'border-sc-accent/30' }
 
-export default function FilterBar({ search, onSearchChange, tab, systemFilter, typeFilter, onFilterChange }) {
+export default function FilterBar({ search, onSearchChange, tab, systemFilter, typeFilter, sizeFilter, onFilterChange }) {
   // Show system pills for locations tab and ores tab
   const showSystemPills = tab === 'locations' || tab === 'ores'
   // Show type pills based on tab
@@ -132,14 +132,36 @@ export default function FilterBar({ search, onSearchChange, tab, systemFilter, t
         </div>
       )}
 
+      {/* Size pills (equipment only) */}
+      {tab === 'equipment' && (
+        <div className="flex flex-wrap gap-2">
+          <TypePill
+            label="All Sizes"
+            active={!sizeFilter && sizeFilter !== '0'}
+            color={accentPill}
+            onClick={() => onFilterChange({ size: '' })}
+          />
+          {['0', '1', '2'].map(s => (
+            <TypePill
+              key={s}
+              label={`Size ${s}`}
+              active={sizeFilter === s}
+              color={{ bg: 'bg-gray-500/15', text: 'text-gray-400', border: 'border-gray-500/30' }}
+              onClick={() => onFilterChange({ size: sizeFilter === s ? '' : s })}
+            />
+          ))}
+        </div>
+      )}
+
       {/* Active filter tags */}
-      {hasActiveFilters && (
+      {(hasActiveFilters || sizeFilter) && (
         <div className="flex flex-wrap items-center gap-2">
           <span className="text-xs text-gray-600">Active:</span>
           {systemFilter && <ActiveTag label={systemFilter} onRemove={() => onFilterChange({ system: '' })} />}
           {typeFilter && <ActiveTag label={typeFilter} onRemove={() => onFilterChange({ type: '' })} />}
+          {sizeFilter && <ActiveTag label={`Size ${sizeFilter}`} onRemove={() => onFilterChange({ size: '' })} />}
           <button
-            onClick={() => onFilterChange({ system: '', type: '' })}
+            onClick={() => onFilterChange({ system: '', type: '', size: '' })}
             className="text-xs text-gray-500 hover:text-gray-300 transition-colors"
           >
             Clear all

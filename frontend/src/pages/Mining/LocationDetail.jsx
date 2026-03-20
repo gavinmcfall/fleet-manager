@@ -5,7 +5,7 @@ import { useMining } from '../../hooks/useAPI'
 import LoadingState from '../../components/LoadingState'
 import ErrorState from '../../components/ErrorState'
 import QualityChart from './QualityChart'
-import { humanizeLocationName, SYSTEM_COLORS, LOCATION_TYPE_COLORS, friendlyElementName } from './miningUtils'
+import { humanizeLocationName, SYSTEM_COLORS, LOCATION_TYPE_COLORS, friendlyElementName, cleanDepositName, extractDepositTier, ROCK_TIER_INFO } from './miningUtils'
 
 export default function LocationDetail() {
   const { id } = useParams()
@@ -17,10 +17,15 @@ export default function LocationDetail() {
     return data.locations.find(l => String(l.id) === id)
   }, [data, id])
 
-  // Get deposits for this location
+  // Get deposits for this location — filter out plant/salvage entries
   const deposits = useMemo(() => {
     if (!location || !data?.deposits) return []
-    return data.deposits.filter(d => d.mining_location_id === location.id)
+    return data.deposits
+      .filter(d => d.mining_location_id === location.id)
+      .filter(d => {
+        const guid = d.composition_guid || ''
+        return !guid.startsWith('plant_') && !guid.startsWith('salvage_') && guid !== ''
+      })
   }, [location, data])
 
   // Group deposits by group_name
@@ -158,33 +163,28 @@ export default function LocationDetail() {
               <table className="w-full text-sm">
                 <thead>
                   <tr className="border-b border-white/[0.08] bg-white/[0.02]">
-                    <th className="text-left text-[10px] uppercase tracking-wider text-gray-500 font-medium px-4 py-2">Composition</th>
-                    <th className="text-left text-[10px] uppercase tracking-wider text-gray-500 font-medium px-4 py-2">Rock Type</th>
-                    <th className="text-left text-[10px] uppercase tracking-wider text-gray-500 font-medium px-4 py-2">Elements</th>
+                    <th className="text-left text-[10px] uppercase tracking-wider text-gray-500 font-medium px-4 py-2">Resource</th>
+                    <th className="text-left text-[10px] uppercase tracking-wider text-gray-500 font-medium px-4 py-2">Tier</th>
                     <th className="text-right text-[10px] uppercase tracking-wider text-gray-500 font-medium px-4 py-2">Rel. Prob</th>
                   </tr>
                 </thead>
                 <tbody>
                   {group.deposits.map((dep, i) => {
-                    let elements = []
-                    try { elements = dep.composition_json ? JSON.parse(dep.composition_json) : [] } catch { /* skip */ }
+                    const name = dep.composition_name || cleanDepositName(dep.composition_guid)
+                    const tier = extractDepositTier(dep.composition_guid)
+                    const tierInfo = tier ? (ROCK_TIER_INFO[tier] || null) : null
 
                     return (
                       <tr key={i} className="border-b border-white/[0.04] last:border-0 hover:bg-white/[0.02]">
-                        <td className="px-4 py-2 text-xs text-gray-300">{dep.composition_name || '—'}</td>
-                        <td className="px-4 py-2 text-xs text-gray-400">{dep.rock_type || '—'}</td>
+                        <td className="px-4 py-2 text-xs text-gray-300">{name}</td>
                         <td className="px-4 py-2">
-                          <div className="flex flex-wrap gap-1">
-                            {elements.slice(0, 4).map((el, j) => (
-                              <span key={j} className="text-[10px] px-1.5 py-0.5 rounded bg-white/[0.04] text-gray-400 border border-white/[0.06]">
-                                {friendlyElementName(el.element)}
-                                {el.maxPct != null && ` ${(el.maxPct * 100).toFixed(0)}%`}
-                              </span>
-                            ))}
-                            {elements.length > 4 && (
-                              <span className="text-[10px] text-gray-600">+{elements.length - 4}</span>
-                            )}
-                          </div>
+                          {tierInfo ? (
+                            <span className={`text-[10px] px-1.5 py-0.5 rounded ${tierInfo.bg} ${tierInfo.color} ${tierInfo.border} border`}>
+                              {tier}
+                            </span>
+                          ) : (
+                            <span className="text-xs text-gray-600">—</span>
+                          )}
                         </td>
                         <td className="px-4 py-2 text-xs text-gray-400 text-right font-mono">
                           {(dep.relative_probability * 100).toFixed(0)}%

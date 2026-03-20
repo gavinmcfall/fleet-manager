@@ -79,6 +79,24 @@ export function cleanElementName(name) {
   return name.replace(/^Minableelement\s+(?:Fps|Ship|Groundvehicle)\s+/i, '')
 }
 
+// Convert deposit composition_guid tags like "mining_common_iron" to readable names
+export function cleanDepositName(guid) {
+  if (!guid) return '--'
+  return guid
+    .replace(/^(mining|fpsmining|groundvehiclemining|salvage|plant)_/, '')
+    .replace(/^(common|uncommon|rare|epic|legendary)_/, '')
+    .replace(/_/g, ' ')
+    .replace(/\b\w/g, (c) => c.toUpperCase())
+}
+
+// Extract tier from deposit composition_guid like "mining_common_iron" → "Common"
+export function extractDepositTier(guid) {
+  if (!guid) return null
+  const match = guid.match(/^(?:mining|fpsmining|groundvehiclemining)_(common|uncommon|rare|epic|legendary)_/)
+  if (match) return match[1].charAt(0).toUpperCase() + match[1].slice(1)
+  return null
+}
+
 export function friendlyElementName(className) {
   if (!className) return '--'
   return className
