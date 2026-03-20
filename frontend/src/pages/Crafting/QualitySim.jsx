@@ -1,11 +1,24 @@
 import React, { useState, useMemo } from 'react'
 import { Gem } from 'lucide-react'
+import { HelpCircle } from 'lucide-react'
 import {
   interpolateModifier, multiplierToImprovement, formatImprovementWithWord,
-  getStatLabel,
+  getStatLabel, getStatDescription,
   resourceColor, resourceBgColor, resourceBorderColor,
   computeActualValue, formatActualValue, computeDPS,
 } from './craftingUtils'
+
+function Tooltip({ text, children }) {
+  return (
+    <span className="relative group/tip inline-flex items-center gap-1 cursor-help">
+      {children}
+      <span className="absolute bottom-full left-0 mb-2 hidden group-hover/tip:block px-3 py-2 rounded-lg bg-gray-900/95 border border-white/[0.1] shadow-xl shadow-black/40 backdrop-blur-sm text-xs text-gray-300 font-normal normal-case tracking-normal whitespace-normal max-w-[240px] z-20 leading-relaxed">
+        {text}
+        <span className="absolute -bottom-1 left-4 w-2 h-2 bg-gray-900/95 border-b border-r border-white/[0.1] rotate-45" />
+      </span>
+    </span>
+  )
+}
 
 function QualitySlider({ slot, value, onChange }) {
   const pct = (value / 1000) * 100
@@ -120,6 +133,7 @@ export default function QualitySim({ blueprint }) {
     if (stat.actualValues) {
       rows.push({
         label: getStatLabel(stat.key, stat.name),
+        _key: stat.key,
         base: `${formatActualValue(stat.actualValues.base, stat.actualValues.decimals)} ${stat.actualValues.unit}`,
         crafted: `${formatActualValue(stat.actualValues.crafted, stat.actualValues.decimals)} ${stat.actualValues.unit}`,
         description: formatDescription(stat.key, stat.improvement),
@@ -139,6 +153,8 @@ export default function QualitySim({ blueprint }) {
       const improvement = ((craftedDPS / baseStats.dps) - 1) * 100
       rows.push({
         label: 'DPS',
+        _key: 'dps',
+        _tooltip: 'Damage per second — calculated from Damage × RPM / 60',
         base: formatActualValue(baseStats.dps, 1),
         crafted: formatActualValue(craftedDPS, 1),
         description: Math.abs(improvement) < 0.05 ? 'no change' : `${improvement > 0 ? '+' : ''}${improvement.toFixed(1)}%`,
@@ -150,24 +166,26 @@ export default function QualitySim({ blueprint }) {
 
   // Unmodified base stats
   if (baseStats?.spread_min != null && baseStats?.spread_max != null) {
-    rows.push({ label: 'Spread', base: `${formatActualValue(baseStats.spread_min, 1)} – ${formatActualValue(baseStats.spread_max, 1)}`, crafted: '', description: '' })
+    rows.push({ label: 'Spread', _tooltip: 'Bullet spread cone — not affected by crafting', base: `${formatActualValue(baseStats.spread_min, 1)} – ${formatActualValue(baseStats.spread_max, 1)}`, crafted: '', description: '' })
   }
   if (baseStats?.effective_range != null) {
-    rows.push({ label: 'Effective Range', base: `${formatActualValue(baseStats.effective_range, 0)} m`, crafted: '', description: '' })
+    rows.push({ label: 'Effective Range', _tooltip: 'Maximum effective distance — not affected by crafting', base: `${formatActualValue(baseStats.effective_range, 0)} m`, crafted: '', description: '' })
   }
   if (baseStats?.projectile_speed != null) {
-    rows.push({ label: 'Projectile Speed', base: `${formatActualValue(baseStats.projectile_speed, 0)} m/s`, crafted: '', description: '' })
+    rows.push({ label: 'Projectile Speed', _tooltip: 'How fast bullets travel — not affected by crafting', base: `${formatActualValue(baseStats.projectile_speed, 0)} m/s`, crafted: '', description: '' })
   }
   if (baseStats?.ammo_capacity != null) {
-    rows.push({ label: 'Ammo', base: `${formatActualValue(baseStats.ammo_capacity, 0)} rds`, crafted: '', description: '' })
+    rows.push({ label: 'Ammo', _tooltip: 'Magazine capacity — not affected by crafting', base: `${formatActualValue(baseStats.ammo_capacity, 0)} rds`, crafted: '', description: '' })
   }
 
-  // Multiplier-only stats (recoil)
+  // Multiplier-only stats (recoil) — no numeric base value, only a multiplier
   for (const stat of statPreview) {
     if (!stat.actualValues) {
       rows.push({
         label: getStatLabel(stat.key, stat.name),
+        _key: stat.key,
         base: 'Base',
+        _baseTooltip: 'This stat has no numeric base value — the game applies it as a multiplier to the weapon\'s internal recoil parameters. "Base" means the unmodified weapon behavior (×1.000).',
         crafted: `×${stat.multiplier.toFixed(3)}`,
         description: formatDescription(stat.key, stat.improvement),
         modified: true,
@@ -234,10 +252,24 @@ export default function QualitySim({ blueprint }) {
           <tbody>
             {rows.map((row, i) => {
               const c = row.colors
+              const statTooltip = row._tooltip || (row._key && getStatDescription(row._key))
               return (
                 <tr key={i} className="border-b border-white/[0.04] last:border-0 hover:bg-white/[0.02] transition-colors">
-                  <td className="px-4 py-2 text-xs text-gray-300 font-medium">{row.label}</td>
-                  <td className="px-4 py-2 text-xs font-mono text-gray-400 tabular-nums">{row.base}</td>
+                  <td className="px-4 py-2 text-xs text-gray-300 font-medium">
+                    {statTooltip ? (
+                      <Tooltip text={statTooltip}>
+                        {row.label}
+                        <HelpCircle className="w-3 h-3 text-gray-600 group-hover/tip:text-sc-accent transition-colors" />
+                      </Tooltip>
+                    ) : row.label}
+                  </td>
+                  <td className="px-4 py-2 text-xs font-mono text-gray-400 tabular-nums">
+                    {row._baseTooltip ? (
+                      <Tooltip text={row._baseTooltip}>
+                        <span className="border-b border-dashed border-gray-600">{row.base}</span>
+                      </Tooltip>
+                    ) : row.base}
+                  </td>
                   <td className="px-4 py-2 text-xs font-mono tabular-nums">
                     {row.crafted ? (
                       <span
