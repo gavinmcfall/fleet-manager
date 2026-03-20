@@ -72,10 +72,10 @@ const authNavItems = [
       { to: '/shops', icon: ShoppingCart, label: 'Shops' },
       { to: '/trade', icon: TrendingUp, label: 'Trade' },
       { to: '/mining', icon: Hammer, label: 'Mining Guide' },
-      { to: '/crafting', icon: FlaskConical, label: 'Crafting' },
       { to: '/npc-loadouts', icon: Users, label: 'NPC Loadouts' },
     ],
   },
+  { to: '/crafting', icon: FlaskConical, label: 'Crafting' },
   {
     group: 'My Fleet',
     icon: Rocket,
