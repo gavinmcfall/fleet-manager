@@ -1,14 +1,59 @@
 # Session Journal
 
 ## Current Focus
-Crafting Materials tab — mining location + quality source data feature complete, awaiting deploy to staging.
+SC Bridge Companion — Wails desktop app with gRPC interceptor, React+Tailwind UI matching crafting page design.
 
 ## What's Next
-1. Deploy to staging and visual check crafting detail Materials tab
-2. Verify resource_locations data populates for all 22 crafting resources
-3. Test quality band probability display and location humanization
+1. System tray integration with SC Bridge logo
+2. Integration test gRPC proxy with local echo server
+3. Live test with Star Citizen client
+4. Settings UI with editable config (currently read-only)
 
 ## Log
+
+### 2026-03-20 18:20 — Completed: Wails desktop app with React+Tailwind UI
+- **Restructured** sc-companion from CLI to Wails v2 desktop app
+- **Go side:** `main.go` (Wails entry, frameless dark window 1280x800), `app.go` (App struct with 7 bound methods: GetStatus, GetConfig, SetDebugMode, GetRecentEvents, GetEventCounts, GetTotalEvents)
+- **Frontend:** React + Vite + Tailwind 4, matching scbridge.app crafting page aesthetic
+  - `TitleBar.jsx` — custom frameless titlebar with SC Bridge logo SVG, window controls
+  - `Dashboard.jsx` — hero with SVG logo, stat cards with HUD corners, data source status
+  - `StatusBar.jsx` — bottom bar with proxy/tailer status, player info, location
+  - `EventFeed.jsx` — live event stream (debug mode only), filter, auto-scroll, source/type coloring
+  - `Settings.jsx` — read-only config display
+- **Design tokens:** sc-darker, sc-dark, sc-panel, sc-border, sc-accent (cyan), sc-accent2, Electrolize/Inter/JetBrains Mono fonts
+- **Dev fallback:** frontend shows placeholder when not running in Wails (`wails dev`)
+- **All builds pass:** Go build, frontend build, 14 grpcproxy tests pass
+- CLI version preserved at `cmd/companion/main.go`
+
+### 2026-03-20 18:05 — Completed: Proto extraction from StarCitizen.exe
+- Ran StarBreaker `proto-set-extract` on PTU 4.7 executable
+- **730KB** FileDescriptorSet (`sc.pb`) with **549 gRPC methods** across 36 services
+- Also extracted 389 .proto files to `protos/` for reference
+- Key services: ledger (aUEC), reputation, blueprint_library, friends, presence, entitygraph, chat, notifications, stats
+- Tests updated for real schema (GetFundsResponse has `repeated Ledger ledgers`, not `amount`)
+- All 14 tests pass against real descriptors
+
+### 2026-03-20 17:55 — Completed: gRPC interceptor implementation
+- **Architecture:** HTTP CONNECT proxy on localhost:8443 → TLS MITM with per-host leaf certs → gRPC UnknownServiceHandler → RawCodec bidirectional forwarding → async protobuf decode → event bus
+- **New files (8):** `descriptors/embed.go`, `registry.go`, `certgen.go`, `filter.go`, `decoder.go`, `handler.go`, `proxy.go` (rewrite), `Makefile`
+- **Modified (2):** `config.go` (ProxyEnabled, ProxyPort, DataDir), `main.go` (--proxy-port, --no-proxy flags, proxy startup)
+- **Tests (4 files, 14 tests):** registry (method lookup, invalid data), certgen (CA gen/reload, leaf chain verification), filter (block/redact), decoder (GetFunds decode, blocked service, unknown method, event type formatting)
+- **All tests pass**, build clean, vet clean
+- **Dependencies added:** google.golang.org/grpc v1.79.3, google.golang.org/protobuf v1.36.11
+- **Placeholder sc.pb** with fake LedgerService — real descriptor needs proto extraction from StarCitizen.exe
+- **Design decisions:** Per-connection gRPC server (not shared) for clean target host passing; singleConnListener pattern; async decode goroutines; backend conn cache in sync.Map
+- **UI direction confirmed:** Wails for native GUI, crafting page design language, SC Bridge logo for systray + UI
+
+### 2026-03-20 11:30 — Completed: Loot map data quality overhaul
+- **Root cause:** `build_loot_map.py` dropped items without explicit loot sources (shop/container/NPC/contract). In-game kiosk shops sell by type, not UUID — 4,619 purchasable items were invisible.
+- **Fix 1 — `build_loot_map.py`:** Added Phase 6d — scans uuid_index for all purchasable items (SCItemPurchasableParams flag set during Phase 1 scan), adds missing ones with `shop: "purchasable"`. Filtered to PURCHASABLE_TYPES set (excludes Paints, Vehicles, Cargo).
+- **Fix 2 — `load_to_d1.py`:** Corrected `WeaponGun` → `vehicle_components` (was wrongly mapped to `fps_weapons`). Added 15 new type mappings (WeaponDefensive, TractorBeam, SalvageHead, etc.).
+- **Fix 3 — manufacturer_name:** vehicle_components for `4.6.0-live.11377160` had all NULL manufacturer_id. Back-filled from `4.6.0-live.11319298` version. Updated 969 loot_map rows with manufacturer names.
+- **Results:** 5,218 → 6,615 items. WeaponGun: 69 → 179. All screenshot weapons verified (Lightstrike III, Reign-3, Singe, Sledge III).
+- **Both envs:** Production + staging at 6,615 loot_map rows, 1,092,839 location rows.
+- **Staging cleanup:** Deleted stale 4.7 PTU data (1.25M locations + 5,446 loot_map rows) — DB was at max size.
+- Files changed: `tools/scripts/loot_map/build_loot_map.py`, `tools/scripts/loot_map/load_to_d1.py`
+
 
 ### 2026-03-20 08:55 — Completed: Crafting Materials tab — mining location + quality data
 - Backend: Added resource location query to crafting endpoint in `gamedata.ts` — joins deposits→compositions→locations with quality distributions

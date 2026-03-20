@@ -1,0 +1,284 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Design 1: Ops Board (Kanban-style)</title>
+<script src="https://cdn.tailwindcss.com"></script>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+<script>
+tailwind.config = {
+  theme: {
+    extend: {
+      colors: {
+        'sc-accent': '#22d3ee',
+        'sc-bg': '#0a0e17',
+        'sc-card': 'rgba(255,255,255,0.03)',
+      }
+    }
+  }
+}
+</script>
+<style>
+  body { font-family: 'Inter', sans-serif; background: #0a0e17; }
+  .scrollbar-thin::-webkit-scrollbar { width: 4px; }
+  .scrollbar-thin::-webkit-scrollbar-track { background: transparent; }
+  .scrollbar-thin::-webkit-scrollbar-thumb { background: rgba(255,255,255,0.1); border-radius: 4px; }
+  .lane { min-height: calc(100vh - 200px); }
+</style>
+</head>
+<body class="text-gray-300 min-h-screen">
+
+<!-- Top Bar -->
+<div class="border-b border-white/[0.06] px-6 py-4">
+  <div class="flex items-center justify-between max-w-[1600px] mx-auto">
+    <div>
+      <p class="text-[10px] uppercase tracking-[0.3em] text-sc-accent/60 font-mono mb-1">Operations Board</p>
+      <h1 class="text-2xl font-bold text-white">Events & Ops</h1>
+    </div>
+    <div class="flex items-center gap-3">
+      <div class="flex bg-white/[0.04] rounded-lg p-0.5 border border-white/[0.06]">
+        <button class="px-3 py-1.5 text-xs font-medium bg-sc-accent/20 text-sc-accent rounded-md">Board</button>
+        <button class="px-3 py-1.5 text-xs font-medium text-gray-500 hover:text-gray-300">List</button>
+        <button class="px-3 py-1.5 text-xs font-medium text-gray-500 hover:text-gray-300">Calendar</button>
+      </div>
+      <button class="px-4 py-2 bg-sc-accent text-black text-sm font-semibold rounded-lg hover:bg-sc-accent/90 transition-colors cursor-pointer">
+        + New Event
+      </button>
+    </div>
+  </div>
+</div>
+
+<!-- Kanban Board -->
+<div class="px-6 py-6 max-w-[1600px] mx-auto">
+  <div class="grid grid-cols-4 gap-4">
+
+    <!-- PLANNING Lane -->
+    <div class="lane">
+      <div class="flex items-center gap-2 mb-4 px-1">
+        <div class="w-2 h-2 rounded-full bg-blue-400"></div>
+        <h3 class="text-sm font-semibold text-gray-300 uppercase tracking-wider">Planning</h3>
+        <span class="text-xs text-gray-600 bg-white/[0.04] px-2 py-0.5 rounded-full">3</span>
+      </div>
+      <div class="space-y-3">
+        <!-- Card -->
+        <div class="bg-white/[0.03] border border-white/[0.06] rounded-xl p-4 hover:border-blue-500/30 transition-all cursor-pointer group">
+          <div class="flex items-center gap-2 mb-2">
+            <span class="px-2 py-0.5 text-[10px] font-semibold bg-amber-500/15 text-amber-400 border border-amber-500/30 rounded uppercase tracking-wider">Mining</span>
+            <span class="px-2 py-0.5 text-[10px] bg-white/[0.04] text-gray-500 rounded border border-white/[0.06]">Org</span>
+          </div>
+          <h4 class="text-sm font-semibold text-gray-200 mb-2 group-hover:text-white">Quantanium Deep Run — Aaron Halo</h4>
+          <p class="text-xs text-gray-500 mb-3 line-clamp-2">Multi-ship mining operation targeting high-yield quantanium clusters in the Aaron Halo belt.</p>
+          <div class="flex items-center justify-between">
+            <div class="flex -space-x-2">
+              <div class="w-6 h-6 rounded-full bg-purple-500/30 border border-purple-500/50 flex items-center justify-center text-[10px] text-purple-300">JL</div>
+              <div class="w-6 h-6 rounded-full bg-green-500/30 border border-green-500/50 flex items-center justify-center text-[10px] text-green-300">MK</div>
+              <div class="w-6 h-6 rounded-full bg-sky-500/30 border border-sky-500/50 flex items-center justify-center text-[10px] text-sky-300">+3</div>
+            </div>
+            <span class="text-[10px] text-gray-600 font-mono">Mar 22 · 19:00</span>
+          </div>
+          <!-- Composition bar -->
+          <div class="mt-3 flex gap-1 h-1 rounded-full overflow-hidden">
+            <div class="bg-amber-400/60 w-2/5"></div>
+            <div class="bg-red-400/60 w-1/5"></div>
+            <div class="bg-white/[0.06] flex-1"></div>
+          </div>
+          <div class="flex justify-between mt-1">
+            <span class="text-[9px] text-gray-600">3/5 miners</span>
+            <span class="text-[9px] text-gray-600">1/2 escort</span>
+          </div>
+        </div>
+
+        <!-- Card 2 -->
+        <div class="bg-white/[0.03] border border-white/[0.06] rounded-xl p-4 hover:border-blue-500/30 transition-all cursor-pointer group">
+          <div class="flex items-center gap-2 mb-2">
+            <span class="px-2 py-0.5 text-[10px] font-semibold bg-red-500/15 text-red-400 border border-red-500/30 rounded uppercase tracking-wider">Combat</span>
+            <span class="px-2 py-0.5 text-[10px] bg-sc-accent/10 text-sc-accent rounded border border-sc-accent/20">Public</span>
+          </div>
+          <h4 class="text-sm font-semibold text-gray-200 mb-2 group-hover:text-white">Xenothreat Defense Fleet</h4>
+          <p class="text-xs text-gray-500 mb-3 line-clamp-2">Coordinated response to the Xenothreat dynamic event. All pilots welcome.</p>
+          <div class="flex items-center justify-between">
+            <div class="flex -space-x-2">
+              <div class="w-6 h-6 rounded-full bg-red-500/30 border border-red-500/50 flex items-center justify-center text-[10px] text-red-300">DV</div>
+              <div class="w-6 h-6 rounded-full bg-amber-500/30 border border-amber-500/50 flex items-center justify-center text-[10px] text-amber-300">+11</div>
+            </div>
+            <span class="text-[10px] text-gray-600 font-mono">Mar 23 · 20:00</span>
+          </div>
+          <div class="mt-3 flex gap-1 h-1 rounded-full overflow-hidden">
+            <div class="bg-red-400/60 w-3/5"></div>
+            <div class="bg-green-400/60 w-1/6"></div>
+            <div class="bg-white/[0.06] flex-1"></div>
+          </div>
+          <div class="flex justify-between mt-1">
+            <span class="text-[9px] text-gray-600">8/12 fighters</span>
+            <span class="text-[9px] text-amber-500">2 on waitlist</span>
+          </div>
+        </div>
+
+        <!-- Card 3 -->
+        <div class="bg-white/[0.03] border border-white/[0.06] rounded-xl p-4 hover:border-blue-500/30 transition-all cursor-pointer group">
+          <div class="flex items-center gap-2 mb-2">
+            <span class="px-2 py-0.5 text-[10px] font-semibold bg-emerald-500/15 text-emerald-400 border border-emerald-500/30 rounded uppercase tracking-wider">Salvage</span>
+          </div>
+          <h4 class="text-sm font-semibold text-gray-200 mb-2 group-hover:text-white">Reclaimer Salvage — Pyro III</h4>
+          <p class="text-xs text-gray-500 mb-3 line-clamp-2">Reclaimer crew needed for wreck salvage near Jump Point.</p>
+          <div class="flex items-center justify-between">
+            <span class="text-[10px] text-gray-500">No sign-ups yet</span>
+            <span class="text-[10px] text-gray-600 font-mono">Mar 25 · 21:00</span>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- SIGN-UPS OPEN Lane -->
+    <div class="lane">
+      <div class="flex items-center gap-2 mb-4 px-1">
+        <div class="w-2 h-2 rounded-full bg-sc-accent"></div>
+        <h3 class="text-sm font-semibold text-gray-300 uppercase tracking-wider">Sign-ups Open</h3>
+        <span class="text-xs text-gray-600 bg-white/[0.04] px-2 py-0.5 rounded-full">2</span>
+      </div>
+      <div class="space-y-3">
+        <div class="bg-white/[0.03] border border-sc-accent/20 rounded-xl p-4 hover:border-sc-accent/40 transition-all cursor-pointer group shadow-lg shadow-sc-accent/5">
+          <div class="flex items-center gap-2 mb-2">
+            <span class="px-2 py-0.5 text-[10px] font-semibold bg-sky-500/15 text-sky-400 border border-sky-500/30 rounded uppercase tracking-wider">Cargo</span>
+            <span class="px-2 py-0.5 text-[10px] bg-white/[0.04] text-gray-500 rounded border border-white/[0.06]">Org</span>
+          </div>
+          <h4 class="text-sm font-semibold text-gray-200 mb-2 group-hover:text-white">Hull C Convoy — Stanton Loop</h4>
+          <p class="text-xs text-gray-500 mb-3">3x Hull C with fighter escort. Equal split after fuel costs. Estimated payout: 340K aUEC each.</p>
+          <div class="flex items-center justify-between mb-3">
+            <div class="flex -space-x-2">
+              <div class="w-6 h-6 rounded-full bg-sky-500/30 border border-sky-500/50 flex items-center justify-center text-[10px] text-sky-300">GS</div>
+              <div class="w-6 h-6 rounded-full bg-rose-500/30 border border-rose-500/50 flex items-center justify-center text-[10px] text-rose-300">TW</div>
+              <div class="w-6 h-6 rounded-full bg-emerald-500/30 border border-emerald-500/50 flex items-center justify-center text-[10px] text-emerald-300">+5</div>
+            </div>
+            <span class="text-[10px] text-gray-600 font-mono">TODAY · 22:00</span>
+          </div>
+          <!-- Role fill meters -->
+          <div class="space-y-1.5">
+            <div class="flex items-center gap-2">
+              <span class="text-[10px] text-gray-500 w-16">Haulers</span>
+              <div class="flex-1 h-1.5 rounded-full bg-white/[0.04] overflow-hidden">
+                <div class="h-full bg-sky-400/70 rounded-full" style="width: 66%"></div>
+              </div>
+              <span class="text-[10px] text-sky-400 font-mono w-8 text-right">2/3</span>
+            </div>
+            <div class="flex items-center gap-2">
+              <span class="text-[10px] text-gray-500 w-16">Fighters</span>
+              <div class="flex-1 h-1.5 rounded-full bg-white/[0.04] overflow-hidden">
+                <div class="h-full bg-red-400/70 rounded-full" style="width: 75%"></div>
+              </div>
+              <span class="text-[10px] text-red-400 font-mono w-8 text-right">3/4</span>
+            </div>
+            <div class="flex items-center gap-2">
+              <span class="text-[10px] text-gray-500 w-16">Medical</span>
+              <div class="flex-1 h-1.5 rounded-full bg-white/[0.04] overflow-hidden">
+                <div class="h-full bg-green-400/70 rounded-full" style="width: 100%"></div>
+              </div>
+              <span class="text-[10px] text-green-400 font-mono w-8 text-right">1/1</span>
+            </div>
+          </div>
+          <button class="mt-3 w-full py-2 text-xs font-semibold bg-sc-accent/20 text-sc-accent border border-sc-accent/30 rounded-lg hover:bg-sc-accent/30 transition-colors cursor-pointer">
+            Sign Up →
+          </button>
+        </div>
+
+        <div class="bg-white/[0.03] border border-white/[0.06] rounded-xl p-4 hover:border-sc-accent/30 transition-all cursor-pointer group">
+          <div class="flex items-center gap-2 mb-2">
+            <span class="px-2 py-0.5 text-[10px] font-semibold bg-violet-500/15 text-violet-400 border border-violet-500/30 rounded uppercase tracking-wider">Social</span>
+            <span class="px-2 py-0.5 text-[10px] bg-sc-accent/10 text-sc-accent rounded border border-sc-accent/20">Public</span>
+          </div>
+          <h4 class="text-sm font-semibold text-gray-200 mb-2 group-hover:text-white">Ship Meet — Lorville Spaceport</h4>
+          <p class="text-xs text-gray-500 mb-3">Bring your best ships for a community showcase. All welcome!</p>
+          <div class="flex items-center justify-between">
+            <span class="text-xs text-emerald-400">14 going · 3 maybe</span>
+            <span class="text-[10px] text-gray-600 font-mono">Mar 24 · 18:00</span>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- ACTIVE Lane -->
+    <div class="lane">
+      <div class="flex items-center gap-2 mb-4 px-1">
+        <div class="w-2 h-2 rounded-full bg-green-400 animate-pulse"></div>
+        <h3 class="text-sm font-semibold text-gray-300 uppercase tracking-wider">Active Now</h3>
+        <span class="text-xs text-gray-600 bg-white/[0.04] px-2 py-0.5 rounded-full">1</span>
+      </div>
+      <div class="space-y-3">
+        <div class="bg-white/[0.03] border border-green-500/30 rounded-xl p-4 cursor-pointer group shadow-lg shadow-green-500/5">
+          <div class="flex items-center gap-2 mb-2">
+            <span class="px-2 py-0.5 text-[10px] font-semibold bg-red-500/15 text-red-400 border border-red-500/30 rounded uppercase tracking-wider">Bounty</span>
+            <span class="relative flex h-2 w-2">
+              <span class="animate-ping absolute inline-flex h-full w-full rounded-full bg-green-400 opacity-75"></span>
+              <span class="relative inline-flex rounded-full h-2 w-2 bg-green-500"></span>
+            </span>
+            <span class="text-[10px] text-green-400 font-medium">LIVE</span>
+          </div>
+          <h4 class="text-sm font-semibold text-white mb-2">VHRT Bounty Train — Crusader</h4>
+          <p class="text-xs text-gray-500 mb-3">Group bounty run through Crusader VHRT contracts. 90 minutes in.</p>
+          <div class="bg-white/[0.02] border border-white/[0.04] rounded-lg p-3 mb-3">
+            <div class="grid grid-cols-2 gap-2 text-center">
+              <div>
+                <p class="text-lg font-bold text-sc-accent font-mono" style="text-shadow: 0 0 8px rgba(34,211,238,0.4)">142K</p>
+                <p class="text-[10px] text-gray-500">aUEC earned</p>
+              </div>
+              <div>
+                <p class="text-lg font-bold text-white font-mono">1:32</p>
+                <p class="text-[10px] text-gray-500">elapsed</p>
+              </div>
+            </div>
+          </div>
+          <div class="flex items-center justify-between">
+            <div class="flex -space-x-2">
+              <div class="w-6 h-6 rounded-full bg-red-500/30 border border-red-500/50 flex items-center justify-center text-[10px] text-red-300">JH</div>
+              <div class="w-6 h-6 rounded-full bg-blue-500/30 border border-blue-500/50 flex items-center justify-center text-[10px] text-blue-300">SK</div>
+              <div class="w-6 h-6 rounded-full bg-amber-500/30 border border-amber-500/50 flex items-center justify-center text-[10px] text-amber-300">NV</div>
+              <div class="w-6 h-6 rounded-full bg-purple-500/30 border border-purple-500/50 flex items-center justify-center text-[10px] text-purple-300">AL</div>
+            </div>
+            <span class="text-[10px] text-green-400 font-mono">4 active</span>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- COMPLETED Lane -->
+    <div class="lane">
+      <div class="flex items-center gap-2 mb-4 px-1">
+        <div class="w-2 h-2 rounded-full bg-gray-600"></div>
+        <h3 class="text-sm font-semibold text-gray-300 uppercase tracking-wider">Completed</h3>
+        <span class="text-xs text-gray-600 bg-white/[0.04] px-2 py-0.5 rounded-full">2</span>
+      </div>
+      <div class="space-y-3">
+        <div class="bg-white/[0.03] border border-white/[0.06] rounded-xl p-4 opacity-70 cursor-pointer hover:opacity-90 transition-opacity">
+          <div class="flex items-center gap-2 mb-2">
+            <span class="px-2 py-0.5 text-[10px] font-semibold bg-amber-500/15 text-amber-400 border border-amber-500/30 rounded uppercase tracking-wider">Mining</span>
+            <span class="text-[10px] text-green-400">✓ Paid out</span>
+          </div>
+          <h4 class="text-sm font-semibold text-gray-400 mb-2">Daymar Quant Run</h4>
+          <div class="flex items-center justify-between text-[10px] text-gray-600">
+            <span>6 participants</span>
+            <span>285K aUEC total</span>
+          </div>
+          <div class="flex items-center justify-between text-[10px] text-gray-600 mt-1">
+            <span>Mar 19 · 3h 12m</span>
+            <span class="text-emerald-500">47.5K each</span>
+          </div>
+        </div>
+
+        <div class="bg-white/[0.03] border border-white/[0.06] rounded-xl p-4 opacity-70 cursor-pointer hover:opacity-90 transition-opacity">
+          <div class="flex items-center gap-2 mb-2">
+            <span class="px-2 py-0.5 text-[10px] font-semibold bg-red-500/15 text-red-400 border border-red-500/30 rounded uppercase tracking-wider">Combat</span>
+            <span class="text-[10px] text-amber-400">⏳ Pending payout</span>
+          </div>
+          <h4 class="text-sm font-semibold text-gray-400 mb-2">Bunker Clear — Hurston</h4>
+          <div class="flex items-center justify-between text-[10px] text-gray-600">
+            <span>4 participants</span>
+            <span>92K aUEC total</span>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+</body>
+</html>

@@ -1,0 +1,278 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Design 3: Command HUD</title>
+<script src="https://cdn.tailwindcss.com"></script>
+<link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@300;400;500;600;700&family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+<script>
+tailwind.config = {
+  theme: { extend: { colors: { 'sc-accent': '#22d3ee', 'sc-bg': '#060a12' } } }
+}
+</script>
+<style>
+  body { font-family: 'Inter', sans-serif; background: #060a12; }
+  .mono { font-family: 'JetBrains Mono', monospace; }
+  .hud-border { border: 1px solid rgba(34,211,238,0.12); background: rgba(34,211,238,0.02); }
+  .hud-glow { box-shadow: inset 0 0 30px rgba(34,211,238,0.03), 0 0 1px rgba(34,211,238,0.2); }
+  .scan-line { background: repeating-linear-gradient(0deg, transparent, transparent 2px, rgba(34,211,238,0.015) 2px, rgba(34,211,238,0.015) 4px); pointer-events: none; }
+  .corner-tl::before, .corner-tr::before, .corner-bl::before, .corner-br::before { content: ''; position: absolute; width: 12px; height: 12px; }
+  .corner-tl::before { top: -1px; left: -1px; border-top: 1px solid rgba(34,211,238,0.4); border-left: 1px solid rgba(34,211,238,0.4); }
+  .corner-tr::before { top: -1px; right: -1px; border-top: 1px solid rgba(34,211,238,0.4); border-right: 1px solid rgba(34,211,238,0.4); }
+  .corner-bl::before { bottom: -1px; left: -1px; border-bottom: 1px solid rgba(34,211,238,0.4); border-left: 1px solid rgba(34,211,238,0.4); }
+  .corner-br::before { bottom: -1px; right: -1px; border-bottom: 1px solid rgba(34,211,238,0.4); border-right: 1px solid rgba(34,211,238,0.4); }
+</style>
+</head>
+<body class="text-gray-400 min-h-screen">
+
+<!-- Full-screen HUD layout -->
+<div class="min-h-screen p-4 md:p-6">
+
+  <!-- Top status bar -->
+  <div class="flex items-center justify-between mb-4 px-2">
+    <div class="flex items-center gap-4">
+      <span class="mono text-[10px] text-sc-accent/50 tracking-widest">SC-BRIDGE // OPERATIONS COMMAND</span>
+      <div class="w-px h-3 bg-sc-accent/20"></div>
+      <span class="mono text-[10px] text-gray-600">SYS: STANTON</span>
+    </div>
+    <div class="flex items-center gap-4">
+      <span class="mono text-[10px] text-gray-600">UTC 09:32:47</span>
+      <div class="w-px h-3 bg-sc-accent/20"></div>
+      <span class="mono text-[10px] text-green-400 flex items-center gap-1">
+        <span class="w-1.5 h-1.5 rounded-full bg-green-400"></span>
+        ONLINE
+      </span>
+    </div>
+  </div>
+
+  <!-- Main grid -->
+  <div class="grid grid-cols-12 gap-3 auto-rows-min">
+
+    <!-- LEFT: Active Op (large) -->
+    <div class="col-span-12 lg:col-span-5 relative hud-border hud-glow rounded-lg p-5 corner-tl corner-br">
+      <div class="absolute inset-0 scan-line rounded-lg"></div>
+      <div class="relative z-10">
+        <div class="flex items-center justify-between mb-4">
+          <div class="flex items-center gap-2">
+            <span class="relative flex h-2.5 w-2.5"><span class="animate-ping absolute inline-flex h-full w-full rounded-full bg-green-400 opacity-50"></span><span class="relative inline-flex rounded-full h-2.5 w-2.5 bg-green-500"></span></span>
+            <span class="mono text-[10px] text-green-400 tracking-widest font-bold">ACTIVE OPERATION</span>
+          </div>
+          <span class="mono text-[10px] text-gray-600">OP-2026-0320-A</span>
+        </div>
+
+        <h2 class="text-xl font-bold text-white mb-1 tracking-wide" style="text-shadow: 0 0 20px rgba(34,211,238,0.1)">VHRT Bounty Train</h2>
+        <p class="mono text-[10px] text-sc-accent/60 mb-4">SECTOR: CRUSADER · TYPE: BOUNTY HUNTING</p>
+
+        <!-- Live metrics grid -->
+        <div class="grid grid-cols-3 gap-2 mb-5">
+          <div class="hud-border rounded-md p-3 text-center">
+            <p class="mono text-2xl font-bold text-sc-accent" style="text-shadow: 0 0 15px rgba(34,211,238,0.5)">142K</p>
+            <p class="mono text-[9px] text-gray-600 tracking-wider mt-1">AUEC EARNED</p>
+          </div>
+          <div class="hud-border rounded-md p-3 text-center">
+            <p class="mono text-2xl font-bold text-white">01:32</p>
+            <p class="mono text-[9px] text-gray-600 tracking-wider mt-1">ELAPSED</p>
+          </div>
+          <div class="hud-border rounded-md p-3 text-center">
+            <p class="mono text-2xl font-bold text-amber-400">23</p>
+            <p class="mono text-[9px] text-gray-600 tracking-wider mt-1">KILLS</p>
+          </div>
+        </div>
+
+        <!-- Fleet composition visual -->
+        <div class="mb-4">
+          <p class="mono text-[9px] text-sc-accent/40 tracking-widest mb-2">FLEET MANIFEST</p>
+          <div class="space-y-2">
+            <div class="flex items-center gap-3 hud-border rounded-md px-3 py-2">
+              <div class="w-8 h-8 rounded bg-red-500/10 border border-red-500/30 flex items-center justify-center">
+                <span class="mono text-[10px] text-red-400 font-bold">F1</span>
+              </div>
+              <div class="flex-1">
+                <p class="text-xs text-white font-medium">Hornet Mk II</p>
+                <p class="mono text-[10px] text-gray-600">JamesHolden · Fighter</p>
+              </div>
+              <span class="mono text-[9px] text-green-400">ACTIVE</span>
+            </div>
+            <div class="flex items-center gap-3 hud-border rounded-md px-3 py-2">
+              <div class="w-8 h-8 rounded bg-red-500/10 border border-red-500/30 flex items-center justify-center">
+                <span class="mono text-[10px] text-red-400 font-bold">F2</span>
+              </div>
+              <div class="flex-1">
+                <p class="text-xs text-white font-medium">Sabre</p>
+                <p class="mono text-[10px] text-gray-600">ShadowKnight · Fighter</p>
+              </div>
+              <span class="mono text-[9px] text-green-400">ACTIVE</span>
+            </div>
+            <div class="flex items-center gap-3 hud-border rounded-md px-3 py-2">
+              <div class="w-8 h-8 rounded bg-red-500/10 border border-red-500/30 flex items-center justify-center">
+                <span class="mono text-[10px] text-red-400 font-bold">F3</span>
+              </div>
+              <div class="flex-1">
+                <p class="text-xs text-white font-medium">Vanguard Sentinel</p>
+                <p class="mono text-[10px] text-gray-600">NovaViper · EWar Support</p>
+              </div>
+              <span class="mono text-[9px] text-green-400">ACTIVE</span>
+            </div>
+            <div class="flex items-center gap-3 hud-border rounded-md px-3 py-2">
+              <div class="w-8 h-8 rounded bg-green-500/10 border border-green-500/30 flex items-center justify-center">
+                <span class="mono text-[10px] text-green-400 font-bold">M1</span>
+              </div>
+              <div class="flex-1">
+                <p class="text-xs text-white font-medium">Cutlass Red</p>
+                <p class="mono text-[10px] text-gray-600">ArcLight · Medical</p>
+              </div>
+              <span class="mono text-[9px] text-green-400">ACTIVE</span>
+            </div>
+          </div>
+        </div>
+
+        <div class="flex gap-2">
+          <button class="flex-1 py-2 mono text-[10px] tracking-wider font-bold text-red-400 border border-red-500/30 rounded-md hover:bg-red-500/10 transition-colors cursor-pointer">END OP</button>
+          <button class="flex-1 py-2 mono text-[10px] tracking-wider font-bold text-sc-accent border border-sc-accent/30 rounded-md hover:bg-sc-accent/10 transition-colors cursor-pointer">MARK PAYOUT</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- RIGHT: Upcoming Ops -->
+    <div class="col-span-12 lg:col-span-7 space-y-3">
+
+      <!-- Upcoming header -->
+      <div class="flex items-center justify-between px-1">
+        <span class="mono text-[10px] text-sc-accent/40 tracking-widest">SCHEDULED OPERATIONS</span>
+        <button class="mono text-[10px] text-sc-accent tracking-wider hover:text-white transition-colors cursor-pointer">+ NEW OP</button>
+      </div>
+
+      <!-- Upcoming op cards (horizontal layout) -->
+      <div class="relative hud-border hud-glow rounded-lg p-4 corner-tl corner-br cursor-pointer hover:border-sc-accent/30 transition-all group">
+        <div class="absolute inset-0 scan-line rounded-lg opacity-50"></div>
+        <div class="relative z-10 flex items-center gap-5">
+          <!-- Time block -->
+          <div class="flex-shrink-0 text-center w-20">
+            <p class="mono text-xs text-sc-accent font-bold">TODAY</p>
+            <p class="mono text-2xl font-bold text-white">22:00</p>
+            <p class="mono text-[9px] text-gray-600">NZST</p>
+          </div>
+          <div class="w-px h-16 bg-sc-accent/10"></div>
+          <!-- Info -->
+          <div class="flex-1 min-w-0">
+            <div class="flex items-center gap-2 mb-1">
+              <span class="px-2 py-0.5 mono text-[9px] bg-sky-500/15 text-sky-400 border border-sky-500/30 rounded tracking-wider">CARGO</span>
+              <span class="px-2 py-0.5 mono text-[9px] bg-white/[0.04] text-gray-500 rounded border border-white/[0.06]">ORG</span>
+            </div>
+            <h3 class="text-sm font-bold text-white group-hover:text-sc-accent transition-colors truncate">Hull C Convoy — Stanton Loop</h3>
+            <p class="text-xs text-gray-500 mt-1">3x Hull C · fighter escort · equal split · ~340K each</p>
+          </div>
+          <!-- Composition -->
+          <div class="flex-shrink-0 space-y-1 w-40">
+            <div class="flex items-center gap-2">
+              <span class="mono text-[9px] text-gray-500 w-14 text-right">HAUL</span>
+              <div class="flex-1 h-1 rounded-full bg-white/[0.04]"><div class="h-full bg-sky-400/60 rounded-full" style="width:66%"></div></div>
+              <span class="mono text-[9px] text-sky-400 w-6">2/3</span>
+            </div>
+            <div class="flex items-center gap-2">
+              <span class="mono text-[9px] text-gray-500 w-14 text-right">FIGHT</span>
+              <div class="flex-1 h-1 rounded-full bg-white/[0.04]"><div class="h-full bg-red-400/60 rounded-full" style="width:75%"></div></div>
+              <span class="mono text-[9px] text-red-400 w-6">3/4</span>
+            </div>
+            <div class="flex items-center gap-2">
+              <span class="mono text-[9px] text-gray-500 w-14 text-right">MED</span>
+              <div class="flex-1 h-1 rounded-full bg-white/[0.04]"><div class="h-full bg-green-400/60 rounded-full" style="width:100%"></div></div>
+              <span class="mono text-[9px] text-green-400 w-6">1/1</span>
+            </div>
+          </div>
+          <!-- Action -->
+          <div class="flex-shrink-0">
+            <button class="px-4 py-2 mono text-[10px] tracking-wider font-bold text-black bg-sc-accent rounded-md hover:bg-sc-accent/90 transition-colors cursor-pointer">ENLIST</button>
+          </div>
+        </div>
+      </div>
+
+      <!-- Op 2 -->
+      <div class="relative hud-border hud-glow rounded-lg p-4 corner-tl corner-br cursor-pointer hover:border-sc-accent/30 transition-all group">
+        <div class="absolute inset-0 scan-line rounded-lg opacity-50"></div>
+        <div class="relative z-10 flex items-center gap-5">
+          <div class="flex-shrink-0 text-center w-20">
+            <p class="mono text-xs text-amber-400 font-bold">SAT</p>
+            <p class="mono text-2xl font-bold text-white">19:00</p>
+            <p class="mono text-[9px] text-gray-600">NZST</p>
+          </div>
+          <div class="w-px h-16 bg-sc-accent/10"></div>
+          <div class="flex-1 min-w-0">
+            <div class="flex items-center gap-2 mb-1">
+              <span class="px-2 py-0.5 mono text-[9px] bg-amber-500/15 text-amber-400 border border-amber-500/30 rounded tracking-wider">MINING</span>
+            </div>
+            <h3 class="text-sm font-bold text-white group-hover:text-sc-accent transition-colors truncate">Quantanium Deep Run — Aaron Halo</h3>
+            <p class="text-xs text-gray-500 mt-1">MOLE + Prospector fleet · escort required · ratio×time payout</p>
+          </div>
+          <div class="flex-shrink-0 space-y-1 w-40">
+            <div class="flex items-center gap-2">
+              <span class="mono text-[9px] text-gray-500 w-14 text-right">MINE</span>
+              <div class="flex-1 h-1 rounded-full bg-white/[0.04]"><div class="h-full bg-amber-400/60 rounded-full" style="width:60%"></div></div>
+              <span class="mono text-[9px] text-amber-400 w-6">3/5</span>
+            </div>
+            <div class="flex items-center gap-2">
+              <span class="mono text-[9px] text-gray-500 w-14 text-right">FIGHT</span>
+              <div class="flex-1 h-1 rounded-full bg-white/[0.04]"><div class="h-full bg-red-400/60 rounded-full" style="width:50%"></div></div>
+              <span class="mono text-[9px] text-red-400 w-6">1/2</span>
+            </div>
+          </div>
+          <div class="flex-shrink-0">
+            <button class="px-4 py-2 mono text-[10px] tracking-wider font-bold text-sc-accent border border-sc-accent/30 rounded-md hover:bg-sc-accent/10 transition-colors cursor-pointer">DETAILS</button>
+          </div>
+        </div>
+      </div>
+
+      <!-- Op 3 (public) -->
+      <div class="relative hud-border hud-glow rounded-lg p-4 corner-tl corner-br cursor-pointer hover:border-sc-accent/30 transition-all group">
+        <div class="absolute inset-0 scan-line rounded-lg opacity-50"></div>
+        <div class="relative z-10 flex items-center gap-5">
+          <div class="flex-shrink-0 text-center w-20">
+            <p class="mono text-xs text-violet-400 font-bold">SUN</p>
+            <p class="mono text-2xl font-bold text-white">18:00</p>
+            <p class="mono text-[9px] text-gray-600">NZST</p>
+          </div>
+          <div class="w-px h-16 bg-sc-accent/10"></div>
+          <div class="flex-1 min-w-0">
+            <div class="flex items-center gap-2 mb-1">
+              <span class="px-2 py-0.5 mono text-[9px] bg-violet-500/15 text-violet-400 border border-violet-500/30 rounded tracking-wider">SOCIAL</span>
+              <span class="px-2 py-0.5 mono text-[9px] bg-sc-accent/10 text-sc-accent rounded border border-sc-accent/20">PUBLIC</span>
+            </div>
+            <h3 class="text-sm font-bold text-white group-hover:text-sc-accent transition-colors truncate">Ship Meet — Lorville Spaceport</h3>
+            <p class="text-xs text-gray-500 mt-1">Community showcase · all ships welcome · no sign-up required</p>
+          </div>
+          <div class="flex-shrink-0 text-right">
+            <p class="mono text-lg font-bold text-white">14</p>
+            <p class="mono text-[9px] text-gray-600">GOING</p>
+          </div>
+          <div class="flex-shrink-0">
+            <button class="px-4 py-2 mono text-[10px] tracking-wider font-bold text-sc-accent border border-sc-accent/30 rounded-md hover:bg-sc-accent/10 transition-colors cursor-pointer">JOIN</button>
+          </div>
+        </div>
+      </div>
+
+      <!-- Completed section -->
+      <div class="flex items-center gap-2 px-1 mt-6">
+        <span class="mono text-[10px] text-gray-600 tracking-widest">COMPLETED OPS</span>
+        <div class="flex-1 h-px bg-white/[0.04]"></div>
+      </div>
+
+      <div class="relative hud-border rounded-lg p-4 opacity-50 cursor-pointer hover:opacity-70 transition-opacity">
+        <div class="relative z-10 flex items-center gap-5">
+          <div class="flex-shrink-0 text-center w-20">
+            <p class="mono text-[10px] text-gray-600">MAR 19</p>
+            <p class="mono text-sm text-gray-500">3h 12m</p>
+          </div>
+          <div class="w-px h-8 bg-white/[0.04]"></div>
+          <div class="flex-1">
+            <h3 class="text-sm text-gray-500">Daymar Quant Run</h3>
+            <p class="mono text-[10px] text-gray-600 mt-0.5">6 pilots · 285K aUEC · 47.5K each</p>
+          </div>
+          <span class="mono text-[9px] text-green-500/60 tracking-wider">PAID</span>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+</body>
+</html>

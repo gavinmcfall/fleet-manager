@@ -1,0 +1,193 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Design 2: Timeline Feed</title>
+<script src="https://cdn.tailwindcss.com"></script>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+<script>
+tailwind.config = {
+  theme: { extend: { colors: { 'sc-accent': '#22d3ee', 'sc-bg': '#0a0e17' } } }
+}
+</script>
+<style>
+  body { font-family: 'Inter', sans-serif; background: #0a0e17; }
+  .timeline-line { position: absolute; left: 50%; width: 1px; top: 0; bottom: 0; background: linear-gradient(to bottom, transparent, rgba(34,211,238,0.15), rgba(34,211,238,0.15), transparent); }
+  @media (max-width: 768px) { .timeline-line { left: 24px; } }
+</style>
+</head>
+<body class="text-gray-300 min-h-screen">
+
+<!-- Header -->
+<div class="max-w-5xl mx-auto px-6 pt-8 pb-4">
+  <div class="flex items-end justify-between mb-8">
+    <div>
+      <p class="text-[10px] uppercase tracking-[0.3em] text-sc-accent/60 font-mono mb-1">Timeline View</p>
+      <h1 class="text-3xl font-bold text-white" style="text-shadow: 0 0 30px rgba(34,211,238,0.15)">Operations Timeline</h1>
+    </div>
+    <div class="flex items-center gap-2">
+      <button class="px-3 py-1.5 text-xs bg-white/[0.04] text-gray-400 rounded-lg border border-white/[0.06] hover:text-white transition-colors cursor-pointer">All</button>
+      <button class="px-3 py-1.5 text-xs bg-sc-accent/15 text-sc-accent rounded-lg border border-sc-accent/30 cursor-pointer">My Events</button>
+      <button class="px-3 py-1.5 text-xs bg-white/[0.04] text-gray-400 rounded-lg border border-white/[0.06] hover:text-white transition-colors cursor-pointer">Public</button>
+    </div>
+  </div>
+
+  <!-- Quick Stats Row -->
+  <div class="grid grid-cols-4 gap-3 mb-10">
+    <div class="bg-white/[0.03] border border-white/[0.06] rounded-xl p-4 text-center">
+      <p class="text-2xl font-bold text-sc-accent font-mono" style="text-shadow: 0 0 10px rgba(34,211,238,0.3)">3</p>
+      <p class="text-[10px] text-gray-500 uppercase tracking-wider mt-1">This Week</p>
+    </div>
+    <div class="bg-white/[0.03] border border-white/[0.06] rounded-xl p-4 text-center">
+      <p class="text-2xl font-bold text-green-400 font-mono">1</p>
+      <p class="text-[10px] text-gray-500 uppercase tracking-wider mt-1">Active Now</p>
+    </div>
+    <div class="bg-white/[0.03] border border-white/[0.06] rounded-xl p-4 text-center">
+      <p class="text-2xl font-bold text-amber-400 font-mono">2</p>
+      <p class="text-[10px] text-gray-500 uppercase tracking-wider mt-1">Awaiting Payout</p>
+    </div>
+    <div class="bg-white/[0.03] border border-white/[0.06] rounded-xl p-4 text-center">
+      <p class="text-2xl font-bold text-white font-mono">847K</p>
+      <p class="text-[10px] text-gray-500 uppercase tracking-wider mt-1">Total Earned</p>
+    </div>
+  </div>
+</div>
+
+<!-- Timeline -->
+<div class="max-w-5xl mx-auto px-6 relative pb-20">
+  <div class="timeline-line"></div>
+
+  <!-- TODAY marker -->
+  <div class="relative flex items-center justify-center mb-8">
+    <div class="bg-sc-accent/20 border border-sc-accent/40 rounded-full px-4 py-1 text-xs font-semibold text-sc-accent z-10 backdrop-blur-sm">
+      TODAY — March 20, 2026
+    </div>
+  </div>
+
+  <!-- Event: Active NOW (right side) -->
+  <div class="relative flex items-start mb-12 md:ml-[50%] md:pl-10 pl-14">
+    <!-- Dot -->
+    <div class="absolute md:left-0 left-[24px] -translate-x-1/2 w-4 h-4 rounded-full bg-green-500 border-2 border-sc-bg z-10 shadow-[0_0_10px_rgba(34,211,38,0.5)]">
+      <span class="absolute inset-0 rounded-full bg-green-400 animate-ping opacity-40"></span>
+    </div>
+    <!-- Card -->
+    <div class="flex-1 bg-white/[0.04] border border-green-500/30 rounded-2xl p-5 shadow-lg shadow-green-500/5">
+      <div class="flex items-center gap-2 mb-2">
+        <span class="relative flex h-2 w-2"><span class="animate-ping absolute inline-flex h-full w-full rounded-full bg-green-400 opacity-75"></span><span class="relative inline-flex rounded-full h-2 w-2 bg-green-500"></span></span>
+        <span class="text-[10px] text-green-400 font-bold uppercase tracking-wider">Active · 1h 32m</span>
+      </div>
+      <h3 class="text-lg font-bold text-white mb-1">VHRT Bounty Train — Crusader</h3>
+      <p class="text-sm text-gray-500 mb-4">Group bounty hunting through Crusader VHRT contracts.</p>
+      <div class="grid grid-cols-3 gap-3 bg-white/[0.02] rounded-lg p-3 mb-4">
+        <div class="text-center">
+          <p class="text-lg font-bold text-sc-accent font-mono">142K</p>
+          <p class="text-[9px] text-gray-500">aUEC earned</p>
+        </div>
+        <div class="text-center">
+          <p class="text-lg font-bold text-white font-mono">4</p>
+          <p class="text-[9px] text-gray-500">pilots active</p>
+        </div>
+        <div class="text-center">
+          <p class="text-lg font-bold text-amber-400 font-mono">23</p>
+          <p class="text-[9px] text-gray-500">bounties cleared</p>
+        </div>
+      </div>
+      <div class="flex items-center justify-between">
+        <div class="flex -space-x-2">
+          <div class="w-7 h-7 rounded-full bg-red-500/30 border-2 border-sc-bg flex items-center justify-center text-[10px] text-red-300 font-semibold">JH</div>
+          <div class="w-7 h-7 rounded-full bg-blue-500/30 border-2 border-sc-bg flex items-center justify-center text-[10px] text-blue-300 font-semibold">SK</div>
+          <div class="w-7 h-7 rounded-full bg-amber-500/30 border-2 border-sc-bg flex items-center justify-center text-[10px] text-amber-300 font-semibold">NV</div>
+          <div class="w-7 h-7 rounded-full bg-purple-500/30 border-2 border-sc-bg flex items-center justify-center text-[10px] text-purple-300 font-semibold">AL</div>
+        </div>
+        <span class="text-xs text-gray-500">Equal split · ~35.5K each</span>
+      </div>
+    </div>
+  </div>
+
+  <!-- Event: Upcoming tonight (left side) -->
+  <div class="relative flex items-start mb-12 md:mr-[50%] md:pr-10 pl-14 md:pl-0">
+    <div class="absolute md:right-0 md:left-auto left-[24px] md:translate-x-1/2 -translate-x-1/2 w-4 h-4 rounded-full bg-sc-accent border-2 border-sc-bg z-10"></div>
+    <div class="flex-1 bg-white/[0.04] border border-sc-accent/20 rounded-2xl p-5">
+      <div class="flex items-center gap-2 mb-2">
+        <span class="text-[10px] text-sc-accent font-bold uppercase tracking-wider">Tonight · 22:00 NZST</span>
+      </div>
+      <h3 class="text-lg font-bold text-white mb-1">Hull C Convoy — Stanton Loop</h3>
+      <p class="text-sm text-gray-500 mb-3">3x Hull C with fighter escort. Equal split after fuel costs.</p>
+      <div class="flex flex-wrap gap-2 mb-4">
+        <span class="px-2 py-1 text-[10px] bg-sky-500/15 text-sky-400 border border-sky-500/30 rounded-lg">Haulers 2/3</span>
+        <span class="px-2 py-1 text-[10px] bg-red-500/15 text-red-400 border border-red-500/30 rounded-lg">Fighters 3/4</span>
+        <span class="px-2 py-1 text-[10px] bg-green-500/15 text-green-400 border border-green-500/30 rounded-lg font-semibold">Medical 1/1 ✓</span>
+      </div>
+      <div class="flex items-center justify-between">
+        <span class="text-xs text-gray-500">Est. payout: <span class="text-sc-accent font-semibold">~340K</span> each</span>
+        <button class="px-4 py-1.5 text-xs font-semibold bg-sc-accent text-black rounded-lg hover:bg-sc-accent/90 transition-colors cursor-pointer">Sign Up</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Date divider -->
+  <div class="relative flex items-center justify-center mb-8">
+    <div class="bg-white/[0.04] border border-white/[0.06] rounded-full px-4 py-1 text-xs text-gray-500 z-10 backdrop-blur-sm">
+      March 22
+    </div>
+  </div>
+
+  <!-- Event: Future (right side) -->
+  <div class="relative flex items-start mb-12 md:ml-[50%] md:pl-10 pl-14">
+    <div class="absolute md:left-0 left-[24px] -translate-x-1/2 w-4 h-4 rounded-full bg-amber-500/60 border-2 border-sc-bg z-10"></div>
+    <div class="flex-1 bg-white/[0.04] border border-white/[0.06] rounded-2xl p-5">
+      <div class="flex items-center gap-2 mb-2">
+        <span class="text-[10px] text-amber-400 font-bold uppercase tracking-wider">Sat · 19:00 NZST</span>
+        <span class="px-2 py-0.5 text-[10px] bg-amber-500/15 text-amber-400 border border-amber-500/30 rounded">Mining</span>
+      </div>
+      <h3 class="text-lg font-bold text-white mb-1">Quantanium Deep Run — Aaron Halo</h3>
+      <p class="text-sm text-gray-500 mb-3">Multi-ship mining operation. MOLE + Prospector fleet with escort.</p>
+      <div class="flex items-center justify-between">
+        <span class="text-xs text-gray-500">5 signed up · 3 slots open</span>
+        <button class="px-4 py-1.5 text-xs font-semibold text-sc-accent border border-sc-accent/30 rounded-lg hover:bg-sc-accent/10 transition-colors cursor-pointer">View Details</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Past event divider -->
+  <div class="relative flex items-center justify-center mb-8">
+    <div class="bg-white/[0.04] border border-white/[0.06] rounded-full px-4 py-1 text-xs text-gray-600 z-10 backdrop-blur-sm">
+      March 19 — Completed
+    </div>
+  </div>
+
+  <!-- Past Event (left side) -->
+  <div class="relative flex items-start mb-12 md:mr-[50%] md:pr-10 pl-14 md:pl-0 opacity-60">
+    <div class="absolute md:right-0 md:left-auto left-[24px] md:translate-x-1/2 -translate-x-1/2 w-3 h-3 rounded-full bg-gray-600 border-2 border-sc-bg z-10"></div>
+    <div class="flex-1 bg-white/[0.02] border border-white/[0.04] rounded-2xl p-5">
+      <div class="flex items-center gap-2 mb-2">
+        <span class="text-[10px] text-green-400">✓ Completed & Paid</span>
+      </div>
+      <h3 class="text-base font-semibold text-gray-400 mb-1">Daymar Quant Run</h3>
+      <div class="flex items-center gap-4 text-xs text-gray-600">
+        <span>6 pilots</span>
+        <span>3h 12m</span>
+        <span class="text-emerald-500">285K total · 47.5K each</span>
+      </div>
+    </div>
+  </div>
+
+  <!-- Past Event (right side) -->
+  <div class="relative flex items-start mb-12 md:ml-[50%] md:pl-10 pl-14 opacity-60">
+    <div class="absolute md:left-0 left-[24px] -translate-x-1/2 w-3 h-3 rounded-full bg-gray-600 border-2 border-sc-bg z-10"></div>
+    <div class="flex-1 bg-white/[0.02] border border-white/[0.04] rounded-2xl p-5">
+      <div class="flex items-center gap-2 mb-2">
+        <span class="text-[10px] text-amber-400">⏳ Pending Payout</span>
+      </div>
+      <h3 class="text-base font-semibold text-gray-400 mb-1">Bunker Clear — Hurston</h3>
+      <div class="flex items-center gap-4 text-xs text-gray-600">
+        <span>4 pilots</span>
+        <span>1h 45m</span>
+        <span>92K total</span>
+      </div>
+    </div>
+  </div>
+</div>
+</body>
+</html>

@@ -1,0 +1,366 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Design 6: Tabbed List + Detail Panel</title>
+<script src="https://cdn.tailwindcss.com"></script>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+<script>
+tailwind.config = {
+  theme: { extend: { colors: { 'sc-accent': '#22d3ee', 'sc-bg': '#0a0e17' } } }
+}
+</script>
+<style>
+  body { font-family: 'Inter', sans-serif; background: #0a0e17; }
+</style>
+</head>
+<body class="text-gray-300 min-h-screen">
+
+<div class="flex min-h-screen">
+
+  <!-- LEFT: List Panel -->
+  <div class="w-full lg:w-[480px] border-r border-white/[0.06] flex flex-col">
+
+    <!-- Header -->
+    <div class="px-5 pt-6 pb-4 border-b border-white/[0.06]">
+      <div class="flex items-center justify-between mb-4">
+        <div>
+          <p class="text-[10px] uppercase tracking-[0.3em] text-sc-accent/60 font-mono mb-1">Star Citizen · SC Bridge</p>
+          <h1 class="text-xl font-bold text-white">Events</h1>
+        </div>
+        <button class="w-9 h-9 flex items-center justify-center bg-sc-accent text-black rounded-lg text-lg font-bold cursor-pointer hover:bg-sc-accent/90 transition-colors">+</button>
+      </div>
+
+      <!-- Tabs -->
+      <div class="flex gap-1 border-b border-white/[0.06] -mx-5 px-5">
+        <button class="px-4 py-2.5 text-sm font-medium text-sc-accent relative cursor-pointer">
+          Browse
+          <div class="absolute bottom-0 left-0 right-0 h-0.5 bg-sc-accent rounded-full"></div>
+        </button>
+        <button class="px-4 py-2.5 text-sm font-medium text-gray-500 hover:text-gray-300 cursor-pointer">My Events</button>
+        <button class="px-4 py-2.5 text-sm font-medium text-gray-500 hover:text-gray-300 cursor-pointer relative">
+          Public
+          <span class="absolute -top-0.5 -right-1 w-4 h-4 bg-sc-accent/20 text-sc-accent text-[9px] rounded-full flex items-center justify-center font-bold">5</span>
+        </button>
+      </div>
+    </div>
+
+    <!-- Search + Filters -->
+    <div class="px-5 py-3 border-b border-white/[0.06]">
+      <input type="text" placeholder="Search events..." class="w-full bg-white/[0.04] border border-white/[0.06] rounded-lg px-3 py-2 text-sm text-white placeholder-gray-600 focus:border-sc-accent/30 focus:outline-none transition-colors" />
+      <div class="flex flex-wrap gap-1.5 mt-2">
+        <button class="px-2.5 py-1 text-[10px] bg-sc-accent/15 text-sc-accent border border-sc-accent/30 rounded-full font-medium cursor-pointer">All</button>
+        <button class="px-2.5 py-1 text-[10px] bg-white/[0.04] text-gray-500 border border-white/[0.06] rounded-full hover:text-gray-300 cursor-pointer">Combat</button>
+        <button class="px-2.5 py-1 text-[10px] bg-white/[0.04] text-gray-500 border border-white/[0.06] rounded-full hover:text-gray-300 cursor-pointer">Mining</button>
+        <button class="px-2.5 py-1 text-[10px] bg-white/[0.04] text-gray-500 border border-white/[0.06] rounded-full hover:text-gray-300 cursor-pointer">Cargo</button>
+        <button class="px-2.5 py-1 text-[10px] bg-white/[0.04] text-gray-500 border border-white/[0.06] rounded-full hover:text-gray-300 cursor-pointer">Salvage</button>
+        <button class="px-2.5 py-1 text-[10px] bg-white/[0.04] text-gray-500 border border-white/[0.06] rounded-full hover:text-gray-300 cursor-pointer">Social</button>
+      </div>
+    </div>
+
+    <!-- Event List -->
+    <div class="flex-1 overflow-y-auto">
+      <!-- Active event (highlighted) -->
+      <div class="px-5 py-4 border-b border-white/[0.04] bg-green-500/[0.04] border-l-2 border-l-green-500 cursor-pointer">
+        <div class="flex items-center gap-2 mb-1">
+          <span class="relative flex h-2 w-2"><span class="animate-ping absolute inline-flex h-full w-full rounded-full bg-green-400 opacity-50"></span><span class="relative inline-flex rounded-full h-2 w-2 bg-green-500"></span></span>
+          <span class="text-[10px] text-green-400 font-bold uppercase">Active Now</span>
+          <span class="text-[10px] text-gray-600 ml-auto font-mono">1h 32m</span>
+        </div>
+        <h4 class="text-sm font-semibold text-white">VHRT Bounty Train — Crusader</h4>
+        <div class="flex items-center gap-3 mt-1.5 text-xs text-gray-500">
+          <span>4 pilots</span>
+          <span class="text-sc-accent font-mono font-semibold">142K aUEC</span>
+        </div>
+      </div>
+
+      <!-- Selected event (blue highlight) -->
+      <div class="px-5 py-4 border-b border-white/[0.04] bg-sc-accent/[0.04] border-l-2 border-l-sc-accent cursor-pointer">
+        <div class="flex items-center gap-2 mb-1">
+          <span class="px-1.5 py-0.5 text-[9px] bg-sky-500/15 text-sky-400 border border-sky-500/30 rounded font-semibold">CARGO</span>
+          <span class="text-[10px] text-gray-600 ml-auto">Today 22:00</span>
+        </div>
+        <h4 class="text-sm font-semibold text-white">Hull C Convoy — Stanton Loop</h4>
+        <div class="flex items-center gap-3 mt-1.5 text-xs text-gray-500">
+          <span>7/8 signed up</span>
+          <span>~340K each</span>
+          <span class="text-amber-400">1 slot open</span>
+        </div>
+      </div>
+
+      <!-- Regular events -->
+      <div class="px-5 py-4 border-b border-white/[0.04] hover:bg-white/[0.02] cursor-pointer transition-colors border-l-2 border-l-transparent">
+        <div class="flex items-center gap-2 mb-1">
+          <span class="px-1.5 py-0.5 text-[9px] bg-amber-500/15 text-amber-400 border border-amber-500/30 rounded font-semibold">MINING</span>
+          <span class="text-[10px] text-gray-600 ml-auto">Sat 19:00</span>
+        </div>
+        <h4 class="text-sm font-semibold text-gray-200">Quantanium Deep Run — Aaron Halo</h4>
+        <div class="flex items-center gap-3 mt-1.5 text-xs text-gray-500">
+          <span>4/7 signed up</span>
+          <span>3 slots open</span>
+        </div>
+      </div>
+
+      <div class="px-5 py-4 border-b border-white/[0.04] hover:bg-white/[0.02] cursor-pointer transition-colors border-l-2 border-l-transparent">
+        <div class="flex items-center gap-2 mb-1">
+          <span class="px-1.5 py-0.5 text-[9px] bg-red-500/15 text-red-400 border border-red-500/30 rounded font-semibold">COMBAT</span>
+          <span class="px-1.5 py-0.5 text-[9px] bg-sc-accent/10 text-sc-accent border border-sc-accent/20 rounded">Public</span>
+          <span class="text-[10px] text-gray-600 ml-auto">Mon 20:00</span>
+        </div>
+        <h4 class="text-sm font-semibold text-gray-200">Xenothreat Defense Fleet</h4>
+        <div class="flex items-center gap-3 mt-1.5 text-xs text-gray-500">
+          <span>12/20 signed up</span>
+          <span class="text-amber-400">2 on waitlist</span>
+        </div>
+      </div>
+
+      <div class="px-5 py-4 border-b border-white/[0.04] hover:bg-white/[0.02] cursor-pointer transition-colors border-l-2 border-l-transparent">
+        <div class="flex items-center gap-2 mb-1">
+          <span class="px-1.5 py-0.5 text-[9px] bg-violet-500/15 text-violet-400 border border-violet-500/30 rounded font-semibold">SOCIAL</span>
+          <span class="px-1.5 py-0.5 text-[9px] bg-sc-accent/10 text-sc-accent border border-sc-accent/20 rounded">Public</span>
+          <span class="text-[10px] text-gray-600 ml-auto">Tue 18:00</span>
+        </div>
+        <h4 class="text-sm font-semibold text-gray-200">Ship Meet — Lorville Spaceport</h4>
+        <div class="flex items-center gap-3 mt-1.5 text-xs text-gray-500">
+          <span>14 going</span>
+          <span>3 maybe</span>
+        </div>
+      </div>
+
+      <div class="px-5 py-4 border-b border-white/[0.04] hover:bg-white/[0.02] cursor-pointer transition-colors border-l-2 border-l-transparent">
+        <div class="flex items-center gap-2 mb-1">
+          <span class="px-1.5 py-0.5 text-[9px] bg-emerald-500/15 text-emerald-400 border border-emerald-500/30 rounded font-semibold">SALVAGE</span>
+          <span class="text-[10px] text-gray-600 ml-auto">Tue 21:00</span>
+        </div>
+        <h4 class="text-sm font-semibold text-gray-200">Reclaimer Salvage — Pyro III</h4>
+        <div class="flex items-center gap-3 mt-1.5 text-xs text-gray-500">
+          <span>0/6 signed up</span>
+          <span class="text-red-400">Needs crew</span>
+        </div>
+      </div>
+
+      <!-- Completed section -->
+      <div class="px-5 py-2 bg-white/[0.02]">
+        <p class="text-[10px] text-gray-600 uppercase tracking-wider font-semibold">Completed</p>
+      </div>
+      <div class="px-5 py-3 border-b border-white/[0.04] opacity-50 hover:opacity-70 cursor-pointer transition-opacity border-l-2 border-l-transparent">
+        <div class="flex items-center gap-2 mb-1">
+          <span class="text-[10px] text-green-400">✓ Paid</span>
+          <span class="text-[10px] text-gray-600 ml-auto">Mar 19</span>
+        </div>
+        <h4 class="text-sm text-gray-500">Daymar Quant Run</h4>
+        <p class="text-xs text-gray-600 mt-1">47.5K each · 6 pilots</p>
+      </div>
+      <div class="px-5 py-3 border-b border-white/[0.04] opacity-50 hover:opacity-70 cursor-pointer transition-opacity border-l-2 border-l-transparent">
+        <div class="flex items-center gap-2 mb-1">
+          <span class="text-[10px] text-amber-400">⏳ Pending</span>
+          <span class="text-[10px] text-gray-600 ml-auto">Mar 18</span>
+        </div>
+        <h4 class="text-sm text-gray-500">Bunker Clear — Hurston</h4>
+        <p class="text-xs text-gray-600 mt-1">92K total · 4 pilots</p>
+      </div>
+    </div>
+  </div>
+
+  <!-- RIGHT: Detail Panel -->
+  <div class="hidden lg:flex flex-1 flex-col">
+
+    <!-- Detail Header -->
+    <div class="px-8 pt-8 pb-6 border-b border-white/[0.06]">
+      <div class="flex items-center gap-3 mb-3">
+        <span class="px-2.5 py-1 text-xs font-semibold bg-sky-500/15 text-sky-400 border border-sky-500/30 rounded uppercase tracking-wider">Cargo</span>
+        <span class="px-2.5 py-1 text-xs font-medium bg-white/[0.04] text-gray-500 border border-white/[0.06] rounded">Org Only</span>
+      </div>
+      <h2 class="text-2xl font-bold text-white mb-2" style="text-shadow: 0 0 20px rgba(34,211,238,0.1)">Hull C Convoy — Stanton Loop</h2>
+      <p class="text-sm text-gray-500 mb-4">3x Hull C with fighter escort running a full Stanton trade loop. Equal split after fuel costs deducted.</p>
+
+      <div class="flex items-center gap-6 text-sm">
+        <div class="flex items-center gap-2">
+          <div class="w-8 h-8 rounded-lg bg-purple-500/20 border border-purple-500/30 flex items-center justify-center text-xs text-purple-300 font-semibold">GS</div>
+          <div>
+            <p class="text-xs font-medium text-white">GavinStar</p>
+            <p class="text-[10px] text-gray-500">Organizer</p>
+          </div>
+        </div>
+        <div>
+          <p class="text-xs font-mono text-white">Today · 22:00 NZST</p>
+          <p class="text-[10px] text-gray-500">in 2 hours</p>
+        </div>
+        <div>
+          <p class="text-xs text-white">~3 hours</p>
+          <p class="text-[10px] text-gray-500">estimated duration</p>
+        </div>
+      </div>
+    </div>
+
+    <!-- Detail Body (scrollable) -->
+    <div class="flex-1 overflow-y-auto px-8 py-6">
+
+      <!-- Payout config -->
+      <div class="bg-white/[0.03] border border-white/[0.06] rounded-xl p-5 mb-6">
+        <h3 class="text-sm font-semibold text-gray-300 mb-3">Payout Configuration</h3>
+        <div class="grid grid-cols-3 gap-4">
+          <div>
+            <p class="text-[10px] text-gray-500 uppercase tracking-wider mb-1">Mode</p>
+            <p class="text-sm text-white font-medium">Equal Split</p>
+          </div>
+          <div>
+            <p class="text-[10px] text-gray-500 uppercase tracking-wider mb-1">Est. Total</p>
+            <p class="text-sm text-sc-accent font-bold font-mono" style="text-shadow: 0 0 8px rgba(34,211,238,0.3)">2.7M aUEC</p>
+          </div>
+          <div>
+            <p class="text-[10px] text-gray-500 uppercase tracking-wider mb-1">Est. Per Person</p>
+            <p class="text-sm text-emerald-400 font-bold font-mono">~340K</p>
+          </div>
+        </div>
+      </div>
+
+      <!-- Fleet Composition -->
+      <div class="mb-6">
+        <h3 class="text-sm font-semibold text-gray-300 mb-3">Fleet Composition</h3>
+        <div class="space-y-2">
+          <!-- Role: Haulers -->
+          <div class="bg-white/[0.03] border border-white/[0.06] rounded-xl p-4">
+            <div class="flex items-center justify-between mb-3">
+              <div class="flex items-center gap-2">
+                <div class="w-6 h-6 rounded bg-sky-500/15 flex items-center justify-center">
+                  <span class="text-[10px] text-sky-400 font-bold">H</span>
+                </div>
+                <span class="text-sm font-semibold text-gray-300">Haulers</span>
+              </div>
+              <span class="text-xs text-sky-400 font-mono font-bold">2/3</span>
+            </div>
+            <div class="h-1.5 rounded-full bg-white/[0.04] overflow-hidden mb-3">
+              <div class="h-full bg-sky-400/60 rounded-full transition-all duration-500" style="width: 66%"></div>
+            </div>
+            <div class="space-y-2">
+              <div class="flex items-center gap-3 px-3 py-2 rounded-lg bg-white/[0.02]">
+                <div class="w-7 h-7 rounded-full bg-purple-500/20 border border-purple-500/30 flex items-center justify-center text-[10px] text-purple-300 font-semibold">GS</div>
+                <div class="flex-1">
+                  <p class="text-xs font-medium text-white">GavinStar</p>
+                  <p class="text-[10px] text-gray-500">Hull C — "The Expanse"</p>
+                </div>
+                <span class="text-[10px] text-green-400 font-medium">Confirmed</span>
+              </div>
+              <div class="flex items-center gap-3 px-3 py-2 rounded-lg bg-white/[0.02]">
+                <div class="w-7 h-7 rounded-full bg-rose-500/20 border border-rose-500/30 flex items-center justify-center text-[10px] text-rose-300 font-semibold">TW</div>
+                <div class="flex-1">
+                  <p class="text-xs font-medium text-white">TowerWatch</p>
+                  <p class="text-[10px] text-gray-500">Hull C</p>
+                </div>
+                <span class="text-[10px] text-green-400 font-medium">Confirmed</span>
+              </div>
+              <div class="flex items-center gap-3 px-3 py-2 rounded-lg border border-dashed border-white/[0.08]">
+                <div class="w-7 h-7 rounded-full bg-white/[0.04] border border-white/[0.08] flex items-center justify-center text-[10px] text-gray-600">?</div>
+                <p class="text-xs text-gray-600 italic">1 hauler slot open</p>
+                <button class="ml-auto px-3 py-1 text-[10px] font-semibold bg-sc-accent/20 text-sc-accent border border-sc-accent/30 rounded-md hover:bg-sc-accent/30 transition-colors cursor-pointer">Fill Slot</button>
+              </div>
+            </div>
+          </div>
+
+          <!-- Role: Fighters -->
+          <div class="bg-white/[0.03] border border-white/[0.06] rounded-xl p-4">
+            <div class="flex items-center justify-between mb-3">
+              <div class="flex items-center gap-2">
+                <div class="w-6 h-6 rounded bg-red-500/15 flex items-center justify-center">
+                  <span class="text-[10px] text-red-400 font-bold">F</span>
+                </div>
+                <span class="text-sm font-semibold text-gray-300">Fighter Escort</span>
+              </div>
+              <span class="text-xs text-red-400 font-mono font-bold">3/4</span>
+            </div>
+            <div class="h-1.5 rounded-full bg-white/[0.04] overflow-hidden mb-3">
+              <div class="h-full bg-red-400/60 rounded-full transition-all duration-500" style="width: 75%"></div>
+            </div>
+            <div class="space-y-2">
+              <div class="flex items-center gap-3 px-3 py-2 rounded-lg bg-white/[0.02]">
+                <div class="w-7 h-7 rounded-full bg-blue-500/20 border border-blue-500/30 flex items-center justify-center text-[10px] text-blue-300 font-semibold">MK</div>
+                <div class="flex-1"><p class="text-xs font-medium text-white">MachineKnight</p><p class="text-[10px] text-gray-500">Hornet Mk II</p></div>
+                <span class="text-[10px] text-green-400">Confirmed</span>
+              </div>
+              <div class="flex items-center gap-3 px-3 py-2 rounded-lg bg-white/[0.02]">
+                <div class="w-7 h-7 rounded-full bg-amber-500/20 border border-amber-500/30 flex items-center justify-center text-[10px] text-amber-300 font-semibold">DV</div>
+                <div class="flex-1"><p class="text-xs font-medium text-white">DarkViper</p><p class="text-[10px] text-gray-500">Sabre</p></div>
+                <span class="text-[10px] text-green-400">Confirmed</span>
+              </div>
+              <div class="flex items-center gap-3 px-3 py-2 rounded-lg bg-white/[0.02]">
+                <div class="w-7 h-7 rounded-full bg-emerald-500/20 border border-emerald-500/30 flex items-center justify-center text-[10px] text-emerald-300 font-semibold">RX</div>
+                <div class="flex-1"><p class="text-xs font-medium text-white">ReaperX</p><p class="text-[10px] text-gray-500">Gladius</p></div>
+                <span class="text-[10px] text-amber-400">Maybe</span>
+              </div>
+              <div class="flex items-center gap-3 px-3 py-2 rounded-lg border border-dashed border-white/[0.08]">
+                <div class="w-7 h-7 rounded-full bg-white/[0.04] border border-white/[0.08] flex items-center justify-center text-[10px] text-gray-600">?</div>
+                <p class="text-xs text-gray-600 italic">1 fighter slot open</p>
+                <button class="ml-auto px-3 py-1 text-[10px] font-semibold bg-sc-accent/20 text-sc-accent border border-sc-accent/30 rounded-md hover:bg-sc-accent/30 transition-colors cursor-pointer">Fill Slot</button>
+              </div>
+            </div>
+          </div>
+
+          <!-- Role: Medical (full) -->
+          <div class="bg-white/[0.03] border border-green-500/20 rounded-xl p-4">
+            <div class="flex items-center justify-between mb-3">
+              <div class="flex items-center gap-2">
+                <div class="w-6 h-6 rounded bg-green-500/15 flex items-center justify-center">
+                  <span class="text-[10px] text-green-400 font-bold">M</span>
+                </div>
+                <span class="text-sm font-semibold text-gray-300">Medical Support</span>
+                <span class="text-[9px] text-green-400 bg-green-500/10 px-1.5 py-0.5 rounded">FULL</span>
+              </div>
+              <span class="text-xs text-green-400 font-mono font-bold">1/1</span>
+            </div>
+            <div class="h-1.5 rounded-full bg-white/[0.04] overflow-hidden mb-3">
+              <div class="h-full bg-green-400/60 rounded-full" style="width: 100%"></div>
+            </div>
+            <div class="flex items-center gap-3 px-3 py-2 rounded-lg bg-white/[0.02]">
+              <div class="w-7 h-7 rounded-full bg-green-500/20 border border-green-500/30 flex items-center justify-center text-[10px] text-green-300 font-semibold">AL</div>
+              <div class="flex-1"><p class="text-xs font-medium text-white">ArcLight</p><p class="text-[10px] text-gray-500">Cutlass Red</p></div>
+              <span class="text-[10px] text-green-400">Confirmed</span>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Comments -->
+      <div>
+        <h3 class="text-sm font-semibold text-gray-300 mb-3">Discussion</h3>
+        <div class="space-y-3 mb-4">
+          <div class="flex gap-3">
+            <div class="w-7 h-7 rounded-full bg-purple-500/20 border border-purple-500/30 flex-shrink-0 flex items-center justify-center text-[10px] text-purple-300 font-semibold">GS</div>
+            <div>
+              <p class="text-[10px] text-gray-500"><span class="text-gray-300 font-medium">GavinStar</span> · 2h ago</p>
+              <p class="text-xs text-gray-400 mt-1">Rally at Port Tressler. I'll have the trade route optimized before we launch. Bring full fuel.</p>
+            </div>
+          </div>
+          <div class="flex gap-3">
+            <div class="w-7 h-7 rounded-full bg-blue-500/20 border border-blue-500/30 flex-shrink-0 flex items-center justify-center text-[10px] text-blue-300 font-semibold">MK</div>
+            <div>
+              <p class="text-[10px] text-gray-500"><span class="text-gray-300 font-medium">MachineKnight</span> · 1h ago</p>
+              <p class="text-xs text-gray-400 mt-1">Roger that. I'll be running interdiction cover on the Hurston leg.</p>
+            </div>
+          </div>
+        </div>
+        <div class="flex gap-2">
+          <input type="text" placeholder="Add a comment..." class="flex-1 bg-white/[0.04] border border-white/[0.06] rounded-lg px-3 py-2 text-sm text-white placeholder-gray-600 focus:border-sc-accent/30 focus:outline-none" />
+          <button class="px-4 py-2 bg-sc-accent/20 text-sc-accent text-sm font-semibold rounded-lg border border-sc-accent/30 hover:bg-sc-accent/30 transition-colors cursor-pointer">Send</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- Detail Footer: CTA -->
+    <div class="px-8 py-4 border-t border-white/[0.06] flex items-center justify-between">
+      <div>
+        <p class="text-xs text-gray-500">Status: <span class="text-sc-accent font-semibold">Sign-ups Open</span></p>
+        <p class="text-[10px] text-gray-600">2 slots remaining · starts in 2 hours</p>
+      </div>
+      <div class="flex gap-2">
+        <button class="px-4 py-2.5 text-sm text-gray-400 border border-white/[0.06] rounded-lg hover:text-white transition-colors cursor-pointer">Share</button>
+        <button class="px-6 py-2.5 text-sm font-bold bg-sc-accent text-black rounded-lg hover:bg-sc-accent/90 transition-colors cursor-pointer shadow-lg shadow-sc-accent/20">
+          Sign Up as Hauler
+        </button>
+      </div>
+    </div>
+  </div>
+</div>
+</body>
+</html>

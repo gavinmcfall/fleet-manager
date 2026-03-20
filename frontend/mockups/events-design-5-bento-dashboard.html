@@ -1,0 +1,277 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Design 5: Bento Dashboard</title>
+<script src="https://cdn.tailwindcss.com"></script>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+<script>
+tailwind.config = {
+  theme: { extend: { colors: { 'sc-accent': '#22d3ee', 'sc-bg': '#0a0e17' } } }
+}
+</script>
+<style>
+  body { font-family: 'Inter', sans-serif; background: #0a0e17; }
+  .bento { border: 1px solid rgba(255,255,255,0.06); background: rgba(255,255,255,0.03); backdrop-filter: blur(12px); }
+</style>
+</head>
+<body class="text-gray-300 min-h-screen p-4 md:p-6">
+
+<div class="max-w-[1400px] mx-auto">
+
+  <!-- Header -->
+  <div class="flex items-end justify-between mb-6">
+    <div>
+      <p class="text-[10px] uppercase tracking-[0.3em] text-sc-accent/60 font-mono mb-1">Operations Hub</p>
+      <h1 class="text-3xl font-bold text-white" style="text-shadow: 0 0 30px rgba(34,211,238,0.15)">Events Dashboard</h1>
+    </div>
+    <button class="px-5 py-2.5 bg-sc-accent text-black text-sm font-semibold rounded-xl hover:bg-sc-accent/90 transition-colors cursor-pointer shadow-lg shadow-sc-accent/20">
+      + Create Event
+    </button>
+  </div>
+
+  <!-- Bento Grid -->
+  <div class="grid grid-cols-12 gap-3 auto-rows-[80px]">
+
+    <!-- ACTIVE OP (large, top-left) -->
+    <div class="col-span-12 md:col-span-8 row-span-4 bento rounded-2xl p-6 relative overflow-hidden">
+      <!-- Subtle gradient -->
+      <div class="absolute inset-0 bg-gradient-to-br from-green-500/[0.04] to-transparent"></div>
+      <div class="relative z-10">
+        <div class="flex items-center justify-between mb-5">
+          <div class="flex items-center gap-2">
+            <span class="relative flex h-2.5 w-2.5"><span class="animate-ping absolute inline-flex h-full w-full rounded-full bg-green-400 opacity-50"></span><span class="relative inline-flex rounded-full h-2.5 w-2.5 bg-green-500"></span></span>
+            <span class="text-xs text-green-400 font-bold uppercase tracking-wider">Active Operation</span>
+          </div>
+          <span class="text-[10px] text-gray-600 font-mono">Started 1h 32m ago</span>
+        </div>
+
+        <h2 class="text-2xl font-bold text-white mb-1">VHRT Bounty Train — Crusader</h2>
+        <p class="text-sm text-gray-500 mb-6">Group bounty run through Crusader VHRT contracts</p>
+
+        <div class="grid grid-cols-4 gap-4 mb-6">
+          <div class="bento rounded-xl p-4 text-center">
+            <p class="text-3xl font-bold text-sc-accent font-mono" style="text-shadow: 0 0 15px rgba(34,211,238,0.4)">142K</p>
+            <p class="text-[10px] text-gray-500 mt-1">aUEC earned</p>
+          </div>
+          <div class="bento rounded-xl p-4 text-center">
+            <p class="text-3xl font-bold text-white font-mono">4</p>
+            <p class="text-[10px] text-gray-500 mt-1">active pilots</p>
+          </div>
+          <div class="bento rounded-xl p-4 text-center">
+            <p class="text-3xl font-bold text-amber-400 font-mono">23</p>
+            <p class="text-[10px] text-gray-500 mt-1">bounties cleared</p>
+          </div>
+          <div class="bento rounded-xl p-4 text-center">
+            <p class="text-3xl font-bold text-emerald-400 font-mono">35.5K</p>
+            <p class="text-[10px] text-gray-500 mt-1">per pilot (est.)</p>
+          </div>
+        </div>
+
+        <!-- Fleet cards -->
+        <div class="grid grid-cols-4 gap-2">
+          <div class="bento rounded-lg p-3 flex items-center gap-3">
+            <div class="w-10 h-10 rounded-lg bg-red-500/10 border border-red-500/30 flex items-center justify-center text-red-400 font-bold text-xs">F1</div>
+            <div>
+              <p class="text-xs font-semibold text-white">Hornet Mk II</p>
+              <p class="text-[10px] text-gray-500">JamesHolden</p>
+            </div>
+          </div>
+          <div class="bento rounded-lg p-3 flex items-center gap-3">
+            <div class="w-10 h-10 rounded-lg bg-red-500/10 border border-red-500/30 flex items-center justify-center text-red-400 font-bold text-xs">F2</div>
+            <div>
+              <p class="text-xs font-semibold text-white">Sabre</p>
+              <p class="text-[10px] text-gray-500">ShadowKnight</p>
+            </div>
+          </div>
+          <div class="bento rounded-lg p-3 flex items-center gap-3">
+            <div class="w-10 h-10 rounded-lg bg-red-500/10 border border-red-500/30 flex items-center justify-center text-red-400 font-bold text-xs">F3</div>
+            <div>
+              <p class="text-xs font-semibold text-white">Vanguard</p>
+              <p class="text-[10px] text-gray-500">NovaViper</p>
+            </div>
+          </div>
+          <div class="bento rounded-lg p-3 flex items-center gap-3">
+            <div class="w-10 h-10 rounded-lg bg-green-500/10 border border-green-500/30 flex items-center justify-center text-green-400 font-bold text-xs">M1</div>
+            <div>
+              <p class="text-xs font-semibold text-white">Cutlass Red</p>
+              <p class="text-[10px] text-gray-500">ArcLight</p>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- MY STATS (right column, top) -->
+    <div class="col-span-6 md:col-span-4 row-span-2 bento rounded-2xl p-5 relative overflow-hidden">
+      <div class="absolute inset-0 bg-gradient-to-br from-sc-accent/[0.03] to-transparent"></div>
+      <div class="relative z-10">
+        <p class="text-[10px] text-gray-500 uppercase tracking-wider mb-3">My Stats This Month</p>
+        <div class="grid grid-cols-2 gap-3">
+          <div>
+            <p class="text-2xl font-bold text-white">12</p>
+            <p class="text-[10px] text-gray-500">ops completed</p>
+          </div>
+          <div>
+            <p class="text-2xl font-bold text-sc-accent" style="text-shadow: 0 0 10px rgba(34,211,238,0.3)">847K</p>
+            <p class="text-[10px] text-gray-500">aUEC earned</p>
+          </div>
+          <div>
+            <p class="text-2xl font-bold text-amber-400">4.8</p>
+            <p class="text-[10px] text-gray-500">avg rating</p>
+          </div>
+          <div>
+            <p class="text-2xl font-bold text-emerald-400">38h</p>
+            <p class="text-[10px] text-gray-500">time in ops</p>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- UPCOMING NEXT (right column) -->
+    <div class="col-span-6 md:col-span-4 row-span-2 bento rounded-2xl p-5">
+      <p class="text-[10px] text-gray-500 uppercase tracking-wider mb-3">Up Next</p>
+      <div class="flex items-center gap-4 mb-4">
+        <div class="text-center">
+          <p class="text-xl font-bold text-white">22:00</p>
+          <p class="text-[9px] text-gray-600">tonight</p>
+        </div>
+        <div class="flex-1">
+          <p class="text-sm font-semibold text-white">Hull C Convoy</p>
+          <p class="text-xs text-gray-500">Stanton Loop · 7/8 signed up</p>
+        </div>
+      </div>
+      <button class="w-full py-2 text-xs font-semibold bg-sc-accent/20 text-sc-accent border border-sc-accent/30 rounded-lg hover:bg-sc-accent/30 transition-colors cursor-pointer">
+        Sign Up — 1 Hauler slot open
+      </button>
+    </div>
+
+    <!-- UPCOMING EVENTS LIST -->
+    <div class="col-span-12 md:col-span-6 row-span-4 bento rounded-2xl p-5">
+      <div class="flex items-center justify-between mb-4">
+        <p class="text-sm font-semibold text-gray-300">Upcoming Events</p>
+        <button class="text-xs text-sc-accent hover:text-white transition-colors cursor-pointer">View All</button>
+      </div>
+      <div class="space-y-2">
+        <div class="flex items-center gap-4 p-3 rounded-xl bg-white/[0.02] border border-white/[0.04] hover:border-sc-accent/20 transition-all cursor-pointer">
+          <div class="w-1 h-12 rounded-full bg-sky-400"></div>
+          <div class="flex-1">
+            <div class="flex items-center gap-2">
+              <span class="text-[10px] bg-sky-500/15 text-sky-400 px-1.5 py-0.5 rounded border border-sky-500/30">Cargo</span>
+              <span class="text-[10px] text-gray-600">Tonight 22:00</span>
+            </div>
+            <p class="text-sm font-semibold text-white mt-1">Hull C Convoy — Stanton Loop</p>
+          </div>
+          <div class="text-right">
+            <p class="text-sm font-bold text-white">7/8</p>
+            <p class="text-[10px] text-gray-500">signed up</p>
+          </div>
+        </div>
+
+        <div class="flex items-center gap-4 p-3 rounded-xl bg-white/[0.02] border border-white/[0.04] hover:border-sc-accent/20 transition-all cursor-pointer">
+          <div class="w-1 h-12 rounded-full bg-amber-400"></div>
+          <div class="flex-1">
+            <div class="flex items-center gap-2">
+              <span class="text-[10px] bg-amber-500/15 text-amber-400 px-1.5 py-0.5 rounded border border-amber-500/30">Mining</span>
+              <span class="text-[10px] text-gray-600">Sat 19:00</span>
+            </div>
+            <p class="text-sm font-semibold text-white mt-1">Quantanium Deep Run — Aaron Halo</p>
+          </div>
+          <div class="text-right">
+            <p class="text-sm font-bold text-white">4/7</p>
+            <p class="text-[10px] text-gray-500">signed up</p>
+          </div>
+        </div>
+
+        <div class="flex items-center gap-4 p-3 rounded-xl bg-white/[0.02] border border-white/[0.04] hover:border-sc-accent/20 transition-all cursor-pointer">
+          <div class="w-1 h-12 rounded-full bg-red-400"></div>
+          <div class="flex-1">
+            <div class="flex items-center gap-2">
+              <span class="text-[10px] bg-red-500/15 text-red-400 px-1.5 py-0.5 rounded border border-red-500/30">Combat</span>
+              <span class="text-[10px] text-gray-600">Mon 20:00</span>
+            </div>
+            <p class="text-sm font-semibold text-white mt-1">Xenothreat Defense Fleet</p>
+          </div>
+          <div class="text-right">
+            <p class="text-sm font-bold text-white">12/20</p>
+            <p class="text-[10px] text-gray-500">signed up</p>
+          </div>
+        </div>
+
+        <div class="flex items-center gap-4 p-3 rounded-xl bg-white/[0.02] border border-white/[0.04] hover:border-sc-accent/20 transition-all cursor-pointer">
+          <div class="w-1 h-12 rounded-full bg-violet-400"></div>
+          <div class="flex-1">
+            <div class="flex items-center gap-2">
+              <span class="text-[10px] bg-violet-500/15 text-violet-400 px-1.5 py-0.5 rounded border border-violet-500/30">Social</span>
+              <span class="text-[10px] bg-sc-accent/10 text-sc-accent px-1.5 py-0.5 rounded border border-sc-accent/20">Public</span>
+              <span class="text-[10px] text-gray-600">Tue 18:00</span>
+            </div>
+            <p class="text-sm font-semibold text-white mt-1">Ship Meet — Lorville</p>
+          </div>
+          <div class="text-right">
+            <p class="text-sm font-bold text-white">14</p>
+            <p class="text-[10px] text-gray-500">going</p>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- PAYOUT HISTORY -->
+    <div class="col-span-12 md:col-span-6 row-span-4 bento rounded-2xl p-5">
+      <div class="flex items-center justify-between mb-4">
+        <p class="text-sm font-semibold text-gray-300">Recent Payouts</p>
+        <button class="text-xs text-sc-accent hover:text-white transition-colors cursor-pointer">History</button>
+      </div>
+
+      <!-- Mini bar chart -->
+      <div class="flex items-end gap-1 h-20 mb-4">
+        <div class="flex-1 bg-sc-accent/20 rounded-t" style="height: 30%"><div class="w-full rounded-t bg-sc-accent/50" style="height: 100%"></div></div>
+        <div class="flex-1 bg-sc-accent/20 rounded-t" style="height: 65%"><div class="w-full rounded-t bg-sc-accent/50" style="height: 100%"></div></div>
+        <div class="flex-1 bg-sc-accent/20 rounded-t" style="height: 45%"><div class="w-full rounded-t bg-sc-accent/50" style="height: 100%"></div></div>
+        <div class="flex-1 bg-sc-accent/20 rounded-t" style="height: 80%"><div class="w-full rounded-t bg-sc-accent/50" style="height: 100%"></div></div>
+        <div class="flex-1 bg-sc-accent/20 rounded-t" style="height: 55%"><div class="w-full rounded-t bg-sc-accent/50" style="height: 100%"></div></div>
+        <div class="flex-1 bg-sc-accent/20 rounded-t" style="height: 100%"><div class="w-full rounded-t bg-sc-accent/70" style="height: 100%"></div></div>
+        <div class="flex-1 bg-sc-accent/20 rounded-t" style="height: 40%"><div class="w-full rounded-t bg-sc-accent/50" style="height: 100%"></div></div>
+      </div>
+      <div class="flex justify-between text-[9px] text-gray-600 mb-4">
+        <span>Mar 1</span><span>Mar 7</span><span>Mar 14</span><span>Mar 20</span>
+      </div>
+
+      <div class="space-y-2">
+        <div class="flex items-center justify-between p-2 rounded-lg bg-white/[0.02]">
+          <div>
+            <p class="text-xs font-medium text-gray-300">Daymar Quant Run</p>
+            <p class="text-[10px] text-gray-600">Mar 19 · 6 pilots</p>
+          </div>
+          <div class="text-right">
+            <p class="text-sm font-bold text-emerald-400">+47.5K</p>
+            <p class="text-[10px] text-gray-600">equal split</p>
+          </div>
+        </div>
+        <div class="flex items-center justify-between p-2 rounded-lg bg-white/[0.02]">
+          <div>
+            <p class="text-xs font-medium text-gray-300">Bunker Clear — Hurston</p>
+            <p class="text-[10px] text-amber-400">Mar 18 · pending</p>
+          </div>
+          <div class="text-right">
+            <p class="text-sm font-bold text-amber-400">~23K</p>
+            <p class="text-[10px] text-gray-600">awaiting confirm</p>
+          </div>
+        </div>
+        <div class="flex items-center justify-between p-2 rounded-lg bg-white/[0.02]">
+          <div>
+            <p class="text-xs font-medium text-gray-300">Hull C Convoy #3</p>
+            <p class="text-[10px] text-gray-600">Mar 15 · 8 pilots</p>
+          </div>
+          <div class="text-right">
+            <p class="text-sm font-bold text-emerald-400">+312K</p>
+            <p class="text-[10px] text-gray-600">role-weighted</p>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+</body>
+</html>
