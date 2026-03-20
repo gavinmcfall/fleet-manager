@@ -1,10 +1,10 @@
 import React, { useState, useMemo } from 'react'
 import { Gem } from 'lucide-react'
 import {
-  interpolateModifier, multiplierToImprovement, formatImprovementWithWord, formatImprovementPct,
-  getStatLabel, getStatDescription,
+  interpolateModifier, multiplierToImprovement, formatImprovementWithWord,
+  getStatLabel,
   resourceColor, resourceBgColor, resourceBorderColor,
-  computeActualValue, formatActualValue, computeDPS, BASE_STAT_DISPLAY,
+  computeActualValue, formatActualValue, computeDPS,
 } from './craftingUtils'
 
 function QualitySlider({ slot, value, onChange }) {
@@ -54,167 +54,11 @@ function QualitySlider({ slot, value, onChange }) {
   )
 }
 
-function progressColor(progress) {
-  if (progress > 0.6) return {
-    bar: 'bg-sc-accent', text: 'text-sc-accent',
-    glow: 'rgba(34,211,238,0.3)',
-  }
-  if (progress > 0.3) return {
-    bar: 'bg-amber-400', text: 'text-amber-400',
-    glow: 'rgba(245,158,11,0.3)',
-  }
-  return {
-    bar: 'bg-red-400', text: 'text-red-400',
-    glow: 'rgba(239,68,68,0.3)',
-  }
-}
-
-function StatRow({ statKey, fallbackName, worstImprovement, currentImprovement, bestImprovement, actualValues, multiplier }) {
-  const label = getStatLabel(statKey, fallbackName)
-  const description = getStatDescription(statKey)
-
-  const totalRange = bestImprovement - worstImprovement
-  const progress = Math.abs(totalRange) > 0.01
-    ? (currentImprovement - worstImprovement) / totalRange
-    : 0.5
-  const progressPct = Math.round(progress * 100)
-  const colors = progressColor(progress)
-
-  return (
-    <div className="group py-2 border-b border-white/[0.04] last:border-0">
-      {/* Main row: label | base → crafted | improvement */}
-      <div className="flex items-center gap-3">
-        {/* Stat name */}
-        <div className="w-28 shrink-0">
-          <span className="text-xs text-gray-300 font-medium">{label}</span>
-          {description && (
-            <span className="text-[10px] text-gray-600 block opacity-0 group-hover:opacity-100 transition-opacity leading-tight">
-              {description}
-            </span>
-          )}
-        </div>
-
-        {/* Base → Crafted values */}
-        <div className="flex-1 min-w-0">
-          {actualValues ? (
-            <div className="flex items-baseline gap-1.5 font-mono text-xs">
-              <span className="text-gray-500">{formatActualValue(actualValues.base, actualValues.decimals)}</span>
-              <span className="text-gray-600">→</span>
-              <span className={colors.text} style={{ textShadow: `0 0 6px ${colors.glow}` }}>
-                {formatActualValue(actualValues.crafted, actualValues.decimals)}
-              </span>
-              <span className="text-gray-600 text-[10px]">{actualValues.unit}</span>
-            </div>
-          ) : (
-            <div className="flex items-baseline gap-1.5 font-mono text-xs">
-              <span className="text-gray-600">base</span>
-              <span className="text-gray-600">×</span>
-              <span className={colors.text} style={{ textShadow: `0 0 6px ${colors.glow}` }}>
-                {multiplier.toFixed(3)}
-              </span>
-            </div>
-          )}
-        </div>
-
-        {/* Improvement badge */}
-        <div className="w-24 text-right shrink-0">
-          <span
-            className={`text-xs font-bold ${colors.text}`}
-            style={{ textShadow: `0 0 8px ${colors.glow}` }}
-          >
-            {formatImprovementWithWord(statKey, currentImprovement)}
-          </span>
-        </div>
-      </div>
-
-      {/* Progress bar */}
-      <div className="flex items-center gap-2 mt-1">
-        <div className="w-28 shrink-0" />
-        <div className="flex-1 flex items-center gap-1.5">
-          <span className="text-[9px] text-red-400/50 w-8 tabular-nums">{formatImprovementPct(worstImprovement)}</span>
-          <div className="flex-1 h-1 bg-white/[0.04] rounded-full overflow-hidden">
-            <div
-              className={`h-full rounded-full ${colors.bar} transition-all duration-200`}
-              style={{ width: `${progressPct}%` }}
-            />
-          </div>
-          <span className="text-[9px] text-sc-accent/50 w-8 text-right tabular-nums">{formatImprovementPct(bestImprovement)}</span>
-        </div>
-        <div className="w-24 shrink-0" />
-      </div>
-    </div>
-  )
-}
-
-function DPSRow({ baseStats, dmgMultiplier, rpmMultiplier }) {
-  const baseDPS = baseStats?.dps
-  if (!baseDPS) return null
-
-  const craftedDPS = computeDPS(
-    (baseStats.damage || 0) * dmgMultiplier,
-    (baseStats.rounds_per_minute || 0) * rpmMultiplier
-  )
-  if (!craftedDPS) return null
-
-  const improvement = ((craftedDPS / baseDPS) - 1) * 100
-  const progress = Math.max(0, Math.min(1, improvement / 30))
-  const colors = progressColor(progress)
-  const word = improvement >= 0.05 ? 'more' : improvement <= -0.05 ? 'less' : ''
-  const label = Math.abs(improvement) < 0.05 ? 'no change' : `${Math.abs(improvement).toFixed(0)}% ${word}`
-
-  return (
-    <div className="group py-2 border-b border-white/[0.04] last:border-0">
-      <div className="flex items-center gap-3">
-        <div className="w-28 shrink-0">
-          <span className="text-xs text-gray-300 font-medium">DPS</span>
-          <span className="text-[10px] text-gray-600 block opacity-0 group-hover:opacity-100 transition-opacity leading-tight">
-            Derived from damage × fire rate
-          </span>
-        </div>
-        <div className="flex-1 min-w-0">
-          <div className="flex items-baseline gap-1.5 font-mono text-xs">
-            <span className="text-gray-500">{formatActualValue(baseDPS, 1)}</span>
-            <span className="text-gray-600">→</span>
-            <span className={colors.text} style={{ textShadow: `0 0 6px ${colors.glow}` }}>
-              {formatActualValue(craftedDPS, 1)}
-            </span>
-            <span className="text-gray-600 text-[10px]">DPS</span>
-          </div>
-        </div>
-        <div className="w-24 text-right shrink-0">
-          <span
-            className={`text-xs font-bold ${colors.text}`}
-            style={{ textShadow: `0 0 8px ${colors.glow}` }}
-          >
-            {label}
-          </span>
-        </div>
-      </div>
-      <div className="flex items-center gap-2 mt-1">
-        <div className="w-28 shrink-0" />
-        <div className="flex-1 flex items-center gap-1.5">
-          <span className="text-[9px] text-gray-600 w-8">&nbsp;</span>
-          <div className="flex-1 h-1 bg-white/[0.04] rounded-full overflow-hidden">
-            <div
-              className={`h-full rounded-full ${colors.bar} transition-all duration-200`}
-              style={{ width: `${Math.round(progress * 100)}%` }}
-            />
-          </div>
-          <span className="text-[9px] text-gray-600 w-8">&nbsp;</span>
-        </div>
-        <div className="w-24 shrink-0" />
-      </div>
-    </div>
-  )
-}
-
-function ReferenceStatRow({ label, value }) {
-  return (
-    <div className="flex items-center justify-between py-1">
-      <span className="text-[11px] text-gray-600">{label}</span>
-      <span className="text-[11px] font-mono text-gray-500">{value}</span>
-    </div>
-  )
+// Format the description column — shows improvement % with word
+function formatDescription(statKey, improvement) {
+  if (Math.abs(improvement) < 0.05) return 'no change'
+  const sign = improvement > 0 ? '+' : ''
+  return `${sign}${improvement.toFixed(1)}% ${formatImprovementWithWord(statKey, improvement).replace(/^\d+%\s*/, '')}`
 }
 
 export default function QualitySim({ blueprint }) {
@@ -228,6 +72,9 @@ export default function QualitySim({ blueprint }) {
     setQualities(prev => ({ ...prev, [index]: value }))
   }
 
+  const baseStats = blueprint.base_stats || null
+
+  // Compute multipliers for each stat
   const { statPreview, dmgMultiplier, rpmMultiplier } = useMemo(() => {
     const statMap = new Map()
 
@@ -236,33 +83,26 @@ export default function QualitySim({ blueprint }) {
       slot.modifiers.forEach(mod => {
         const key = mod.key || mod.name
         if (!statMap.has(key)) {
-          statMap.set(key, { name: mod.name, key, worst: 1, crafted: 1, best: 1 })
+          statMap.set(key, { name: mod.name, key, crafted: 1 })
         }
         const entry = statMap.get(key)
-        entry.worst *= mod.modifier_at_start
         entry.crafted *= interpolateModifier(mod, qualities[slotIndex] || 0)
-        entry.best *= mod.modifier_at_end
       })
     })
 
-    const baseStats = blueprint.base_stats || null
     const dmg = statMap.get('weapon_damage')?.crafted ?? 1
     const rpm = statMap.get('weapon_firerate')?.crafted ?? 1
 
-    const preview = [...statMap.values()]
-      .map(stat => ({
-        key: stat.key,
-        name: stat.name,
-        worstImprovement: multiplierToImprovement(stat.key, stat.worst),
-        currentImprovement: multiplierToImprovement(stat.key, stat.crafted),
-        bestImprovement: multiplierToImprovement(stat.key, stat.best),
-        actualValues: computeActualValue(stat.key, baseStats, stat.crafted),
-        multiplier: stat.crafted,
-      }))
-      .sort((a, b) => Math.abs(b.bestImprovement) - Math.abs(a.bestImprovement))
+    const preview = [...statMap.values()].map(stat => ({
+      key: stat.key,
+      name: stat.name,
+      improvement: multiplierToImprovement(stat.key, stat.crafted),
+      actualValues: computeActualValue(stat.key, baseStats, stat.crafted),
+      multiplier: stat.crafted,
+    }))
 
     return { statPreview: preview, dmgMultiplier: dmg, rpmMultiplier: rpm }
-  }, [slots, qualities, blueprint.base_stats])
+  }, [slots, qualities, baseStats])
 
   if (slots.length === 0) {
     return (
@@ -272,22 +112,91 @@ export default function QualitySim({ blueprint }) {
     )
   }
 
-  const baseStats = blueprint.base_stats || null
-  const hasDPS = baseStats?.dps != null
+  // Build table rows
+  const rows = []
 
-  // Build reference stats (unmodified by crafting)
-  const modifiedFields = new Set(['damage', 'rounds_per_minute', 'dps'])
-  const referenceStats = baseStats
-    ? BASE_STAT_DISPLAY.filter(s => {
-        if (modifiedFields.has(s.field)) return false
-        if (s.paired) return baseStats[s.field] != null && baseStats[s.paired] != null
-        return baseStats[s.field] != null
+  // Modified stats first (damage, fire rate)
+  for (const stat of statPreview) {
+    if (stat.actualValues) {
+      rows.push({
+        label: getStatLabel(stat.key, stat.name),
+        base: `${formatActualValue(stat.actualValues.base, stat.actualValues.decimals)} ${stat.actualValues.unit}`,
+        crafted: `${formatActualValue(stat.actualValues.crafted, stat.actualValues.decimals)} ${stat.actualValues.unit}`,
+        description: formatDescription(stat.key, stat.improvement),
+        modified: true,
+        _improvement: stat.improvement,
       })
-    : []
+    }
+  }
+
+  // DPS (derived)
+  if (baseStats?.dps) {
+    const craftedDPS = computeDPS(
+      (baseStats.damage || 0) * dmgMultiplier,
+      (baseStats.rounds_per_minute || 0) * rpmMultiplier
+    )
+    if (craftedDPS) {
+      const improvement = ((craftedDPS / baseStats.dps) - 1) * 100
+      rows.push({
+        label: 'DPS',
+        base: formatActualValue(baseStats.dps, 1),
+        crafted: formatActualValue(craftedDPS, 1),
+        description: Math.abs(improvement) < 0.05 ? 'no change' : `${improvement > 0 ? '+' : ''}${improvement.toFixed(1)}%`,
+        modified: true,
+        _improvement: improvement,
+      })
+    }
+  }
+
+  // Unmodified base stats
+  if (baseStats?.spread_min != null && baseStats?.spread_max != null) {
+    rows.push({ label: 'Spread', base: `${formatActualValue(baseStats.spread_min, 1)} – ${formatActualValue(baseStats.spread_max, 1)}`, crafted: '', description: '' })
+  }
+  if (baseStats?.effective_range != null) {
+    rows.push({ label: 'Effective Range', base: `${formatActualValue(baseStats.effective_range, 0)} m`, crafted: '', description: '' })
+  }
+  if (baseStats?.projectile_speed != null) {
+    rows.push({ label: 'Projectile Speed', base: `${formatActualValue(baseStats.projectile_speed, 0)} m/s`, crafted: '', description: '' })
+  }
+  if (baseStats?.ammo_capacity != null) {
+    rows.push({ label: 'Ammo', base: `${formatActualValue(baseStats.ammo_capacity, 0)} rds`, crafted: '', description: '' })
+  }
+
+  // Multiplier-only stats (recoil)
+  for (const stat of statPreview) {
+    if (!stat.actualValues) {
+      rows.push({
+        label: getStatLabel(stat.key, stat.name),
+        base: 'Base',
+        crafted: `×${stat.multiplier.toFixed(3)}`,
+        description: formatDescription(stat.key, stat.improvement),
+        modified: true,
+        _improvement: stat.improvement,
+      })
+    }
+  }
+
+  // Color helper for improvement values
+  const improvementColor = (imp) => {
+    if (Math.abs(imp) < 0.05) return { text: 'text-gray-500', glow: '' }
+    if (imp > 5) return { text: 'text-sc-accent', glow: 'rgba(34,211,238,0.3)' }
+    if (imp > 0) return { text: 'text-amber-400', glow: 'rgba(245,158,11,0.3)' }
+    return { text: 'text-red-400', glow: 'rgba(239,68,68,0.3)' }
+  }
+
+  // Assign colors to each row
+  for (const row of rows) {
+    row.colors = row.modified ? improvementColor(row._improvement ?? 0) : { text: 'text-gray-600', glow: '' }
+  }
+
+  // Static info rows
+  const infoRows = []
+  if (baseStats?.damage_type) infoRows.push({ label: 'Damage Type', value: baseStats.damage_type })
+  if (baseStats?.fire_modes) infoRows.push({ label: 'Fire Modes', value: baseStats.fire_modes })
 
   return (
     <div className="space-y-5">
-      {/* Top: Quality sliders — full width responsive grid */}
+      {/* Quality sliders — full width */}
       <div>
         <div className="flex items-baseline justify-between mb-2">
           <h4 className="text-xs uppercase tracking-wider text-gray-500">Material Quality</h4>
@@ -305,63 +214,60 @@ export default function QualitySim({ blueprint }) {
         </div>
       </div>
 
-      {/* Bottom: Unified stats — base + crafted in one view */}
-      <div className="bg-white/[0.02] border border-white/[0.05] rounded-lg">
-        {/* Column headers */}
-        <div className="flex items-center gap-3 px-4 pt-3 pb-1.5 border-b border-white/[0.06]">
-          <span className="w-28 shrink-0 text-[10px] uppercase tracking-wider text-gray-600">Stat</span>
-          <span className="flex-1 text-[10px] uppercase tracking-wider text-gray-600">Base → Crafted</span>
-          <span className="w-24 shrink-0 text-[10px] uppercase tracking-wider text-gray-600 text-right">Effect</span>
-        </div>
-
-        {/* Dynamic stat rows */}
-        <div className="px-4">
-          {statPreview.length === 0 ? (
-            <p className="text-sm text-gray-600 text-center py-6">No modifiers on this blueprint.</p>
-          ) : (
-            <>
-              {statPreview.map(stat => (
-                <StatRow
-                  key={stat.key}
-                  statKey={stat.key}
-                  fallbackName={stat.name}
-                  worstImprovement={stat.worstImprovement}
-                  currentImprovement={stat.currentImprovement}
-                  bestImprovement={stat.bestImprovement}
-                  actualValues={stat.actualValues}
-                  multiplier={stat.multiplier}
-                />
-              ))}
-              {hasDPS && (
-                <DPSRow
-                  baseStats={baseStats}
-                  dmgMultiplier={dmgMultiplier}
-                  rpmMultiplier={rpmMultiplier}
-                />
-              )}
-            </>
-          )}
-        </div>
-
-        {/* Reference stats — unmodified by crafting */}
-        {referenceStats.length > 0 && (
-          <div className="border-t border-white/[0.06] px-4 py-2.5">
-            <span className="text-[10px] uppercase tracking-wider text-gray-600 mb-1 block">Unmodified</span>
-            <div className="grid grid-cols-2 sm:grid-cols-4 gap-x-4">
-              {referenceStats.map(s => (
-                <ReferenceStatRow
-                  key={s.field}
-                  label={s.label}
-                  value={
-                    s.paired
-                      ? `${formatActualValue(baseStats[s.field], s.decimals)}–${formatActualValue(baseStats[s.paired], s.decimals)}`
-                      : `${formatActualValue(baseStats[s.field], s.decimals)}${s.unit ? ` ${s.unit}` : ''}`
-                  }
-                />
-              ))}
-            </div>
-          </div>
-        )}
+      {/* Stats table */}
+      <div className="border border-white/[0.06] rounded-lg overflow-hidden">
+        <table className="w-full text-sm">
+          <thead>
+            <tr className="border-b border-white/[0.08] bg-white/[0.02]">
+              <th className="text-left text-[10px] uppercase tracking-wider text-gray-500 font-medium px-4 py-2.5">Stat</th>
+              <th className="text-left text-[10px] uppercase tracking-wider text-gray-500 font-medium px-4 py-2.5">Base Value</th>
+              <th className="text-left text-[10px] uppercase tracking-wider text-gray-500 font-medium px-4 py-2.5">Crafted Value</th>
+              <th className="text-left text-[10px] uppercase tracking-wider text-gray-500 font-medium px-4 py-2.5">Description</th>
+            </tr>
+          </thead>
+          <tbody>
+            {rows.map((row, i) => {
+              const c = row.colors
+              return (
+                <tr key={i} className="border-b border-white/[0.04] last:border-0 hover:bg-white/[0.02] transition-colors">
+                  <td className="px-4 py-2 text-xs text-gray-300 font-medium">{row.label}</td>
+                  <td className="px-4 py-2 text-xs font-mono text-gray-400">{row.base}</td>
+                  <td className="px-4 py-2 text-xs font-mono">
+                    {row.crafted ? (
+                      <span
+                        className={row.modified ? c.text : 'text-gray-600'}
+                        style={c.glow ? { textShadow: `0 0 8px ${c.glow}` } : undefined}
+                      >
+                        {row.crafted}
+                      </span>
+                    ) : (
+                      <span className="text-gray-600">—</span>
+                    )}
+                  </td>
+                  <td className="px-4 py-2 text-xs">
+                    {row.description ? (
+                      <span
+                        className={row.modified ? c.text : 'text-gray-600'}
+                        style={c.glow ? { textShadow: `0 0 6px ${c.glow}` } : undefined}
+                      >
+                        {row.description}
+                      </span>
+                    ) : (
+                      <span className="text-gray-600">—</span>
+                    )}
+                  </td>
+                </tr>
+              )
+            })}
+            {/* Static info rows — span columns */}
+            {infoRows.map((row, i) => (
+              <tr key={`info-${i}`} className="border-b border-white/[0.04] last:border-0">
+                <td className="px-4 py-2 text-xs text-gray-300 font-medium">{row.label}</td>
+                <td colSpan={3} className="px-4 py-2 text-xs text-gray-400">{row.value}</td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
       </div>
     </div>
   )

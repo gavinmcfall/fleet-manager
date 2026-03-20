@@ -702,7 +702,7 @@ export function gamedataRoutes<E extends HonoEnv>() {
         const weaponResult = await db.prepare(
           `SELECT class_name, name, rounds_per_minute, damage, dps,
                   effective_range, projectile_speed, ammo_capacity,
-                  spread_min, spread_max
+                  spread_min, spread_max, damage_type, fire_modes
            FROM fps_weapons
            WHERE game_version_id <= ${versionSub(versionId)}
            ORDER BY game_version_id DESC`
@@ -720,6 +720,8 @@ export function gamedataRoutes<E extends HonoEnv>() {
               ammo_capacity: w.ammo_capacity,
               spread_min: w.spread_min,
               spread_max: w.spread_max,
+              damage_type: w.damage_type,
+              fire_modes: w.fire_modes,
             })
           }
         }
