@@ -165,33 +165,37 @@ export default function LocationDetail() {
                   <tr className="border-b border-white/[0.08] bg-white/[0.02]">
                     <th className="text-left text-[10px] uppercase tracking-wider text-gray-500 font-medium px-4 py-2">Resource</th>
                     <th className="text-left text-[10px] uppercase tracking-wider text-gray-500 font-medium px-4 py-2">Tier</th>
-                    <th className="text-right text-[10px] uppercase tracking-wider text-gray-500 font-medium px-4 py-2">Rel. Prob</th>
+                    <th className="text-right text-[10px] uppercase tracking-wider text-gray-500 font-medium px-4 py-2">Chance</th>
                   </tr>
                 </thead>
                 <tbody>
-                  {group.deposits.map((dep, i) => {
-                    const name = dep.composition_name || cleanDepositName(dep.composition_guid)
-                    const tier = extractDepositTier(dep.composition_guid)
-                    const tierInfo = tier ? (ROCK_TIER_INFO[tier] || null) : null
+                  {(() => {
+                    const totalWeight = group.deposits.reduce((sum, d) => sum + (d.relative_probability || 0), 0)
+                    return group.deposits.map((dep, i) => {
+                      const name = dep.composition_name || cleanDepositName(dep.composition_guid)
+                      const tier = extractDepositTier(dep.composition_guid)
+                      const tierInfo = tier ? (ROCK_TIER_INFO[tier] || null) : null
+                      const normalizedPct = totalWeight > 0 ? (dep.relative_probability / totalWeight * 100) : 0
 
-                    return (
-                      <tr key={i} className="border-b border-white/[0.04] last:border-0 hover:bg-white/[0.02]">
-                        <td className="px-4 py-2 text-xs text-gray-300">{name}</td>
-                        <td className="px-4 py-2">
-                          {tierInfo ? (
-                            <span className={`text-[10px] px-1.5 py-0.5 rounded ${tierInfo.bg} ${tierInfo.color} ${tierInfo.border} border`}>
-                              {tier}
-                            </span>
-                          ) : (
-                            <span className="text-xs text-gray-600">—</span>
-                          )}
-                        </td>
-                        <td className="px-4 py-2 text-xs text-gray-400 text-right font-mono">
-                          {(dep.relative_probability * 100).toFixed(0)}%
-                        </td>
-                      </tr>
-                    )
-                  })}
+                      return (
+                        <tr key={i} className="border-b border-white/[0.04] last:border-0 hover:bg-white/[0.02]">
+                          <td className="px-4 py-2 text-xs text-gray-300">{name}</td>
+                          <td className="px-4 py-2">
+                            {tierInfo ? (
+                              <span className={`text-[10px] px-1.5 py-0.5 rounded ${tierInfo.bg} ${tierInfo.color} ${tierInfo.border} border`}>
+                                {tier}
+                              </span>
+                            ) : (
+                              <span className="text-xs text-gray-600">—</span>
+                            )}
+                          </td>
+                          <td className="px-4 py-2 text-xs text-gray-400 text-right font-mono">
+                            {normalizedPct.toFixed(1)}%
+                          </td>
+                        </tr>
+                      )
+                    })
+                  })()}
                 </tbody>
               </table>
             </div>
