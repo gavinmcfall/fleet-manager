@@ -419,7 +419,7 @@ export function adminRoutes() {
       "mining_clustering_presets", "rock_compositions",
       "reputation_scopes", "reputation_standings", "reputation_perks",
       "reputation_reward_tiers", "shops", "shop_locations",
-      "shop_inventory", "commodity_shop_listings",
+      "shop_inventory",
       "missions", "mission_types", "mission_givers", "mission_organizations",
       "damage_types", "npc_loadouts", "npc_loadout_items",
       "crafting_resources", "crafting_blueprints",
