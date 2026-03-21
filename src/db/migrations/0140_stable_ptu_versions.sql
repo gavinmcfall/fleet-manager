@@ -10,6 +10,11 @@
 --   3. Consolidate duplicate PTU/EPTU rows (delete old data + old rows, keep newest)
 --   4. Strip build number from surviving PTU/EPTU codes
 
+-- Disable FK checks for the duration of this migration.
+-- Data deletions across inter-related versioned tables would otherwise fail
+-- due to FK ordering constraints. New connections get FKs ON automatically.
+PRAGMA foreign_keys = OFF;
+
 -- Step 1: Add the column
 ALTER TABLE game_versions ADD COLUMN build_number TEXT;
 
