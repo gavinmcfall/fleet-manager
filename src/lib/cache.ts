@@ -20,13 +20,18 @@ export async function resolveVersionId(
   db: D1Database,
   patchCode?: string,
 ): Promise<number> {
-  const sql = patchCode
-    ? "SELECT id FROM game_versions WHERE code = ?"
-    : "SELECT id FROM game_versions WHERE is_default = 1";
-  const row = patchCode
-    ? await db.prepare(sql).bind(patchCode).first<{ id: number }>()
-    : await db.prepare(sql).first<{ id: number }>();
-  return row?.id ?? -1;
+  if (patchCode) {
+    const row = await db
+      .prepare("SELECT id FROM game_versions WHERE code = ?")
+      .bind(patchCode)
+      .first<{ id: number }>();
+    if (row) return row.id;
+    // Unknown code (e.g. stale PTU code after consolidation) — fall back to default
+  }
+  const defaultRow = await db
+    .prepare("SELECT id FROM game_versions WHERE is_default = 1")
+    .first<{ id: number }>();
+  return defaultRow?.id ?? -1;
 }
 
 /**
