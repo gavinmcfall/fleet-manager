@@ -402,8 +402,8 @@ export function adminRoutes() {
 
     const versionId = version.id;
 
-    // All tables with game_version_id FK — batch DELETE in one go (< 100 statements)
-    const tables = [
+    // Tables with game_version_id FK — DELETE WHERE game_version_id = ?
+    const versionedTables = [
       "vehicles", "vehicle_components", "vehicle_ports", "vehicle_careers",
       "vehicle_roles", "vehicle_weapon_racks", "vehicle_suit_lockers",
       "ship_missiles", "fps_weapons", "fps_armour", "fps_attachments",
@@ -414,21 +414,73 @@ export function adminRoutes() {
       "factions", "faction_reputation_scopes", "law_infractions",
       "law_jurisdictions", "jurisdiction_infraction_overrides",
       "star_systems", "star_map_locations", "mineable_elements",
-      "mining_locations", "mining_location_deposits", "mining_lasers",
+      "mining_locations", "mining_lasers",
       "mining_modules", "mining_gadgets", "mining_quality_distributions",
       "mining_clustering_presets", "rock_compositions",
       "reputation_scopes", "reputation_standings", "reputation_perks",
       "reputation_reward_tiers", "shops", "shop_locations",
       "shop_inventory", "commodity_shop_listings",
       "missions", "mission_types", "mission_givers", "mission_organizations",
-      "damage_types", "npc_factions", "npc_loadouts", "npc_loadout_items",
-      "crafting_resources", "crafting_blueprints", "crafting_blueprint_slots",
-      "crafting_slot_modifiers", "salvageable_ships",
-      "salvageable_ship_components", "refining_processes",
+      "damage_types", "npc_loadouts", "npc_loadout_items",
+      "crafting_resources", "crafting_blueprints",
+      "salvageable_ships", "refining_processes",
+      "armor_resistance_profiles", "fps_ammo",
     ];
 
-    const deleteStatements = tables.map(t =>
-      db.prepare(`DELETE FROM ${t} WHERE game_version_id = ?`).bind(versionId)
+    // Child tables without game_version_id — DELETE via FK to parent
+    // Must be deleted BEFORE their parents to avoid FK constraint errors
+    const deleteStatements: D1PreparedStatement[] = [];
+
+    // Delete child tables first (no game_version_id — delete via FK to versioned parent)
+    // Order matters: deepest children first
+
+    // crafting_slot_modifiers → crafting_blueprint_slots → crafting_blueprints (versioned)
+    deleteStatements.push(
+      db.prepare(
+        `DELETE FROM crafting_slot_modifiers WHERE crafting_blueprint_slot_id IN (
+          SELECT id FROM crafting_blueprint_slots WHERE crafting_blueprint_id IN (
+            SELECT id FROM crafting_blueprints WHERE game_version_id = ?
+          )
+        )`
+      ).bind(versionId)
+    );
+    deleteStatements.push(
+      db.prepare(
+        `DELETE FROM crafting_blueprint_slots WHERE crafting_blueprint_id IN (
+          SELECT id FROM crafting_blueprints WHERE game_version_id = ?
+        )`
+      ).bind(versionId)
+    );
+
+    // mining_location_deposits → mining_locations (versioned)
+    deleteStatements.push(
+      db.prepare(
+        `DELETE FROM mining_location_deposits WHERE mining_location_id IN (
+          SELECT id FROM mining_locations WHERE game_version_id = ?
+        )`
+      ).bind(versionId)
+    );
+
+    // salvageable_ship_components → salvageable_ships (versioned)
+    deleteStatements.push(
+      db.prepare(
+        `DELETE FROM salvageable_ship_components WHERE salvageable_ship_id IN (
+          SELECT id FROM salvageable_ships WHERE game_version_id = ?
+        )`
+      ).bind(versionId)
+    );
+
+    // Then delete versioned tables
+    for (const t of versionedTables) {
+      deleteStatements.push(
+        db.prepare(`DELETE FROM ${t} WHERE game_version_id = ?`).bind(versionId)
+      );
+    }
+
+    // Clean up npc_factions — lookup table, no game_version_id.
+    // Runs after npc_loadouts are deleted so orphaned factions get removed.
+    deleteStatements.push(
+      db.prepare("DELETE FROM npc_factions WHERE id NOT IN (SELECT DISTINCT npc_faction_id FROM npc_loadouts)")
     );
 
     // Clear build_number so the row is hidden from dropdown
@@ -442,7 +494,7 @@ export function adminRoutes() {
     const kv = c.env.SC_BRIDGE_CACHE;
     await purgeByPrefix(kv);
 
-    return c.json({ ok: true, tables_purged: tables.length, channel });
+    return c.json({ ok: true, tables_purged: versionedTables.length + 4, channel }); // +4 child tables
   });
 
   /**
