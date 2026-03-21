@@ -51,39 +51,39 @@ export default function ComponentPicker({ slug, portId, portType, currentOverrid
   const totalCount = data?.components?.length || 0
 
   return (
-    <div className="fixed inset-0 z-50 flex items-start justify-center pt-6 pb-6 px-4 bg-black/70 backdrop-blur-sm" onClick={onClose}>
-      <div className="bg-zinc-900 border border-zinc-700/50 rounded-lg shadow-2xl w-full max-w-5xl max-h-[88vh] flex flex-col" onClick={e => e.stopPropagation()}>
+    <div className="fixed inset-0 z-50 flex items-start justify-center pt-6 pb-6 px-4 bg-black/60 backdrop-blur-md" onClick={onClose}>
+      <div className="bg-gray-950 border border-white/[0.08] rounded-lg shadow-2xl w-full max-w-5xl max-h-[88vh] flex flex-col" onClick={e => e.stopPropagation()}>
         {/* Header */}
-        <div className="flex items-center justify-between px-5 py-3 border-b border-zinc-700/50 flex-shrink-0">
+        <div className="flex items-center justify-between px-5 py-3 border-b border-white/[0.06] flex-shrink-0">
           <div>
-            <h3 className="text-sm font-semibold text-zinc-100">
+            <h3 className="text-sm font-semibold text-white">
               Select {PORT_TYPE_LABELS[portType] || portType}
             </h3>
-            <p className="text-xs text-zinc-500 mt-0.5">
+            <p className="text-xs text-gray-500 mt-0.5">
               Size {data?.size_min === data?.size_max ? data?.size_min : `${data?.size_min}–${data?.size_max}`}
               {' · '}{totalCount} compatible
             </p>
           </div>
           <div className="flex items-center gap-3">
             <div className="relative">
-              <Search className="absolute left-2.5 top-2 w-3.5 h-3.5 text-zinc-500" />
+              <Search className="absolute left-2.5 top-2 w-3.5 h-3.5 text-gray-500" />
               <input
                 type="text"
                 placeholder="Filter..."
                 value={filter}
                 onChange={e => setFilter(e.target.value)}
-                className="pl-8 pr-3 py-1.5 text-sm bg-zinc-800/80 border border-zinc-700/50 rounded text-zinc-200 placeholder-zinc-500 focus:outline-none focus:border-sky-700 w-48"
+                className="pl-8 pr-3 py-1.5 text-sm bg-white/[0.04] border border-white/[0.08] rounded text-gray-300 placeholder-zinc-500 focus:outline-none focus:border-sc-accent/50 w-48"
                 autoFocus
               />
             </div>
-            <button onClick={onClose} className="p-1.5 text-zinc-400 hover:text-zinc-200 rounded transition-colors">
+            <button onClick={onClose} className="p-1.5 text-gray-400 hover:text-gray-300 rounded transition-colors">
               <X className="w-4 h-4" />
             </button>
           </div>
         </div>
 
         {/* Table header */}
-        <div className="flex items-center gap-0 px-5 py-1.5 border-b border-zinc-800/80 bg-zinc-800/40 text-[11px] font-medium text-zinc-500 uppercase tracking-wider flex-shrink-0">
+        <div className="flex items-center gap-0 px-5 py-1.5 border-b border-white/[0.08] bg-white/[0.02] text-[11px] font-medium text-gray-500 uppercase tracking-wider flex-shrink-0">
           <div className="w-6 flex-shrink-0" /> {/* status icon */}
           {columns.map(col => (
             <button
@@ -93,7 +93,7 @@ export default function ComponentPicker({ slug, portId, portType, currentOverrid
             >
               {col.label}
               {sortKey === col.key ? (
-                sortDir === 'desc' ? <ArrowDown className="w-3 h-3 text-sky-400" /> : <ArrowUp className="w-3 h-3 text-sky-400" />
+                sortDir === 'desc' ? <ArrowDown className="w-3 h-3 text-sc-accent" /> : <ArrowUp className="w-3 h-3 text-sc-accent" />
               ) : (
                 <ArrowUpDown className="w-3 h-3 opacity-30" />
               )}
@@ -118,12 +118,12 @@ export default function ComponentPicker({ slug, portId, portType, currentOverrid
               <div
                 key={comp.id}
                 onClick={() => onSelect(comp)}
-                className={`flex items-center gap-0 px-5 py-2 cursor-pointer transition-colors group border-b border-zinc-800/20
-                  ${isEquipped ? 'bg-sky-950/30 border-l-2 border-l-sky-400' : 'hover:bg-zinc-800/40 border-l-2 border-l-transparent'}`}
+                className={`flex items-center gap-0 px-5 py-2 cursor-pointer transition-colors group border-b border-white/[0.03]
+                  ${isEquipped ? 'bg-sc-accent/[0.06] border-l-2 border-l-sc-accent/60' : 'hover:bg-white/[0.03] border-l-2 border-l-transparent'}`}
               >
                 {/* Status icon */}
                 <div className="w-6 flex-shrink-0 flex items-center">
-                  {isEquipped && <Star className="w-3.5 h-3.5 text-sky-400" />}
+                  {isEquipped && <Star className="w-3.5 h-3.5 text-sc-accent" />}
                   {isStock && !isEquipped && <Diamond className="w-3.5 h-3.5 text-amber-400" />}
                 </div>
 
@@ -136,7 +136,7 @@ export default function ComponentPicker({ slug, portId, portType, currentOverrid
                       key={col.key}
                       className={`${col.width || 'w-16'} flex-shrink-0 text-xs font-mono truncate
                         ${col.align === 'left' ? 'text-left' : 'text-right'}
-                        ${col.key === 'name' ? (isEquipped ? 'text-sky-300 font-medium font-sans' : 'text-zinc-200 font-sans') : 'text-zinc-400'}`}
+                        ${col.key === 'name' ? (isEquipped ? 'text-sc-accent font-medium font-sans' : 'text-gray-300 font-sans') : 'text-gray-400'}`}
                     >
                       {display}
                     </div>
@@ -150,7 +150,7 @@ export default function ComponentPicker({ slug, portId, portType, currentOverrid
                       <Package className="w-3 h-3" /> Collected
                     </span>
                   ) : comp.on_ships?.length > 0 ? (
-                    <span className="inline-flex items-center gap-1 text-[10px] text-sky-400 bg-sky-900/20 px-1.5 py-0.5 rounded truncate max-w-full" title={`On ${comp.on_ships[0].custom_name || comp.on_ships[0].ship_name}`}>
+                    <span className="inline-flex items-center gap-1 text-[10px] text-sc-accent bg-sky-900/20 px-1.5 py-0.5 rounded truncate max-w-full" title={`On ${comp.on_ships[0].custom_name || comp.on_ships[0].ship_name}`}>
                       On {comp.on_ships[0].custom_name || comp.on_ships[0].ship_name}
                     </span>
                   ) : hasBuyShop ? (
@@ -168,7 +168,7 @@ export default function ComponentPicker({ slug, portId, portType, currentOverrid
                 <div className="w-8 flex-shrink-0 flex justify-center">
                   <button
                     onClick={(e) => { e.stopPropagation(); onAddToCart(comp) }}
-                    className="p-1 text-zinc-600 hover:text-emerald-400 opacity-0 group-hover:opacity-100 transition-all"
+                    className="p-1 text-gray-600 hover:text-emerald-400 opacity-0 group-hover:opacity-100 transition-all"
                     title="Add to cart"
                   >
                     <ShoppingCart className="w-3.5 h-3.5" />
@@ -179,15 +179,15 @@ export default function ComponentPicker({ slug, portId, portType, currentOverrid
           })}
 
           {!loading && !error && sorted.length === 0 && (
-            <div className="p-8 text-center text-zinc-500 text-sm">No compatible components found.</div>
+            <div className="p-8 text-center text-gray-500 text-sm">No compatible components found.</div>
           )}
         </div>
 
         {/* Footer */}
-        <div className="px-5 py-2 border-t border-zinc-800/50 text-[11px] text-zinc-600 flex items-center justify-between flex-shrink-0">
+        <div className="px-5 py-2 border-t border-white/[0.04] text-[11px] text-gray-600 flex items-center justify-between flex-shrink-0">
           <span>{sorted.length} of {totalCount} shown</span>
           <div className="flex items-center gap-3">
-            <span className="flex items-center gap-1"><Star className="w-3 h-3 text-sky-400" /> Equipped</span>
+            <span className="flex items-center gap-1"><Star className="w-3 h-3 text-sc-accent" /> Equipped</span>
             <span className="flex items-center gap-1"><Diamond className="w-3 h-3 text-amber-400" /> Stock</span>
           </div>
         </div>
