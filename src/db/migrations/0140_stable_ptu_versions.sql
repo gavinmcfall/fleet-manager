@@ -44,7 +44,7 @@ DELETE FROM vehicle_components WHERE game_version_id IN (SELECT gv.id FROM game_
 DELETE FROM trade_commodities WHERE game_version_id IN (SELECT gv.id FROM game_versions gv WHERE gv.channel IN ('PTU','EPTU') AND EXISTS (SELECT 1 FROM game_versions g2 WHERE g2.channel = gv.channel AND g2.id > gv.id));
 DELETE FROM shop_locations WHERE game_version_id IN (SELECT gv.id FROM game_versions gv WHERE gv.channel IN ('PTU','EPTU') AND EXISTS (SELECT 1 FROM game_versions g2 WHERE g2.channel = gv.channel AND g2.id > gv.id));
 DELETE FROM shop_inventory WHERE game_version_id IN (SELECT gv.id FROM game_versions gv WHERE gv.channel IN ('PTU','EPTU') AND EXISTS (SELECT 1 FROM game_versions g2 WHERE g2.channel = gv.channel AND g2.id > gv.id));
-DELETE FROM commodity_shop_listings WHERE game_version_id IN (SELECT gv.id FROM game_versions gv WHERE gv.channel IN ('PTU','EPTU') AND EXISTS (SELECT 1 FROM game_versions g2 WHERE g2.channel = gv.channel AND g2.id > gv.id));
+-- commodity_shop_listings: skipped — table does not exist in all environments
 DELETE FROM shops WHERE game_version_id IN (SELECT gv.id FROM game_versions gv WHERE gv.channel IN ('PTU','EPTU') AND EXISTS (SELECT 1 FROM game_versions g2 WHERE g2.channel = gv.channel AND g2.id > gv.id));
 DELETE FROM missions WHERE game_version_id IN (SELECT gv.id FROM game_versions gv WHERE gv.channel IN ('PTU','EPTU') AND EXISTS (SELECT 1 FROM game_versions g2 WHERE g2.channel = gv.channel AND g2.id > gv.id));
 DELETE FROM mission_givers WHERE game_version_id IN (SELECT gv.id FROM game_versions gv WHERE gv.channel IN ('PTU','EPTU') AND EXISTS (SELECT 1 FROM game_versions g2 WHERE g2.channel = gv.channel AND g2.id > gv.id));
