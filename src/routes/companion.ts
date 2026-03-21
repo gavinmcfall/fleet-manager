@@ -708,7 +708,21 @@ companion.get("/wallet/history", async (c) => {
  */
 companion.get("/friends", async (c) => {
   const user = c.get("user" as never) as { id: string };
+  const since = c.req.query("since");
   const db = c.env.DB;
+
+  if (since) {
+    // Delta mode: only return friends updated after the given timestamp
+    const rows = await db
+      .prepare(
+        `SELECT account_id, nickname, display_name, presence, activity_state, activity_detail, updated_at
+         FROM companion_friends WHERE user_id = ? AND updated_at > ? ORDER BY updated_at DESC`,
+      )
+      .bind(user.id, since)
+      .all();
+
+    return c.json({ ok: true, friends: rows.results, delta: true });
+  }
 
   const rows = await db
     .prepare(
