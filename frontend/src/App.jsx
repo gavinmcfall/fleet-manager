@@ -57,6 +57,7 @@ const Reputation = lazy(() => import('./pages/Reputation'))
 const LawSystem = lazy(() => import('./pages/LawSystem'))
 const NPCLoadouts = lazy(() => import('./pages/NPCLoadouts'))
 const LocalizationBuilder = lazy(() => import('./pages/LocalizationBuilder'))
+const Loadout = lazy(() => import('./pages/Loadout'))
 const NotFound = lazy(() => import('./pages/NotFound'))
 
 const publicNavItems = [
@@ -663,6 +664,7 @@ export default function App() {
                       <Route path="/reputation" element={<RequireAuth><Reputation /></RequireAuth>} />
                       <Route path="/law" element={<RequireAuth><LawSystem /></RequireAuth>} />
                       <Route path="/npc-loadouts" element={<RequireAuth><NPCLoadouts /></RequireAuth>} />
+                      <Route path="/loadout/:slug" element={<RequireAuth><Suspense fallback={<LoadingState fullScreen />}><Loadout /></Suspense></RequireAuth>} />
                       <Route path="/fleet" element={<RequireAuth><FleetTable /></RequireAuth>} />
                       <Route path="/insurance" element={<RequireAuth><Insurance /></RequireAuth>} />
                       <Route path="/analysis" element={<RequireAuth><Analysis /></RequireAuth>} />

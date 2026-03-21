@@ -722,6 +722,7 @@ function LoadoutItems({ items, emptyIcon: Icon, emptyMessage, onItemClick }) {
 // ─── Component / Weapon tabs ──────────────────────────────────────────────────
 
 function ComponentsTab({ slug }) {
+  const navigate = useNavigate()
   const { data: loadout, loading, error, refetch } = useShipLoadout(slug)
   const [selected, setSelected] = useState(null)
   if (loading) return <LoadingState message="Loading components..." />
@@ -729,6 +730,15 @@ function ComponentsTab({ slug }) {
   const items = (loadout || []).filter(r => COMPONENT_TYPES.has(r.port_type))
   return (
     <>
+      <div className="flex justify-end mb-2">
+        <button
+          onClick={() => navigate(`/loadout/${slug}`)}
+          className="px-3 py-1.5 text-xs bg-sky-700 hover:bg-sky-600 text-white rounded transition-colors flex items-center gap-1.5"
+        >
+          <Wrench className="w-3.5 h-3.5" />
+          Customize Loadout
+        </button>
+      </div>
       <LoadoutItems items={items} emptyIcon={Box} emptyMessage="No component data available" onItemClick={setSelected} />
       <ComponentDetailPanel item={selected} onClose={() => setSelected(null)} />
     </>

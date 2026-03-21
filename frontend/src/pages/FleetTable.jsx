@@ -1,7 +1,7 @@
 import React, { useMemo } from 'react'
 import { useSearchParams, useNavigate } from 'react-router-dom'
 import { useFleet, useUserOrgs, updateShipVisibility } from '../hooks/useAPI'
-import { ArrowUpDown, SearchX, Rocket, Upload } from 'lucide-react'
+import { ArrowUpDown, SearchX, Rocket, Upload, Wrench } from 'lucide-react'
 import PageHeader from '../components/PageHeader'
 import LoadingState from '../components/LoadingState'
 import ErrorState from '../components/ErrorState'
@@ -220,7 +220,16 @@ export default function FleetTable() {
                           className="rounded border border-sc-border/50 shrink-0"
                         />
                         <div>
-                          <span className="font-medium text-white">{v.vehicle_name}</span>
+                          <div className="flex items-center gap-1.5">
+                            <span className="font-medium text-white">{v.vehicle_name}</span>
+                            <button
+                              onClick={(e) => { e.stopPropagation(); navigate(`/loadout/${v.vehicle_slug}?fleet_id=${v.id}`) }}
+                              className="p-0.5 text-zinc-500 hover:text-sky-400 transition-colors"
+                              title="Customize loadout"
+                            >
+                              <Wrench className="w-3.5 h-3.5" />
+                            </button>
+                          </div>
                           {v.custom_name && (
                             <span className="block text-xs text-sc-accent italic">"{v.custom_name}"</span>
                           )}

@@ -357,3 +357,52 @@ export async function saveLocalizationShipOrder(items) {
 export function useLocalizationPreview() {
   return useAPI('/localization/preview')
 }
+
+// Loadout Builder hooks
+export function useLoadoutComponents(slug) {
+  return useAPI(slug ? `/loadout/${slug}/components` : null, { skip: !slug })
+}
+
+export function useCompatibleComponents(slug, portId) {
+  return useAPI(slug && portId ? `/loadout/${slug}/compatible?port_id=${portId}` : null, { skip: !slug || !portId })
+}
+
+export function useFleetLoadout(fleetId) {
+  return useAPI(fleetId ? `/loadout/fleet/${fleetId}` : null, { skip: !fleetId })
+}
+
+export async function saveFleetLoadout(fleetId, overrides) {
+  return putJSON(`/loadout/fleet/${fleetId}`, { overrides })
+}
+
+export async function resetFleetLoadout(fleetId) {
+  return apiFetch('DELETE', `/loadout/fleet/${fleetId}`)
+}
+
+export async function resetFleetLoadoutPort(fleetId, portId) {
+  return apiFetch('DELETE', `/loadout/fleet/${fleetId}/port/${portId}`)
+}
+
+export function useLoadoutCart() {
+  return useAPI('/loadout/cart')
+}
+
+export async function addToLoadoutCart(items) {
+  return postJSON('/loadout/cart', { items })
+}
+
+export async function updateLoadoutCartItem(cartId, body) {
+  return putJSON(`/loadout/cart/${cartId}`, body)
+}
+
+export async function removeLoadoutCartItem(cartId) {
+  return apiFetch('DELETE', `/loadout/cart/${cartId}`)
+}
+
+export async function emptyLoadoutCart() {
+  return apiFetch('DELETE', '/loadout/cart')
+}
+
+export async function optimizeLoadoutCart() {
+  return postJSON('/loadout/cart/optimize', {})
+}
