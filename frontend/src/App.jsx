@@ -169,7 +169,7 @@ function VersionSelector() {
           <div className="fixed inset-0 z-40" onClick={() => setOpen(false)} />
           <div className="absolute left-0 top-full mt-1 z-50 bg-gray-800 border border-gray-700 rounded-lg shadow-xl py-1 min-w-[200px]">
             {versions.map(v => {
-              const vLabel = v.channel === 'LIVE' ? formatVersionLabel(v.code, v.channel) : formatVersionFull(v.code, v.channel)
+              const vLabel = v.channel === 'LIVE' ? formatVersionLabel(v.code, v.channel) : formatVersionFull(v.code, v.channel, v.build_number)
               const isDefault = v.code === defaultVersion?.code
               const isActive = v.code === activeCode
               return (

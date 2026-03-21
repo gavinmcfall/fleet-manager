@@ -149,6 +149,7 @@ in this repo** — create them in the tools repo instead.
 - **Profile bio verification (0132)**: `profile_verification_pending` table + `verified_at`/`verified_handle` on `user_rsi_profile`. Partial unique index prevents two users verifying same handle. Verification cleared on handle change via RSI sync. 3 endpoints: generate key, check citizen page HTML, status query.
 - **Org Ops (0133)**: 7 tables: `op_types`, `org_ops`, `org_op_participants`, `org_op_ships`, `org_op_capital`, `org_op_earnings`, `org_op_payouts`. Lifecycle: planning→active→completed→archived (or cancelled). Payout: ratio × time proration. `is_public` + `join_code` for public ops. `webhook_url` column reserved for future Discord integration. Ships linked to `user_fleet` entries. `opsRoutes()` mounted as sub-router on `orgRoutes` at `/:slug/ops`. `publicOpsRoutes()` mounted at `/api/ops` for join-by-code.
 - **Player reputation (0134)**: 4 tables: `rating_categories`, `player_ratings`, `player_reviews`, `rating_audit_log`, `player_reputation` (materialized medians). Semi-anonymous: users see aggregates, admins see everything. Requires verified account + 7-day account age. IP tracked on every rating. Median recalculated on each INSERT.
+- **Stable PTU versions (0140)**: PTU/EPTU `game_versions` rows use stable codes without build numbers (e.g., `"4.7.0-ptu"` not `"4.7.0-ptu.11475995"`). Build number tracked in separate `build_number` column. User preferences survive PTU data refreshes. Admin purge endpoint (`DELETE /api/admin/versions/ptu`) wipes all PTU data from ~65 versioned tables; build update endpoint (`PUT /api/admin/versions/ptu/build`) sets the build number. Extraction scripts use `lib/version.py:resolve_version()` to produce stable PTU codes. The `getGameVersions` EXISTS check naturally hides purged PTU entries (no data = not in dropdown).
 - **KV caching**: `SC_BRIDGE_CACHE` KV namespace. `cachedJson()` helper in `src/lib/cache.ts` wraps 25 public endpoints with read-through KV cache. Cache keys: `{domain}:{resource}:{versionId}[:{qualifier}]`. User-supplied slugs sanitized via `cacheSlug()` to prevent namespace collision. 24-hour TTL safety net. Auto-purge on game version change (`PUT /api/admin/versions/default`). Manual purge via `POST /api/admin/cache/purge` (optional `{ prefix }` body). `X-Cache: HIT/MISS` + `X-Cache-Key` headers for observability. User-data endpoints (fleet, settings, collection) are never cached. Design doc at `/home/gavin/scbridge/tools/docs/design/kv-caching-strategy.md`.
 
 ## Build & Deploy
@@ -241,7 +242,7 @@ have caused bugs before or are easy to get wrong.
 - Never skip numbers. Never rename an applied migration file.
 - **Never ALTER a PK or UNIQUE constraint in-place** — create new table, copy data, drop old.
 - Index naming: `idx_{table}_{column}` — e.g., `idx_loot_map_type`
-- Current last migration: **0136_companion_app_tables.sql**
+- Current last migration: **0140_stable_ptu_versions.sql**
 
 ### Out-of-Band Columns
 Previously these columns were applied via `wrangler d1 execute` outside migration files.

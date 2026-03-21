@@ -372,5 +372,136 @@ export function adminRoutes() {
     return c.json({ ok: true });
   });
 
+  // ── PTU data management ────────────────────────────────────────────
+
+  /**
+   * DELETE /api/admin/versions/ptu
+   *
+   * Purge all game data for a PTU/EPTU channel. The game_versions row is kept
+   * alive but with build_number set to NULL, so the EXISTS check in
+   * getGameVersions naturally hides it from the dropdown until new data arrives.
+   *
+   * Body: { channel?: "PTU" | "EPTU" } (defaults to "PTU")
+   */
+  routes.delete("/versions/ptu",
+    validate("json", z.object({
+      channel: z.enum(["PTU", "EPTU"]).default("PTU"),
+    }).default({ channel: "PTU" })),
+    async (c) => {
+    const { channel } = c.req.valid("json");
+    const db = c.env.DB;
+
+    const version = await db
+      .prepare("SELECT id FROM game_versions WHERE channel = ?")
+      .bind(channel)
+      .first<{ id: number }>();
+
+    if (!version) {
+      return c.json({ error: `No ${channel} version row found` }, 404);
+    }
+
+    const versionId = version.id;
+
+    // All tables with game_version_id FK — batch DELETE in one go (< 100 statements)
+    const tables = [
+      "vehicles", "vehicle_components", "vehicle_ports", "vehicle_careers",
+      "vehicle_roles", "vehicle_weapon_racks", "vehicle_suit_lockers",
+      "ship_missiles", "fps_weapons", "fps_armour", "fps_attachments",
+      "fps_utilities", "fps_helmets", "fps_clothing", "fps_melee",
+      "fps_carryables", "fps_ammo_types", "consumables", "consumable_effects",
+      "harvestables", "props", "loot_map", "loot_item_locations",
+      "contracts", "manufacturers", "commodities", "trade_commodities",
+      "factions", "faction_reputation_scopes", "law_infractions",
+      "law_jurisdictions", "jurisdiction_infraction_overrides",
+      "star_systems", "star_map_locations", "mineable_elements",
+      "mining_locations", "mining_location_deposits", "mining_lasers",
+      "mining_modules", "mining_gadgets", "mining_quality_distributions",
+      "mining_clustering_presets", "rock_compositions",
+      "reputation_scopes", "reputation_standings", "reputation_perks",
+      "reputation_reward_tiers", "shops", "shop_locations",
+      "shop_inventory", "commodity_shop_listings",
+      "missions", "mission_types", "mission_givers", "mission_organizations",
+      "damage_types", "npc_factions", "npc_loadouts", "npc_loadout_items",
+      "crafting_resources", "crafting_blueprints", "crafting_blueprint_slots",
+      "crafting_slot_modifiers", "salvageable_ships",
+      "salvageable_ship_components", "refining_processes",
+    ];
+
+    const deleteStatements = tables.map(t =>
+      db.prepare(`DELETE FROM ${t} WHERE game_version_id = ?`).bind(versionId)
+    );
+
+    // Clear build_number so the row is hidden from dropdown
+    deleteStatements.push(
+      db.prepare("UPDATE game_versions SET build_number = NULL WHERE id = ?").bind(versionId)
+    );
+
+    await db.batch(deleteStatements);
+
+    // Purge KV cache
+    const kv = c.env.SC_BRIDGE_CACHE;
+    await purgeByPrefix(kv);
+
+    return c.json({ ok: true, tables_purged: tables.length, channel });
+  });
+
+  /**
+   * PUT /api/admin/versions/ptu/build
+   *
+   * Update the build number (and optionally the code) for a PTU/EPTU version.
+   * Used after loading new PTU data to record which build the data is from.
+   */
+  routes.put("/versions/ptu/build",
+    validate("json", z.object({
+      channel: z.enum(["PTU", "EPTU"]),
+      build_number: z.string().min(1).max(50),
+      code: z.string().min(1).max(100).optional(),
+    })),
+    async (c) => {
+    const { channel, build_number, code } = c.req.valid("json");
+    const db = c.env.DB;
+
+    // Find or create the canonical row for this channel
+    let version = await db
+      .prepare("SELECT id, code FROM game_versions WHERE channel = ?")
+      .bind(channel)
+      .first<{ id: number; code: string }>();
+
+    if (!version && code) {
+      // Create the PTU row if it doesn't exist yet
+      const uuid = `${code}-${build_number}`;
+      await db
+        .prepare("INSERT INTO game_versions (uuid, code, channel, is_default, build_number) VALUES (?, ?, ?, 0, ?)")
+        .bind(uuid, code, channel, build_number)
+        .run();
+      version = await db
+        .prepare("SELECT id, code FROM game_versions WHERE channel = ?")
+        .bind(channel)
+        .first<{ id: number; code: string }>();
+    }
+
+    if (!version) {
+      return c.json({ error: `No ${channel} version row found. Provide 'code' to create one.` }, 404);
+    }
+
+    const updates: D1PreparedStatement[] = [
+      db.prepare("UPDATE game_versions SET build_number = ? WHERE id = ?").bind(build_number, version.id),
+    ];
+
+    if (code && code !== version.code) {
+      updates.push(
+        db.prepare("UPDATE game_versions SET code = ? WHERE id = ?").bind(code, version.id)
+      );
+    }
+
+    await db.batch(updates);
+
+    // Purge KV cache
+    const kv = c.env.SC_BRIDGE_CACHE;
+    await purgeByPrefix(kv);
+
+    return c.json({ ok: true, code: code || version.code, build_number, channel });
+  });
+
   return routes;
 }

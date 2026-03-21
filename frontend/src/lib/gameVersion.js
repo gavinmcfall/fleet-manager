@@ -1,9 +1,10 @@
 // "4.6.0-live.11319298" → "Alpha 4.6.0 LIVE"
 // "4.7.0-ptu.12345678"  → "Alpha 4.7.0 PTU"
+// "4.7.0-ptu"           → "Alpha 4.7.0 PTU"  (stable PTU code)
 // "1.0.0-techpreview.11286463" → "SC 1.0 TECH-PREVIEW"
 export function formatVersionLabel(code, channel) {
   if (!code) return '';
-  const match = code.match(/^(\d+\.\d+\.\d+)-([a-z-]+)\./);
+  const match = code.match(/^(\d+\.\d+\.\d+)-([a-z-]+)/);
   if (!match) return code;
   const [, version, codeChannel] = match;
   const ch = (channel || codeChannel).toUpperCase();
@@ -20,8 +21,9 @@ export function extractBuildNumber(code) {
 }
 
 // Full display for dropdowns: "Alpha 4.6.0 LIVE · 11319298"
-export function formatVersionFull(code, channel) {
+// buildNumber param takes priority over extracting from the code string
+export function formatVersionFull(code, channel, buildNumber) {
   const label = formatVersionLabel(code, channel);
-  const build = extractBuildNumber(code);
+  const build = buildNumber || extractBuildNumber(code);
   return build ? `${label} · ${build}` : label;
 }

@@ -764,10 +764,10 @@ export interface CollectionEntry {
   quantity: number;
 }
 
-export async function getGameVersions(db: D1Database): Promise<{ code: string; channel: string; is_default: number; released_at: string }[]> {
+export async function getGameVersions(db: D1Database): Promise<{ code: string; channel: string; is_default: number; released_at: string; build_number: string | null }[]> {
   // Show: the default version, and PTU/EPTU versions that have game data
   const result = await db
-    .prepare(`SELECT gv.code, gv.channel, gv.is_default, gv.released_at
+    .prepare(`SELECT gv.code, gv.channel, gv.is_default, gv.released_at, gv.build_number
       FROM game_versions gv
       WHERE gv.is_default = 1
         OR (gv.channel IN ('PTU', 'EPTU') AND (
@@ -775,7 +775,7 @@ export async function getGameVersions(db: D1Database): Promise<{ code: string; c
           OR EXISTS (SELECT 1 FROM crafting_blueprints cb WHERE cb.game_version_id = gv.id)
         ))
       ORDER BY gv.id DESC`)
-    .all<{ code: string; channel: string; is_default: number; released_at: string }>();
+    .all<{ code: string; channel: string; is_default: number; released_at: string; build_number: string | null }>();
   return result.results;
 }
 

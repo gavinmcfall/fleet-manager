@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react'
-import { RefreshCw, Globe, Play, AlertCircle, Ticket, Copy, Check, Trash2 } from 'lucide-react'
+import { RefreshCw, Globe, Play, AlertCircle, Ticket, Copy, Check, Trash2, FlaskConical } from 'lucide-react'
 import { useSyncStatus, triggerRSISync, triggerFullSync, setPreferences } from '../hooks/useAPI'
 import useTimezone from '../hooks/useTimezone'
 
@@ -198,6 +198,87 @@ function CachePurgePanel() {
   )
 }
 
+function PTUPurgePanel() {
+  const [channel, setChannel] = useState('PTU')
+  const [purging, setPurging] = useState(false)
+  const [result, setResult] = useState(null)
+  const [confirming, setConfirming] = useState(false)
+
+  const handlePurge = async () => {
+    if (!confirming) {
+      setConfirming(true)
+      return
+    }
+    setPurging(true)
+    setResult(null)
+    setConfirming(false)
+    try {
+      const res = await fetch('/api/admin/versions/ptu', {
+        method: 'DELETE',
+        headers: { 'Content-Type': 'application/json' },
+        credentials: 'same-origin',
+        body: JSON.stringify({ channel }),
+      })
+      if (!res.ok) {
+        const err = await res.json().catch(() => ({}))
+        throw new Error(err.error || 'Purge failed')
+      }
+      const data = await res.json()
+      setResult({ type: 'success', message: `Purged ${data.tables_purged} tables for ${data.channel}` })
+      setTimeout(() => setResult(null), 6000)
+    } catch (err) {
+      setResult({ type: 'error', message: err.message })
+    } finally {
+      setPurging(false)
+    }
+  }
+
+  return (
+    <PanelSection title="PTU Data" icon={FlaskConical}>
+      <div className="p-4 space-y-3">
+        <p className="text-xs text-gray-500">
+          Purge all game data for a PTU/EPTU channel. The version row is preserved so users don't need to reselect after new data is loaded.
+        </p>
+        <div className="flex items-center gap-2">
+          <select
+            value={channel}
+            onChange={(e) => { setChannel(e.target.value); setConfirming(false) }}
+            className="px-3 py-2 bg-sc-darker border border-sc-border rounded text-sm text-gray-200 focus:outline-none focus:ring-1 focus:ring-sc-accent/50"
+          >
+            <option value="PTU">PTU</option>
+            <option value="EPTU">EPTU</option>
+          </select>
+          <button
+            onClick={handlePurge}
+            disabled={purging}
+            className={`flex items-center gap-2 text-sm px-3 py-2 rounded font-medium transition-colors disabled:opacity-50 ${
+              confirming
+                ? 'bg-sc-danger text-white hover:bg-sc-danger/80'
+                : 'btn-primary'
+            }`}
+          >
+            <Trash2 className="w-3.5 h-3.5" />
+            {purging ? 'Purging...' : confirming ? `Confirm purge ${channel}?` : `Purge ${channel} Data`}
+          </button>
+          {confirming && (
+            <button
+              onClick={() => setConfirming(false)}
+              className="text-xs text-gray-500 hover:text-gray-300"
+            >
+              Cancel
+            </button>
+          )}
+        </div>
+        {result && (
+          <p className={`text-xs font-mono ${result.type === 'success' ? 'text-sc-success' : 'text-sc-danger'}`}>
+            {result.message}
+          </p>
+        )}
+      </div>
+    </PanelSection>
+  )
+}
+
 export default function Admin() {
   const { timezone } = useTimezone()
   const { data: syncHistory, loading, error, refetch } = useSyncStatus()
@@ -255,6 +336,9 @@ export default function Admin() {
           <span>{triggerError}</span>
         </div>
       )}
+
+      {/* PTU Data */}
+      <PTUPurgePanel />
 
       {/* KV Cache */}
       <CachePurgePanel />
