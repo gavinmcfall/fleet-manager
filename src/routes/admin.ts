@@ -497,7 +497,7 @@ export function adminRoutes() {
     // Clean up npc_factions — lookup table, no game_version_id.
     // Runs after npc_loadouts are deleted so orphaned factions get removed.
     deleteStatements.push(
-      db.prepare("DELETE FROM npc_factions WHERE id NOT IN (SELECT DISTINCT npc_faction_id FROM npc_loadouts)")
+      db.prepare("DELETE FROM npc_factions WHERE id NOT IN (SELECT DISTINCT faction_id FROM npc_loadouts WHERE faction_id IS NOT NULL)")
     );
 
     // Clear build_number so the row is hidden from dropdown
