@@ -31,11 +31,16 @@ export const VEHICLE_VERSION_JOIN = `INNER JOIN (
  */
 export const VEHICLE_VERSION_CAP = `game_version_id <= (SELECT id FROM game_versions WHERE is_default = 1)`;
 
-/** Version-aware join — accepts optional patch code for user-selected versions */
+/** Version-aware join — accepts optional patch code for user-selected versions.
+ * Falls back to the default version if the requested code doesn't exist
+ * (e.g. stale PTU codes after version consolidation). */
 export function versionSubquery(patchCode?: string): string {
-  return patchCode
-    ? `(SELECT id FROM game_versions WHERE code = '${patchCode.replace(/'/g, "''")}')`
-    : `(SELECT id FROM game_versions WHERE is_default = 1)`;
+  if (!patchCode) return `(SELECT id FROM game_versions WHERE is_default = 1)`;
+  const escaped = patchCode.replace(/'/g, "''");
+  return `(SELECT COALESCE(
+    (SELECT id FROM game_versions WHERE code = '${escaped}'),
+    (SELECT id FROM game_versions WHERE is_default = 1)
+  ))`;
 }
 
 export function vehicleVersionJoin(patchCode?: string): string {
