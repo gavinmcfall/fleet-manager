@@ -189,14 +189,13 @@ export default function Loadout() {
       {/* Stats Panel — horizontal across top */}
       <StatsPanel stockComponents={stockComponents} overrides={overrides} horizontal />
 
-      {/* Component Slots — 3-column grid */}
-      <div className="p-3">
-        <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-3">
+      {/* Component Slots — masonry flow */}
+      <div className="p-3" style={{ columns: 'auto 280px', columnGap: '12px' }}>
           {grouped.map(group => {
             const isCollapsed = collapsed[group.label]
             const categoryOverrides = group.items.filter(i => overrides[i.port_id]).length
             return (
-              <div key={group.label} className="bg-white/[0.02] border border-white/[0.05] rounded-lg overflow-hidden">
+              <div key={group.label} className="bg-white/[0.02] border border-white/[0.05] rounded-lg overflow-hidden mb-3" style={{ breakInside: 'avoid' }}>
                 {/* Category header */}
                 <div className="flex items-center gap-1.5 px-3 py-1.5 bg-white/[0.02] border-b border-white/[0.06]">
                   <button
@@ -259,7 +258,6 @@ export default function Loadout() {
               </div>
             )
           })}
-        </div>
       </div>
 
       {pickerPortId && (
