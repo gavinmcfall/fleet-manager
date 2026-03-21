@@ -8,13 +8,20 @@ import {
   computeActualValue, formatActualValue, computeDPS,
 } from './craftingUtils'
 
-function Tooltip({ text, children }) {
+function Tooltip({ text, children, position = 'top' }) {
+  const posStyles = position === 'right'
+    ? 'left-full top-1/2 -translate-y-1/2 ml-2'
+    : 'bottom-full left-0 mb-2'
+  const arrowStyles = position === 'right'
+    ? 'absolute top-1/2 -translate-y-1/2 -left-1 w-2 h-2 bg-gray-900/95 border-b border-l border-white/[0.1] rotate-45'
+    : 'absolute -bottom-1 left-4 w-2 h-2 bg-gray-900/95 border-b border-r border-white/[0.1] rotate-45'
+
   return (
     <span className="relative group/tip inline-flex items-center gap-1 cursor-help">
       {children}
-      <span className="absolute bottom-full left-0 mb-2 hidden group-hover/tip:block px-3 py-2 rounded-lg bg-gray-900/95 border border-white/[0.1] shadow-xl shadow-black/40 backdrop-blur-sm text-xs text-gray-300 font-normal normal-case tracking-normal whitespace-normal max-w-[240px] z-20 leading-relaxed">
+      <span className={`absolute ${posStyles} hidden group-hover/tip:block px-3 py-2 rounded-lg bg-gray-900/95 border border-white/[0.1] shadow-xl shadow-black/40 backdrop-blur-sm text-xs text-gray-300 font-normal normal-case tracking-normal whitespace-normal w-72 z-20 leading-relaxed`}>
         {text}
-        <span className="absolute -bottom-1 left-4 w-2 h-2 bg-gray-900/95 border-b border-r border-white/[0.1] rotate-45" />
+        <span className={arrowStyles} />
       </span>
     </span>
   )
@@ -265,7 +272,7 @@ export default function QualitySim({ blueprint }) {
                   </td>
                   <td className="px-4 py-2 text-xs font-mono text-gray-400 tabular-nums">
                     {row._baseTooltip ? (
-                      <Tooltip text={row._baseTooltip}>
+                      <Tooltip text={row._baseTooltip} position="right">
                         <span className="border-b border-dashed border-gray-600">{row.base}</span>
                       </Tooltip>
                     ) : row.base}
