@@ -488,7 +488,12 @@ export function adminRoutes() {
       db.prepare("UPDATE game_versions SET build_number = NULL WHERE id = ?").bind(versionId)
     );
 
-    await db.batch(deleteStatements);
+    try {
+      await db.batch(deleteStatements);
+    } catch (err) {
+      console.error("[admin/ptu-purge] batch failed:", err);
+      return c.json({ error: `Purge failed: ${String(err)}` }, 500);
+    }
 
     // Purge KV cache
     const kv = c.env.SC_BRIDGE_CACHE;
