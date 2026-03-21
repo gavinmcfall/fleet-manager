@@ -178,104 +178,74 @@ export default function Loadout() {
         </div>
       </div>
 
-      {/* Main 2-column layout */}
-      <div className="flex flex-col lg:flex-row">
-        {/* Left: Component Slots */}
-        <div className="flex-1 min-w-0 border-r border-zinc-700/30">
-          <div className="p-3 space-y-0.5">
-            {grouped.map(group => {
-              const isCollapsed = collapsed[group.label]
-              const categoryOverrides = group.items.filter(i => overrides[i.port_id]).length
-              return (
-                <div key={group.label}>
-                  {/* Category header */}
-                  <div className="flex items-center gap-1 px-2 py-1.5">
-                    <button
-                      onClick={() => setCollapsed(prev => ({ ...prev, [group.label]: !prev[group.label] }))}
-                      className="flex items-center gap-1.5 text-zinc-400 hover:text-zinc-200 transition-colors"
-                    >
-                      {isCollapsed ? <ChevronRight className="w-3.5 h-3.5" /> : <ChevronDown className="w-3.5 h-3.5" />}
-                      <span className="text-[11px] font-semibold uppercase tracking-wider">{group.label}</span>
-                    </button>
-                    <span className="text-[10px] text-zinc-600">{group.items.length}</span>
-                    {categoryOverrides > 0 && (
-                      <>
-                        <span className="text-[10px] text-sky-400 ml-1">{categoryOverrides} custom</span>
-                        <button
-                          onClick={() => handleResetCategory(group.items)}
-                          className="text-[10px] text-zinc-600 hover:text-zinc-400 ml-auto transition-colors"
-                        >
-                          Reset
-                        </button>
-                      </>
-                    )}
-                  </div>
+      {/* Stats Panel — horizontal across top */}
+      <StatsPanel stockComponents={stockComponents} overrides={overrides} horizontal />
 
-                  {/* Slot cards */}
-                  {!isCollapsed && (
-                    <div className="space-y-px ml-1">
-                      {group.items.map(item => {
-                        const override = overrides[item.port_id]
-                        const displayName = override?.component_name || item.component_name
-                        const displayMfr = override?.manufacturer_name || item.manufacturer_name
-                        const isOverridden = !!override
-                        const Icon = PORT_TYPE_ICONS[item.port_type]
-                        const primaryStat = getPrimaryStat(item, override)
-                        const sz = item.component_size || item.size_max
-
-                        return (
-                          <button
-                            key={item.port_id}
-                            onClick={() => { setPickerPortId(item.port_id); setPickerPortType(item.port_type) }}
-                            className={`w-full flex items-center gap-2 px-2.5 py-2 rounded text-left transition-colors cursor-pointer group
-                              ${isOverridden
-                                ? 'bg-sky-950/25 border-l-2 border-l-sky-500 hover:bg-sky-950/40'
-                                : 'border-l-2 border-l-transparent hover:bg-zinc-800/40'}`}
-                          >
-                            {/* Size badge */}
-                            <span className="badge badge-size text-[10px] w-7 text-center flex-shrink-0">S{sz}</span>
-
-                            {/* Icon */}
-                            {Icon && <Icon className="w-4 h-4 text-zinc-500 flex-shrink-0" />}
-
-                            {/* Name + manufacturer */}
-                            <div className="flex-1 min-w-0">
-                              <div className="flex items-center gap-1.5">
-                                <span className={`text-sm truncate ${isOverridden ? 'text-sky-300 font-medium' : 'text-zinc-200'}`}>
-                                  {displayName || 'Empty'}
-                                </span>
-                                {isOverridden && <Star className="w-3 h-3 text-sky-400 flex-shrink-0" />}
-                              </div>
-                              {displayMfr && (
-                                <span className="text-[10px] text-zinc-600 block truncate">{displayMfr}</span>
-                              )}
-                            </div>
-
-                            {/* Primary stat */}
-                            {primaryStat && (
-                              <span className="text-xs font-mono text-zinc-400 flex-shrink-0 tabular-nums">
-                                {primaryStat}
-                              </span>
-                            )}
-
-                            {/* Grade */}
-                            {item.grade && (
-                              <span className="text-[10px] text-zinc-600 flex-shrink-0 w-5 text-center">{item.grade}</span>
-                            )}
-                          </button>
-                        )
-                      })}
-                    </div>
+      {/* Component Slots — 3-column grid */}
+      <div className="p-3">
+        <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-3">
+          {grouped.map(group => {
+            const isCollapsed = collapsed[group.label]
+            const categoryOverrides = group.items.filter(i => overrides[i.port_id]).length
+            return (
+              <div key={group.label} className="bg-zinc-800/20 rounded-lg overflow-hidden">
+                {/* Category header */}
+                <div className="flex items-center gap-1.5 px-3 py-1.5 bg-zinc-800/40 border-b border-zinc-700/30">
+                  <button
+                    onClick={() => setCollapsed(prev => ({ ...prev, [group.label]: !prev[group.label] }))}
+                    className="flex items-center gap-1.5 text-zinc-400 hover:text-zinc-200 transition-colors"
+                  >
+                    {isCollapsed ? <ChevronRight className="w-3 h-3" /> : <ChevronDown className="w-3 h-3" />}
+                    <span className="text-[11px] font-semibold uppercase tracking-wider">{group.label}</span>
+                  </button>
+                  <span className="text-[10px] text-zinc-600">{group.items.length}</span>
+                  {categoryOverrides > 0 && (
+                    <>
+                      <span className="text-[10px] text-sky-400 ml-1">{categoryOverrides} custom</span>
+                      <button
+                        onClick={() => handleResetCategory(group.items)}
+                        className="text-[10px] text-zinc-600 hover:text-zinc-400 ml-auto transition-colors"
+                      >
+                        Reset
+                      </button>
+                    </>
                   )}
                 </div>
-              )
-            })}
-          </div>
-        </div>
 
-        {/* Right: Stats Panel */}
-        <div className="w-full lg:w-80 xl:w-96 flex-shrink-0">
-          <StatsPanel stockComponents={stockComponents} overrides={overrides} />
+                {/* Slot cards */}
+                {!isCollapsed && (
+                  <div className="divide-y divide-zinc-800/30">
+                    {group.items.map(item => {
+                      const override = overrides[item.port_id]
+                      const displayName = override?.component_name || item.component_name
+                      const isOverridden = !!override
+                      const Icon = PORT_TYPE_ICONS[item.port_type]
+                      const primaryStat = getPrimaryStat(item, override)
+                      const sz = item.component_size || item.size_max
+
+                      return (
+                        <button
+                          key={item.port_id}
+                          onClick={() => { setPickerPortId(item.port_id); setPickerPortType(item.port_type) }}
+                          className={`w-full flex items-center gap-2 px-3 py-1.5 text-left transition-colors cursor-pointer
+                            ${isOverridden ? 'bg-sky-950/20 border-l-2 border-l-sky-500' : 'hover:bg-zinc-800/30 border-l-2 border-l-transparent'}`}
+                        >
+                          <span className="badge badge-size text-[9px] w-6 text-center flex-shrink-0">S{sz}</span>
+                          {Icon && <Icon className="w-3.5 h-3.5 text-zinc-500 flex-shrink-0" />}
+                          <span className={`text-xs truncate flex-1 ${isOverridden ? 'text-sky-300 font-medium' : 'text-zinc-300'}`}>
+                            {displayName || 'Empty'}
+                          </span>
+                          {primaryStat && (
+                            <span className="text-[11px] font-mono text-zinc-500 flex-shrink-0 tabular-nums">{primaryStat}</span>
+                          )}
+                        </button>
+                      )
+                    })}
+                  </div>
+                )}
+              </div>
+            )
+          })}
         </div>
       </div>
 

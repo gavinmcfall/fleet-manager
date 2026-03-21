@@ -5,7 +5,7 @@ import { ArrowUp, ArrowDown, Zap, Shield, Crosshair, Thermometer, Gauge } from '
  * Stats panel with grouped sections: DPS, Shields, Power Budget, Cooling, Quantum.
  * Shows stock→custom diff with color-coded arrows.
  */
-export default function StatsPanel({ stockComponents, overrides }) {
+export default function StatsPanel({ stockComponents, overrides, horizontal }) {
   const stock = useMemo(() => aggregateStats(stockComponents, {}), [stockComponents])
   const custom = useMemo(() => aggregateStats(stockComponents, overrides), [stockComponents, overrides])
 
@@ -13,21 +13,22 @@ export default function StatsPanel({ stockComponents, overrides }) {
   const hasChanges = Object.keys(overrides).length > 0
 
   return (
-    <div className="p-4 space-y-4">
+    <div className={horizontal ? 'px-4 py-3 border-b border-zinc-700/50 bg-zinc-900/40' : 'p-4 space-y-4'}>
+      <div className={horizontal ? 'grid grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-3' : 'space-y-4'}>
       {/* DPS Section */}
-      <StatsSection icon={Crosshair} title="Firepower" color="text-red-400">
+      <StatsSection icon={Crosshair} title="Firepower" color="text-red-400" compact={horizontal}>
         <StatRow label="Total DPS" stock={stock.dps} custom={custom.dps} hasChanges={hasChanges} large />
         <div className="grid grid-cols-2 gap-x-3">
           <StatRow label="Ballistic" stock={stock.ballisticDps} custom={custom.ballisticDps} hasChanges={hasChanges} />
           <StatRow label="Energy" stock={stock.energyDps} custom={custom.energyDps} hasChanges={hasChanges} />
         </div>
-        <StatRow label="Alpha Damage" stock={stock.alpha} custom={custom.alpha} hasChanges={hasChanges} />
+        <StatRow label="Alpha" stock={stock.alpha} custom={custom.alpha} hasChanges={hasChanges} />
       </StatsSection>
 
       {/* Shields Section */}
-      <StatsSection icon={Shield} title="Shields" color="text-sky-400">
+      <StatsSection icon={Shield} title="Shields" color="text-sky-400" compact={horizontal}>
         <StatRow label="Shield HP" stock={stock.shieldHp} custom={custom.shieldHp} hasChanges={hasChanges} large />
-        <StatRow label="Regen Rate" stock={stock.shieldRegen} custom={custom.shieldRegen} hasChanges={hasChanges} suffix="/s" />
+        <StatRow label="Regen" stock={stock.shieldRegen} custom={custom.shieldRegen} hasChanges={hasChanges} suffix="/s" />
         {(custom.resistPhys || custom.resistEnergy || custom.resistDist) && (
           <div className="mt-2 space-y-1">
             <ResistBar label="Physical" value={custom.resistPhys} stockValue={stock.resistPhys} hasChanges={hasChanges} color="bg-amber-500" />
@@ -38,34 +39,35 @@ export default function StatsPanel({ stockComponents, overrides }) {
       </StatsSection>
 
       {/* Power Budget Section */}
-      <StatsSection icon={Zap} title="Power" color="text-amber-400">
+      <StatsSection icon={Zap} title="Power" color="text-amber-400" compact={horizontal}>
         <PowerBudget output={custom.power} draw={custom.powerDraw} stockOutput={stock.power} stockDraw={stock.powerDraw} hasChanges={hasChanges} />
       </StatsSection>
 
       {/* Cooling Section */}
-      <StatsSection icon={Thermometer} title="Cooling" color="text-cyan-400">
+      <StatsSection icon={Thermometer} title="Cooling" color="text-cyan-400" compact={horizontal}>
         <StatRow label="Cooling Rate" stock={stock.cooling} custom={custom.cooling} hasChanges={hasChanges} suffix="/s" />
       </StatsSection>
 
       {/* Quantum Section */}
-      <StatsSection icon={Gauge} title="Quantum" color="text-violet-400">
+      <StatsSection icon={Gauge} title="Quantum" color="text-violet-400" compact={horizontal}>
         <StatRow label="Speed" stock={stock.qtSpeed} custom={custom.qtSpeed} hasChanges={hasChanges} scale={1000000} suffix=" Mm/s" />
         <StatRow label="Range" stock={stock.qtRange} custom={custom.qtRange} hasChanges={hasChanges} scale={1000} suffix=" km" />
-        <StatRow label="Fuel Rate" stock={stock.qtFuelRate} custom={custom.qtFuelRate} hasChanges={hasChanges} invert />
-        <StatRow label="Spool Time" stock={stock.qtSpool} custom={custom.qtSpool} hasChanges={hasChanges} scale={1000} suffix="s" invert />
+        <StatRow label="Fuel" stock={stock.qtFuelRate} custom={custom.qtFuelRate} hasChanges={hasChanges} invert />
+        <StatRow label="Spool" stock={stock.qtSpool} custom={custom.qtSpool} hasChanges={hasChanges} scale={1000} suffix="s" invert />
       </StatsSection>
+      </div>
     </div>
   )
 }
 
-function StatsSection({ icon: Icon, title, color, children }) {
+function StatsSection({ icon: Icon, title, color, compact, children }) {
   return (
     <div className="bg-zinc-800/30 rounded-lg overflow-hidden">
-      <div className={`flex items-center gap-2 px-3 py-1.5 border-b border-zinc-700/30 ${color}`}>
+      <div className={`flex items-center gap-2 px-3 py-1 border-b border-zinc-700/30 ${color}`}>
         <Icon className="w-3.5 h-3.5" />
-        <span className="text-xs font-semibold uppercase tracking-wider">{title}</span>
+        <span className="text-[11px] font-semibold uppercase tracking-wider">{title}</span>
       </div>
-      <div className="px-3 py-2 space-y-1">
+      <div className={`px-3 ${compact ? 'py-1.5 space-y-0.5' : 'py-2 space-y-1'}`}>
         {children}
       </div>
     </div>
