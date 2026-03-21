@@ -2,7 +2,7 @@ import React, { useState, useCallback } from 'react'
 import { useParams, useNavigate, useSearchParams } from 'react-router-dom'
 import {
   ArrowLeft, ExternalLink, X, Wrench,
-  Rocket, Zap, Box, Palette, LayoutGrid, List,
+  Rocket, Zap, Box, Package, Palette, LayoutGrid, List,
   Tag, DollarSign, Calendar, PenLine, ArrowUpRight, CircleDot,
 } from 'lucide-react'
 import { useShip, useShipLoadout, useShipPaints, useShipSalvage, useWeaponRacks, useSuitLockers, useFleet, useFleetEntryUpgrades } from '../hooks/useAPI'
@@ -849,7 +849,11 @@ function InteriorTab({ ship }) {
 
   if (loading) return <LoadingState message="Loading interior data..." />
 
-  if (racks.length === 0 && lockers.length === 0) {
+  const hasCargo = ship.vehicle_inventory != null && ship.vehicle_inventory > 0
+  const hasRacks = racks.length > 0
+  const hasLockers = lockers.length > 0
+
+  if (!hasCargo && !hasRacks && !hasLockers) {
     return (
       <div className="text-center py-16 text-gray-500">
         <Box className="w-10 h-10 mx-auto mb-3 text-gray-600" />
@@ -858,13 +862,32 @@ function InteriorTab({ ship }) {
     )
   }
 
+  const scuValue = hasCargo ? ship.vehicle_inventory / 1000000 : 0
   const totalRackSlots = racks.reduce((sum, r) => sum + (r.total_ports || 0), 0)
   const totalRifleSlots = racks.reduce((sum, r) => sum + (r.rifle_ports || 0), 0)
   const totalPistolSlots = racks.reduce((sum, r) => sum + (r.pistol_ports || 0), 0)
 
   return (
-    <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
-      {racks.length > 0 && (
+    <div className="space-y-4">
+      {hasCargo && (
+        <div className="panel">
+          <div className="panel-header">Internal Storage</div>
+          <div className="p-5 flex items-center gap-4">
+            <div className="p-3 rounded-lg bg-sc-highlight/10 text-sc-highlight">
+              <Package className="w-6 h-6" />
+            </div>
+            <div>
+              <p className="text-2xl font-mono font-semibold text-white">
+                {scuValue.toLocaleString(undefined, { maximumFractionDigits: 2 })} <span className="text-sm text-gray-400">SCU</span>
+              </p>
+              <p className="text-xs text-gray-500 mt-0.5">Cargo capacity</p>
+            </div>
+          </div>
+        </div>
+      )}
+
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+      {hasRacks && (
         <div className="panel">
           <div className="panel-header">Weapon Racks</div>
           <div className="p-4 space-y-0">
@@ -891,7 +914,7 @@ function InteriorTab({ ship }) {
         </div>
       )}
 
-      {lockers.length > 0 && (
+      {hasLockers && (
         <div className="panel">
           <div className="panel-header">Suit Lockers</div>
           <div className="p-4 space-y-0">
@@ -908,6 +931,7 @@ function InteriorTab({ ship }) {
           </div>
         </div>
       )}
+      </div>
     </div>
   )
 }
