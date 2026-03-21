@@ -243,10 +243,15 @@ export default function Loadout() {
                         >
                           <span className="badge badge-size text-[9px] w-6 text-center flex-shrink-0">S{sz}</span>
                           {Icon && <Icon className="w-3.5 h-3.5 text-gray-600 flex-shrink-0" />}
-                          <span className={`text-xs truncate flex-1 ${isOverridden ? 'text-sc-accent font-medium' : 'text-gray-300'}`}
-                            style={isOverridden ? { textShadow: '0 0 8px rgba(34,211,238,0.3)' } : undefined}>
-                            {displayName || 'Empty'}
-                          </span>
+                          <div className="flex-1 min-w-0">
+                            <span className={`text-xs truncate block ${isOverridden ? 'text-sc-accent font-medium' : 'text-gray-300'}`}
+                              style={isOverridden ? { textShadow: '0 0 8px rgba(34,211,238,0.3)' } : undefined}>
+                              {displayName || 'Empty'}
+                            </span>
+                            {item.mount_name && item.child_name && (
+                              <span className="text-[10px] text-gray-600 truncate block">{item.mount_name}</span>
+                            )}
+                          </div>
                           {primaryStat && (
                             <span className="text-[11px] font-mono text-gray-500 flex-shrink-0 tabular-nums">{primaryStat}</span>
                           )}
