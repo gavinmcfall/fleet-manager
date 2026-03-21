@@ -226,12 +226,48 @@ export default function Loadout() {
                   <div className="divide-y divide-white/[0.04]">
                     {group.items.map(item => {
                       const override = overrides[item.port_id]
-                      const displayName = override?.component_name || item.component_name
                       const isOverridden = !!override
+                      const hasChild = !!(item.mount_name && item.child_name)
                       const Icon = PORT_TYPE_ICONS[item.port_type]
                       const primaryStat = getPrimaryStat(item, override)
                       const sz = item.component_size || item.size_max
 
+                      // Parent-child hierarchy: mount + weapon as two rows
+                      if (hasChild) {
+                        const mountName = item.mount_name
+                        const weaponName = override?.component_name || item.child_name
+                        return (
+                          <div key={item.port_id} className="border-l-2 border-l-transparent">
+                            {/* Mount row (parent) */}
+                            <button
+                              onClick={() => { setPickerPortId(item.port_id); setPickerPortType(item.port_type) }}
+                              className="w-full flex items-center gap-2 px-3 py-1 text-left hover:bg-white/[0.03] transition-all duration-200 cursor-pointer"
+                            >
+                              <span className="badge badge-size text-[9px] w-6 text-center flex-shrink-0">S{item.size_max}</span>
+                              {Icon && <Icon className="w-3.5 h-3.5 text-gray-600 flex-shrink-0" />}
+                              <span className="text-xs text-gray-500 truncate flex-1">{mountName}</span>
+                            </button>
+                            {/* Weapon row (child, indented) */}
+                            <button
+                              onClick={() => { setPickerPortId(item.port_id); setPickerPortType(item.port_type) }}
+                              className={`w-full flex items-center gap-2 pl-10 pr-3 py-1.5 text-left transition-all duration-200 cursor-pointer
+                                ${isOverridden ? 'bg-sc-accent/[0.06] hover:bg-sc-accent/[0.1]' : 'hover:bg-white/[0.03]'}`}
+                            >
+                              <span className="badge badge-size text-[9px] w-6 text-center flex-shrink-0">S{sz}</span>
+                              <span className={`text-xs truncate flex-1 ${isOverridden ? 'text-sc-accent font-medium' : 'text-gray-300'}`}
+                                style={isOverridden ? { textShadow: '0 0 8px rgba(34,211,238,0.3)' } : undefined}>
+                                {weaponName}
+                              </span>
+                              {primaryStat && (
+                                <span className="text-[11px] font-mono text-gray-500 flex-shrink-0 tabular-nums">{primaryStat}</span>
+                              )}
+                            </button>
+                          </div>
+                        )
+                      }
+
+                      // Simple row (no parent-child)
+                      const displayName = override?.component_name || item.component_name
                       return (
                         <button
                           key={item.port_id}
@@ -243,15 +279,10 @@ export default function Loadout() {
                         >
                           <span className="badge badge-size text-[9px] w-6 text-center flex-shrink-0">S{sz}</span>
                           {Icon && <Icon className="w-3.5 h-3.5 text-gray-600 flex-shrink-0" />}
-                          <div className="flex-1 min-w-0">
-                            <span className={`text-xs truncate block ${isOverridden ? 'text-sc-accent font-medium' : 'text-gray-300'}`}
-                              style={isOverridden ? { textShadow: '0 0 8px rgba(34,211,238,0.3)' } : undefined}>
-                              {displayName || 'Empty'}
-                            </span>
-                            {item.mount_name && item.child_name && (
-                              <span className="text-[10px] text-gray-600 truncate block">{item.mount_name}</span>
-                            )}
-                          </div>
+                          <span className={`text-xs truncate flex-1 ${isOverridden ? 'text-sc-accent font-medium' : 'text-gray-300'}`}
+                            style={isOverridden ? { textShadow: '0 0 8px rgba(34,211,238,0.3)' } : undefined}>
+                            {displayName || 'Empty'}
+                          </span>
                           {primaryStat && (
                             <span className="text-[11px] font-mono text-gray-500 flex-shrink-0 tabular-nums">{primaryStat}</span>
                           )}
