@@ -28,6 +28,25 @@ const CartUpdateBody = z.object({
   quantity: z.number().int().min(1).optional(),
 });
 
+// --- Map port_type (vehicle_ports) → component type (vehicle_components) ---
+// vehicle_ports uses lowercase, vehicle_components uses PascalCase
+const PORT_TYPE_TO_COMPONENT_TYPE: Record<string, string[]> = {
+  power: ["PowerPlant"],
+  cooler: ["Cooler"],
+  shield: ["Shield"],
+  quantum_drive: ["QuantumDrive"],
+  weapon: ["WeaponGun"],
+  turret: ["TurretBase", "Turret"],
+  missile: ["MissileLauncher", "BombLauncher"],
+  sensor: ["Radar", "Scanner"],
+  countermeasure: ["WeaponDefensive"],
+  mining_laser: ["WeaponMining"],
+  salvage_head: ["SalvageHead"],
+  salvage_module: ["SalvageModifier", "MiningModifier"],
+  qed: ["QuantumInterdictionGenerator"],
+  jump_drive: ["JumpDrive"],
+};
+
 // --- Stat sort keys per component type ---
 const STAT_SORT_KEY: Record<string, string> = {
   PowerPlant: "vc.power_output",
@@ -39,7 +58,7 @@ const STAT_SORT_KEY: Record<string, string> = {
   MissileLauncher: "vc.damage",
   TurretBase: "vc.dps",
   Turret: "vc.dps",
-  QEDGenerator: "vc.qed_range",
+  QuantumInterdictionGenerator: "vc.qed_range",
 };
 
 /**
@@ -91,7 +110,12 @@ export function loadoutRoutes() {
 
     if (!port) return c.json({ error: "Port not found" }, 404);
 
-    const sortKey = STAT_SORT_KEY[port.port_type] || "vc.name";
+    // Map port_type → component types (port_type is lowercase, component types are PascalCase)
+    const componentTypes = PORT_TYPE_TO_COMPONENT_TYPE[port.port_type] || [port.port_type];
+    const typePlaceholders = componentTypes.map(() => "?").join(",");
+
+    // Find best sort key from the mapped types
+    const sortKey = componentTypes.map(t => STAT_SORT_KEY[t]).find(Boolean) || "vc.name";
 
     // Fetch all compatible components (version-aware)
     const components = await db
@@ -120,11 +144,11 @@ export function loadoutRoutes() {
            GROUP BY uuid
          ) _cvv ON vc.uuid = _cvv.uuid AND vc.game_version_id = _cvv.latest_gv
          LEFT JOIN manufacturers m ON m.id = vc.manufacturer_id
-         WHERE vc.type = ?
+         WHERE vc.type IN (${typePlaceholders})
            AND vc.size BETWEEN ? AND ?
          ORDER BY ${sortKey} DESC NULLS LAST, vc.name`,
       )
-      .bind(port.port_type, port.size_min, port.size_max)
+      .bind(...componentTypes, port.size_min, port.size_max)
       .all();
 
     // Fetch shop availability for all compatible components
