@@ -402,29 +402,46 @@ export function adminRoutes() {
 
     const versionId = version.id;
 
-    // Tables with game_version_id FK — DELETE WHERE game_version_id = ?
+    // Tables with game_version_id FK in FK-safe deletion order (children before parents).
+    // Topologically sorted so no DELETE violates a FK constraint.
     const versionedTables = [
-      "vehicles", "vehicle_components", "vehicle_ports", "vehicle_careers",
-      "vehicle_roles", "vehicle_weapon_racks", "vehicle_suit_lockers",
-      "ship_missiles", "fps_weapons", "fps_armour", "fps_attachments",
-      "fps_utilities", "fps_helmets", "fps_clothing", "fps_melee",
-      "fps_carryables", "fps_ammo_types", "consumables", "consumable_effects",
-      "harvestables", "props", "loot_map", "loot_item_locations",
-      "contracts", "manufacturers", "commodities", "trade_commodities",
-      "factions", "faction_reputation_scopes", "law_infractions",
-      "law_jurisdictions", "jurisdiction_infraction_overrides",
-      "star_systems", "star_map_locations", "mineable_elements",
-      "mining_locations", "mining_lasers",
-      "mining_modules", "mining_gadgets", "mining_quality_distributions",
-      "mining_clustering_presets", "rock_compositions",
-      "reputation_scopes", "reputation_standings", "reputation_perks",
-      "reputation_reward_tiers", "shops", "shop_locations",
-      "shop_inventory",
-      "missions", "mission_types", "mission_givers", "mission_organizations",
-      "damage_types", "npc_loadouts", "npc_loadout_items",
+      // Vehicle children → vehicles → manufacturers
+      "vehicle_weapon_racks", "vehicle_suit_lockers", "vehicle_ports",
+      "salvageable_ships", "vehicle_roles", "vehicle_careers",
+      // Loot children → loot_map → FPS/vehicle tables
+      "loot_item_locations", "loot_map", "vehicle_components",
+      // Shop children → shops → star_map_locations
+      "shop_locations", "shop_inventory",
+      // Mission children → missions → mission_givers → star_map_locations
+      "missions", "mission_givers", "star_map_locations", "star_systems",
+      "ship_missiles",
+      // Reputation children → reputation_scopes → factions
+      "reputation_perks", "reputation_standings",
+      "faction_reputation_scopes", "reputation_scopes", "reputation_reward_tiers",
+      // NPC children
+      "npc_loadout_items", "npc_loadouts",
+      // Mining (no inter-table FKs among versioned tables)
+      "rock_compositions", "mining_quality_distributions", "mining_modules",
+      "mining_locations", "mining_lasers", "mining_gadgets",
+      "mining_clustering_presets", "mineable_elements",
+      // Mission lookups
+      "mission_types", "mission_organizations",
+      // FPS tables → manufacturers
+      "fps_weapons", "fps_utilities", "fps_melee", "fps_helmets",
+      "fps_clothing", "fps_attachments", "fps_armour", "fps_ammo",
+      "consumables", "props",
+      // Shops (parent)
+      "shops",
+      // Root parents (most-referenced, delete last)
+      "vehicles", "manufacturers",
+      // Law system
+      "jurisdiction_infraction_overrides", "law_jurisdictions", "law_infractions",
+      // Remaining leaf tables
+      "harvestables", "fps_carryables", "fps_ammo_types", "consumable_effects",
+      "factions", "damage_types", "armor_resistance_profiles",
+      "trade_commodities", "commodities", "contracts",
       "crafting_resources", "crafting_blueprints",
-      "salvageable_ships", "refining_processes",
-      "armor_resistance_profiles", "fps_ammo",
+      "refining_processes",
     ];
 
     // Child tables without game_version_id — DELETE via FK to parent
