@@ -56,6 +56,8 @@ const ReputationScoreSchema = z.object({
   scope: z.string().max(100).default("default"),
   score: z.number().int(),
   standing_tier: z.string().max(100).optional(),
+  standings_id: z.string().max(100).optional(),
+  standing_id: z.string().max(100).optional(),
   drift: z.number().optional(),
 });
 
@@ -427,11 +429,12 @@ companion.post("/sync/reputation", validate("json", ReputationSyncSchema), async
   const scoreStmts = data.scores.map((s) =>
     db
       .prepare(
-        `INSERT INTO companion_reputation_scores (user_id, entity_id, scope, score, standing_tier, drift, captured_at, updated_at)
-         VALUES (?, ?, ?, ?, ?, ?, ?, datetime('now'))
+        `INSERT INTO companion_reputation_scores (user_id, entity_id, scope, score, standing_tier, standings_id, standing_id, drift, captured_at, updated_at)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, datetime('now'))
          ON CONFLICT(user_id, entity_id, scope) DO UPDATE SET
-           score = excluded.score, standing_tier = excluded.standing_tier, drift = excluded.drift,
-           captured_at = excluded.captured_at, updated_at = excluded.updated_at`,
+           score = excluded.score, standing_tier = excluded.standing_tier,
+           standings_id = excluded.standings_id, standing_id = excluded.standing_id,
+           drift = excluded.drift, captured_at = excluded.captured_at, updated_at = excluded.updated_at`,
       )
       .bind(
         user.id,
@@ -439,6 +442,8 @@ companion.post("/sync/reputation", validate("json", ReputationSyncSchema), async
         s.scope,
         s.score,
         s.standing_tier ?? null,
+        s.standings_id ?? null,
+        s.standing_id ?? null,
         s.drift ?? null,
         data.captured_at,
       ),
@@ -726,8 +731,15 @@ companion.get("/reputation", async (c) => {
 
   const rows = await db
     .prepare(
-      `SELECT entity_id, scope, score, standing_tier, drift, captured_at
-       FROM companion_reputation_scores WHERE user_id = ? ORDER BY entity_id ASC`,
+      `SELECT cr.entity_id, cr.scope, cr.score, cr.standing_tier, cr.standings_id, cr.standing_id,
+              cr.drift, cr.captured_at,
+              rs.name AS scope_name,
+              rst.name AS standing_name, rst.min_reputation
+       FROM companion_reputation_scores cr
+       LEFT JOIN reputation_scopes rs ON rs.uuid = cr.standings_id
+       LEFT JOIN reputation_standings rst ON rst.uuid = cr.standing_id
+       WHERE cr.user_id = ?
+       ORDER BY cr.scope ASC`,
     )
     .bind(user.id)
     .all();
