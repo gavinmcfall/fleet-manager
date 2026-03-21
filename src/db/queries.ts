@@ -14,7 +14,7 @@ import type {
   AIAnalysis,
 } from "../lib/types";
 import { extractSetName, makeSetSlug } from "../lib/loot-sets";
-import { VEHICLE_VERSION_JOIN, vehicleVersionJoin, vehicleVersionCap } from "../lib/constants";
+import { VEHICLE_VERSION_JOIN, vehicleVersionJoin, vehicleVersionCap, versionSubquery } from "../lib/constants";
 
 // --- Loot JSON "has_*" column expressions ---
 // Reusable SQL fragment for SELECT clauses that compute boolean flags from JSON blob columns.
@@ -179,11 +179,19 @@ export async function getShipLoadout(db: D1Database, slug: string, patchCode?: s
   //
   // port_id and parent_port_id are returned so the frontend can build a hierarchy
   // (e.g. weapon ports nested under their turret housing in the Turrets section).
+  const vq = versionSubquery(patchCode);
+
   const result = await db
     .prepare(
       `WITH ship_ports AS (
-        SELECT * FROM vehicle_ports
-        WHERE vehicle_id = (SELECT v.id FROM vehicles v ${vehicleVersionJoin(patchCode)} WHERE v.slug = ?)
+        SELECT vp.* FROM vehicle_ports vp
+        INNER JOIN (
+          SELECT uuid, MAX(game_version_id) as latest_gv
+          FROM vehicle_ports
+          WHERE game_version_id <= ${vq}
+          GROUP BY uuid
+        ) _pvv ON vp.uuid = _pvv.uuid AND vp.game_version_id = _pvv.latest_gv
+        WHERE vp.vehicle_id = (SELECT v.id FROM vehicles v ${vehicleVersionJoin(patchCode)} WHERE v.slug = ?)
       ),
       child_components AS (
         SELECT
@@ -206,6 +214,7 @@ export async function getShipLoadout(db: D1Database, slug: string, patchCode?: s
           ROW_NUMBER() OVER (PARTITION BY c.parent_port_id ORDER BY c.id) AS rn
         FROM ship_ports c
         JOIN vehicle_components vc2 ON vc2.uuid = c.equipped_item_uuid
+          AND vc2.game_version_id = (SELECT MAX(game_version_id) FROM vehicle_components WHERE uuid = c.equipped_item_uuid AND game_version_id <= ${vq})
         LEFT JOIN manufacturers m2 ON m2.id = vc2.manufacturer_id
       )
       SELECT
@@ -271,6 +280,7 @@ export async function getShipLoadout(db: D1Database, slug: string, patchCode?: s
         COALESCE(vc.class, m.class, child.class, child.manufacturer_class) AS component_class
       FROM ship_ports p
       LEFT JOIN vehicle_components vc ON vc.uuid = p.equipped_item_uuid
+        AND vc.game_version_id = (SELECT MAX(game_version_id) FROM vehicle_components WHERE uuid = p.equipped_item_uuid AND game_version_id <= ${vq})
       LEFT JOIN manufacturers m ON m.id = vc.manufacturer_id
       LEFT JOIN child_components child ON child.parent_port_id = p.id AND child.rn = 1
       WHERE p.category_label IS NOT NULL

@@ -32,7 +32,7 @@ export const VEHICLE_VERSION_JOIN = `INNER JOIN (
 export const VEHICLE_VERSION_CAP = `game_version_id <= (SELECT id FROM game_versions WHERE is_default = 1)`;
 
 /** Version-aware join — accepts optional patch code for user-selected versions */
-function versionSubquery(patchCode?: string): string {
+export function versionSubquery(patchCode?: string): string {
   return patchCode
     ? `(SELECT id FROM game_versions WHERE code = '${patchCode.replace(/'/g, "''")}')`
     : `(SELECT id FROM game_versions WHERE is_default = 1)`;
