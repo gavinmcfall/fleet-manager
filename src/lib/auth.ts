@@ -5,6 +5,7 @@ import { admin } from "better-auth/plugins/admin";
 import { magicLink } from "better-auth/plugins";
 import { twoFactor } from "better-auth/plugins/two-factor";
 import { passkey } from "@better-auth/passkey";
+import { bearer } from "better-auth/plugins/bearer";
 import { organization } from "better-auth/plugins/organization";
 import { createAccessControl } from "better-auth/plugins/access";
 import { defaultStatements } from "better-auth/plugins/admin/access";
@@ -397,6 +398,7 @@ export function createAuth(env: Env) {
         rpName: "SC Bridge",
         origin: env.BETTER_AUTH_URL,
       }),
+      bearer(),
     ],
   });
 
