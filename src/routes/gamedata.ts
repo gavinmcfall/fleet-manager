@@ -829,14 +829,23 @@ export function gamedataRoutes<E extends HonoEnv>() {
       }
 
       if (armourTags.length > 0) {
-        const armourResult = await db.prepare(
-          `SELECT class_name, name, sub_type,
-                  resist_physical, resist_energy, resist_distortion,
-                  resist_thermal, resist_biochemical, resist_stun
-           FROM fps_armour
-           WHERE game_version_id <= ${versionSub(versionId)}
-           ORDER BY game_version_id DESC`
-        ).all()
+        // Query fps_armour (body pieces + undersuits) and fps_helmets in parallel
+        const [armourResult, helmetResult] = await Promise.all([
+          db.prepare(
+            `SELECT class_name, name, sub_type,
+                    resist_physical, resist_energy, resist_distortion,
+                    resist_thermal, resist_biochemical, resist_stun
+             FROM fps_armour
+             WHERE game_version_id <= ${versionSub(versionId)}
+             ORDER BY game_version_id DESC`
+          ).all(),
+          db.prepare(
+            `SELECT class_name, name
+             FROM fps_helmets
+             WHERE game_version_id <= ${versionSub(versionId)}
+             ORDER BY game_version_id DESC`
+          ).all(),
+        ])
         for (const a of armourResult.results) {
           const cn = a.class_name as string
           if (armourTags.includes(cn) && !baseStatsMap.has(cn)) {
@@ -850,6 +859,12 @@ export function gamedataRoutes<E extends HonoEnv>() {
               resist_biochemical: a.resist_biochemical,
               resist_stun: a.resist_stun,
             })
+          }
+        }
+        for (const h of helmetResult.results) {
+          const cn = h.class_name as string
+          if (armourTags.includes(cn) && !baseStatsMap.has(cn)) {
+            baseStatsMap.set(cn, { item_name: h.name })
           }
         }
       }
