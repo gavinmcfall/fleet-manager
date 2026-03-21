@@ -52,6 +52,28 @@ const USER_TABLES = [
   // Localization builder (0127)
   "user_localization_configs",
   "user_localization_ship_order",
+  // Companion app (0136)
+  "companion_events",
+  "companion_status",
+  // Companion gRPC data (0138)
+  "companion_wallet_snapshots",
+  "companion_wallet_current",
+  "companion_friends",
+  "companion_reputation_scores",
+  "companion_reputation_history",
+  "companion_blueprints",
+  "companion_entitlements",
+  "companion_missions",
+  "companion_stats",
+  "companion_sync_log",
+  // Player reputation (0134)
+  "player_reputation",
+  // Profile verification (0132)
+  "profile_verification_pending",
+  // Org ops (0133)
+  "org_op_participants",
+  "org_op_capital",
+  "org_op_payouts",
 ] as const;
 
 // Tables with user_id that DON'T cascade (known exceptions).
