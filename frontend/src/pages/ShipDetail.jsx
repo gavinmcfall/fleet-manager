@@ -3,6 +3,7 @@ import { useParams, useNavigate, useSearchParams } from 'react-router-dom'
 import {
   ArrowLeft, ExternalLink, X, Wrench,
   Rocket, Zap, Box, Palette, LayoutGrid, List,
+  Tag, DollarSign, Calendar, PenLine, ArrowUpRight, CircleDot,
 } from 'lucide-react'
 import { useShip, useShipLoadout, useShipPaints, useShipSalvage, useWeaponRacks, useSuitLockers, useFleet, useFleetEntryUpgrades } from '../hooks/useAPI'
 import ShipImage from '../components/ShipImage'
@@ -402,23 +403,26 @@ function CCUHistory({ fleetEntryId }) {
   }
 
   return (
-    <div className="panel">
-      <div className="panel-header">Upgrade History</div>
+    <div className="panel border-l-4 border-l-sc-accent2">
+      <div className="panel-header flex items-center gap-2">
+        <ArrowUpRight className="w-3.5 h-3.5 text-sc-accent2" />
+        Upgrade History
+      </div>
       <div className="p-4">
         <div className="relative pl-6 space-y-0">
           {/* Vertical line */}
-          <div className="absolute left-2 top-2 bottom-2 w-px bg-sc-border" />
+          <div className="absolute left-2 top-2 bottom-2 w-px bg-sc-border/60" />
 
           {/* Base pledge */}
-          <div className="relative pb-4">
-            <div className="absolute left-[-16px] top-1.5 w-2 h-2 rounded-full bg-sc-accent2" />
+          <div className="relative pb-5">
+            <div className="absolute left-[-16px] top-1.5 w-2.5 h-2.5 rounded-full bg-sc-accent2 ring-2 ring-sc-accent2/30" />
             <div className="flex items-baseline justify-between gap-4">
               <div>
-                <p className="text-sm font-mono text-white">{pledge.name}</p>
+                <p className="text-sm font-mono text-white font-semibold">{pledge.name}</p>
                 <p className="text-xs text-gray-500 mt-0.5">Base pledge</p>
               </div>
               <div className="text-right shrink-0">
-                <span className="text-sm font-mono text-sc-warn">{formatValue(pledge.value_cents, pledge.value)}</span>
+                <span className="text-sm font-mono font-semibold text-sc-success">{formatValue(pledge.value_cents, pledge.value)}</span>
                 {pledge.pledge_date_parsed && (
                   <p className="text-xs text-gray-600 mt-0.5">{formatDate(pledge.pledge_date_parsed, pledge.pledge_date)}</p>
                 )}
@@ -427,24 +431,27 @@ function CCUHistory({ fleetEntryId }) {
           </div>
 
           {/* Upgrades */}
-          {upgrades.map((upg, i) => (
-            <div key={i} className="relative pb-4 last:pb-0">
-              <div className={`absolute left-[-16px] top-1.5 w-2 h-2 rounded-full ${i === upgrades.length - 1 ? 'bg-sc-accent' : 'bg-gray-500'}`} />
-              <div className="flex items-baseline justify-between gap-4">
-                <div>
-                  <p className="text-sm font-mono text-gray-300">{upg.upgrade_name}</p>
-                </div>
-                <div className="text-right shrink-0">
-                  {upg.new_value_cents && (
-                    <span className="text-sm font-mono text-sc-warn">{formatValue(upg.new_value_cents, upg.new_value)}</span>
-                  )}
-                  {upg.applied_at_parsed && (
-                    <p className="text-xs text-gray-600 mt-0.5">{formatDate(upg.applied_at_parsed, upg.applied_at)}</p>
-                  )}
+          {upgrades.map((upg, i) => {
+            const isLast = i === upgrades.length - 1
+            return (
+              <div key={i} className="relative pb-5 last:pb-0">
+                <div className={`absolute left-[-16px] top-1.5 w-2.5 h-2.5 rounded-full ${isLast ? 'bg-sc-accent ring-2 ring-sc-accent/30' : 'bg-gray-500 ring-2 ring-gray-500/20'}`} />
+                <div className="flex items-baseline justify-between gap-4">
+                  <div>
+                    <p className={`text-sm font-mono ${isLast ? 'text-white font-semibold' : 'text-gray-300'}`}>{upg.upgrade_name}</p>
+                  </div>
+                  <div className="text-right shrink-0">
+                    {upg.new_value_cents && (
+                      <span className="text-sm font-mono font-semibold text-sc-success">{formatValue(upg.new_value_cents, upg.new_value)}</span>
+                    )}
+                    {upg.applied_at_parsed && (
+                      <p className="text-xs text-gray-600 mt-0.5">{formatDate(upg.applied_at_parsed, upg.applied_at)}</p>
+                    )}
+                  </div>
                 </div>
               </div>
-            </div>
-          ))}
+            )
+          })}
         </div>
       </div>
     </div>
@@ -462,21 +469,47 @@ function PledgeSection({ ship }) {
   return (
     <div className="space-y-4">
       {entries.map((entry) => (
-        <div key={entry.id} className="space-y-2">
-          <div className="panel">
+        <div key={entry.id} className="space-y-3">
+          <div className="panel border-l-4 border-l-sc-accent">
             <div className="panel-header">Your Pledge</div>
-            <div className="p-4 space-y-0">
+            <div className="p-4 space-y-3">
               {entry.pledge_name && (
-                <SpecRow label="Pledge" value={entry.pledge_name} />
+                <div>
+                  <div className="flex items-center gap-1.5 mb-0.5">
+                    <Tag className="w-3 h-3 text-gray-500" />
+                    <span className="text-xs font-mono text-gray-500 uppercase tracking-wider">Pledge</span>
+                  </div>
+                  <p className="text-sm font-semibold text-sc-accent pl-[18px]">{entry.pledge_name}</p>
+                </div>
               )}
               {entry.current_value_cents > 0 && (
-                <SpecRow label="Current Value" value={`$${(entry.current_value_cents / 100).toLocaleString('en-US', { maximumFractionDigits: 0 })}`} />
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center gap-1.5">
+                    <DollarSign className="w-3 h-3 text-gray-500" />
+                    <span className="text-xs font-mono text-gray-500 uppercase tracking-wider">Current Value</span>
+                  </div>
+                  <span className="text-sm font-mono font-semibold text-sc-success">
+                    ${(entry.current_value_cents / 100).toLocaleString('en-US', { maximumFractionDigits: 0 })}
+                  </span>
+                </div>
               )}
               {entry.pledge_date && (
-                <SpecRow label="Date" value={entry.pledge_date} />
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center gap-1.5">
+                    <Calendar className="w-3 h-3 text-gray-500" />
+                    <span className="text-xs font-mono text-gray-500 uppercase tracking-wider">Date</span>
+                  </div>
+                  <span className="text-sm font-mono text-white">{entry.pledge_date}</span>
+                </div>
               )}
               {entry.custom_name && (
-                <SpecRow label="Ship Name" value={entry.custom_name} />
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center gap-1.5">
+                    <PenLine className="w-3 h-3 text-gray-500" />
+                    <span className="text-xs font-mono text-gray-500 uppercase tracking-wider">Ship Name</span>
+                  </div>
+                  <span className="text-sm font-mono text-sc-accent2">{entry.custom_name}</span>
+                </div>
               )}
             </div>
           </div>
@@ -952,12 +985,12 @@ function SalvageTab({ slug }) {
   const { data: loadout } = useShipLoadout(slug)
 
   if (loading) return <LoadingState message="Loading salvage data..." />
-  if (error) return <ErrorState message={error} onRetry={refetch} />
+  if (error && !/not found/i.test(error)) return <ErrorState message={error} onRetry={refetch} />
   if (!salvage || !salvage.variants || salvage.variants.length === 0) {
     return (
       <div className="text-center py-12 text-gray-500">
         <Wrench className="w-12 h-12 mx-auto mb-3 opacity-30" />
-        <p>This ship has no known derelict or salvageable variants.</p>
+        <p>Salvage yield data is not yet available for this ship.</p>
       </div>
     )
   }
