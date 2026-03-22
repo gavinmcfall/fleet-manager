@@ -177,9 +177,15 @@ export function lootRoutes() {
   });
 
   // GET /api/loot/locations/:type/:slug — items for a single location (public)
+  // Accepts both singular (container) and plural (containers) for convenience
   app.get("/locations/:type/:slug", async (c) => {
-    const type = c.req.param("type") as "container" | "shop" | "npc";
-    if (!["container", "shop", "npc"].includes(type)) {
+    let type = c.req.param("type") as string;
+    // Normalize plural to singular
+    if (type === "containers") type = "container";
+    else if (type === "shops") type = "shop";
+    else if (type === "npcs") type = "npc";
+    else if (type === "contracts") type = "contract";
+    if (!["container", "shop", "npc", "contract"].includes(type)) {
       return c.json({ error: "Invalid location type" }, 400);
     }
     const slug = decodeURIComponent(c.req.param("slug"));

@@ -567,13 +567,13 @@ export function orgRoutes() {
     return c.json({ fleet: fleet.results, callerRole });
   });
 
-  // GET /api/orgs/:slug/members — member list (org members only)
+  // GET /api/orgs/:slug/members — member list (org members only, non-members get 404)
   routes.get("/:slug/members", async (c) => {
     const slug = c.req.param("slug");
     const db = c.env.DB;
     const user = c.get("user");
 
-    if (!user) return c.json({ error: "Unauthorized" }, 401);
+    if (!user) return c.json({ error: "Not found" }, 404);
 
     const org = await db
       .prepare("SELECT id FROM organization WHERE slug = ?")
@@ -585,7 +585,7 @@ export function orgRoutes() {
       .prepare("SELECT role FROM member WHERE organizationId = ? AND userId = ?")
       .bind(org.id, user.id)
       .first<{ role: string }>();
-    if (!membership) return c.json({ error: "Forbidden" }, 403);
+    if (!membership) return c.json({ error: "Not found" }, 404);
 
     const members = await db
       .prepare(
@@ -602,13 +602,13 @@ export function orgRoutes() {
     return c.json({ members: members.results });
   });
 
-  // GET /api/orgs/:slug/analysis — gap analysis on org fleet (org members only)
+  // GET /api/orgs/:slug/analysis — gap analysis on org fleet (org members only, non-members get 404)
   routes.get("/:slug/analysis", async (c) => {
     const slug = c.req.param("slug");
     const db = c.env.DB;
     const user = c.get("user");
 
-    if (!user) return c.json({ error: "Unauthorized" }, 401);
+    if (!user) return c.json({ error: "Not found" }, 404);
 
     const org = await db
       .prepare("SELECT id FROM organization WHERE slug = ?")
