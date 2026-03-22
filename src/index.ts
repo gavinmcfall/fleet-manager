@@ -1,5 +1,6 @@
 import { Hono, type Context, type Next } from "hono";
 import { cors } from "hono/cors";
+import { HTTPException } from "hono/http-exception";
 import type { Env, HonoEnv } from "./lib/types";
 import { createAuth } from "./lib/auth";
 import { fleetRoutes } from "./routes/fleet";
@@ -34,6 +35,10 @@ const app = new Hono<HonoEnv>();
 
 // Global error handler — structured logging for unhandled exceptions
 app.onError((err, c) => {
+  // Preserve HTTPException status codes (e.g. 401 from getAuthUser)
+  if (err instanceof HTTPException) {
+    return c.json({ error: err.message }, err.status);
+  }
   logEvent("unhandled_error", {
     method: c.req.method,
     path: c.req.path,
@@ -276,7 +281,8 @@ app.use("/api/settings/*", requireAuth);
 app.use("/api/localization/*", requireAuth);
 app.use("/api/analysis", requireAuth);
 app.use("/api/llm/*", async (c, next) => {
-  if (c.req.method !== "POST" && c.req.method !== "DELETE") return next();
+  // /api/llm/models is public (lists available providers); all other LLM endpoints require auth
+  if (c.req.path.endsWith("/llm/models") && c.req.method === "GET") return next();
   return requireAuth(c, next);
 });
 // Public: serve R2-stored user avatars (no auth required)
