@@ -1,4 +1,4 @@
-import React, { useMemo } from 'react'
+import React, { useMemo, useState } from 'react'
 import { useSearchParams } from 'react-router-dom'
 import { FlaskConical } from 'lucide-react'
 import { useCrafting } from '../../hooks/useAPI'
@@ -8,9 +8,12 @@ import StatsRow from './StatsRow'
 import FilterBar from './FilterBar'
 import BlueprintCard from './BlueprintCard'
 
+const PAGE_SIZE = 60
+
 export default function Crafting() {
   const { data, loading, error, refetch } = useCrafting()
   const [searchParams, setSearchParams] = useSearchParams()
+  const [visibleCount, setVisibleCount] = useState(PAGE_SIZE)
 
   const search = searchParams.get('q') || ''
   const typeFilter = searchParams.get('type') || ''
@@ -18,6 +21,7 @@ export default function Crafting() {
   const resourceFilter = searchParams.get('resource') || ''
 
   const setFilter = (key, value) => {
+    setVisibleCount(PAGE_SIZE)
     setSearchParams(prev => {
       const next = new URLSearchParams(prev)
       if (value) next.set(key, value)
@@ -27,6 +31,7 @@ export default function Crafting() {
   }
 
   const setFilters = (updates) => {
+    setVisibleCount(PAGE_SIZE)
     setSearchParams(prev => {
       const next = new URLSearchParams(prev)
       for (const [key, value] of Object.entries(updates)) {
@@ -117,11 +122,23 @@ export default function Crafting() {
           <p className="text-gray-500">No blueprints match your filters.</p>
         </div>
       ) : (
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-3">
-          {filtered.map((bp, i) => (
-            <BlueprintCard key={bp.id} bp={bp} index={i} />
-          ))}
-        </div>
+        <>
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-3">
+            {filtered.slice(0, visibleCount).map((bp, i) => (
+              <BlueprintCard key={bp.id} bp={bp} index={i} />
+            ))}
+          </div>
+          {visibleCount < filtered.length && (
+            <div className="text-center pt-6">
+              <button
+                onClick={() => setVisibleCount(c => c + PAGE_SIZE)}
+                className="px-6 py-2 text-xs font-display tracking-wider uppercase border border-sc-border rounded hover:border-sc-accent/40 hover:text-sc-accent transition-colors"
+              >
+                Show more ({filtered.length - visibleCount} remaining)
+              </button>
+            </div>
+          )}
+        </>
       )}
     </div>
   )

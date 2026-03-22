@@ -158,12 +158,20 @@ function InsuranceRow({ ship }) {
         )}
       </div>
       <div className="flex items-center gap-3 shrink-0">
-        {ship.pledge_cost && (
-          <span className="flex items-center gap-1 text-xs font-mono text-gray-400 w-24">
-            <DollarSign className="w-3 h-3" />
-            {ship.pledge_cost}
-          </span>
-        )}
+        {ship.pledge_cost && (() => {
+          const raw = ship.pledge_cost.trim()
+          if (raw.includes('¤') || raw.toUpperCase().includes('UEC')) return null
+          const m = raw.match(/\$\s*([\d,]+(?:\.\d+)?)/)
+          if (!m) return null
+          const num = parseFloat(m[1].replace(/,/g, ''))
+          if (!num || num === 0) return null
+          return (
+            <span className="flex items-center gap-1 text-xs font-mono text-gray-400 w-24">
+              <DollarSign className="w-3 h-3" />
+              ${Math.round(num).toLocaleString('en-US')}
+            </span>
+          )
+        })()}
         {ship.pledge_date && (
           <span className="flex items-center gap-1 text-xs font-mono text-gray-500 w-40 justify-end">
             <Calendar className="w-3 h-3" />

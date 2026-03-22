@@ -13,7 +13,7 @@ export default function BlueprintCard({ bp, index = 0 }) {
     <button
       onClick={() => navigate(`/crafting/${bp.id}`)}
       className="group relative w-full text-left bg-white/[0.03] backdrop-blur-md border border-white/[0.06] rounded-xl p-4 shadow-lg shadow-black/20 transition-all duration-200 hover:border-sc-accent/30 hover:shadow-sc-accent/10 hover:shadow-xl hover:-translate-y-0.5 active:scale-[0.98] animate-stagger-fade-up"
-      style={{ animationDelay: `${index * 30}ms` }}
+      style={{ animationDelay: `${Math.min(index * 30, 600)}ms` }}
     >
       {/* HUD corner brackets */}
       <div className="absolute top-0 left-0 w-3 h-3 border-t border-l border-sc-accent/0 group-hover:border-sc-accent/30 transition-colors duration-200 rounded-tl-xl" />
