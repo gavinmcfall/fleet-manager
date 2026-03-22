@@ -285,17 +285,24 @@ export async function getShipLoadout(db: D1Database, slug: string, patchCode?: s
         AND vc.game_version_id = (SELECT MAX(game_version_id) FROM vehicle_components WHERE uuid = p.equipped_item_uuid AND game_version_id <= ${vq})
       LEFT JOIN manufacturers m ON m.id = vc.manufacturer_id
       LEFT JOIN child_components child ON child.parent_port_id = p.id AND child.rn = 1
-      WHERE p.category_label IS NOT NULL
+      WHERE (
+          p.category_label IS NOT NULL
+          OR p.name LIKE '%weapon%'
+          OR p.name LIKE '%gun%'
+          OR p.name LIKE 'Turret%'
+          OR p.name LIKE '%turret_%'
+        )
         AND (
           p.parent_port_id IS NULL
           OR NOT EXISTS (
             SELECT 1 FROM ship_ports pp
             WHERE pp.id = p.parent_port_id
+              AND pp.category_label IS NOT NULL
               AND pp.category_label = p.category_label
               AND pp.port_type != 'turret'
           )
         )
-      ORDER BY p.category_label, p.name`,
+      ORDER BY COALESCE(p.category_label, 'Weapons'), p.name`,
     )
     .bind(slug)
     .all();
