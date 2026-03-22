@@ -114,7 +114,6 @@ export function loadoutRoutes() {
     // Some ports (turrets, weapons) have null port_type — infer from port name
     let resolvedPortType = port.port_type;
     if (!resolvedPortType) {
-      // Look up port name to infer type
       const portInfo = await db
         .prepare("SELECT name FROM vehicle_ports WHERE id = ?")
         .bind(portId)
@@ -124,6 +123,21 @@ export function loadoutRoutes() {
       else if (pn.includes("weapon") || pn.includes("gun")) resolvedPortType = "weapon";
       else if (pn.includes("missile")) resolvedPortType = "missile";
     }
+
+    // Ports with size 0-0 are structural mounts (turret housings, fixed brackets)
+    // that aren't player-swappable — return empty with explanation
+    if (port.size_min === 0 && port.size_max === 0) {
+      return c.json({
+        port_id: portId,
+        port_type: resolvedPortType,
+        size_min: 0,
+        size_max: 0,
+        stock_uuid: port.equipped_item_uuid,
+        components: [],
+        note: "This is a fixed mount — swap components on the child weapon ports instead",
+      });
+    }
+
     const componentTypes = PORT_TYPE_TO_COMPONENT_TYPE[resolvedPortType] || [resolvedPortType || "UNKNOWN"];
     const typePlaceholders = componentTypes.map(() => "?").join(",");
 
