@@ -227,21 +227,21 @@ export async function getShipLoadout(db: D1Database, slug: string, patchCode?: s
         p.size_max,
         vc.name AS mount_name,
         COALESCE(child.name, (
-          SELECT vc3.name FROM ship_ports cp
+          SELECT vc3.name FROM vehicle_ports cp
           JOIN vehicle_components vc3 ON vc3.uuid = cp.equipped_item_uuid
             AND vc3.game_version_id = (SELECT MAX(game_version_id) FROM vehicle_components WHERE uuid = cp.equipped_item_uuid AND game_version_id <= ${vq})
           WHERE cp.parent_port_id = p.id
           LIMIT 1
         )) AS child_name,
         COALESCE(child.name, (
-          SELECT vc3.name FROM ship_ports cp
+          SELECT vc3.name FROM vehicle_ports cp
           JOIN vehicle_components vc3 ON vc3.uuid = cp.equipped_item_uuid
             AND vc3.game_version_id = (SELECT MAX(game_version_id) FROM vehicle_components WHERE uuid = cp.equipped_item_uuid AND game_version_id <= ${vq})
           WHERE cp.parent_port_id = p.id
           LIMIT 1
         ), vc.name) AS component_name,
         COALESCE(child.type, (
-          SELECT vc3.type FROM ship_ports cp
+          SELECT vc3.type FROM vehicle_ports cp
           JOIN vehicle_components vc3 ON vc3.uuid = cp.equipped_item_uuid
             AND vc3.game_version_id = (SELECT MAX(game_version_id) FROM vehicle_components WHERE uuid = cp.equipped_item_uuid AND game_version_id <= ${vq})
           WHERE cp.parent_port_id = p.id
