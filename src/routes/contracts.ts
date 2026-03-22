@@ -23,8 +23,8 @@ export function contractRoutes<E extends HonoEnv>() {
           SELECT v.* FROM vehicles v
           ${VEHICLE_VERSION_JOIN}
         ) v ON v.name = c.reward_text
-        LEFT JOIN fps_weapons fw ON fw.name = c.reward_text
-        WHERE c.is_active = 1`
+        LEFT JOIN fps_weapons fw ON fw.name = c.reward_text AND fw.game_version_id = ${versionId}
+        WHERE c.is_active = 1 AND c.game_version_id = ${versionId}`
       const params: string[] = []
 
       if (giver) {
