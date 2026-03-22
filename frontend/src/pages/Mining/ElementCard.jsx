@@ -46,14 +46,14 @@ export default function ElementCard({ element, topLocations = [], index = 0 }) {
         <div className="flex items-center justify-between text-xs">
           <span className="font-mono text-gray-500">Instability</span>
           <span className={`font-mono font-semibold ${instabilityColor(instability)}`}>
-            {instability != null ? (instability * 100).toFixed(0) + '%' : '--'}
+            {instability != null ? instability.toFixed(0) : '--'}
           </span>
         </div>
         {instability != null && (
           <div className={`h-1.5 w-full rounded-full overflow-hidden ${instabilityBg(instability)}`}>
             <div
               className={`h-full rounded-full transition-all ${instabilityBarColor(instability)}`}
-              style={{ width: `${(instability * 100).toFixed(0)}%` }}
+              style={{ width: `${Math.min(instability / 10, 100).toFixed(0)}%` }}
             />
           </div>
         )}

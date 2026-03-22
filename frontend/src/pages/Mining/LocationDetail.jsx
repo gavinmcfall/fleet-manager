@@ -211,7 +211,7 @@ export default function LocationDetail() {
             <div className="flex items-center justify-between mb-3">
               <span className="text-xs text-gray-300">{clusteringPreset.name}</span>
               <span className="text-xs text-gray-500 font-mono">
-                {(clusteringPreset.probability_of_clustering * 100).toFixed(0)}% clustering chance
+                {clusteringPreset.probability_of_clustering.toFixed(0)}% clustering chance
               </span>
             </div>
             {clusteringPreset.params?.length > 0 && (

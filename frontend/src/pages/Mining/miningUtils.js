@@ -114,22 +114,22 @@ export function friendlyElementName(className) {
 // --- Instability color helpers ---
 export function instabilityColor(val) {
   if (val == null) return 'text-gray-400'
-  if (val >= 0.7) return 'text-red-400'
-  if (val >= 0.4) return 'text-amber-400'
+  if (val >= 700) return 'text-red-400'
+  if (val >= 400) return 'text-amber-400'
   return 'text-green-400'
 }
 
 export function instabilityBarColor(val) {
   if (val == null) return 'bg-gray-500'
-  if (val >= 0.7) return 'bg-red-500'
-  if (val >= 0.4) return 'bg-amber-500'
+  if (val >= 700) return 'bg-red-500'
+  if (val >= 400) return 'bg-amber-500'
   return 'bg-green-500'
 }
 
 export function instabilityBg(val) {
   if (val == null) return 'bg-gray-700'
-  if (val >= 0.7) return 'bg-red-500/30'
-  if (val >= 0.4) return 'bg-amber-500/30'
+  if (val >= 700) return 'bg-red-500/30'
+  if (val >= 400) return 'bg-amber-500/30'
   return 'bg-green-500/30'
 }
 

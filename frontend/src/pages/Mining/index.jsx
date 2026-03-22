@@ -52,7 +52,7 @@ function CompositionCard({ composition }) {
       {elements.length > 0 && (
         <div className="space-y-1.5 pt-1 border-t border-white/[0.04]">
           {elements.map((el, i) => {
-            const pct = el.maxPct != null ? `${(el.minPct * 100).toFixed(1)}–${(el.maxPct * 100).toFixed(1)}%` : null
+            const pct = el.maxPct != null ? `${el.minPct.toFixed(1)}–${el.maxPct.toFixed(1)}%` : null
             return (
               <div key={el.element || i} className="flex items-center justify-between text-xs gap-2">
                 <span className="text-gray-300 truncate">{friendlyElementName(el.element)}</span>
@@ -60,7 +60,7 @@ function CompositionCard({ composition }) {
                   {pct && (
                     <div className="flex items-center gap-1">
                       <div className="w-16 h-1.5 bg-white/[0.06] rounded-full overflow-hidden">
-                        <div className="h-full bg-sc-accent/50 rounded-full" style={{ width: `${(el.maxPct || 0) * 100}%` }} />
+                        <div className="h-full bg-sc-accent/50 rounded-full" style={{ width: `${el.maxPct || 0}%` }} />
                       </div>
                       <span className="font-mono text-gray-500 text-[11px]">{pct}</span>
                     </div>

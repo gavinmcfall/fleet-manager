@@ -125,9 +125,9 @@ function ChargeBar({ windowStart, windowEnd, effectiveInstability }) {
           Window: {(endPct - startPct).toFixed(1)}% wide
         </span>
         <span className={`font-mono font-semibold ${
-          effectiveInstability > 0.7 ? 'text-red-400' : effectiveInstability > 0.4 ? 'text-amber-400' : 'text-emerald-400'
+          effectiveInstability > 700 ? 'text-red-400' : effectiveInstability > 400 ? 'text-amber-400' : 'text-emerald-400'
         }`}>
-          Instability: {(effectiveInstability * 100).toFixed(0)}%
+          Instability: {effectiveInstability.toFixed(0)}
         </span>
       </div>
     </div>
@@ -446,9 +446,9 @@ export default function RockCalculator({ data }) {
                 />
                 <StatCard
                   label="Adjusted Instability"
-                  value={(result.chargeWindow.effectiveInstability * 100).toFixed(1)}
-                  subtitle={`Base ${(rockStats.instability * 100).toFixed(0)} × ${(1 + result.mods.mod_instability).toFixed(3)}`}
-                  color={result.chargeWindow.effectiveInstability > 0.7 ? 'text-red-400' : result.chargeWindow.effectiveInstability > 0.4 ? 'text-amber-400' : 'text-emerald-400'}
+                  value={result.chargeWindow.effectiveInstability.toFixed(1)}
+                  subtitle={`Base ${rockStats.instability.toFixed(0)} × ${(1 + result.mods.mod_instability).toFixed(3)}`}
+                  color={result.chargeWindow.effectiveInstability > 700 ? 'text-red-400' : result.chargeWindow.effectiveInstability > 400 ? 'text-amber-400' : 'text-emerald-400'}
                 />
               </div>
 
@@ -470,9 +470,9 @@ export default function RockCalculator({ data }) {
                           {friendlyElementName(el.element)}
                         </span>
                         <div className="flex items-center gap-3 text-gray-500 font-mono">
-                          {el.maxPct != null && <span>{(el.minPct * 100).toFixed(1)}–{(el.maxPct * 100).toFixed(1)}%</span>}
+                          {el.maxPct != null && <span>{el.minPct.toFixed(1)}–{el.maxPct.toFixed(1)}%</span>}
                           {el.stats?.resistance != null && <span className="text-amber-400/60">R:{el.stats.resistance.toFixed(2)}</span>}
-                          {el.stats?.instability != null && <span className="text-red-400/60">I:{(el.stats.instability * 100).toFixed(0)}%</span>}
+                          {el.stats?.instability != null && <span className="text-red-400/60">I:{el.stats.instability.toFixed(0)}</span>}
                         </div>
                       </div>
                     ))}

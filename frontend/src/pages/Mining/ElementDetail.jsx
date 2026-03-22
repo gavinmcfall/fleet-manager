@@ -128,12 +128,12 @@ export default function ElementDetail() {
           <div className="flex items-center justify-between text-xs">
             <span className="font-mono text-gray-500">Instability</span>
             <span className={`font-mono font-semibold ${instabilityColor(instability)}`}>
-              {instability != null ? (instability * 100).toFixed(0) + '%' : '--'}
+              {instability != null ? instability.toFixed(0) : '--'}
             </span>
           </div>
           {instability != null && (
             <div className={`h-2 w-full rounded-full overflow-hidden ${instabilityBg(instability)}`}>
-              <div className={`h-full rounded-full ${instabilityBarColor(instability)}`} style={{ width: `${(instability * 100).toFixed(0)}%` }} />
+              <div className={`h-full rounded-full ${instabilityBarColor(instability)}`} style={{ width: `${Math.min(instability / 10, 100).toFixed(0)}%` }} />
             </div>
           )}
         </div>
@@ -224,7 +224,7 @@ export default function ElementDetail() {
                   </div>
                   {elPct && (
                     <div className="mt-1 text-xs text-gray-500 font-mono">
-                      {(elPct.min * 100).toFixed(1)}% – {(elPct.max * 100).toFixed(1)}%
+                      {elPct.min.toFixed(1)}% – {elPct.max.toFixed(1)}%
                     </div>
                   )}
                 </div>
