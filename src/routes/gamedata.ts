@@ -487,7 +487,30 @@ export function gamedataRoutes<E extends HonoEnv>() {
         .first()
 
       if (!location) {
-        return { location: null, shops: [] }
+        // Fallback: match slug against location_label on shops directly
+        // (star_map_locations may not have a matching slug for common location names)
+        const labelSlug = slug.replace(/-/g, ' ')
+        const { results: labelShops } = await db
+          .prepare(
+            `SELECT s.id, s.name, s.slug, s.shop_type, s.location_label, NULL as placement_name
+             FROM shops s
+             WHERE LOWER(REPLACE(s.location_label, ' ', '')) = LOWER(REPLACE(?, ' ', ''))
+               AND s.game_version_id = ${versionSub(versionId)}
+             ORDER BY s.shop_type, s.name`,
+          )
+          .bind(labelSlug)
+          .all()
+
+        if (labelShops.length === 0) return { location: null, shops: [] }
+
+        const labelShopIds = labelShops.map((s) => s.id as number)
+        const labelPlaceholders = labelShopIds.map(() => "?").join(",")
+        const { results: labelInv } = await db
+          .prepare(buildInventoryQuery(labelPlaceholders, versionId))
+          .bind(...labelShopIds)
+          .all()
+
+        return { location: { name: labelShops[0].location_label, slug }, shops: nestInventoryUnderShops(labelShops, labelInv) }
       }
 
       const { results: childLocations } = await db
