@@ -904,7 +904,7 @@ export function gamedataRoutes<E extends HonoEnv>() {
              JOIN mining_locations ml ON ml.id = mld.mining_location_id
              WHERE rc.game_version_id <= ${versionSub(versionId)}
                AND ml.game_version_id <= ${versionSub(versionId)}
-               AND rc.class_name LIKE '%ShipMineables%'`
+               AND rc.class_name LIKE 'Asteroid_%' AND rc.class_name NOT LIKE '%test%'`
           )
           .all(),
         db
@@ -912,7 +912,7 @@ export function gamedataRoutes<E extends HonoEnv>() {
             `SELECT name, min_quality, max_quality, mean, stddev
              FROM mining_quality_distributions
              WHERE game_version_id <= ${versionSub(versionId)}
-               AND name LIKE '%ShipMineable%'`
+               AND (name LIKE '%ShipMineable%' OR name LIKE '%Mineable%' OR name LIKE '%GroundMineable%')`
           )
           .all(),
       ])
