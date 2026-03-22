@@ -21,7 +21,7 @@ import { VEHICLE_VERSION_JOIN, vehicleVersionJoin, vehicleVersionCap, versionSub
 // Each flag is 1 if the JSON column contains actual data, 0 otherwise.
 const LOOT_HAS_FLAGS = `
         EXISTS(SELECT 1 FROM loot_item_locations lil WHERE lil.loot_map_id = lm.id AND lil.source_type = 'container') as has_containers,
-        EXISTS(SELECT 1 FROM loot_item_locations lil WHERE lil.loot_map_id = lm.id AND lil.source_type = 'shop') as has_shops,
+        EXISTS(SELECT 1 FROM shop_inventory si WHERE si.item_uuid = lm.uuid AND si.game_version_id = lm.game_version_id AND (si.buy_price > 0 OR si.sell_price > 0)) as has_shops,
         EXISTS(SELECT 1 FROM loot_item_locations lil WHERE lil.loot_map_id = lm.id AND lil.source_type = 'npc') as has_npcs,
         EXISTS(SELECT 1 FROM loot_item_locations lil WHERE lil.loot_map_id = lm.id AND lil.source_type = 'contract') as has_contracts`;
 
@@ -1012,6 +1012,31 @@ export async function getLootByUuid(db: D1Database, uuid: string, patchCode?: st
     const r = loc as Record<string, unknown>;
     const key = (r.source_type as string) + 's'; // container→containers
     if (locationsByType[key]) locationsByType[key].push(r);
+  }
+
+  // Enrich with shop availability — which shops sell this item and at what price
+  const shopAvailability = await db.prepare(`
+    SELECT si.buy_price, si.sell_price, s.name AS shop_name, s.slug AS shop_slug,
+           s.location_label, s.display_name
+    FROM shop_inventory si
+    JOIN shops s ON s.id = si.shop_id
+    WHERE si.item_uuid = ?
+      AND si.game_version_id = ${versionSub}
+      AND (si.buy_price > 0 OR si.sell_price > 0)
+    ORDER BY s.location_label, s.name
+  `).bind(uuid, ...versionParams).all();
+
+  for (const shop of shopAvailability.results) {
+    const r = shop as Record<string, unknown>;
+    locationsByType.shops.push({
+      source_type: 'shop',
+      location_key: r.shop_slug || r.shop_name,
+      shop_name: r.display_name || r.shop_name,
+      shop_slug: r.shop_slug,
+      location_label: r.location_label,
+      buy_price: r.buy_price,
+      sell_price: r.sell_price,
+    });
   }
 
   // Enrich with NPC loadout data — which NPCs wear/carry this item
