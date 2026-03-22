@@ -428,7 +428,7 @@ export function gamedataRoutes<E extends HonoEnv>() {
                s.location_label
              FROM shop_inventory si
              JOIN shops s ON s.id = si.shop_id
-             JOIN trade_commodities tc ON tc.uuid = si.item_uuid
+             JOIN trade_commodities tc ON tc.uuid = si.item_uuid AND tc.game_version_id = s.game_version_id
              WHERE s.shop_type = 'admin'
                AND s.game_version_id = ${versionSub(versionId)}
              ORDER BY s.location_label, s.name`,
