@@ -111,7 +111,20 @@ export function loadoutRoutes() {
     if (!port) return c.json({ error: "Port not found" }, 404);
 
     // Map port_type → component types (port_type is lowercase, component types are PascalCase)
-    const componentTypes = PORT_TYPE_TO_COMPONENT_TYPE[port.port_type] || [port.port_type];
+    // Some ports (turrets, weapons) have null port_type — infer from port name
+    let resolvedPortType = port.port_type;
+    if (!resolvedPortType) {
+      // Look up port name to infer type
+      const portInfo = await db
+        .prepare("SELECT name FROM vehicle_ports WHERE id = ?")
+        .bind(portId)
+        .first<{ name: string }>();
+      const pn = (portInfo?.name || "").toLowerCase();
+      if (pn.includes("turret")) resolvedPortType = "turret";
+      else if (pn.includes("weapon") || pn.includes("gun")) resolvedPortType = "weapon";
+      else if (pn.includes("missile")) resolvedPortType = "missile";
+    }
+    const componentTypes = PORT_TYPE_TO_COMPONENT_TYPE[resolvedPortType] || [resolvedPortType || "UNKNOWN"];
     const typePlaceholders = componentTypes.map(() => "?").join(",");
 
     // Find best sort key from the mapped types
@@ -145,10 +158,10 @@ export function loadoutRoutes() {
          ) _cvv ON vc.uuid = _cvv.uuid AND vc.game_version_id = _cvv.latest_gv
          LEFT JOIN manufacturers m ON m.id = vc.manufacturer_id
          WHERE vc.type IN (${typePlaceholders})
-           AND vc.size BETWEEN ? AND ?
+           ${port.size_min === 0 && port.size_max === 0 ? "" : "AND vc.size BETWEEN ? AND ?"}
          ORDER BY ${sortKey} DESC NULLS LAST, vc.name`,
       )
-      .bind(...componentTypes, port.size_min, port.size_max)
+      .bind(...componentTypes, ...(port.size_min === 0 && port.size_max === 0 ? [] : [port.size_min, port.size_max]))
       .all();
 
     // Fetch shop availability for all compatible components
