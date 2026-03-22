@@ -226,9 +226,27 @@ export async function getShipLoadout(db: D1Database, slug: string, patchCode?: s
         p.size_min,
         p.size_max,
         vc.name AS mount_name,
-        child.name AS child_name,
-        CASE WHEN child.name IS NOT NULL THEN child.name ELSE vc.name END AS component_name,
-        CASE WHEN child.type IS NOT NULL THEN child.type ELSE vc.type END AS component_type,
+        COALESCE(child.name, (
+          SELECT vc3.name FROM ship_ports cp
+          JOIN vehicle_components vc3 ON vc3.uuid = cp.equipped_item_uuid
+            AND vc3.game_version_id = (SELECT MAX(game_version_id) FROM vehicle_components WHERE uuid = cp.equipped_item_uuid AND game_version_id <= ${vq})
+          WHERE cp.parent_port_id = p.id
+          LIMIT 1
+        )) AS child_name,
+        COALESCE(child.name, (
+          SELECT vc3.name FROM ship_ports cp
+          JOIN vehicle_components vc3 ON vc3.uuid = cp.equipped_item_uuid
+            AND vc3.game_version_id = (SELECT MAX(game_version_id) FROM vehicle_components WHERE uuid = cp.equipped_item_uuid AND game_version_id <= ${vq})
+          WHERE cp.parent_port_id = p.id
+          LIMIT 1
+        ), vc.name) AS component_name,
+        COALESCE(child.type, (
+          SELECT vc3.type FROM ship_ports cp
+          JOIN vehicle_components vc3 ON vc3.uuid = cp.equipped_item_uuid
+            AND vc3.game_version_id = (SELECT MAX(game_version_id) FROM vehicle_components WHERE uuid = cp.equipped_item_uuid AND game_version_id <= ${vq})
+          WHERE cp.parent_port_id = p.id
+          LIMIT 1
+        ), vc.type) AS component_type,
         COALESCE(child.sub_type, vc.sub_type) AS sub_type,
         COALESCE(child.size, vc.size) AS component_size,
         COALESCE(child.grade, vc.grade) AS grade,
