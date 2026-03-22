@@ -384,8 +384,17 @@ export function gamedataRoutes<E extends HonoEnv>() {
   // GET /api/gamedata/shops/:slug/inventory — inventory for a specific shop
   app.get("/shops/:slug/inventory", async (c) => {
     const slug = c.req.param("slug")
+    if (slug.length > 100) return c.json({ error: "Not found" }, 404)
     const db = c.env.DB
     const versionId = await resolveVersionId(db, c.req.query("patch"))
+
+    // Verify shop exists before caching (prevents cache pollution with fake slugs)
+    const shop = await db
+      .prepare(`SELECT id FROM shops WHERE slug = ? AND game_version_id = ${versionSub(versionId)}`)
+      .bind(slug)
+      .first()
+    if (!shop) return c.json({ error: "Not found" }, 404)
+
     return cachedJson(c, `gd:shop-inv:${versionId}:${cacheSlug(slug)}`, async () => {
       const { results } = await db
         .prepare(

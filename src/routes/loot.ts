@@ -202,6 +202,7 @@ export function lootRoutes() {
   // GET /api/loot/sets/:setSlug — full set detail with pieces, stats, locations (public)
   app.get("/sets/:setSlug", async (c) => {
     const setSlug = c.req.param("setSlug");
+    if (setSlug.length > 200) return c.json({ error: "Not found" }, 404);
     const patch = c.req.query("patch");
     const versionId = await resolveVersionId(c.env.DB, patch);
     return cachedJson(c, `loot:set-detail:${versionId}:${cacheSlug(setSlug)}`, async () => {
@@ -228,6 +229,7 @@ export function lootRoutes() {
   // Must be last to avoid matching /collection and /wishlist
   app.get("/:uuid", async (c) => {
     const uuid = c.req.param("uuid");
+    if (uuid.length > 50) return c.json({ error: "Not found" }, 404);
     const patch = c.req.query("patch");
     const versionId = await resolveVersionId(c.env.DB, patch);
     return cachedJson(c, `loot:detail:${versionId}:${cacheSlug(uuid)}`, () =>
