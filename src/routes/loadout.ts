@@ -2,7 +2,7 @@ import { Hono } from "hono";
 import { z } from "zod";
 import { getAuthUser, type HonoEnv } from "../lib/types";
 import { validate } from "../lib/validation";
-import { versionSubquery } from "../lib/constants";
+import { versionSubquery, deltaVersionJoin } from "../lib/constants";
 import { cachedJson, resolveVersionId, cacheSlug } from "../lib/cache";
 import { getShipLoadout } from "../db/queries";
 
@@ -94,15 +94,12 @@ export function loadoutRoutes() {
     const vq = versionSubquery(patch);
 
     // Get port info (type + size range)
+    const dvjPorts = deltaVersionJoin('vehicle_ports', 'vp', 'uuid', patch);
     const port = await db
       .prepare(
         `SELECT vp.port_type, vp.size_min, vp.size_max, vp.equipped_item_uuid
          FROM vehicle_ports vp
-         INNER JOIN (
-           SELECT uuid, MAX(game_version_id) as latest_gv
-           FROM vehicle_ports WHERE game_version_id <= ${vq}
-           GROUP BY uuid
-         ) _pvv ON vp.uuid = _pvv.uuid AND vp.game_version_id = _pvv.latest_gv
+         ${dvjPorts}
          WHERE vp.id = ?`,
       )
       .bind(portId)
@@ -164,12 +161,7 @@ export function loadoutRoutes() {
                 vc.damage, vc.blast_radius, vc.speed, vc.lock_range,
                 m.name AS manufacturer_name, m.code AS manufacturer_code
          FROM vehicle_components vc
-         INNER JOIN (
-           SELECT uuid, MAX(game_version_id) as latest_gv
-           FROM vehicle_components
-           WHERE game_version_id <= ${vq}
-           GROUP BY uuid
-         ) _cvv ON vc.uuid = _cvv.uuid AND vc.game_version_id = _cvv.latest_gv
+         ${deltaVersionJoin('vehicle_components', 'vc', 'uuid', patch)}
          LEFT JOIN manufacturers m ON m.id = vc.manufacturer_id
          WHERE vc.type IN (${typePlaceholders})
            ${port.size_min === 0 && port.size_max === 0 ? "" : "AND vc.size BETWEEN ? AND ?"}
@@ -191,11 +183,7 @@ export function loadoutRoutes() {
                   s.slug AS shop_slug, s.location_label
            FROM shop_inventory si
            JOIN shops s ON s.id = si.shop_id
-           INNER JOIN (
-             SELECT uuid, MAX(game_version_id) as latest_gv
-             FROM shops WHERE game_version_id <= ${vq}
-             GROUP BY uuid
-           ) _svv ON s.uuid = _svv.uuid AND s.game_version_id = _svv.latest_gv
+           ${deltaVersionJoin('shops', 's', 'uuid', patch)}
            WHERE si.item_uuid IN (${placeholders})
              AND si.game_version_id <= ${vq}`,
         )
@@ -535,11 +523,7 @@ export function loadoutRoutes() {
         `SELECT si.item_uuid, s.id AS shop_id
          FROM shop_inventory si
          JOIN shops s ON s.id = si.shop_id
-         INNER JOIN (
-           SELECT uuid, MAX(game_version_id) as latest_gv
-           FROM shops WHERE game_version_id <= ${vq}
-           GROUP BY uuid
-         ) _svv ON s.uuid = _svv.uuid AND s.game_version_id = _svv.latest_gv
+         ${deltaVersionJoin('shops', 's', 'uuid', patch)}
          WHERE si.item_uuid IN (${placeholders})
            AND si.buy_price IS NOT NULL
            AND si.game_version_id <= ${vq}`,

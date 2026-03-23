@@ -1,6 +1,7 @@
 import { Hono } from "hono"
 import type { HonoEnv } from "../lib/types"
 import { cachedJson, resolveVersionId, cacheSlug } from "../lib/cache"
+import { deltaVersionJoin } from "../lib/constants"
 
 const DEFAULT_VERSION_SUBQUERY = "(SELECT id FROM game_versions WHERE is_default = 1)"
 
@@ -119,14 +120,18 @@ export function gamedataRoutes<E extends HonoEnv>() {
   // GET /api/gamedata/reputation — reputation scopes with nested standings
   app.get("/reputation", async (c) => {
     const db = c.env.DB
-    const versionId = await resolveVersionId(db, c.req.query("patch"))
+    const patchCode = c.req.query("patch")
+    const versionId = await resolveVersionId(db, patchCode)
     return cachedJson(c, `gd:reputation:${versionId}`, async () => {
+      const dvjScopes = deltaVersionJoin('reputation_scopes', 'rsc2', 'uuid', patchCode)
+      const dvjStandings = deltaVersionJoin('reputation_standings', 'rs', 'uuid', patchCode)
+
       const { results: scopes } = await db
         .prepare(
-          `SELECT * FROM reputation_scopes
-           WHERE game_version_id = ${versionSub(versionId)}
-             AND name NOT LIKE '%PLACEHOLDER%'
-           ORDER BY name`,
+          `SELECT rsc2.* FROM reputation_scopes rsc2
+           ${dvjScopes}
+           WHERE rsc2.name NOT LIKE '%PLACEHOLDER%'
+           ORDER BY rsc2.name`,
         )
         .all()
 
@@ -134,9 +139,9 @@ export function gamedataRoutes<E extends HonoEnv>() {
         .prepare(
           `SELECT rs.*, rsc.name as scope_name, rsc.uuid as scope_uuid
            FROM reputation_standings rs
+           ${dvjStandings}
            JOIN reputation_scopes rsc ON rsc.id = rs.scope_id
-           WHERE rs.game_version_id = ${versionSub(versionId)}
-             AND rs.name != '<= PLACEHOLDER =>'
+           WHERE rs.name != '<= PLACEHOLDER =>'
            ORDER BY rs.scope_id, rs.sort_order`,
         )
         .all()
@@ -178,21 +183,25 @@ export function gamedataRoutes<E extends HonoEnv>() {
   // GET /api/gamedata/law — infractions, jurisdictions, overrides
   app.get("/law", async (c) => {
     const db = c.env.DB
-    const versionId = await resolveVersionId(db, c.req.query("patch"))
+    const patchCode = c.req.query("patch")
+    const versionId = await resolveVersionId(db, patchCode)
     return cachedJson(c, `gd:law:${versionId}`, async () => {
+      const dvjInfractions = deltaVersionJoin('law_infractions', 'li2', 'uuid', patchCode)
+      const dvjJurisdictions = deltaVersionJoin('law_jurisdictions', 'lj2', 'uuid', patchCode)
+
       const [infractions, jurisdictions, overrides] = await Promise.all([
         db
           .prepare(
-            `SELECT * FROM law_infractions
-             WHERE game_version_id = ${versionSub(versionId)}
-             ORDER BY name`,
+            `SELECT li2.* FROM law_infractions li2
+             ${dvjInfractions}
+             ORDER BY li2.name`,
           )
           .all(),
         db
           .prepare(
-            `SELECT * FROM law_jurisdictions
-             WHERE game_version_id = ${versionSub(versionId)}
-             ORDER BY name`,
+            `SELECT lj2.* FROM law_jurisdictions lj2
+             ${dvjJurisdictions}
+             ORDER BY lj2.name`,
           )
           .all(),
         db
@@ -223,9 +232,13 @@ export function gamedataRoutes<E extends HonoEnv>() {
   // locations, deposits, quality distributions, clustering, equipment
   app.get("/mining", async (c) => {
     const db = c.env.DB
-    const versionId = await resolveVersionId(db, c.req.query("patch"))
+    const patchCode = c.req.query("patch")
+    const versionId = await resolveVersionId(db, patchCode)
     return cachedJson(c, `gd:mining:${versionId}`, async () => {
       const vs = versionSub(versionId)
+      const dvjElements = deltaVersionJoin('mineable_elements', 'me', 'uuid', patchCode)
+      const dvjCompositions = deltaVersionJoin('rock_compositions', 'rc2', 'uuid', patchCode)
+      const dvjRefining = deltaVersionJoin('refining_processes', 'rp', 'uuid', patchCode)
       // 4.7-only tables (locations, equipment) may not have data for the
       // resolved version (e.g. user on LIVE 4.6). Fall back to latest version
       // that has mining location data so the page always shows content.
@@ -249,25 +262,25 @@ export function gamedataRoutes<E extends HonoEnv>() {
       ] = await Promise.all([
         db
           .prepare(
-            `SELECT * FROM mineable_elements
-             WHERE game_version_id = ${vs}
-               AND name NOT LIKE '%Template%'
-               AND name NOT LIKE '%Testelement%'
-             ORDER BY name`,
+            `SELECT me.* FROM mineable_elements me
+             ${dvjElements}
+             WHERE me.name NOT LIKE '%Template%'
+               AND me.name NOT LIKE '%Testelement%'
+             ORDER BY me.name`,
           )
           .all(),
         db
           .prepare(
-            `SELECT * FROM rock_compositions
-             WHERE game_version_id = ${vs}
-             ORDER BY name`,
+            `SELECT rc2.* FROM rock_compositions rc2
+             ${dvjCompositions}
+             ORDER BY rc2.name`,
           )
           .all(),
         db
           .prepare(
-            `SELECT * FROM refining_processes
-             WHERE game_version_id = ${vs}
-             ORDER BY name`,
+            `SELECT rp.* FROM refining_processes rp
+             ${dvjRefining}
+             ORDER BY rp.name`,
           )
           .all(),
         db
@@ -363,7 +376,9 @@ export function gamedataRoutes<E extends HonoEnv>() {
   // GET /api/gamedata/shops — shop list with item counts
   app.get("/shops", async (c) => {
     const db = c.env.DB
-    const versionId = await resolveVersionId(db, c.req.query("patch"))
+    const patchCode = c.req.query("patch")
+    const versionId = await resolveVersionId(db, patchCode)
+    const dvjShops = deltaVersionJoin('shops', 's', 'uuid', patchCode)
     return cachedJson(c, `gd:shops:${versionId}`, async () => {
       const { results } = await db
         .prepare(
@@ -372,7 +387,7 @@ export function gamedataRoutes<E extends HonoEnv>() {
              (SELECT COUNT(*) FROM shop_inventory si WHERE si.shop_id = s.id) as item_count,
              s.location_label as location_name
            FROM shops s
-           WHERE s.game_version_id = ${versionSub(versionId)}
+           ${dvjShops}
            ORDER BY s.name`,
         )
         .all()
@@ -386,11 +401,13 @@ export function gamedataRoutes<E extends HonoEnv>() {
     const slug = c.req.param("slug")
     if (slug.length > 100) return c.json({ error: "Not found" }, 404)
     const db = c.env.DB
-    const versionId = await resolveVersionId(db, c.req.query("patch"))
+    const patchCode = c.req.query("patch")
+    const versionId = await resolveVersionId(db, patchCode)
+    const dvjShops = deltaVersionJoin('shops', 's', 'uuid', patchCode)
 
     // Verify shop exists before caching (prevents cache pollution with fake slugs)
     const shop = await db
-      .prepare(`SELECT id FROM shops WHERE slug = ? AND game_version_id = ${versionSub(versionId)}`)
+      .prepare(`SELECT s.id FROM shops s ${dvjShops} WHERE s.slug = ?`)
       .bind(slug)
       .first()
     if (!shop) return c.json({ error: "Not found" }, 404)
@@ -404,8 +421,8 @@ export function gamedataRoutes<E extends HonoEnv>() {
            LEFT JOIN loot_map fi ON fi.uuid = si.item_uuid AND fi.game_version_id = ${versionSub(versionId)}
            LEFT JOIN vehicles v ON v.uuid = si.item_uuid
            JOIN shops s ON s.id = si.shop_id
+           ${dvjShops}
            WHERE s.slug = ?
-             AND s.game_version_id = ${versionSub(versionId)}
            ORDER BY COALESCE(fi.name, v.name, si.item_name), si.buy_price DESC`,
         )
         .bind(slug)
@@ -418,14 +435,17 @@ export function gamedataRoutes<E extends HonoEnv>() {
   // GET /api/gamedata/trade — trade commodities with per-shop buy/sell/stock data
   app.get("/trade", async (c) => {
     const db = c.env.DB
-    const versionId = await resolveVersionId(db, c.req.query("patch"))
+    const patchCode = c.req.query("patch")
+    const versionId = await resolveVersionId(db, patchCode)
+    const dvjTrade = deltaVersionJoin('trade_commodities', 'tc2', 'uuid', patchCode)
+    const dvjShops = deltaVersionJoin('shops', 's', 'uuid', patchCode)
     return cachedJson(c, `gd:trade:${versionId}`, async () => {
       const [commoditiesResult, listingsResult] = await Promise.all([
         db
           .prepare(
-            `SELECT * FROM trade_commodities
-             WHERE game_version_id = ${versionSub(versionId)}
-             ORDER BY category, name`,
+            `SELECT tc2.* FROM trade_commodities tc2
+             ${dvjTrade}
+             ORDER BY tc2.category, tc2.name`,
           )
           .all(),
         db
@@ -437,9 +457,9 @@ export function gamedataRoutes<E extends HonoEnv>() {
                s.location_label
              FROM shop_inventory si
              JOIN shops s ON s.id = si.shop_id
+             ${dvjShops}
              JOIN trade_commodities tc ON tc.uuid = si.item_uuid AND tc.game_version_id = s.game_version_id
              WHERE s.shop_type = 'admin'
-               AND s.game_version_id = ${versionSub(versionId)}
              ORDER BY s.location_label, s.name`,
           )
           .all(),
@@ -473,14 +493,17 @@ export function gamedataRoutes<E extends HonoEnv>() {
   app.get("/locations/:slug/shops", async (c) => {
     const slug = c.req.param("slug")
     const db = c.env.DB
-    const versionId = await resolveVersionId(db, c.req.query("patch"))
+    const patchCode = c.req.query("patch")
+    const versionId = await resolveVersionId(db, patchCode)
+    const dvjLocations = deltaVersionJoin('star_map_locations', 'sml', 'uuid', patchCode)
+    const dvjShops = deltaVersionJoin('shops', 's', 'uuid', patchCode)
     return cachedJson(c, `gd:loc-shops:${versionId}:${cacheSlug(slug)}`, async () => {
       const location = await db
         .prepare(
-          `SELECT id, name, slug, location_type
-           FROM star_map_locations
-           WHERE slug = ?
-             AND game_version_id = ${versionSub(versionId)}
+          `SELECT sml.id, sml.name, sml.slug, sml.location_type
+           FROM star_map_locations sml
+           ${dvjLocations}
+           WHERE sml.slug = ?
            LIMIT 1`,
         )
         .bind(slug)
@@ -494,8 +517,8 @@ export function gamedataRoutes<E extends HonoEnv>() {
           .prepare(
             `SELECT s.id, s.name, s.slug, s.shop_type, s.location_label, NULL as placement_name
              FROM shops s
+             ${dvjShops}
              WHERE LOWER(REPLACE(s.location_label, ' ', '')) = LOWER(REPLACE(?, ' ', ''))
-               AND s.game_version_id = ${versionSub(versionId)}
              ORDER BY s.shop_type, s.name`,
           )
           .bind(labelSlug)
@@ -513,13 +536,14 @@ export function gamedataRoutes<E extends HonoEnv>() {
         return { location: { name: labelShops[0].location_label, slug }, shops: nestInventoryUnderShops(labelShops, labelInv) }
       }
 
+      const dvjLocations2 = deltaVersionJoin('star_map_locations', 'sml2', 'uuid', patchCode)
       const { results: childLocations } = await db
         .prepare(
-          `SELECT id FROM star_map_locations
-           WHERE (id = ? OR parent_uuid = (
-             SELECT uuid FROM star_map_locations WHERE id = ? AND game_version_id = ${versionSub(versionId)}
-           ))
-           AND game_version_id = ${versionSub(versionId)}`,
+          `SELECT sml2.id FROM star_map_locations sml2
+           ${dvjLocations2}
+           WHERE (sml2.id = ? OR sml2.parent_uuid = (
+             SELECT sml3.uuid FROM star_map_locations sml3 WHERE sml3.id = ?
+           ))`,
         )
         .bind(location.id, location.id)
         .all()
@@ -535,9 +559,9 @@ export function gamedataRoutes<E extends HonoEnv>() {
           `SELECT DISTINCT s.id, s.name, s.slug, s.shop_type, s.location_label,
              sl.placement_name
            FROM shops s
+           ${dvjShops}
            JOIN shop_locations sl ON sl.shop_id = s.id
            WHERE sl.location_id IN (${placeholders})
-             AND s.game_version_id = ${versionSub(versionId)}
            ORDER BY s.shop_type, s.name`,
         )
         .bind(...locationIds)
@@ -548,8 +572,8 @@ export function gamedataRoutes<E extends HonoEnv>() {
           .prepare(
             `SELECT s.id, s.name, s.slug, s.shop_type, s.location_label, NULL as placement_name
              FROM shops s
+             ${dvjShops}
              WHERE s.location_id IN (${placeholders})
-               AND s.game_version_id = ${versionSub(versionId)}
              ORDER BY s.shop_type, s.name`,
           )
           .bind(...locationIds)
@@ -583,16 +607,18 @@ export function gamedataRoutes<E extends HonoEnv>() {
   // GET /api/gamedata/weapon-racks — vehicle weapon racks grouped by vehicle
   app.get("/weapon-racks", async (c) => {
     const db = c.env.DB
-    const versionId = await resolveVersionId(db, c.req.query("patch"))
+    const patchCode = c.req.query("patch")
+    const versionId = await resolveVersionId(db, patchCode)
+    const dvjRacks = deltaVersionJoin('vehicle_weapon_racks', 'wr', 'uuid', patchCode)
     return cachedJson(c, `gd:weapon-racks:${versionId}`, async () => {
       const { results } = await db
         .prepare(
           `SELECT wr.*, v.name as vehicle_name, v.slug as vehicle_slug,
              m.name as manufacturer_name, m.code as manufacturer_code
            FROM vehicle_weapon_racks wr
+           ${dvjRacks}
            LEFT JOIN vehicles v ON v.id = wr.vehicle_id
            LEFT JOIN manufacturers m ON m.id = v.manufacturer_id
-           WHERE wr.game_version_id = ${versionSub(versionId)}
            ORDER BY v.name, wr.rack_label`,
         )
         .all()
@@ -603,16 +629,18 @@ export function gamedataRoutes<E extends HonoEnv>() {
   // GET /api/gamedata/suit-lockers — vehicle suit lockers grouped by vehicle
   app.get("/suit-lockers", async (c) => {
     const db = c.env.DB
-    const versionId = await resolveVersionId(db, c.req.query("patch"))
+    const patchCode = c.req.query("patch")
+    const versionId = await resolveVersionId(db, patchCode)
+    const dvjLockers = deltaVersionJoin('vehicle_suit_lockers', 'sl', 'uuid', patchCode)
     return cachedJson(c, `gd:suit-lockers:${versionId}`, async () => {
       const { results } = await db
         .prepare(
           `SELECT sl.*, v.name as vehicle_name, v.slug as vehicle_slug,
              m.name as manufacturer_name, m.code as manufacturer_code
            FROM vehicle_suit_lockers sl
+           ${dvjLockers}
            LEFT JOIN vehicles v ON v.id = sl.vehicle_id
            LEFT JOIN manufacturers m ON m.id = v.manufacturer_id
-           WHERE sl.game_version_id = ${versionSub(versionId)}
            ORDER BY v.name, sl.locker_label`,
         )
         .all()
@@ -624,7 +652,9 @@ export function gamedataRoutes<E extends HonoEnv>() {
   // GET /api/gamedata/npc-loadouts — list all factions with loadout counts
   app.get("/npc-loadouts", async (c) => {
     const db = c.env.DB
-    const versionId = await resolveVersionId(db, c.req.query("patch"))
+    const patchCode = c.req.query("patch")
+    const versionId = await resolveVersionId(db, patchCode)
+    const dvjLoadouts = deltaVersionJoin('npc_loadouts', 'nl', 'file_path', patchCode)
     return cachedJson(c, `gd:npc-loadouts:${versionId}`, async () => {
       const { results: factions } = await db
         .prepare(
@@ -633,8 +663,8 @@ export function gamedataRoutes<E extends HonoEnv>() {
              SUM(nl.visible_item_count) as item_count
            FROM npc_factions f
            JOIN npc_loadouts nl ON nl.faction_id = f.id
-             AND nl.game_version_id = ${versionSub(versionId)}
-             AND nl.visible_item_count > 0
+           ${dvjLoadouts}
+           WHERE nl.visible_item_count > 0
            GROUP BY f.id
            HAVING item_count > 0
            ORDER BY f.name`,
@@ -650,7 +680,9 @@ export function gamedataRoutes<E extends HonoEnv>() {
     const page = Math.max(1, parseInt(c.req.query("page") || "1", 10))
     const perPage = Math.min(100, Math.max(1, parseInt(c.req.query("per_page") || "50", 10)))
     const db = c.env.DB
-    const versionId = await resolveVersionId(db, c.req.query("patch"))
+    const patchCode = c.req.query("patch")
+    const versionId = await resolveVersionId(db, patchCode)
+    const dvjLoadouts = deltaVersionJoin('npc_loadouts', 'nl', 'file_path', patchCode)
     return cachedJson(c, `gd:npc-loadout:${versionId}:${cacheSlug(factionCode)}:p${page}:pp${perPage}`, async () => {
       const faction = await db
         .prepare("SELECT * FROM npc_factions WHERE code = ? LIMIT 1")
@@ -663,8 +695,8 @@ export function gamedataRoutes<E extends HonoEnv>() {
       const countRow = await db
         .prepare(
           `SELECT COUNT(*) as total FROM npc_loadouts nl
+           ${dvjLoadouts}
            WHERE nl.faction_id = ?
-             AND nl.game_version_id = ${versionSub(versionId)}
              AND nl.visible_item_count > 0`,
         )
         .bind(faction.id)
@@ -679,8 +711,8 @@ export function gamedataRoutes<E extends HonoEnv>() {
         .prepare(
           `SELECT nl.*
            FROM npc_loadouts nl
+           ${dvjLoadouts}
            WHERE nl.faction_id = ?
-             AND nl.game_version_id = ${versionSub(versionId)}
              AND nl.visible_item_count > 0
            ORDER BY nl.category, nl.sub_category, nl.loadout_name
            LIMIT ? OFFSET ?`,
@@ -735,24 +767,27 @@ export function gamedataRoutes<E extends HonoEnv>() {
   // types) and is returned correctly; a Missions page is deferred to a future milestone.
   app.get("/missions", async (c) => {
     const db = c.env.DB
-    const versionId = await resolveVersionId(db, c.req.query("patch"))
+    const patchCode = c.req.query("patch")
+    const versionId = await resolveVersionId(db, patchCode)
+    const dvjTypes = deltaVersionJoin('mission_types', 'mt', 'uuid', patchCode)
+    const dvjGivers = deltaVersionJoin('mission_givers', 'mg', 'uuid', patchCode)
     return cachedJson(c, `gd:missions:${versionId}`, async () => {
       const [typesResult, giversResult] = await Promise.all([
         db.prepare(
-          `SELECT * FROM mission_types
-           WHERE game_version_id = ${versionSub(versionId)}
-             AND name != '<= PLACEHOLDER =>'
-           ORDER BY name`,
+          `SELECT mt.* FROM mission_types mt
+           ${dvjTypes}
+           WHERE mt.name != '<= PLACEHOLDER =>'
+           ORDER BY mt.name`,
         ).all(),
         db.prepare(
           `SELECT mg.*,
              f.name as faction_name, f.slug as faction_slug,
              sml.name as location_name
            FROM mission_givers mg
+           ${dvjGivers}
            LEFT JOIN factions f ON f.id = mg.faction_id
            LEFT JOIN star_map_locations sml ON sml.id = mg.location_id
-           WHERE mg.game_version_id = ${versionSub(versionId)}
-             AND mg.name != '<= PLACEHOLDER =>'
+           WHERE mg.name != '<= PLACEHOLDER =>'
              AND mg.name != '<= UNINITIALIZED =>'
            ORDER BY mg.name`,
         ).all(),

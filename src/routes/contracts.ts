@@ -1,7 +1,7 @@
 import { Hono } from "hono"
 import type { HonoEnv } from "../lib/types"
 import { ARMOR_SET_REWARD_MAP } from "../lib/loot-sets"
-import { VEHICLE_VERSION_JOIN } from "../lib/constants"
+import { VEHICLE_VERSION_JOIN, deltaVersionJoin } from "../lib/constants"
 import { cachedJson, resolveVersionId, cacheSlug } from "../lib/cache"
 
 /**
@@ -14,17 +14,25 @@ export function contractRoutes<E extends HonoEnv>() {
   app.get("/", async (c) => {
     const db = c.env.DB
     const giver = c.req.query("giver")
-    const versionId = await resolveVersionId(db, c.req.query("patch"))
+    const patch = c.req.query("patch")
+    const versionId = await resolveVersionId(db, patch)
+
+    const dvjContracts = deltaVersionJoin('contracts', 'c', 'contract_key', patch)
+    const dvjWeapons = deltaVersionJoin('fps_weapons', 'fw', 'uuid', patch)
 
     return cachedJson(c, `contracts:${versionId}:${cacheSlug(giver ?? "all")}`, async () => {
       let query = `SELECT c.*, v.slug AS reward_vehicle_slug, fw.uuid AS reward_item_uuid
         FROM contracts c
+        ${dvjContracts}
         LEFT JOIN (
           SELECT v.* FROM vehicles v
           ${VEHICLE_VERSION_JOIN}
         ) v ON v.name = c.reward_text
-        LEFT JOIN fps_weapons fw ON fw.name = c.reward_text AND fw.game_version_id = ${versionId}
-        WHERE c.is_active = 1 AND c.game_version_id = ${versionId}`
+        LEFT JOIN (
+          SELECT fw.* FROM fps_weapons fw
+          ${dvjWeapons}
+        ) fw ON fw.name = c.reward_text
+        WHERE c.is_active = 1`
       const params: string[] = []
 
       if (giver) {

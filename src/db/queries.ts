@@ -185,12 +185,7 @@ export async function getShipLoadout(db: D1Database, slug: string, patchCode?: s
     .prepare(
       `WITH ship_ports AS (
         SELECT vp.* FROM vehicle_ports vp
-        INNER JOIN (
-          SELECT uuid, MAX(game_version_id) as latest_gv
-          FROM vehicle_ports
-          WHERE game_version_id <= ${vq}
-          GROUP BY uuid
-        ) _pvv ON vp.uuid = _pvv.uuid AND vp.game_version_id = _pvv.latest_gv
+        ${deltaVersionJoin('vehicle_ports', 'vp', 'uuid', patchCode)}
         WHERE vp.vehicle_id = (SELECT v.id FROM vehicles v ${vehicleVersionJoin(patchCode)} WHERE v.slug = ?)
       ),
       child_components AS (
@@ -879,17 +874,15 @@ export async function getLootByUuid(db: D1Database, uuid: string, patchCode?: st
   const row = await db.prepare(sql).bind(...lv.params, uuid).first();
   if (!row) return null;
 
-  // Version subquery for detail lookups — must match the same version as the loot_map row
-  const versionSub = patchCode
-    ? `(SELECT id FROM game_versions WHERE code = ?)`
-    : `(SELECT id FROM game_versions WHERE is_default = 1)`;
-  const versionParams: unknown[] = patchCode ? [patchCode] : [];
+  // Version subquery for child/junction table lookups — inline (no bind params needed)
+  const versionSub = versionSubquery(patchCode);
 
   // Fetch linked item details based on which FK is set
   const item = row as Record<string, unknown>;
   let details: Record<string, unknown> | null = null;
 
   if (item.fps_weapon_id) {
+    const dvjAmmo = deltaVersionJoin('fps_ammo_types', 'fa', 'uuid', patchCode);
     details = await db
       .prepare(`SELECT fw.name, fw.sub_type as type, fw.size, fw.description,
         fw.rounds_per_minute, fw.fire_modes, fw.burst_count, fw.ammo_capacity,
@@ -898,11 +891,13 @@ export async function getLootByUuid(db: D1Database, uuid: string, patchCode?: st
         COALESCE(fa.display_name, fa.name) as magazine_name, fa.magazine_capacity as magazine_size,
         mag_lm.uuid as magazine_loot_uuid
         FROM fps_weapons fw
-        LEFT JOIN fps_ammo_types fa ON fa.uuid = fw.magazine_uuid
-          AND fa.game_version_id = ${versionSub}
+        LEFT JOIN (
+          SELECT fa.* FROM fps_ammo_types fa
+          ${dvjAmmo}
+        ) fa ON fa.uuid = fw.magazine_uuid
         LEFT JOIN loot_map mag_lm ON mag_lm.uuid = fw.magazine_uuid AND mag_lm.removed = 0
         WHERE fw.id = ?`)
-      .bind(...versionParams, item.fps_weapon_id)
+      .bind(item.fps_weapon_id)
       .first() as Record<string, unknown> | null;
   } else if (item.fps_armour_id) {
     details = await db
@@ -937,7 +932,7 @@ export async function getLootByUuid(db: D1Database, uuid: string, patchCode?: st
     if (details?.uuid) {
       const effects = await db
         .prepare(`SELECT effect_key, magnitude, duration_seconds FROM consumable_effects WHERE consumable_uuid = ? AND game_version_id = ${versionSub}`)
-        .bind(details.uuid as string, ...versionParams)
+        .bind(details.uuid as string)
         .all();
       (details as Record<string, unknown>).effects = effects.results;
       delete (details as Record<string, unknown>).uuid;
@@ -946,9 +941,10 @@ export async function getLootByUuid(db: D1Database, uuid: string, patchCode?: st
 
   // Fallback: magazines have no FK from loot_map — match by UUID to fps_ammo_types
   if (!details && item.sub_type === 'Magazine') {
+    const dvjAmmoFallback = deltaVersionJoin('fps_ammo_types', 'fa', 'uuid', patchCode);
     details = await db
-      .prepare(`SELECT COALESCE(display_name, name) as name, caliber, damage_per_round, damage_type, projectile_speed, magazine_capacity FROM fps_ammo_types WHERE uuid = ? AND game_version_id = ${versionSub}`)
-      .bind(uuid, ...versionParams)
+      .prepare(`SELECT COALESCE(fa.display_name, fa.name) as name, fa.caliber, fa.damage_per_round, fa.damage_type, fa.projectile_speed, fa.magazine_capacity FROM fps_ammo_types fa ${dvjAmmoFallback} WHERE fa.uuid = ?`)
+      .bind(uuid)
       .first() as Record<string, unknown> | null;
   }
 
@@ -957,7 +953,7 @@ export async function getLootByUuid(db: D1Database, uuid: string, patchCode?: st
   if (!details?.effects && (item.type === 'FPS_Consumable' || item.category === 'Consumable')) {
     const effects = await db
       .prepare(`SELECT effect_key, magnitude, duration_seconds FROM consumable_effects WHERE consumable_uuid = ? AND game_version_id = ${versionSub}`)
-      .bind(uuid, ...versionParams)
+      .bind(uuid)
       .all();
     if (effects.results.length > 0) {
       if (!details) details = { name: item.name as string, type: item.type as string, sub_type: item.sub_type as string, description: item.description as string };
@@ -1015,7 +1011,7 @@ export async function getLootByUuid(db: D1Database, uuid: string, patchCode?: st
       AND si.game_version_id = ${versionSub}
       AND (si.buy_price > 0 OR si.sell_price > 0)
     ORDER BY s.location_label, s.name
-  `).bind(uuid, ...versionParams).all();
+  `).bind(uuid).all();
 
   for (const shop of shopAvailability.results) {
     const r = shop as Record<string, unknown>;
@@ -1034,16 +1030,17 @@ export async function getLootByUuid(db: D1Database, uuid: string, patchCode?: st
   const className = item.class_name as string;
   if (className) {
     const itemName = className.replace(/^EntityClassDefinition\./, '');
+    const dvjNpcLoadouts = deltaVersionJoin('npc_loadouts', 'nl', 'file_path', patchCode);
     const npcLoadouts = await db.prepare(`
       SELECT nl.loadout_name, nf.name as faction_name, nf.code as faction_code,
              nli.port_name, nli.tag
       FROM npc_loadout_items nli
       JOIN npc_loadouts nl ON nl.id = nli.loadout_id
+      ${dvjNpcLoadouts}
       JOIN npc_factions nf ON nf.id = nl.faction_id
       WHERE nli.item_name = ?
-        AND nl.game_version_id = ${versionSub}
       ORDER BY nf.name, nl.loadout_name
-    `).bind(itemName, ...versionParams).all();
+    `).bind(itemName).all();
 
     if (npcLoadouts.results.length > 0) {
       for (const npc of npcLoadouts.results) {
@@ -1536,10 +1533,7 @@ export async function getLootLocationSummary(db: D1Database, patchCode?: string)
   // Optimized: filter directly on junction table's game_version_id instead of
   // expensive MAX(game_version_id) correlated subquery. The junction table already
   // stores version_id per row, so we can skip the UUID-dedup pattern.
-  const versionCap = patchCode
-    ? `(SELECT id FROM game_versions WHERE code = ?)`
-    : `(SELECT id FROM game_versions WHERE is_default = 1)`;
-  const params = patchCode ? [patchCode] : [];
+  const versionCap = versionSubquery(patchCode);
 
   const sql = `SELECT lil.source_type, lil.location_key as key,
       COUNT(DISTINCT lil.loot_map_id) as itemCount,
@@ -1555,7 +1549,7 @@ export async function getLootLocationSummary(db: D1Database, patchCode?: string)
       AND ${LOOT_EXCLUSION_FILTER}
     GROUP BY lil.source_type, lil.location_key`;
 
-  const result = await db.prepare(sql).bind(...params).all<LocationAggRow & { source_type: string }>();
+  const result = await db.prepare(sql).all<LocationAggRow & { source_type: string }>();
 
   function toSummaries(rows: (LocationAggRow & { source_type: string })[]): LocationSummary[] {
     return rows.map((r) => {
@@ -1622,10 +1616,7 @@ export async function getLootLocationDetail(
     : ", lil.probability, lil.slot";
 
   // Optimized: filter on junction table's game_version_id directly
-  const versionCap = patchCode
-    ? `(SELECT id FROM game_versions WHERE code = ?)`
-    : `(SELECT id FROM game_versions WHERE is_default = 1)`;
-  const versionParams = patchCode ? [patchCode] : [];
+  const versionCap = versionSubquery(patchCode);
 
   const sql = `SELECT DISTINCT
       lm.uuid, lm.name, lm.type, lm.sub_type, lm.rarity, lm.category
@@ -1638,7 +1629,7 @@ export async function getLootLocationDetail(
       AND ${LOOT_EXCLUSION_FILTER}
     ORDER BY lm.name`;
 
-  const result = await db.prepare(sql).bind(...versionParams, sourceType, slug).all<{
+  const result = await db.prepare(sql).bind(sourceType, slug).all<{
     uuid: string;
     name: string;
     type: string | null;
