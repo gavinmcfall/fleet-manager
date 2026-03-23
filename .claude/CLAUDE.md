@@ -242,7 +242,7 @@ have caused bugs before or are easy to get wrong.
 - Never skip numbers. Never rename an applied migration file.
 - **Never ALTER a PK or UNIQUE constraint in-place** — create new table, copy data, drop old.
 - Index naming: `idx_{table}_{column}` — e.g., `idx_loot_map_type`
-- Current last migration: **0140_stable_ptu_versions.sql**
+- Current last migration: **0142_clustering_preset_uuid_per_version.sql**
 
 ### Out-of-Band Columns
 Previously these columns were applied via `wrangler d1 execute` outside migration files.

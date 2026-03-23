@@ -14,7 +14,7 @@ import type {
   AIAnalysis,
 } from "../lib/types";
 import { extractSetName, makeSetSlug } from "../lib/loot-sets";
-import { VEHICLE_VERSION_JOIN, vehicleVersionJoin, vehicleVersionCap, versionSubquery } from "../lib/constants";
+import { VEHICLE_VERSION_JOIN, vehicleVersionJoin, vehicleVersionCap, versionSubquery, deltaVersionJoin } from "../lib/constants";
 
 // --- Loot JSON "has_*" column expressions ---
 // Reusable SQL fragment for SELECT clauses that compute boolean flags from JSON blob columns.
@@ -841,19 +841,10 @@ export async function getGameVersions(db: D1Database): Promise<{ code: string; c
  *   - params: bind parameters to spread (empty array or [patchCode])
  */
 function latestAsOf(patchCode?: string): { join: string; where: string; params: unknown[] } {
-  const versionCap = patchCode
-    ? `(SELECT id FROM game_versions WHERE code = ?)`
-    : `(SELECT id FROM game_versions WHERE is_default = 1)`;
   return {
-    join: `INNER JOIN (
-      SELECT uuid, MAX(game_version_id) as latest_gv
-      FROM loot_map
-      WHERE game_version_id <= ${versionCap}
-        AND removed = 0
-      GROUP BY uuid
-    ) _lv ON lm.uuid = _lv.uuid AND lm.game_version_id = _lv.latest_gv`,
+    join: deltaVersionJoin("loot_map", "lm", "uuid", patchCode),
     where: `lm.removed = 0`,
-    params: patchCode ? [patchCode] : [],
+    params: [],  // version resolved inline by deltaVersionJoin
   };
 }
 

@@ -43,14 +43,35 @@ export function versionSubquery(patchCode?: string): string {
   ))`;
 }
 
-export function vehicleVersionJoin(patchCode?: string): string {
+/**
+ * Generic delta-versioned INNER JOIN. Resolves each item to its latest
+ * non-removed row at or before the selected game version.
+ *
+ * Usage: `FROM fps_weapons w ${deltaVersionJoin('fps_weapons', 'w', 'uuid', patchCode)}`
+ *
+ * @param table     - DB table name
+ * @param alias     - table alias used in the outer query
+ * @param identityCol - column that identifies the "same item" across versions (usually 'uuid')
+ * @param patchCode - optional version code; defaults to the is_default version
+ */
+export function deltaVersionJoin(
+  table: string,
+  alias: string,
+  identityCol: string = "uuid",
+  patchCode?: string,
+): string {
   const vq = versionSubquery(patchCode);
   return `INNER JOIN (
-    SELECT slug, MAX(game_version_id) as latest_gv
-    FROM vehicles
-    WHERE game_version_id <= ${vq}
-    GROUP BY slug
-  ) _vv ON v.slug = _vv.slug AND v.game_version_id = _vv.latest_gv`;
+    SELECT ${identityCol}, MAX(game_version_id) as latest_gv
+    FROM ${table}
+    WHERE game_version_id <= ${vq} AND removed = 0
+    GROUP BY ${identityCol}
+  ) _dv_${alias} ON ${alias}.${identityCol} = _dv_${alias}.${identityCol}
+    AND ${alias}.game_version_id = _dv_${alias}.latest_gv`;
+}
+
+export function vehicleVersionJoin(patchCode?: string): string {
+  return deltaVersionJoin("vehicles", "v", "slug", patchCode);
 }
 
 export function vehicleVersionCap(patchCode?: string): string {

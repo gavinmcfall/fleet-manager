@@ -1,15 +1,36 @@
 # Session Journal
 
 ## Current Focus
-SC Bridge Companion — Wails desktop app with gRPC interceptor, React+Tailwind UI matching crafting page design.
+Data pipeline overhaul complete. Loot map rebuild running. Waiting for KV cache purge then fresh conversation.
 
 ## What's Next
-1. System tray integration with SC Bridge logo
-2. Integration test gRPC proxy with local echo server
-3. Live test with Star Citizen client
-4. Settings UI with editable config (currently read-only)
+1. KV cache purge (user will do via admin UI after loot map rebuild completes)
+2. User has research/fixes to dump in fresh conversation
+3. Remaining QA Low/Info items from 68-issue audit
+4. SC Companion desktop app (Wails) — system tray, gRPC proxy tests
 
 ## Log
+
+### 2026-03-23 19:00 — Completed: 100% manufacturer coverage + extraction pipeline fixes
+- **Manufacturer coverage**: 0 NULL manufacturer_id across ALL tables on both prod and staging
+- **Segment scanning**: checks ALL underscore-separated segments against mfr map
+- **PREFIX_TO_MANUFACTURER**: bltr→BLTR (Blue Triangle Inc.), toag→XNAA (Xi'an/Aopoa)
+- **Empty Code derivation**: scitemmanufacturer.xian.json → XNAA from localization key
+- **UNKN fallback**: remaining unresolvable items set to Unknown Manufacturer
+- **9-agent fix batch**: paints (auto-DataCore), auec (no scdatatools), shop_locations (path fix), commodity_listings (correct data source), contracts (transient), mining (migration 0142), loot_map manufacturer backfill (+4,386 rows), CSV investigation
+- **Ship ports**: 13K useful ports (filtered from 215K total), loading in background
+- **Loot map rebuild**: running for both 4.6 and 4.7
+
+### 2026-03-23 17:30 — Completed: Full data refresh with two-stage manufacturer resolution
+- **lib/datacore.py**: Added `resolve_manufacturer_code()` (A=ref, B=prefix, A-real wins), `MANUFACTURER_OVERRIDES` (11 brands), `MANUFACTURER_REF_CORRECTIONS` (Fresnel→VOLT), `report_unmatched_manufacturers()`
+- **19 extraction scripts**: All now use `resolve_manufacturer_code()` + call `report_unmatched_manufacturers()` at end
+- **3 scripts fixed**: contracts, auec_prices, acquisition_types — missing `sys.path.insert`
+- **Extractions run**: 47 SQL files for 4.6.0-live + 47 for 4.7.0-ptu
+- **Applied to production** (sc-companion): all phases, 0 failures on core data
+- **Applied to staging** (sc-companion-staging): 4.6 + 4.7 data, crafting 1,044 blueprints loaded
+- **Manufacturer coverage**: fps_weapons 99.4%, fps_armour 97.6%, helmets 94.3%, vehicle_components 91.7%, clothing 99.3%
+- **Fresnel LMG**: confirmed VOLT on production (was the original bug that started the manufacturer overhaul)
+- Committed to scbridge/tools/scripts repo
 
 ### 2026-03-20 18:20 — Completed: Wails desktop app with React+Tailwind UI
 - **Restructured** sc-companion from CLI to Wails v2 desktop app
