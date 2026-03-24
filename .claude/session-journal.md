@@ -1,13 +1,20 @@
 # Session Journal
 
 ## Current Focus
-Data pipeline overhaul complete. Loot map rebuild running. Waiting for KV cache purge then fresh conversation.
+Fresh database approach for clean data reset. Plan approved, dry run first.
 
 ## What's Next
-1. KV cache purge (user will do via admin UI after loot map rebuild completes)
-2. User has research/fixes to dump in fresh conversation
-3. Remaining QA Low/Info items from 68-issue audit
-4. SC Companion desktop app (Wails) — system tray, gRPC proxy tests
+1. **IMMEDIATE: Execute fresh DB plan** (plan at `.claude/plans/modular-crunching-nygaard.md`)
+   - Create sc-companion-test D1 database
+   - Write export_prod.py to merge v32+v33 game data
+   - Bootstrap Better Auth + apply 146 migrations
+   - Load merged game data + user data
+   - Verify everything
+   - If clean: repeat for sc-companion-v2 (prod) and sc-companion-staging-v2
+   - Cut over wrangler.toml
+2. Build 4.7.0 delta extraction pipeline
+3. Close GitHub issues (37 open) before Saturday March 29 launch
+4. KV cache purge after data is finalized
 
 ## Log
 

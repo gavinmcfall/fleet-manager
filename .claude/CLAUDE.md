@@ -279,6 +279,21 @@ Higher-priority images must **never** be overwritten by lower-priority ones.
 
 ---
 
+## Evidence-First Rule (DO NOT BREAK THIS)
+
+**NEVER make a statement about data without querying the actual data first.**
+
+- Before claiming "X doesn't exist" → `SELECT` it and show the result
+- Before claiming "script Y doesn't do Z" → read the code and cite the line number
+- Before claiming "the cause is X" → show evidence from DB + code
+- No "likely", "probably", or "I think" when facts are queryable
+- Present findings like court evidence: source, query, result, conclusion
+- If you don't know → say so, then investigate. Do not speculate.
+
+This rule exists because unfounded assumptions wasted time and increased stress during a critical deadline.
+
+---
+
 ## Owner Context
 - Gavin — Senior QA at Pushpay
 - Homelab: TalosOS Kubernetes cluster, Flux GitOps, BJW-S app-template
