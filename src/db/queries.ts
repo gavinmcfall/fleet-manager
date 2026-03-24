@@ -1601,7 +1601,7 @@ interface LocationDetailResult {
 
 export async function getLootLocationDetail(
   db: D1Database,
-  locType: "container" | "shop" | "npc",
+  locType: "container" | "shop" | "npc" | "contract",
   slug: string,
   patchCode?: string,
 ): Promise<LocationDetailResult> {

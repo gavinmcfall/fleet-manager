@@ -192,7 +192,7 @@ export function lootRoutes() {
     const patch = c.req.query("patch");
     const versionId = await resolveVersionId(c.env.DB, patch);
     return cachedJson(c, `loot:loc-detail:${versionId}:${type}:${cacheSlug(slug)}`, () =>
-      getLootLocationDetail(c.env.DB, type, slug, patch),
+      getLootLocationDetail(c.env.DB, type as "container" | "shop" | "npc" | "contract", slug, patch),
     );
   });
 
