@@ -34,7 +34,17 @@ export function analysisRoutes() {
 
     const allVehicles = allVehiclesResult.results as unknown as Vehicle[];
 
-    const analysis = analyzeFleet(fleet, allVehicles);
+    // Total pledge value from user_pledges (all pledges, not just ships)
+    // This is the real total spent — ships, paints, add-ons, upgrades
+    const pledgeTotal = await db
+      .prepare(
+        `SELECT COALESCE(SUM(CASE WHEN value_cents > 0 AND currency NOT LIKE '%UEC%' THEN value_cents ELSE 0 END), 0) / 100.0 as total
+         FROM user_pledges WHERE user_id = ?`,
+      )
+      .bind(userID)
+      .first<{ total: number }>();
+
+    const analysis = analyzeFleet(fleet, allVehicles, pledgeTotal?.total ?? 0);
     return c.json(analysis);
   });
 
@@ -506,12 +516,12 @@ function getRoleGroup(focus: string): string {
   return ROLE_GROUP_MAP[focus] ?? focus;
 }
 
-export function analyzeFleet(fleet: UserFleetEntry[], _allVehicles: Vehicle[]): FleetAnalysis {
+export function analyzeFleet(fleet: UserFleetEntry[], _allVehicles: Vehicle[], totalPledgeValue: number = 0): FleetAnalysis {
   // Overview stats
   let flightReady = 0;
   let inConcept = 0;
   let totalCargo = 0;
-  let totalPledgeValue = 0;
+  // totalPledgeValue is passed in from user_pledges query (real total spent across all pledges)
   let minCrew = 0;
   let maxCrew = 0;
   let ltiCount = 0;
@@ -541,7 +551,6 @@ export function analyzeFleet(fleet: UserFleetEntry[], _allVehicles: Vehicle[]): 
 
     // Cargo
     totalCargo += entry.cargo ?? 0;
-    totalPledgeValue += entry.pledge_price ?? 0;
 
     // Crew
     minCrew += entry.crew_min ?? 0;
