@@ -3,7 +3,7 @@ import { CheckCircle, Wrench, Lightbulb } from 'lucide-react'
 const STATUS_CONFIG = {
   flight_ready: { icon: CheckCircle, color: 'text-sc-success', label: 'Flight Ready' },
   in_production: { icon: Wrench, color: 'text-sc-warn', label: 'In Production' },
-  in_concept: { icon: Lightbulb, color: 'text-blue-400', label: 'In Concept' },
+  in_concept: { icon: Lightbulb, color: 'text-blue-400', label: 'Concept' },
 }
 
 export default function StatusBadge({ status, size = 'md' }) {

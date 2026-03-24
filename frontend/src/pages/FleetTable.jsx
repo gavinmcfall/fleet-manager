@@ -1,7 +1,7 @@
-import React, { useMemo } from 'react'
+import React, { useMemo, useState, useRef, useEffect } from 'react'
 import { useSearchParams, useNavigate } from 'react-router-dom'
 import { useFleet, useUserOrgs, updateShipVisibility } from '../hooks/useAPI'
-import { ArrowUpDown, SearchX, Rocket, Upload, Wrench } from 'lucide-react'
+import { ArrowUpDown, SearchX, Rocket, Upload, Wrench, ChevronDown } from 'lucide-react'
 import PageHeader from '../components/PageHeader'
 import LoadingState from '../components/LoadingState'
 import ErrorState from '../components/ErrorState'
@@ -42,6 +42,54 @@ const VISIBILITY_OPTIONS = [
   { value: 'officers', label: 'Officers' },
   { value: 'public', label: 'Public' },
 ]
+
+function VisibilitySelect({ value, onChange }) {
+  const [open, setOpen] = useState(false)
+  const ref = useRef(null)
+  const selected = VISIBILITY_OPTIONS.find(o => o.value === value) || VISIBILITY_OPTIONS[0]
+
+  useEffect(() => {
+    if (!open) return
+    const handler = (e) => { if (ref.current && !ref.current.contains(e.target)) setOpen(false) }
+    document.addEventListener('mousedown', handler)
+    return () => document.removeEventListener('mousedown', handler)
+  }, [open])
+
+  return (
+    <div ref={ref} className="relative">
+      <button
+        type="button"
+        onClick={() => setOpen(!open)}
+        className={`flex items-center gap-1 px-2 py-1 rounded-md text-xs transition-all cursor-pointer ${
+          open
+            ? 'bg-white/[0.08] border border-sc-accent/40 text-gray-200'
+            : 'bg-white/[0.04] border border-white/[0.08] text-gray-400 hover:border-white/[0.15] hover:text-gray-300'
+        }`}
+      >
+        {selected.label}
+        <ChevronDown className={`w-3 h-3 transition-transform ${open ? 'rotate-180' : ''}`} />
+      </button>
+      {open && (
+        <div className="absolute z-50 mt-1 right-0 w-28 rounded-lg bg-gray-800/95 backdrop-blur-md border border-white/[0.1] shadow-xl shadow-black/40 overflow-hidden">
+          {VISIBILITY_OPTIONS.map(opt => (
+            <button
+              key={opt.value}
+              type="button"
+              onClick={() => { onChange(opt.value); setOpen(false) }}
+              className={`w-full text-left px-3 py-1.5 text-xs transition-colors cursor-pointer ${
+                opt.value === value
+                  ? 'bg-sc-accent/10 text-sc-accent'
+                  : 'text-gray-300 hover:bg-white/[0.06] hover:text-white'
+              }`}
+            >
+              {opt.label}
+            </button>
+          ))}
+        </div>
+      )}
+    </div>
+  )
+}
 
 export default function FleetTable() {
   const { data: fleet, loading, error, refetch } = useFleet()
@@ -159,7 +207,7 @@ export default function FleetTable() {
                   <th
                     key={key}
                     scope="col"
-                    className="table-header cursor-pointer hover:text-gray-300 select-none whitespace-nowrap"
+                    className={`table-header cursor-pointer hover:text-gray-300 select-none whitespace-nowrap${key === 'size' ? ' pl-8' : ''}`}
                     onClick={() => toggleSort(key)}
                     aria-sort={sortKey === key ? (sortDir === 'asc' ? 'ascending' : 'descending') : undefined}
                   >
@@ -220,16 +268,7 @@ export default function FleetTable() {
                           className="rounded border border-sc-border/50 shrink-0"
                         />
                         <div>
-                          <div className="flex items-center gap-1.5">
-                            <span className="font-medium text-white">{v.vehicle_name}</span>
-                            <button
-                              onClick={(e) => { e.stopPropagation(); navigate(`/loadout/${v.vehicle_slug}?fleet_id=${v.id}`) }}
-                              className="p-0.5 text-zinc-500 hover:text-sky-400 transition-colors"
-                              title="Customize loadout"
-                            >
-                              <Wrench className="w-3.5 h-3.5" />
-                            </button>
-                          </div>
+                          <span className="font-medium text-white">{v.vehicle_name}</span>
                           {v.custom_name && (
                             <span className="block text-xs text-sc-accent italic">"{v.custom_name}"</span>
                           )}
@@ -237,7 +276,16 @@ export default function FleetTable() {
                       </div>
                     </td>
                     <td className="table-cell">
-                      <span className="badge badge-size">{v.size_label || '?'}</span>
+                      <div className="flex items-center gap-2">
+                        <button
+                          onClick={(e) => { e.stopPropagation(); navigate(`/loadout/${v.vehicle_slug}?fleet_id=${v.id}`) }}
+                          className="p-1 text-zinc-600 hover:text-sky-400 transition-colors"
+                          title="Customize loadout"
+                        >
+                          <Wrench className="w-3.5 h-3.5" />
+                        </button>
+                        <span className="badge badge-size inline-block w-16 text-center">{v.size_label || '?'}</span>
+                      </div>
                     </td>
                     <td className="table-cell text-gray-400">{v.focus || '-'}</td>
                     <td className="table-cell font-mono text-gray-400">
@@ -251,23 +299,17 @@ export default function FleetTable() {
                     </td>
                     {inOrgs && (
                       <td className="table-cell" onClick={(e) => e.stopPropagation()}>
-                        <select
+                        <VisibilitySelect
                           value={v.org_visibility || 'private'}
-                          onChange={async (e) => {
-                            await updateShipVisibility(v.id, { org_visibility: e.target.value }).catch(() => {})
+                          onChange={async (val) => {
+                            await updateShipVisibility(v.id, { org_visibility: val }).catch(() => {})
                             refetch()
                           }}
-                          className="text-xs bg-sc-darker border border-sc-border rounded px-1 py-0.5 text-gray-300 focus:outline-none focus:border-sc-accent"
-                          title="Org visibility for this ship"
-                        >
-                          {VISIBILITY_OPTIONS.map((o) => (
-                            <option key={o.value} value={o.value}>{o.label}</option>
-                          ))}
-                        </select>
+                        />
                       </td>
                     )}
                     {inOrgs && (
-                      <td className="table-cell" onClick={(e) => e.stopPropagation()}>
+                      <td className="table-cell text-center" onClick={(e) => e.stopPropagation()}>
                         <input
                           type="checkbox"
                           checked={!!v.available_for_ops}
@@ -276,7 +318,7 @@ export default function FleetTable() {
                             refetch()
                           }}
                           title="Available for ops"
-                          className="accent-sc-accent cursor-pointer"
+                          className="w-4 h-4 accent-sc-accent cursor-pointer rounded"
                         />
                       </td>
                     )}
