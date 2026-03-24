@@ -1,6 +1,6 @@
 import React, { useMemo } from 'react'
 import { Search, X } from 'lucide-react'
-import { TYPE_LABELS, SUBTYPE_LABELS, TYPE_COLORS, resourceColor, resourceBgColor, resourceBorderColor } from './craftingUtils'
+import { TYPE_LABELS, TYPE_ORDER, SUBTYPE_LABELS, TYPE_COLORS, resourceColor, resourceBgColor, resourceBorderColor } from './craftingUtils'
 
 function TypePill({ label, active, color, onClick }) {
   return (
@@ -58,7 +58,14 @@ export default function FilterBar({
   onFilterChange,
   blueprints, resources,
 }) {
-  const types = useMemo(() => [...new Set(blueprints.map(b => b.type))].sort(), [blueprints])
+  const types = useMemo(() => {
+    const unique = [...new Set(blueprints.map(b => b.type))]
+    return unique.sort((a, b) => {
+      const ai = TYPE_ORDER.indexOf(a)
+      const bi = TYPE_ORDER.indexOf(b)
+      return (ai === -1 ? 999 : ai) - (bi === -1 ? 999 : bi)
+    })
+  }, [blueprints])
   const subtypes = useMemo(() => {
     const filtered = typeFilter ? blueprints.filter(b => b.type === typeFilter) : blueprints
     return [...new Set(filtered.map(b => b.sub_type))].sort()

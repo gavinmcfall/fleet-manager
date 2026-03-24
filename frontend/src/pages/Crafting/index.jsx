@@ -61,6 +61,14 @@ export default function Crafting() {
         return tokens.every(t => haystack.includes(t))
       })
     }
+    // Sort: type order (armour, weapons, ammo) then by name
+    const typeOrder = { armour: 0, weapons: 1, ammo: 2 }
+    items.sort((a, b) => {
+      const ta = typeOrder[a.type] ?? 99
+      const tb = typeOrder[b.type] ?? 99
+      if (ta !== tb) return ta - tb
+      return (a.name || '').localeCompare(b.name || '')
+    })
     return items
   }, [blueprints, typeFilter, subtypeFilter, resourceFilter, search])
 

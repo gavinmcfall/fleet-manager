@@ -6,6 +6,9 @@ export const TYPE_LABELS = {
   ammo: 'Ammo',
 }
 
+// Display order for type filter pills — ammo last since players care about it least
+export const TYPE_ORDER = ['armour', 'weapons', 'ammo']
+
 export const SUBTYPE_LABELS = {
   combat: 'Combat',
   engineer: 'Engineer',
