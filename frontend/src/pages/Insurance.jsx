@@ -158,28 +158,31 @@ function InsuranceRow({ ship }) {
         )}
       </div>
       <div className="flex items-center gap-3 shrink-0">
-        {ship.pledge_cost && (() => {
-          const raw = ship.pledge_cost.trim()
-          if (raw.includes('¤') || raw.toUpperCase().includes('UEC')) return null
-          const m = raw.match(/\$\s*([\d,]+(?:\.\d+)?)/)
-          if (!m) return null
-          const num = parseFloat(m[1].replace(/,/g, ''))
-          if (!num || num === 0) return null
-          return (
-            <span className="flex items-center gap-1 text-xs font-mono text-gray-400 w-24">
-              <DollarSign className="w-3 h-3" />
-              ${Math.round(num).toLocaleString('en-US')}
-            </span>
-          )
-        })()}
-        {ship.pledge_date && (
-          <span className="flex items-center gap-1 text-xs font-mono text-gray-500 w-40 justify-end">
-            <Calendar className="w-3 h-3" />
-            {ship.pledge_date}
-          </span>
-        )}
-        {!!ship.warbond && <span className="badge badge-warbond">WB</span>}
-        <InsuranceBadge isLifetime={ship.is_lifetime} label={ship.insurance_label || (ship.is_lifetime ? 'LTI' : 'Standard')} />
+        <span className="w-20 text-right text-xs font-mono text-gray-400">
+          {(() => {
+            if (!ship.pledge_cost) return <span className="text-gray-600">N/A</span>
+            const raw = ship.pledge_cost.trim()
+            if (raw.includes('¤') || raw.toUpperCase().includes('UEC')) {
+              return <span className="text-gray-600">aUEC</span>
+            }
+            const m = raw.match(/\$\s*([\d,]+(?:\.\d+)?)/)
+            if (!m) return <span className="text-gray-600">N/A</span>
+            const num = parseFloat(m[1].replace(/,/g, ''))
+            if (!num || num === 0) return <span className="text-gray-600">Gift</span>
+            return <span className="flex items-center gap-1 justify-end">${Math.round(num).toLocaleString('en-US')}</span>
+          })()}
+        </span>
+        <span className="w-44 text-right text-xs font-mono text-gray-500 whitespace-nowrap">
+          {ship.pledge_date && (
+            <span className="flex items-center gap-1 justify-end"><Calendar className="w-3 h-3" />{ship.pledge_date}</span>
+          )}
+        </span>
+        <span className="w-8 text-center">
+          {!!ship.warbond && <span className="badge badge-warbond">WB</span>}
+        </span>
+        <span className="w-28 text-right">
+          <InsuranceBadge isLifetime={ship.is_lifetime} label={ship.insurance_label || (ship.is_lifetime ? 'LTI' : 'Standard')} />
+        </span>
       </div>
     </div>
   )

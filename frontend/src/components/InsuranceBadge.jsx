@@ -14,8 +14,8 @@ export default function InsuranceBadge({ isLifetime, label }) {
   if (!display) return <span className="text-xs text-gray-400">&mdash;</span>
 
   return isLifetime ? (
-    <span className="badge badge-lti whitespace-nowrap">Lifetime</span>
+    <span className="badge badge-lti whitespace-nowrap inline-block w-24 text-center">Lifetime</span>
   ) : (
-    <span className="badge badge-nonlti whitespace-nowrap">{display}</span>
+    <span className="badge badge-nonlti whitespace-nowrap inline-block w-24 text-center">{display}</span>
   )
 }
