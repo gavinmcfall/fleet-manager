@@ -266,7 +266,7 @@ export default function RockCalculator({ data }) {
   ]
 
   const buildLaserOptions = (slotSize) => {
-    const filtered = lasers.filter(l => l.size === slotSize || l.size === 0)
+    const filtered = lasers.filter(l => l.size === slotSize)
     return [
       { value: '', label: 'None' },
       ...filtered.map(l => ({
@@ -277,13 +277,13 @@ export default function RockCalculator({ data }) {
     ]
   }
 
-  const buildModuleOptions = (slotSize) => {
-    const filtered = modules.filter(m => m.size === slotSize || m.size === 0)
+  const buildModuleOptions = () => {
+    // All modules are size 1 and fit any laser's module sub-slots
     return [
       { value: '', label: 'None' },
-      ...filtered.map(m => ({
+      ...modules.map(m => ({
         value: String(m.id),
-        label: `${m.name} (S${m.size})`,
+        label: m.name,
         subtitle: m.type,
       }))
     ]
@@ -324,7 +324,7 @@ export default function RockCalculator({ data }) {
           {ship.slots.map((slot, i) => {
             const laser = laserIds[i]
             return (
-              <div key={i} className="relative z-30 bg-white/[0.03] border border-white/[0.06] rounded-xl p-5 space-y-3">
+              <div key={i} className="relative bg-white/[0.03] border border-white/[0.06] rounded-xl p-5 space-y-3" style={{ zIndex: 30 - i }}>
                 <CustomSelect
                   label={slot.label}
                   value={laser ? String(laser.id) : ''}
@@ -346,7 +346,7 @@ export default function RockCalculator({ data }) {
                           const found = modules.find(m => String(m.id) === val)
                           setModuleIds(prev => ({ ...prev, [`${i}-${j}`]: found || null }))
                         }}
-                        options={buildModuleOptions(slot.size)}
+                        options={buildModuleOptions()}
                         placeholder="None"
                       />
                     ))}
