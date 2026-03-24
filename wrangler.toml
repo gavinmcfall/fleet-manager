@@ -63,8 +63,8 @@ RSI_RATE_LIMIT = "1.0"
 
 [[env.staging.d1_databases]]
 binding = "DB"
-database_name = "sc-companion-staging"
-database_id = "6c6a387b-362f-4dda-88dc-b441b6dc268f"
+database_name = "sc-companion-staging-v2"
+database_id = "210c084b-6e14-415f-af45-46157e5d53a5"
 migrations_dir = "src/db/migrations"
 
 [[env.staging.kv_namespaces]]
