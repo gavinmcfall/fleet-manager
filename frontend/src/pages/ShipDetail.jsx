@@ -569,7 +569,7 @@ function OverviewTab({ ship }) {
         {ship.description && (
           <div className="panel">
             <div className="panel-header">Description</div>
-            <p className="p-4 text-sm text-gray-400 leading-relaxed">{ship.description}</p>
+            <p className="p-4 text-sm text-gray-400 leading-relaxed whitespace-pre-line">{ship.description.replace(/\\n/g, '\n')}</p>
           </div>
         )}
       </div>
