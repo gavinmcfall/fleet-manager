@@ -60,6 +60,7 @@ export default function Account() {
   const [passkeys, setPasskeys] = useState([])
   const [passkeysLoading, setPasskeysLoading] = useState(true)
   const [passkeyError, setPasskeyError] = useState(null)
+  const [passkeyMsg, setPasskeyMsg] = useState(null)
   const [showPasskeyNamePrompt, setShowPasskeyNamePrompt] = useState(false)
   const [passkeyNameInput, setPasskeyNameInput] = useState('')
   const [editingPasskeyId, setEditingPasskeyId] = useState(null)
@@ -568,6 +569,8 @@ export default function Account() {
       await fetchPasskeys()
       setShowPasskeyNamePrompt(false)
       setPasskeyNameInput('')
+      setPasskeyMsg('Passkey added successfully')
+      setTimeout(() => setPasskeyMsg(null), 5000)
     } catch (err) {
       setPasskeyError(err.message || 'Failed to add passkey')
     }
@@ -804,7 +807,7 @@ export default function Account() {
       <PasskeySection
         timezone={timezone}
         passkeys={passkeys} passkeysLoading={passkeysLoading}
-        passkeyError={passkeyError}
+        passkeyError={passkeyError} passkeyMsg={passkeyMsg}
         showPasskeyNamePrompt={showPasskeyNamePrompt} setShowPasskeyNamePrompt={setShowPasskeyNamePrompt}
         passkeyNameInput={passkeyNameInput} setPasskeyNameInput={setPasskeyNameInput}
         editingPasskeyId={editingPasskeyId} setEditingPasskeyId={setEditingPasskeyId}

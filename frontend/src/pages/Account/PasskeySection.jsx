@@ -1,12 +1,12 @@
 import React from 'react'
-import { Fingerprint, AlertCircle, Pencil, Trash2 } from 'lucide-react'
+import { Fingerprint, AlertCircle, Check, Pencil, Trash2 } from 'lucide-react'
 import { formatDate } from '../../lib/dates'
 import PanelSection from '../../components/PanelSection'
 
 export default function PasskeySection({
   timezone,
   passkeys, passkeysLoading,
-  passkeyError,
+  passkeyError, passkeyMsg,
   showPasskeyNamePrompt, setShowPasskeyNamePrompt,
   passkeyNameInput, setPasskeyNameInput,
   editingPasskeyId, setEditingPasskeyId,
@@ -23,6 +23,12 @@ export default function PasskeySection({
           <div className="flex items-center gap-2 mb-4 p-3 bg-sc-danger/10 border border-sc-danger/30 rounded text-sc-danger text-sm">
             <AlertCircle className="w-4 h-4 shrink-0" />
             <span>{passkeyError}</span>
+          </div>
+        )}
+        {passkeyMsg && (
+          <div className="flex items-center gap-2 mb-4 p-3 bg-sc-success/10 border border-sc-success/30 rounded text-sc-success text-sm">
+            <Check className="w-4 h-4 shrink-0" />
+            <span>{passkeyMsg}</span>
           </div>
         )}
 

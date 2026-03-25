@@ -44,6 +44,34 @@ export default function TwoFactorSection({
               <QRCodeSVG value={totpUri} size={200} />
             </div>
 
+            {/* Manual entry for password managers like Bitwarden */}
+            {(() => {
+              const secretMatch = totpUri.match(/[?&]secret=([A-Z2-7]+)/i)
+              const secret = secretMatch ? secretMatch[1] : null
+              return secret ? (
+                <div>
+                  <p className="text-xs font-medium text-gray-400 uppercase tracking-wider mb-1">Manual entry code</p>
+                  <div className="flex items-center gap-2">
+                    <code className="flex-1 px-3 py-2 bg-sc-darker border border-sc-border rounded text-xs font-mono text-gray-300 select-all break-all">
+                      {secret}
+                    </code>
+                    <button
+                      onClick={() => {
+                        navigator.clipboard.writeText(secret)
+                        setTwoFAMsg('Secret key copied')
+                        setTimeout(() => setTwoFAMsg(null), 2000)
+                      }}
+                      className="flex items-center gap-1 px-2 py-2 text-xs text-gray-500 hover:text-gray-300 transition-colors shrink-0"
+                      title="Copy secret key"
+                    >
+                      <Copy className="w-3.5 h-3.5" />
+                      Copy
+                    </button>
+                  </div>
+                </div>
+              ) : null
+            })()}
+
             {backupCodes && (
               <div>
                 <div className="flex items-center justify-between mb-2">
