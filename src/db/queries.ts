@@ -340,6 +340,7 @@ export async function getShipLoadout(db: D1Database, slug: string, versionId?: n
         AND p.port_type IN ('weapon', 'turret', 'missile', 'shield', 'power', 'cooler',
             'quantum_drive', 'jump_drive', 'countermeasure', 'sensor', 'module',
             'personal_storage', 'cargo_grid')
+        -- Exclude child ports that duplicate their parent's category (gimbal→weapon shown via parent)
         AND (
           p.parent_port_id IS NULL
           OR NOT EXISTS (
@@ -349,6 +350,18 @@ export async function getShipLoadout(db: D1Database, slug: string, versionId?: n
               AND pp.category_label = p.category_label
               AND pp.port_type != 'turret'
           )
+        )
+        -- Exclude noise: Display/MFD/Screen items, individual missile attach points, empty size-1 ports
+        AND COALESCE(
+          COALESCE(child.type, vc.type),
+          'KEEP'
+        ) NOT IN ('Display', 'SeatDashboard', 'Seat', 'SeatAccess')
+        AND p.name NOT LIKE 'missile_%_attach'
+        AND NOT (
+          p.port_type = 'weapon'
+          AND vc.uuid IS NULL
+          AND child.parent_port_id IS NULL
+          AND p.size_max <= 1
         )
       ORDER BY COALESCE(p.category_label, 'Weapons'), p.name`,
     )

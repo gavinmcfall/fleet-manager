@@ -3,7 +3,6 @@ import { useParams, useSearchParams, Link } from 'react-router-dom'
 import { RotateCcw, ShoppingCart, ChevronDown, ChevronRight } from 'lucide-react'
 import { useShip, useLoadoutComponents, useShipModules, useFleetLoadout, useLoadoutCart, saveFleetLoadout, resetFleetLoadout, addToLoadoutCart } from '../../hooks/useAPI'
 import LoadingState from '../../components/LoadingState'
-import ShipImage from '../../components/ShipImage'
 import ComponentPicker from './ComponentPicker'
 import CartPanel from './CartPanel'
 import WeaponBlock from './WeaponBlock'
@@ -127,13 +126,20 @@ export default function Loadout() {
       <div className="relative bg-sc-panel border-b border-sc-border">
         <div className="max-w-[1400px] mx-auto flex items-stretch">
           <div className="w-80 h-44 flex-shrink-0 overflow-hidden relative hidden md:block">
-            <ShipImage
-              src={ship?.image_url_large || ship?.image_url_medium || ship?.image_url}
-              fallbackSrc={ship?.image_url_medium || ship?.image_url}
-              alt={ship?.name || slug}
-              aspectRatio="landscape"
-              className="w-full h-full object-cover opacity-80"
-            />
+            {(ship?.image_url_large || ship?.image_url_medium || ship?.image_url) && (
+              <img
+                src={ship.image_url_large || ship.image_url_medium || ship.image_url}
+                alt={ship?.name || slug}
+                className="w-full h-full object-cover opacity-80"
+                onError={(e) => {
+                  if (ship.image_url_medium && e.target.src !== ship.image_url_medium) {
+                    e.target.src = ship.image_url_medium
+                  } else if (ship.image_url && e.target.src !== ship.image_url) {
+                    e.target.src = ship.image_url
+                  }
+                }}
+              />
+            )}
             <div className="absolute inset-0 bg-gradient-to-r from-transparent to-sc-panel" />
           </div>
           <div className="flex-1 px-6 py-4 flex flex-col justify-between">
