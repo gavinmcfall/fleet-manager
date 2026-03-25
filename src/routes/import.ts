@@ -213,7 +213,7 @@ export function importRoutes() {
     const skippedItems: string[] = [];
 
     for (const pledge of payload.pledges) {
-      const shipItems = pledge.items.filter((item) => item.kind === "Ship");
+      const shipItems = pledge.items.filter((item: { kind?: string }) => item.kind === "Ship");
 
       for (const item of shipItems) {
         const displayName = item.title;
@@ -433,27 +433,15 @@ export function importRoutes() {
       .run();
     const syncId = syncResult.meta.last_row_id;
 
-    // --- Populate user_pledges (insert-then-swap) ---
-    // Record max existing IDs before inserting new data
-    const maxPledgeRow = await db
-      .prepare("SELECT MAX(id) as max_id FROM user_pledges WHERE user_id = ?")
-      .bind(userID)
-      .first<{ max_id: number | null }>();
-    const maxExistingPledgeId = maxPledgeRow?.max_id ?? 0;
+    // --- Populate user_pledges (upsert + delete-reinsert children) ---
+    // user_pledges has UNIQUE(user_id, rsi_pledge_id) so we upsert pledges.
+    // Items and upgrades have no natural key so we delete and reinsert them.
+    await db.batch([
+      db.prepare("DELETE FROM user_pledge_upgrades WHERE user_id = ?").bind(userID),
+      db.prepare("DELETE FROM user_pledge_items WHERE user_id = ?").bind(userID),
+    ]);
 
-    const maxItemRow = await db
-      .prepare("SELECT MAX(id) as max_id FROM user_pledge_items WHERE user_id = ?")
-      .bind(userID)
-      .first<{ max_id: number | null }>();
-    const maxExistingItemId = maxItemRow?.max_id ?? 0;
-
-    const maxUpgradeRow = await db
-      .prepare("SELECT MAX(id) as max_id FROM user_pledge_upgrades WHERE user_id = ?")
-      .bind(userID)
-      .first<{ max_id: number | null }>();
-    const maxExistingUpgradeId = maxUpgradeRow?.max_id ?? 0;
-
-    // Step 1: Insert new pledges (old ones still exist with lower IDs)
+    // Step 1: Upsert pledges (ON CONFLICT updates existing, inserts new)
     const pledgeStmts: D1PreparedStatement[] = [];
     for (const pledge of payload.pledges) {
       pledgeStmts.push(
@@ -462,7 +450,20 @@ export function importRoutes() {
             `INSERT INTO user_pledges (user_id, sync_id, rsi_pledge_id, name, value, value_cents,
               configuration_value, currency, pledge_date, pledge_date_parsed,
               is_upgraded, is_reclaimable, is_giftable, availability)
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            ON CONFLICT(user_id, rsi_pledge_id) DO UPDATE SET
+              sync_id = excluded.sync_id,
+              name = excluded.name,
+              value = excluded.value,
+              value_cents = excluded.value_cents,
+              configuration_value = excluded.configuration_value,
+              currency = excluded.currency,
+              pledge_date = excluded.pledge_date,
+              pledge_date_parsed = excluded.pledge_date_parsed,
+              is_upgraded = excluded.is_upgraded,
+              is_reclaimable = excluded.is_reclaimable,
+              is_giftable = excluded.is_giftable,
+              availability = excluded.availability`,
           )
           .bind(
             userID,
@@ -483,14 +484,22 @@ export function importRoutes() {
       );
     }
 
-    for (let i = 0; i < pledgeStmts.length; i += 100) {
-      await db.batch(pledgeStmts.slice(i, i + 100));
+    for (let i = 0; i < pledgeStmts.length; i += 500) {
+      await db.batch(pledgeStmts.slice(i, i + 500));
     }
 
-    // Step 2: Build pledge ID map from NEW pledges only (id > maxExistingPledgeId)
+    // Remove pledges that no longer exist (gifted, melted, etc.)
+    // After upsert, all current pledges have the new sync_id. Stale pledges have old sync_ids.
+    // This avoids the D1 100-bind-parameter limit that a NOT IN (...) clause would hit.
+    await db
+      .prepare("DELETE FROM user_pledges WHERE user_id = ? AND sync_id != ?")
+      .bind(userID, syncId)
+      .run();
+
+    // Step 2: Build pledge ID map (all current pledges)
     const pledgeMapRows = await db
-      .prepare("SELECT id, rsi_pledge_id FROM user_pledges WHERE user_id = ? AND id > ?")
-      .bind(userID, maxExistingPledgeId)
+      .prepare("SELECT id, rsi_pledge_id FROM user_pledges WHERE user_id = ?")
+      .bind(userID)
       .all<{ id: number; rsi_pledge_id: number }>();
     const pledgeIdMap = new Map<number, number>();
     for (const row of pledgeMapRows.results) {
@@ -580,23 +589,11 @@ export function importRoutes() {
       );
     }
 
-    for (let i = 0; i < upgradeStmts.length; i += 100) {
-      await db.batch(upgradeStmts.slice(i, i + 100));
+    for (let i = 0; i < upgradeStmts.length; i += 500) {
+      await db.batch(upgradeStmts.slice(i, i + 500));
     }
 
-    // Step 5: Delete old rows (children first, then parent pledges)
-    if (maxExistingUpgradeId > 0) {
-      await db.prepare("DELETE FROM user_pledge_upgrades WHERE user_id = ? AND id <= ?")
-        .bind(userID, maxExistingUpgradeId).run();
-    }
-    if (maxExistingItemId > 0) {
-      await db.prepare("DELETE FROM user_pledge_items WHERE user_id = ? AND id <= ?")
-        .bind(userID, maxExistingItemId).run();
-    }
-    if (maxExistingPledgeId > 0) {
-      await db.prepare("DELETE FROM user_pledges WHERE user_id = ? AND id <= ?")
-        .bind(userID, maxExistingPledgeId).run();
-    }
+    // Pledges upserted, stale pledges removed by sync_id. Items/upgrades delete+reinsert.
 
     const upgradeCount = payload.upgrades.length;
     const pledgeItemCount = itemStmts.length;
@@ -639,7 +636,9 @@ export function importRoutes() {
       message: "Hangar sync complete",
     });
    } catch (err) {
-    console.error("[hangar-sync] Unhandled error:", err instanceof Error ? err.message : err, err instanceof Error ? err.stack : "");
+    const errMsg = err instanceof Error ? err.message : String(err);
+    const errStack = err instanceof Error ? err.stack?.slice(0, 500) : "";
+    console.error("[hangar-sync] Unhandled error:", errMsg, errStack);
     return c.json({ error: "Sync failed — please try again" }, 500);
    }
   });

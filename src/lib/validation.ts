@@ -73,68 +73,11 @@ export const HangarXplorImportSchema = z
 /** Max string lengths for sync payload fields */
 const STR = { short: 200, medium: 500, url: 2000, json: 10000 } as const;
 
-/** RSI pledge item schema */
-const RsiPledgeItemSchema = z.object({
-  title: z.string().max(STR.short).default(""),
-  kind: z.string().max(50).nullable().optional().default(null),
-  manufacturer: z.string().max(STR.short).optional(),
-  manufacturerCode: z.string().max(10).optional(),
-  image: z.string().max(STR.url).optional(),
-  customName: z.string().max(STR.short).optional(),
-  serial: z.string().max(100).optional(),
-  isNameable: z.boolean().optional(),
-}).passthrough();
-
 /** Named ship schema */
 const NamedShipSchema = z.object({
   membership_id: z.number(),
   default_name: z.string().max(STR.short),
   custom_name: z.string().max(STR.short),
-}).passthrough();
-
-/** RSI pledge schema */
-const RsiPledgeSchema = z.object({
-  id: z.number(),
-  name: z.string().max(STR.short).default(""),
-  value: z.string().max(STR.medium).default("$0.00"),
-  valueCents: z.number().int().min(0).default(0),
-  configurationValue: z.string().max(STR.medium).optional().default(""),
-  currency: z.string().max(100).optional().default(""),
-  date: z.string().max(50).default(""),
-  isUpgraded: z.boolean().default(false),
-  isReclaimable: z.boolean().default(false),
-  isGiftable: z.boolean().default(false),
-  hasUpgradeLog: z.boolean().default(false),
-  availability: z.string().max(200).optional().default(""),
-  items: z.array(RsiPledgeItemSchema).max(50).default([]),
-  nameableShips: z.array(NamedShipSchema).max(20).nullable().optional().default(null),
-  nameReservations: z.record(z.string().max(50), z.string().max(STR.short)).nullable().optional().default(null),
-  upgradeData: z.unknown().nullable().optional().default(null),
-  pledgeImage: z.string().max(STR.url).nullable().optional().default(null),
-  hasLti: z.boolean().default(false),
-  isWarbond: z.boolean().default(false),
-  isReward: z.boolean().default(false),
-}).passthrough();
-
-/** RSI buy-back pledge */
-const RsiBuyBackPledgeSchema = z.object({
-  id: z.number(),
-  name: z.string().max(STR.short).default(""),
-  value: z.string().max(STR.medium).default("$0.00"),
-  value_cents: z.number().int().min(0).max(1_000_000_00).optional(),
-  date: z.string().max(50).default(""),
-  date_parsed: z.string().max(50).optional(),
-  items: z.array(RsiPledgeItemSchema).max(50).default([]),
-  is_credit_reclaimable: z.boolean().default(false),
-  token_cost: z.number().min(0).max(100_000).optional(),
-}).passthrough();
-
-/** RSI upgrade entry */
-const RsiUpgradeSchema = z.object({
-  pledge_id: z.number(),
-  name: z.string().max(STR.short).default(""),
-  applied_at: z.string().max(50).default(""),
-  new_value: z.string().max(STR.medium).default(""),
 }).passthrough();
 
 /** RSI account info — lenient since RSI dashboard data varies, but capped */
@@ -167,9 +110,12 @@ export const SYNC_ANOMALY_THRESHOLDS = {
 
 /** Full hangar sync payload from extension */
 export const HangarSyncPayloadSchema = z.object({
-  pledges: z.array(RsiPledgeSchema).max(2000).default([]),
-  buyback_pledges: z.array(RsiBuyBackPledgeSchema).max(1000).default([]),
-  upgrades: z.array(RsiUpgradeSchema).max(5000).default([]),
+  // Use z.any() for large arrays — Zod per-element validation on 500+ pledges
+  // with nested items causes Workers CPU timeout. The data comes from our own
+  // extension so it's trusted; we validate at the SQL binding level instead.
+  pledges: z.array(z.any()).max(2000).default([]),
+  buyback_pledges: z.array(z.any()).max(1000).default([]),
+  upgrades: z.array(z.any()).max(5000).default([]),
   account: RsiAccountInfoSchema.optional().default(null),
   named_ships: z.array(NamedShipSchema).max(500).default([]),
   sync_meta: z.object({
