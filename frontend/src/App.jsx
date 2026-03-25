@@ -730,8 +730,8 @@ export default function App() {
                       <Route path="/localization" element={<RequireAuth><Suspense fallback={<LoadingState fullScreen />}><LocalizationBuilder /></Suspense></RequireAuth>} />
                       <Route path="/settings" element={<RequireAuth><Settings /></RequireAuth>} />
                       <Route path="/account" element={<RequireAuth><Account /></RequireAuth>} />
-                      <Route path="/admin" element={<RequireAuth><RequireRole roles={["super_admin"]}><Admin /></RequireRole></RequireAuth>} />
-                      <Route path="/users" element={<RequireAuth><RequireRole roles={["super_admin"]}><UserManagement /></RequireRole></RequireAuth>} />
+                      <Route path="/admin" element={<RequireAuth><RequireRole roles={["admin", "super_admin"]}><Admin /></RequireRole></RequireAuth>} />
+                      <Route path="/users" element={<RequireAuth><RequireRole roles={["admin", "super_admin"]}><UserManagement /></RequireRole></RequireAuth>} />
                       <Route path="/orgs" element={<RequireAuth><Orgs /></RequireAuth>} />
                       <Route path="/orgs/:slug" element={<RequireAuth><OrgProfile /></RequireAuth>} />
                       <Route path="/orgs/:slug/settings" element={<RequireAuth><OrgSettings /></RequireAuth>} />
