@@ -97,7 +97,7 @@ const SyncPledgeSchema = z.object({
   value: z.string().max(50).nullable().optional(),
   valueCents: z.number().int().min(0).max(100_000_000).nullable().optional(),
   configurationValue: z.string().max(50).nullable().optional(),
-  currency: z.string().max(10).nullable().optional(),
+  currency: z.string().max(100).nullable().optional(),
   date: z.string().max(50).nullable().optional(),
   isUpgraded: z.boolean().optional().default(false),
   isReclaimable: z.boolean().optional().default(false),
@@ -130,8 +130,8 @@ const SyncUpgradeSchema = z.object({
 /** Named ship schema */
 const NamedShipSchema = z.object({
   membership_id: z.number(),
-  default_name: z.string().max(STR.short),
-  custom_name: z.string().max(STR.short),
+  default_name: z.string().max(STR.short).nullable().default(""),
+  custom_name: z.string().max(STR.short).nullable().default(""),
 }).passthrough();
 
 /** RSI account info — lenient since RSI dashboard data varies, but capped */
