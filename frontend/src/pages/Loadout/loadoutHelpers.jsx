@@ -4,17 +4,44 @@ import {
   ElectromagneticIcon, MiningLaserIcon, CrossSectionIcon, UtilityIcon, QEDIcon,
 } from '../../assets/icons/index.js'
 
+// ─── Damage type shapes (SVG) ────────────────────────────────────────────────
+// Distinct shapes for colorblind accessibility:
+// Physical=square, Energy=diamond, Distortion=hexagon, Thermal=triangle
+
+export const DMG_TYPES = {
+  physical: { label: 'Ballistic', color: '#f59e0b', shape: 'square' },
+  energy:   { label: 'Energy',    color: '#22c55e', shape: 'diamond' },
+  distortion: { label: 'Distortion', color: '#6366f1', shape: 'hexagon' },
+  thermal:  { label: 'Thermal',   color: '#ef4444', shape: 'triangle' },
+}
+
+export function DmgShape({ type, size = 12, className = '' }) {
+  const { color, shape } = DMG_TYPES[type] || DMG_TYPES.physical
+  const s = size
+  const svgProps = { width: s, height: s, viewBox: '0 0 10 10', className: `inline-block flex-shrink-0 ${className}` }
+  switch (shape) {
+    case 'square': return <svg {...svgProps}><rect x="1" y="1" width="8" height="8" rx="1" fill={color} /></svg>
+    case 'diamond': return <svg {...svgProps}><polygon points="5,0 10,5 5,10 0,5" fill={color} /></svg>
+    case 'hexagon': return <svg {...svgProps}><polygon points="5,0.5 9.3,2.8 9.3,7.2 5,9.5 0.7,7.2 0.7,2.8" fill={color} /></svg>
+    case 'triangle': return <svg {...svgProps}><polygon points="5,0.5 9.5,8.5 0.5,8.5" fill={color} /></svg>
+    default: return null
+  }
+}
+
+// ─── Port type config ─────────────────────────────────────────────────────────
+
 export const PORT_TYPE_ICONS = {
   power:          PowerPlantIcon,
   cooler:         CoolerIcon,
   shield:         ShieldGeneratorIcon,
   quantum_drive:  QuantumDriveIcon,
-  sensor:         RadarIcon,
   jump_drive:     JumpDriveIcon,
+  sensor:         RadarIcon,
   weapon:         WeaponIcon,
   turret:         TurretIcon,
   missile:        MissileRackIcon,
   countermeasure: ElectromagneticIcon,
+  module:         UtilityIcon,
   mining_laser:   MiningLaserIcon,
   salvage_head:   CrossSectionIcon,
   salvage_module: UtilityIcon,
@@ -26,16 +53,17 @@ export const PORT_TYPE_LABELS = {
   cooler:         'Coolers',
   shield:         'Shields',
   quantum_drive:  'Quantum Drives',
+  jump_drive:     'Jump Drive',
   sensor:         'Sensors',
   weapon:         'Weapons',
   turret:         'Turrets',
   missile:        'Missiles',
   countermeasure: 'Countermeasures',
+  module:         'Modules',
   mining_laser:   'Mining Lasers',
   salvage_head:   'Salvage',
   salvage_module: 'Salvage Modules',
   qed:            'QED',
-  jump_drive:     'Jump Drive',
 }
 
 export const PORT_CATEGORY_ORDER = [
@@ -46,13 +74,14 @@ export const PORT_CATEGORY_ORDER = [
   'Power Plants',
   'Coolers',
   'Quantum Drives',
+  'Jump Drive',
   'Countermeasures',
   'Sensors',
+  'Modules',
   'Mining Lasers',
   'Salvage',
   'Salvage Modules',
   'QED',
-  'Jump Drive',
 ]
 
 /** Map port_type to a display category. Uses category_label from the DB if available. */
@@ -66,19 +95,17 @@ export function getPortCategory(portType, categoryLabel) {
 
 // ─── Stat formatters ──────────────────────────────────────────────────────────
 
-const fmtInt = (v) => Number(v).toLocaleString(undefined, { maximumFractionDigits: 0 })
-const fmtDec1 = (v) => Number(v).toLocaleString(undefined, { maximumFractionDigits: 1 })
-const fmtPct = (v) => `${(Number(v) * 100).toFixed(1)}%`
-const fmtSpeed = (v) => `${(Number(v) / 1000000).toLocaleString(undefined, { maximumFractionDigits: 0 })} Mm/s`
-const fmtRange = (v) => `${(Number(v) / 1000).toLocaleString(undefined, { maximumFractionDigits: 0 })} km`
-const fmtSec = (v) => `${(Number(v) / 1000).toLocaleString(undefined, { maximumFractionDigits: 1 })}s`
-const fmtRPM = (v) => `${fmtInt(v)} RPM`
-const fmtMS = (v) => `${fmtInt(v)} m/s`
-const fmtM = (v) => `${fmtInt(v)} m`
+export const fmtInt = (v) => Number(v).toLocaleString(undefined, { maximumFractionDigits: 0 })
+export const fmtDec1 = (v) => Number(v).toLocaleString(undefined, { maximumFractionDigits: 1 })
+export const fmtPct = (v) => `${(Number(v) * 100).toFixed(1)}%`
+export const fmtSpeed = (v) => `${(Number(v) / 1000000).toLocaleString(undefined, { maximumFractionDigits: 0 })} Mm/s`
+export const fmtRange = (v) => `${(Number(v) / 1000).toLocaleString(undefined, { maximumFractionDigits: 0 })} km`
+export const fmtSec = (v) => `${(Number(v) / 1000).toLocaleString(undefined, { maximumFractionDigits: 1 })}s`
+export const fmtRPM = (v) => `${fmtInt(v)} RPM`
+export const fmtMS = (v) => `${fmtInt(v)} m/s`
+export const fmtM = (v) => `${fmtInt(v)} m`
 
 // ─── Column definitions per port_type ─────────────────────────────────────────
-// Each column: { key, label, format?, align?, width? }
-// align defaults to 'right' for numeric, 'left' for text
 
 export const PICKER_COLUMNS = {
   weapon: [
@@ -151,7 +178,6 @@ export const PICKER_COLUMNS = {
   ],
 }
 
-// Default columns for types not explicitly defined
 PICKER_COLUMNS.missile = [
   { key: 'name', label: 'Name', align: 'left', width: 'flex-[2]' },
   { key: 'manufacturer_name', label: 'Mfr', align: 'left', width: 'w-24' },
@@ -201,6 +227,25 @@ export function getPrimaryStat(item, override) {
   return null
 }
 
+/** Get the primary damage type for a component */
+export function getDamageType(item) {
+  const dp = item.damage_physical || 0
+  const de = item.damage_energy || 0
+  const dd = item.damage_distortion || 0
+  const dt = item.damage_thermal || 0
+  if (dp > de && dp > dd && dp > dt) return 'physical'
+  if (de > dp && de > dd && de > dt) return 'energy'
+  if (dd > dp && dd > de && dd > dt) return 'distortion'
+  if (dt > dp && dt > de && dt > dd) return 'thermal'
+  if (de > 0) return 'energy'
+  if (dp > 0) return 'physical'
+  // Fallback to damage_type string
+  if (item.damage_type === 'Energy') return 'energy'
+  if (item.damage_type === 'Physical' || item.damage_type === 'Ballistic') return 'physical'
+  if (item.damage_type === 'Distortion') return 'distortion'
+  return null
+}
+
 /** Stat key used for sorting compatible components */
 export const SORT_STAT_KEY = {
   PowerPlant: 'power_output',
@@ -221,6 +266,7 @@ export const COMPONENT_TYPE_TO_PORT_TYPE = {
   Cooler: 'cooler',
   Shield: 'shield',
   QuantumDrive: 'quantum_drive',
+  JumpDrive: 'jump_drive',
   WeaponGun: 'weapon',
   Radar: 'sensor',
   TurretBase: 'turret',
@@ -229,4 +275,46 @@ export const COMPONENT_TYPE_TO_PORT_TYPE = {
   MissileLauncher: 'missile',
   MiningModifier: 'mining_laser',
   SalvageHead: 'salvage_head',
+  Module: 'module',
+}
+
+// ─── Aggregation helpers ──────────────────────────────────────────────────────
+
+/** Aggregate combat stats from all weapon/turret ports */
+export function aggregateCombatStats(components) {
+  let totalDps = 0, totalAlpha = 0
+  let dpsPhysical = 0, dpsEnergy = 0, dpsDistortion = 0, dpsThermal = 0
+  let totalShieldHp = 0, totalShieldRegen = 0
+
+  for (const c of components) {
+    if ((c.port_type === 'weapon' || c.port_type === 'turret') && c.dps) {
+      totalDps += c.dps
+      totalAlpha += c.damage_per_shot || 0
+      // Per-type DPS: damage_per_type * rpm / 60
+      const rpm = c.rounds_per_minute || 0
+      if (rpm > 0) {
+        dpsPhysical += (c.damage_physical || 0) * rpm / 60
+        dpsEnergy += (c.damage_energy || 0) * rpm / 60
+        dpsDistortion += (c.damage_distortion || 0) * rpm / 60
+        dpsThermal += (c.damage_thermal || 0) * rpm / 60
+      } else {
+        // Fallback: use total dps split by primary type
+        const dtype = getDamageType(c)
+        if (dtype === 'physical') dpsPhysical += c.dps
+        else if (dtype === 'energy') dpsEnergy += c.dps
+        else if (dtype === 'distortion') dpsDistortion += c.dps
+        else if (dtype === 'thermal') dpsThermal += c.dps
+      }
+    }
+    if (c.port_type === 'shield' && c.shield_hp) {
+      totalShieldHp += c.shield_hp
+      totalShieldRegen += c.shield_regen || 0
+    }
+  }
+
+  return {
+    totalDps, totalAlpha,
+    dpsPhysical, dpsEnergy, dpsDistortion, dpsThermal,
+    totalShieldHp, totalShieldRegen,
+  }
 }

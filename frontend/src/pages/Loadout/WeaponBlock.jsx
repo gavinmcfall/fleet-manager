@@ -1,0 +1,188 @@
+import React from 'react'
+import { ShoppingCart } from 'lucide-react'
+import { DmgShape, getDamageType, fmtDec1 } from './loadoutHelpers'
+
+/** SVG └ bracket connector for parent→child */
+function Bracket() {
+  return (
+    <svg className="flex-shrink-0 w-4 h-[22px] -ml-4 mr-0" style={{ color: 'rgba(255,255,255,0.15)' }}
+      viewBox="0 0 16 22" fill="none">
+      <path d="M 2 0 L 2 14 Q 2 18 6 18 L 16 18" stroke="currentColor" strokeWidth="1.5" fill="none" strokeLinecap="round" />
+    </svg>
+  )
+}
+
+/** Gimbal icon (circle + crosshair) */
+function GimbalIcon({ className = '' }) {
+  return (
+    <svg className={`w-3.5 h-3.5 flex-shrink-0 text-gray-600 ${className}`} viewBox="0 0 16 16" fill="none">
+      <circle cx="8" cy="8" r="5.5" stroke="currentColor" strokeWidth="1.2" />
+      <circle cx="8" cy="8" r="1.5" fill="currentColor" />
+      <line x1="8" y1="1" x2="8" y2="4" stroke="currentColor" strokeWidth="1" />
+      <line x1="8" y1="12" x2="8" y2="15" stroke="currentColor" strokeWidth="1" />
+      <line x1="1" y1="8" x2="4" y2="8" stroke="currentColor" strokeWidth="1" />
+      <line x1="12" y1="8" x2="15" y2="8" stroke="currentColor" strokeWidth="1" />
+    </svg>
+  )
+}
+
+/** Fixed mount icon (square + crosshair) */
+function FixedIcon({ className = '' }) {
+  return (
+    <svg className={`w-3.5 h-3.5 flex-shrink-0 text-gray-600 ${className}`} viewBox="0 0 16 16" fill="none">
+      <rect x="2.5" y="2.5" width="11" height="11" stroke="currentColor" strokeWidth="1.2" rx="1" />
+      <circle cx="8" cy="8" r="1.5" fill="currentColor" />
+      <line x1="8" y1="0.5" x2="8" y2="4" stroke="currentColor" strokeWidth="1" />
+      <line x1="8" y1="12" x2="8" y2="15.5" stroke="currentColor" strokeWidth="1" />
+      <line x1="0.5" y1="8" x2="4" y2="8" stroke="currentColor" strokeWidth="1" />
+      <line x1="12" y1="8" x2="15.5" y2="8" stroke="currentColor" strokeWidth="1" />
+    </svg>
+  )
+}
+
+/** Weapon group badge (1-4) */
+function WgBadge({ num, active, onClick }) {
+  return (
+    <button
+      onClick={(e) => { e.stopPropagation(); onClick?.() }}
+      className={`w-5 h-5 rounded flex items-center justify-center text-[11px] font-semibold cursor-pointer transition-all duration-150
+        ${active
+          ? 'bg-sc-accent/20 text-sc-accent border border-sc-accent/40'
+          : 'bg-white/[0.03] text-gray-600 border border-white/[0.08] hover:bg-white/[0.06] hover:text-gray-400'
+        }`}
+    >
+      {num}
+    </button>
+  )
+}
+
+/** Grade badge with color */
+function GradeBadge({ grade }) {
+  if (!grade) return null
+  const colors = {
+    A: 'bg-sc-accent/10 text-sc-accent border-sc-accent/20',
+    B: 'bg-emerald-500/10 text-emerald-400 border-emerald-500/20',
+    C: 'bg-gray-500/10 text-gray-400 border-gray-500/20',
+    D: 'bg-amber-500/10 text-amber-400 border-amber-500/20',
+  }
+  return (
+    <span className={`font-mono text-[11px] px-1 py-px rounded flex-shrink-0 border ${colors[grade] || colors.C}`}>
+      {grade}
+    </span>
+  )
+}
+
+/**
+ * WeaponBlock — renders a single weapon hardpoint.
+ *
+ * Gimballed: 2 rows — mount row (VariPuck) with └ bracket child row (weapon)
+ * Fixed: 1 row — weapon at parent level with stats below
+ *
+ * Props:
+ *   item - port data from API (mount_name, child_name, component_name, etc.)
+ *   isCustomized - whether user has overridden this port
+ *   weaponGroups - [1,2,3,4] active group assignments
+ *   onClickMount - handler for clicking the mount row
+ *   onClickWeapon - handler for clicking the weapon row
+ *   onToggleGroup - handler for toggling weapon group
+ *   onAddToCart - handler for cart button
+ */
+export default function WeaponBlock({ item, isCustomized, weaponGroups = [], onClickMount, onClickWeapon, onToggleGroup, onAddToCart }) {
+  const hasMount = item.mount_name && item.child_name && item.mount_name !== item.child_name
+  const isGimbal = hasMount && (item.sub_type === 'GunTurret' || item.mount_name?.includes('Gimbal') || item.mount_name?.includes('VariPuck'))
+  const weaponName = item.child_name || item.component_name
+  const dps = item.dps
+  const alpha = item.damage_per_shot
+  const dmgType = getDamageType(item)
+  const sz = item.component_size || item.size_max
+
+  // Weapon group badges
+  const wgBadges = (
+    <div className="flex gap-1 ml-auto flex-shrink-0">
+      {[1, 2, 3, 4].map(n => (
+        <WgBadge key={n} num={n} active={weaponGroups.includes(n)} onClick={() => onToggleGroup?.(n)} />
+      ))}
+    </div>
+  )
+
+  if (hasMount) {
+    // GIMBALLED: two rows with bracket
+    return (
+      <div className={`border-b border-white/[0.04] px-3 py-1 ${isCustomized ? 'bg-sc-accent/[0.02]' : ''}`}>
+        {/* Mount row */}
+        <div
+          onClick={onClickMount}
+          className="flex items-center gap-2 py-1 cursor-pointer rounded transition-colors hover:bg-white/[0.03] -mx-1 px-1"
+        >
+          <span className="badge badge-size text-[11px] w-7 text-center flex-shrink-0 font-mono bg-white/[0.06] border border-white/[0.1] rounded px-1.5 py-px text-gray-400">
+            S{item.size_max}
+          </span>
+          {isGimbal ? <GimbalIcon /> : <FixedIcon />}
+          <span className="text-[13px] text-gray-500">{item.mount_name}</span>
+          {wgBadges}
+        </div>
+        {/* Weapon child row — indented with bracket */}
+        <div
+          onClick={onClickWeapon}
+          className="flex items-center gap-2 py-1.5 cursor-pointer rounded transition-colors hover:bg-white/[0.03] -mx-1 px-1"
+          style={{ marginLeft: '34px' }}
+        >
+          <Bracket />
+          <span className="badge badge-size text-[11px] w-7 text-center flex-shrink-0 font-mono bg-white/[0.06] border border-white/[0.1] rounded px-1.5 py-px text-gray-400">
+            S{sz}
+          </span>
+          <span className={`text-sm font-medium truncate ${isCustomized ? 'text-sc-accent' : 'text-gray-200'}`}
+            style={isCustomized ? { textShadow: '0 0 8px rgba(34,211,238,0.3)' } : undefined}>
+            {weaponName || 'Empty'}
+          </span>
+          <GradeBadge grade={item.grade} />
+          {item.manufacturer_name && <span className="text-[11px] text-gray-600 flex-shrink-0">{item.manufacturer_name}</span>}
+          {isCustomized && <span className="text-[11px] text-sc-accent bg-sc-accent/10 px-1 rounded flex-shrink-0">custom</span>}
+          <div className="flex items-center gap-2 ml-auto flex-shrink-0">
+            {dmgType && <DmgShape type={dmgType} />}
+            {dps ? <span className={`font-mono text-[12px] ${isCustomized ? 'text-sc-accent' : 'text-gray-500'}`}>{fmtDec1(dps)} <span className="text-gray-600">dps</span></span> : null}
+            {alpha ? <span className={`font-mono text-[12px] ${isCustomized ? 'text-sc-accent' : 'text-gray-500'}`}>{fmtDec1(alpha)} <span className="text-gray-600">&#945;</span></span> : null}
+          </div>
+          <button onClick={(e) => { e.stopPropagation(); onAddToCart?.() }}
+            className="p-1 text-gray-700 hover:text-emerald-400 transition-colors cursor-pointer flex-shrink-0">
+            <ShoppingCart className="w-3.5 h-3.5" />
+          </button>
+        </div>
+      </div>
+    )
+  }
+
+  // FIXED or DIRECT: single row at parent level
+  return (
+    <div className={`border-b border-white/[0.04] px-3 ${isCustomized ? 'bg-sc-accent/[0.02]' : ''}`}>
+      <div
+        onClick={onClickWeapon}
+        className="flex items-center gap-2 py-1.5 cursor-pointer rounded transition-colors hover:bg-white/[0.03] -mx-1 px-1"
+      >
+        <span className="badge badge-size text-[11px] w-7 text-center flex-shrink-0 font-mono bg-white/[0.06] border border-white/[0.1] rounded px-1.5 py-px text-gray-400">
+          S{sz}
+        </span>
+        <FixedIcon />
+        <span className={`text-sm font-medium truncate ${isCustomized ? 'text-sc-accent' : 'text-gray-200'}`}
+          style={isCustomized ? { textShadow: '0 0 8px rgba(34,211,238,0.3)' } : undefined}>
+          {weaponName || 'Empty'}
+        </span>
+        <GradeBadge grade={item.grade} />
+        {item.manufacturer_name && <span className="text-[11px] text-gray-600 flex-shrink-0">{item.manufacturer_name}</span>}
+        <span className="text-[11px] text-amber-400 bg-amber-500/10 px-1 rounded border border-amber-500/15 flex-shrink-0">fixed</span>
+        {isCustomized && <span className="text-[11px] text-sc-accent bg-sc-accent/10 px-1 rounded flex-shrink-0">custom</span>}
+        {wgBadges}
+      </div>
+      {/* Stats on second line, right-aligned */}
+      <div className="flex items-center justify-end gap-2 pb-1.5">
+        {dmgType && <DmgShape type={dmgType} />}
+        {dps ? <span className={`font-mono text-[12px] ${isCustomized ? 'text-sc-accent' : 'text-gray-500'}`}>{fmtDec1(dps)} <span className="text-gray-600">dps</span></span> : null}
+        {alpha ? <span className={`font-mono text-[12px] ${isCustomized ? 'text-sc-accent' : 'text-gray-500'}`}>{fmtDec1(alpha)} <span className="text-gray-600">&#945;</span></span> : null}
+        <button onClick={(e) => { e.stopPropagation(); onAddToCart?.() }}
+          className="p-1 text-gray-700 hover:text-emerald-400 transition-colors cursor-pointer flex-shrink-0">
+          <ShoppingCart className="w-3.5 h-3.5" />
+        </button>
+      </div>
+    </div>
+  )
+}
