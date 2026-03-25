@@ -200,14 +200,18 @@ export function adminRoutes() {
    * Without prefix, purges all cached keys.
    * Returns { deleted: number }
    */
-  routes.post("/cache/purge",
-    validate("json", z.object({
-      prefix: z.string().max(200).optional(),
-    }).optional()),
-    async (c) => {
-    const body = c.req.valid("json");
+  routes.post("/cache/purge", async (c) => {
+    let prefix: string | undefined;
+    try {
+      const body = await c.req.json();
+      if (body?.prefix && typeof body.prefix === "string") {
+        prefix = body.prefix.slice(0, 200);
+      }
+    } catch {
+      // Empty body is fine — purge all
+    }
     const kv = c.env.SC_BRIDGE_CACHE;
-    const result = await purgeByPrefix(kv, body?.prefix);
+    const result = await purgeByPrefix(kv, prefix);
     return c.json(result);
   });
 
