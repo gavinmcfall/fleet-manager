@@ -229,7 +229,7 @@ export function importRoutes() {
     const skippedItems: string[] = [];
 
     for (const pledge of payload.pledges) {
-      const shipItems = (pledge.items ?? []).filter((item) => item.kind === "Ship");
+      const shipItems = (pledge.items ?? []).filter((item: Record<string, unknown>) => item.kind === "Ship");
 
       for (const item of shipItems) {
         const displayName = item.title || "";
@@ -255,7 +255,7 @@ export function importRoutes() {
         // Titles are like "Lifetime Insurance", "120 Month Insurance", "6 Month Insurance"
         let insuranceTypeID: number | null = null;
         const insuranceItem = (pledge.items ?? []).find(
-          (i) => i.kind === "Insurance",
+          (i: Record<string, unknown>) => i.kind === "Insurance",
         );
         const insTitle = (insuranceItem?.title ?? "").toLowerCase();
         if (pledge.hasLti || insTitle.includes("lifetime") || insTitle.includes("lti")) {
