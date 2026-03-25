@@ -150,7 +150,7 @@ export default function useHangarSync() {
           listenerRef.current = null
         }
       }
-    }, 180000)
+    }, 600000) // 10 min — large hangars (600+ pledges) need time for RSI page loading + buyback collection
   }, [])
 
   const retry = useCallback(() => {
