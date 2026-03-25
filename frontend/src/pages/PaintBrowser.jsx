@@ -1,4 +1,4 @@
-import React, { useMemo } from 'react'
+import React, { useMemo, useState } from 'react'
 import { Link, useSearchParams } from 'react-router-dom'
 import { Palette, LayoutGrid, List, ChevronLeft, ChevronRight, ChevronsLeft, ChevronsRight } from 'lucide-react'
 import { usePaints } from '../hooks/useAPI'
@@ -149,6 +149,22 @@ export default function PaintBrowser() {
   )
 }
 
+function PaintPlaceholder({ size = 'lg' }) {
+  const iconCls = size === 'lg' ? 'w-10 h-10' : 'w-6 h-6'
+  return (
+    <div className="flex flex-col items-center justify-center gap-2 text-gray-600 w-full h-full">
+      <Palette className={iconCls} />
+      {size === 'lg' && <span className="text-[10px] font-mono uppercase tracking-wider">No Image</span>}
+    </div>
+  )
+}
+
+function PaintImage({ src, alt, className, size = 'lg' }) {
+  const [broken, setBroken] = useState(false)
+  if (!src || broken) return <PaintPlaceholder size={size} />
+  return <img src={src} alt={alt} loading="lazy" className={className} onError={() => setBroken(true)} />
+}
+
 function PaintCard({ paint }) {
   const thumb = paint.image_url_medium || paint.image_url_small || paint.image_url
   const shipNames = paint.vehicles.map((v) => v.name).join(', ')
@@ -156,11 +172,7 @@ function PaintCard({ paint }) {
   return (
     <div className="bg-sc-panel border border-sc-border/40 rounded overflow-hidden group hover:border-sc-accent/40 transition-colors">
       <div className="aspect-square flex items-center justify-center bg-sc-darker/50">
-        {thumb ? (
-          <img src={thumb} alt={paint.name} loading="lazy" className="w-full h-full object-cover transition-transform duration-300 group-hover:scale-105" />
-        ) : (
-          <Palette className="w-8 h-8 text-gray-600" />
-        )}
+        <PaintImage src={thumb} alt={paint.name} className="w-full h-full object-cover transition-transform duration-300 group-hover:scale-105" />
       </div>
       <div className="p-2 space-y-1">
         <p className="text-xs font-mono text-gray-200 truncate" title={paint.name}>{paint.name}</p>
@@ -184,11 +196,7 @@ function PaintRow({ paint }) {
   return (
     <div className="flex items-center gap-4 px-4 py-3 hover:bg-white/[0.02] transition-colors">
       <div className="shrink-0 w-14 h-14 rounded overflow-hidden bg-sc-darker/50 border border-sc-border/40 flex items-center justify-center">
-        {thumb ? (
-          <img src={thumb} alt={paint.name} loading="lazy" className="w-full h-full object-cover" />
-        ) : (
-          <Palette className="w-5 h-5 text-gray-600" />
-        )}
+        <PaintImage src={thumb} alt={paint.name} className="w-full h-full object-cover" size="sm" />
       </div>
       <div className="min-w-0 flex-1">
         <p className="text-sm font-mono text-gray-200">{paint.name}</p>
