@@ -12,13 +12,13 @@ const TEAM = [
   {
     name: 'Mr_Xul',
     role: 'Ideas & Community',
-    avatar: '/team/mr_xul.webp',
+    avatar: '/team/mr_xul.png',
     bio: 'Mr_Xul is an idea generating machine who has focused his skills directly at SC Bridge. He has been around since day one of Star Citizen and has more than 16,000 hours in the game. Retired now, Mr_Xul owned his own high-end gaming computer company for a number of years and enjoys taking the time to help people and facilitate their enjoyment of video games. In Star Citizen you will find him leading his Org \u201CThe Exelus Corporation\u201D or broadcasting network \u201CPulseNet\u201D while traveling the \u2019Verse seeking the next adventure.',
   },
   {
     name: 'Mallachi',
     role: 'Business & Strategy',
-    avatar: '/team/mallachi.webp',
+    avatar: '/team/mallachi.png',
     bio: 'Mallachi is a business enthusiast, not shying away from the opportunity to seek solutions where others might have given up. No matter the game, Mallachi focuses on finding pleasure in the industrial aspects of the game, and often finds himself staring down informational rabbitholes in search of ways to do things \u201Cthe different way\u201D. Otherwise a lover of good drinks, fine cigars, and great stories from the \u2019verse.',
   },
 ]
@@ -52,7 +52,7 @@ export default function About() {
                 <img
                   src={member.avatar}
                   alt={member.name}
-                  className="w-36 h-36 rounded-lg object-cover border-2 border-sc-border"
+                  className="w-36 h-36 rounded-lg object-cover"
                 />
               </div>
               <div className="flex-1 min-w-0">
