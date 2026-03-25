@@ -3,6 +3,7 @@ import { useSearchParams, useNavigate } from 'react-router-dom'
 import { useFleet, useUserOrgs, updateShipVisibility } from '../hooks/useAPI'
 import { ArrowUpDown, SearchX, Rocket, Upload, Wrench, ChevronDown } from 'lucide-react'
 import PageHeader from '../components/PageHeader'
+import PrivacyMask from '../components/PrivacyMask'
 import LoadingState from '../components/LoadingState'
 import ErrorState from '../components/ErrorState'
 import FilterSelect from '../components/FilterSelect'
@@ -289,7 +290,7 @@ export default function FleetTable() {
                     </td>
                     <td className="table-cell text-gray-400">{v.focus || '-'}</td>
                     <td className="table-cell font-mono text-gray-400">
-                      {getShipValue(v).display}
+                      <PrivacyMask placeholder="$•••">{getShipValue(v).display}</PrivacyMask>
                     </td>
                     <td className="table-cell">
                       <StatusBadge status={v.production_status} size="sm" />

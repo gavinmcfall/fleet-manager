@@ -16,8 +16,8 @@ run_worker_first = true
 # D1 Database binding
 [[d1_databases]]
 binding = "DB"
-database_name = "sc-companion"
-database_id = "56875a7e-0ebd-4455-887d-5d1e1afdb416"
+database_name = "sc-companion-v2"
+database_id = "0f2fd623-0a47-492b-aa43-0773cced850b"
 migrations_dir = "src/db/migrations"
 
 # KV namespace for caching game data responses

@@ -1,4 +1,5 @@
 import { DollarSign, Rocket, Package, Users, Activity } from 'lucide-react'
+import PrivacyMask from './PrivacyMask'
 
 export default function FleetOverviewGrid({ overview, totalVehicles, ltiPercent, readyPercent }) {
   const ltiCount = overview.lti_count || 0
@@ -12,7 +13,7 @@ export default function FleetOverviewGrid({ overview, totalVehicles, ltiPercent,
           <span className="stat-label">Total Fleet Value</span>
         </div>
         <p className="text-5xl font-display font-bold text-sc-accent leading-tight">
-          ${(overview.total_pledge_value || 0).toLocaleString()}
+          <PrivacyMask placeholder="$•••••">${(overview.total_pledge_value || 0).toLocaleString()}</PrivacyMask>
         </p>
         <p className="text-sm text-gray-500 mt-2 font-mono">{totalVehicles} ships pledged</p>
       </div>

@@ -3,9 +3,10 @@ import { Link } from 'react-router-dom'
 import ReactMarkdown from 'react-markdown'
 import remarkGfm from 'remark-gfm'
 import { useLLMConfig, generateAIAnalysis, useLatestAIAnalysis, setLLMConfig } from '../hooks/useAPI'
+import usePrivacyMode from '../hooks/usePrivacyMode'
 import useTimezone from '../hooks/useTimezone'
 import { formatDateOnly } from '../lib/dates'
-import { AlertCircle, Sparkles, Loader, ChevronRight, Settings } from 'lucide-react'
+import { AlertCircle, Sparkles, Loader, ChevronRight, Settings, EyeOff } from 'lucide-react'
 import PageHeader from '../components/PageHeader'
 import LoadingState from '../components/LoadingState'
 import SectionBoundary from '../components/SectionBoundary'
@@ -40,6 +41,7 @@ export default function Analysis() {
   const [selectedProvider, setSelectedProvider] = useState(null)
   const [selectedModel, setSelectedModel] = useState(null)
   const [context, setContext] = useState('')
+  const { privacyMode } = usePrivacyMode()
   const resultsRef = useRef(null)
 
   // Load latest analysis on mount
@@ -259,9 +261,16 @@ export default function Analysis() {
               )}
             </div>
             <div className="p-5">
-              <div className="prose-fleet">
-                <ReactMarkdown remarkPlugins={[remarkGfm]}>{aiInsights}</ReactMarkdown>
-              </div>
+              {privacyMode ? (
+                <div className="text-center py-8 text-gray-500">
+                  <EyeOff className="w-8 h-8 mx-auto mb-2 opacity-40" />
+                  <p className="text-sm">AI analysis hidden in privacy mode</p>
+                </div>
+              ) : (
+                <div className="prose-fleet">
+                  <ReactMarkdown remarkPlugins={[remarkGfm]}>{aiInsights}</ReactMarkdown>
+                </div>
+              )}
             </div>
           </div>
           </SectionBoundary>
