@@ -76,81 +76,82 @@ export const HangarXplorImportSchema = z
 const STR = { short: 200, medium: 500, url: 2000, json: 10000 } as const;
 
 /** Flexible ID: RSI pledge IDs arrive as number or string depending on extension version */
-const FlexId = z.union([z.string().max(50), z.number()]);
+const FlexId = z.union([z.string().max(50), z.number()]).nullable().optional();
 
 /** Pledge item (nested inside pledge.items) — only fields bound to SQL */
 const PledgeItemSchema = z.object({
-  title: z.string().max(STR.short).default(""),
+  title: z.string().max(STR.short).nullable().optional().default(""),
   kind: z.string().max(50).nullable().optional(),
   manufacturerCode: z.string().max(20).nullable().optional(),
   manufacturer: z.string().max(STR.short).nullable().optional(),
   image: z.string().max(STR.url).nullable().optional(),
   customName: z.string().max(STR.short).nullable().optional(),
   serial: z.string().max(100).nullable().optional(),
-  isNameable: z.boolean().optional().default(false),
+  isNameable: z.union([z.boolean(), z.number()]).nullable().optional().default(false),
 }).passthrough();
 
 /** Pledge schema — fields accessed in hangar-sync route */
 const SyncPledgeSchema = z.object({
   id: FlexId,
-  name: z.string().max(STR.short).default(""),
-  value: z.string().max(50).nullable().optional(),
-  valueCents: z.number().int().min(0).max(100_000_000).nullable().optional(),
-  configurationValue: z.string().max(50).nullable().optional(),
+  name: z.string().max(STR.short).nullable().optional().default(""),
+  value: z.string().max(100).nullable().optional(),
+  valueCents: z.number().nullable().optional(),
+  configurationValue: z.string().max(100).nullable().optional(),
   currency: z.string().max(100).nullable().optional(),
-  date: z.string().max(50).nullable().optional(),
-  isUpgraded: z.boolean().optional().default(false),
-  isReclaimable: z.boolean().optional().default(false),
-  isGiftable: z.boolean().optional().default(false),
-  isWarbond: z.boolean().optional().default(false),
-  hasLti: z.boolean().optional().default(false),
-  availability: z.string().max(50).nullable().optional(),
-  items: z.array(PledgeItemSchema).max(100).default([]),
+  date: z.string().max(100).nullable().optional(),
+  isUpgraded: z.union([z.boolean(), z.number()]).nullable().optional().default(false),
+  isReclaimable: z.union([z.boolean(), z.number()]).nullable().optional().default(false),
+  isGiftable: z.union([z.boolean(), z.number()]).nullable().optional().default(false),
+  isWarbond: z.union([z.boolean(), z.number()]).nullable().optional().default(false),
+  hasLti: z.union([z.boolean(), z.number()]).nullable().optional().default(false),
+  availability: z.string().max(100).nullable().optional(),
+  items: z.array(PledgeItemSchema).max(200).nullable().optional().default([]),
 }).passthrough();
 
 /** Buyback pledge schema — fields accessed in hangar-sync route */
 const SyncBuybackSchema = z.object({
   id: FlexId,
-  name: z.string().max(STR.short).default(""),
-  value_cents: z.number().int().min(0).max(100_000_000).nullable().optional(),
-  date_parsed: z.string().max(50).nullable().optional(),
-  date: z.string().max(50).nullable().optional(),
-  is_credit_reclaimable: z.boolean().optional().default(false),
-  items: z.array(z.object({}).passthrough()).max(100).default([]),
+  name: z.string().max(STR.short).nullable().optional().default(""),
+  value: z.string().max(100).nullable().optional(),
+  value_cents: z.number().nullable().optional(),
+  date_parsed: z.string().max(100).nullable().optional(),
+  date: z.string().max(100).nullable().optional(),
+  is_credit_reclaimable: z.union([z.boolean(), z.number()]).nullable().optional().default(false),
+  items: z.array(z.object({}).passthrough()).max(200).nullable().optional().default([]),
 }).passthrough();
 
 /** Upgrade schema — fields accessed in hangar-sync route */
 const SyncUpgradeSchema = z.object({
   pledge_id: FlexId,
-  name: z.string().max(STR.short).default(""),
-  applied_at: z.string().max(50).nullable().optional(),
-  new_value: z.string().max(50).nullable().optional(),
+  name: z.string().max(STR.short).nullable().optional().default(""),
+  applied_at: z.string().max(100).nullable().optional(),
+  new_value: z.string().max(100).nullable().optional(),
 }).passthrough();
 
 /** Named ship schema */
 const NamedShipSchema = z.object({
-  membership_id: z.number(),
-  default_name: z.string().max(STR.short).nullable().default(""),
-  custom_name: z.string().max(STR.short).nullable().default(""),
+  membership_id: z.union([z.number(), z.string()]).nullable().optional(),
+  default_name: z.string().max(STR.short).nullable().optional().default(""),
+  custom_name: z.string().max(STR.short).nullable().optional().default(""),
 }).passthrough();
 
-/** RSI account info — lenient since RSI dashboard data varies, but capped */
+/** RSI account info — maximally lenient since RSI dashboard data varies */
 const RsiAccountInfoSchema = z.object({
-  nickname: z.string().max(100).default(""),
-  displayname: z.string().max(100).default(""),
-  avatar_url: z.string().max(STR.url).optional(),
-  enlisted_since: z.string().max(50).optional(),
-  country: z.string().max(100).optional(),
-  concierge_level: z.string().max(50).nullable().optional(),
-  subscriber_type: z.string().max(50).nullable().optional(),
-  subscriber_frequency: z.string().max(50).nullable().optional(),
-  store_credit_cents: z.number().int().min(0).max(100_000_000).nullable().optional(),
-  uec_balance: z.number().min(0).nullable().optional(),
-  rec_balance: z.number().min(0).nullable().optional(),
-  referral_code: z.string().max(50).nullable().optional(),
-  has_game_package: z.boolean().optional(),
+  nickname: z.string().max(100).nullable().optional().default(""),
+  displayname: z.string().max(100).nullable().optional().default(""),
+  avatar_url: z.string().max(STR.url).nullable().optional(),
+  enlisted_since: z.string().max(100).nullable().optional(),
+  country: z.string().max(100).nullable().optional(),
+  concierge_level: z.string().max(100).nullable().optional(),
+  subscriber_type: z.string().max(100).nullable().optional(),
+  subscriber_frequency: z.string().max(100).nullable().optional(),
+  store_credit_cents: z.number().nullable().optional(),
+  uec_balance: z.number().nullable().optional(),
+  rec_balance: z.number().nullable().optional(),
+  referral_code: z.string().max(100).nullable().optional(),
+  has_game_package: z.union([z.boolean(), z.number()]).nullable().optional(),
   orgs: z.array(z.object({}).passthrough()).max(20).nullable().optional(),
-  all_badges: z.record(z.string(), z.string()).nullable().optional(),
+  all_badges: z.record(z.string(), z.unknown()).nullable().optional(),
   featured_badges: z.array(z.object({}).passthrough()).max(20).nullable().optional(),
 }).passthrough().nullable();
 

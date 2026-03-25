@@ -229,10 +229,10 @@ export function importRoutes() {
     const skippedItems: string[] = [];
 
     for (const pledge of payload.pledges) {
-      const shipItems = pledge.items.filter((item) => item.kind === "Ship");
+      const shipItems = (pledge.items ?? []).filter((item) => item.kind === "Ship");
 
       for (const item of shipItems) {
-        const displayName = item.title;
+        const displayName = item.title || "";
 
         // Generate slug candidates from item title and manufacturer code
         const nameSlug = slugFromName(displayName);
@@ -247,14 +247,14 @@ export function importRoutes() {
         if (!matchedSlug) {
           // No known vehicle match — skip instead of creating a stub.
           // Stubs from user-supplied data risk polluting the shared vehicles table.
-          skippedItems.push(displayName);
+          skippedItems.push(displayName || "Unknown");
           continue;
         }
 
         // Insurance: parse from pledge items with kind=Insurance
         // Titles are like "Lifetime Insurance", "120 Month Insurance", "6 Month Insurance"
         let insuranceTypeID: number | null = null;
-        const insuranceItem = pledge.items.find(
+        const insuranceItem = (pledge.items ?? []).find(
           (i) => i.kind === "Insurance",
         );
         const insTitle = (insuranceItem?.title ?? "").toLowerCase();
@@ -428,7 +428,7 @@ export function importRoutes() {
               bb.value_cents ?? null,
               bb.date_parsed || bb.date || null,
               bb.is_credit_reclaimable ? 1 : 0,
-              bb.items.length > 0 ? JSON.stringify(bb.items) : null,
+              (bb.items ?? []).length > 0 ? JSON.stringify(bb.items) : null,
             ),
         );
       }
@@ -447,7 +447,7 @@ export function importRoutes() {
         userID,
         payload.pledges.length,
         imported,
-        payload.pledges.reduce((sum, p) => sum + p.items.length, 0 as number),
+        payload.pledges.reduce((sum, p) => sum + (p.items ?? []).length, 0 as number),
       )
       .run();
     const syncId = syncResult.meta.last_row_id;
@@ -532,8 +532,9 @@ export function importRoutes() {
       const userPledgeId = pledgeIdMap.get(Number(pledge.id));
       if (!userPledgeId) continue;
 
-      for (let idx = 0; idx < pledge.items.length; idx++) {
-        const item = pledge.items[idx];
+      const pledgeItems = pledge.items ?? [];
+      for (let idx = 0; idx < pledgeItems.length; idx++) {
+        const item = pledgeItems[idx];
 
         // Parse insurance type from Insurance items
         let insuranceTypeId: number | null = null;
