@@ -167,7 +167,22 @@ export function importRoutes() {
   });
 
   // POST /api/import/hangar-sync — import from SC Bridge extension (RSI hangar sync)
-  routes.post("/hangar-sync", validate("json", HangarSyncPayloadSchema), async (c) => {
+  // Pre-validate: log payload shape on validation failure to diagnose schema mismatches
+  routes.post("/hangar-sync", async (c, next) => {
+    const raw = await c.req.raw.clone().json().catch(() => null) as Record<string, unknown> | null;
+    if (raw) {
+      const result = HangarSyncPayloadSchema.safeParse(raw);
+      if (!result.success) {
+        console.error("[hangar-sync] Validation errors:", JSON.stringify(result.error.issues.slice(0, 10)));
+        console.error("[hangar-sync] Payload keys:", Object.keys(raw));
+        const pledges = raw.pledges as Record<string, unknown>[] | undefined;
+        const buybacks = raw.buyback_pledges as Record<string, unknown>[] | undefined;
+        if (pledges?.[0]) console.error("[hangar-sync] First pledge keys:", Object.keys(pledges[0]));
+        if (buybacks?.[0]) console.error("[hangar-sync] First buyback keys:", Object.keys(buybacks[0]));
+      }
+    }
+    return next();
+  }, validate("json", HangarSyncPayloadSchema), async (c) => {
    try {
     const db = c.env.DB;
     const userID = getAuthUser(c).id;
