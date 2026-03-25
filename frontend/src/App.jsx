@@ -63,6 +63,7 @@ const LawSystem = lazy(() => import('./pages/LawSystem'))
 const NPCLoadouts = lazy(() => import('./pages/NPCLoadouts'))
 const LocalizationBuilder = lazy(() => import('./pages/LocalizationBuilder'))
 const Loadout = lazy(() => import('./pages/Loadout'))
+const About = lazy(() => import('./pages/About'))
 const NotFound = lazy(() => import('./pages/NotFound'))
 
 // Game Data and Reference are public — visible to all users
@@ -425,7 +426,7 @@ function SidebarContent({ expandedMenu, setExpandedMenu, onNavClick }) {
 
       <div className="p-3 border-t border-sc-border">
         <p className="text-[11px] font-mono text-gray-500 text-center tracking-widest">
-          v2.0.0 · NZVengeance
+          v1.0.0 · <NavLink to="/about" className="hover:text-sc-accent transition-colors">About</NavLink>
         </p>
         <p className="text-[10px] text-gray-600 text-center mt-1">
           <NavLink to="/privacy" className="hover:text-gray-400 transition-colors">Privacy</NavLink>
@@ -697,6 +698,7 @@ export default function App() {
                       <Route path="/reputation" element={<Reputation />} />
                       <Route path="/law" element={<LawSystem />} />
                       <Route path="/npc-loadouts" element={<NPCLoadouts />} />
+                      <Route path="/about" element={<Suspense fallback={<LoadingState fullScreen />}><About /></Suspense>} />
                       <Route path="/loadout/:slug" element={<RequireAuth><Suspense fallback={<LoadingState fullScreen />}><Loadout /></Suspense></RequireAuth>} />
                       <Route path="/fleet" element={<RequireAuth><FleetTable /></RequireAuth>} />
                       <Route path="/insurance" element={<RequireAuth><Insurance /></RequireAuth>} />
