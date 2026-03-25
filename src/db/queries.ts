@@ -172,15 +172,21 @@ export async function findVehicleIDsByNameContains(
 // ============================================================
 
 export async function getShipLoadout(db: D1Database, slug: string, versionId?: number): Promise<Record<string, unknown>[]> {
-  // Some ships mount weapons inside a weapon-mount bracket (fixed/gimbal). The bracket is
-  // the direct equipped item on the gun port, but it is not in vehicle_components. The actual
-  // weapon lives one level deeper in a child port. We use a CTE to pre-filter to just this
-  // ship's ports, then COALESCE the direct component join with a child-port fallback lookup.
+  // Resolve the full weapon hierarchy for each top-level port.
+  // Ships can have 1-3 levels: Port → [Gimbal →] [Turret →] WeaponGun.
+  // We walk down the tree to find the deepest actual weapon, and return it
+  // alongside the mount name (intermediate item) for the parent-child UI.
   //
-  // port_id and parent_port_id are returned so the frontend can build a hierarchy
-  // (e.g. weapon ports nested under their turret housing in the Turrets section).
+  // Architecture:
+  // 1. ship_ports: all ports for this ship
+  // 2. deepest_weapon: recursive walk from each top-level port to find the
+  //    deepest WeaponGun (or any real component) at the leaf
+  // 3. Main SELECT: top-level ports with mount + weapon resolved
   const vq = versionSubquery(versionId);
 
+  // Use a recursive CTE to find the deepest "real" component (WeaponGun, Shield, etc.)
+  // for each top-level port, walking through any number of intermediate levels
+  // (TurretBase → Gimbal → WeaponGun, or just Gimbal → WeaponGun, etc.)
   const result = await db
     .prepare(
       `WITH ship_ports AS (
@@ -188,33 +194,68 @@ export async function getShipLoadout(db: D1Database, slug: string, versionId?: n
         ${deltaVersionJoin('vehicle_ports', 'vp', 'uuid', versionId)}
         WHERE vp.vehicle_id = (SELECT v.id FROM vehicles v ${vehicleVersionJoin(versionId)} WHERE v.slug = ?)
       ),
-      child_components AS (
+      -- Walk from each top-level port down to its deepest child with a real component
+      port_tree AS (
         SELECT
-          c.parent_port_id,
-          vc2.name, vc2.type, vc2.sub_type, vc2.size, vc2.grade, vc2.class,
-          vc2.power_output, vc2.overpower_performance, vc2.overclock_performance,
-          vc2.overclock_threshold_min, vc2.overclock_threshold_max, vc2.thermal_output,
-          vc2.cooling_rate, vc2.max_temperature, vc2.overheat_temperature,
-          vc2.shield_hp, vc2.shield_regen, vc2.resist_physical, vc2.resist_energy,
-          vc2.resist_distortion, vc2.resist_thermal, vc2.regen_delay, vc2.downed_regen_delay,
-          vc2.quantum_speed, vc2.quantum_range, vc2.fuel_rate, vc2.spool_time,
-          vc2.cooldown_time, vc2.stage1_accel, vc2.stage2_accel,
-          vc2.rounds_per_minute, vc2.ammo_container_size, vc2.damage_per_shot,
-          vc2.damage_type, vc2.projectile_speed, vc2.effective_range, vc2.dps,
-          vc2.heat_per_shot, vc2.power_draw, vc2.fire_modes,
-          vc2.rotation_speed, vc2.min_pitch, vc2.max_pitch, vc2.min_yaw, vc2.max_yaw, vc2.gimbal_type,
-          vc2.thrust_force, vc2.fuel_burn_rate, vc2.radar_range, vc2.radar_angle,
-          vc2.qed_range, vc2.qed_strength,
-          vc2.damage_physical, vc2.damage_energy, vc2.damage_distortion, vc2.damage_thermal,
-          vc2.penetration, vc2.weapon_range,
-          vc2.resist_physical_min, vc2.resist_energy_min, vc2.resist_distortion_min, vc2.resist_thermal_min,
-          vc2.absorb_physical_min, vc2.absorb_physical_max,
-          m2.name AS manufacturer_name, m2.class AS manufacturer_class,
-          ROW_NUMBER() OVER (PARTITION BY c.parent_port_id ORDER BY c.id) AS rn
-        FROM ship_ports c
-        JOIN vehicle_components vc2 ON vc2.uuid = c.equipped_item_uuid
-          AND vc2.game_version_id = (SELECT MAX(game_version_id) FROM vehicle_components WHERE uuid = c.equipped_item_uuid AND game_version_id <= ${vq})
-        LEFT JOIN manufacturers m2 ON m2.id = vc2.manufacturer_id
+          p.id AS root_id,
+          p.id AS current_id,
+          p.equipped_item_uuid,
+          0 AS depth
+        FROM ship_ports p
+        WHERE p.parent_port_id IS NULL
+          AND p.category_label IS NOT NULL
+        UNION ALL
+        SELECT
+          pt.root_id,
+          c.id,
+          c.equipped_item_uuid,
+          pt.depth + 1
+        FROM port_tree pt
+        JOIN ship_ports c ON c.parent_port_id = pt.current_id
+        WHERE pt.depth < 4
+      ),
+      -- For each root port, find the deepest child that has a WeaponGun component
+      deepest AS (
+        SELECT
+          pt.root_id,
+          vc.name, vc.type, vc.sub_type, vc.size, vc.grade, vc.class,
+          vc.dps, vc.damage_per_shot, vc.damage_type, vc.rounds_per_minute,
+          vc.projectile_speed, vc.effective_range, vc.heat_per_shot,
+          vc.ammo_container_size, vc.power_draw, vc.fire_modes,
+          vc.shield_hp, vc.shield_regen, vc.resist_physical, vc.resist_energy,
+          vc.resist_distortion, vc.resist_thermal, vc.regen_delay, vc.downed_regen_delay,
+          vc.power_output, vc.overpower_performance, vc.overclock_performance,
+          vc.thermal_output, vc.cooling_rate, vc.max_temperature, vc.overheat_temperature,
+          vc.quantum_speed, vc.quantum_range, vc.fuel_rate, vc.spool_time,
+          vc.radar_range, vc.radar_angle, vc.rotation_speed,
+          vc.damage_physical, vc.damage_energy, vc.damage_distortion, vc.damage_thermal,
+          vc.penetration, vc.weapon_range,
+          vc.resist_physical_min, vc.resist_energy_min, vc.resist_distortion_min, vc.resist_thermal_min,
+          vc.absorb_physical_min, vc.absorb_physical_max,
+          m.name AS manufacturer_name,
+          pt.depth,
+          ROW_NUMBER() OVER (PARTITION BY pt.root_id ORDER BY
+            CASE WHEN vc.type = 'WeaponGun' THEN 0
+                 WHEN vc.type IN ('MissileLauncher','WeaponDefensive') THEN 1
+                 WHEN vc.type IN ('Shield','PowerPlant','Cooler','QuantumDrive','Radar') THEN 0
+                 WHEN vc.type = 'Turret' THEN 2
+                 ELSE 3 END,
+            pt.depth DESC
+          ) AS rn
+        FROM port_tree pt
+        JOIN vehicle_components vc ON vc.uuid = pt.equipped_item_uuid
+          AND vc.game_version_id = (SELECT MAX(game_version_id) FROM vehicle_components WHERE uuid = pt.equipped_item_uuid AND game_version_id <= ${vq})
+        LEFT JOIN manufacturers m ON m.id = vc.manufacturer_id
+        WHERE vc.type NOT IN ('Display', 'SeatDashboard', 'Seat', 'SeatAccess')
+      ),
+      -- Count real weapons under each root (for turrets: how many guns)
+      weapon_count AS (
+        SELECT pt.root_id, COUNT(*) AS cnt
+        FROM port_tree pt
+        JOIN vehicle_components vc ON vc.uuid = pt.equipped_item_uuid
+          AND vc.game_version_id = (SELECT MAX(game_version_id) FROM vehicle_components WHERE uuid = pt.equipped_item_uuid AND game_version_id <= ${vq})
+        WHERE vc.type = 'WeaponGun' AND pt.depth > 0
+        GROUP BY pt.root_id
       )
       SELECT
         p.id AS port_id,
@@ -224,146 +265,78 @@ export async function getShipLoadout(db: D1Database, slug: string, versionId?: n
         p.port_type,
         p.size_min,
         p.size_max,
-        vc.name AS mount_name,
-        COALESCE(
-          -- Level 2: grandchild (turret → gimbal → weapon)
-          (SELECT vc4.name FROM vehicle_ports gcp
-           JOIN vehicle_components vc4 ON vc4.uuid = gcp.equipped_item_uuid
-             AND vc4.game_version_id = (SELECT MAX(game_version_id) FROM vehicle_components WHERE uuid = gcp.equipped_item_uuid AND game_version_id <= ${vq})
-           WHERE gcp.parent_port_id IN (SELECT cp2.id FROM vehicle_ports cp2 WHERE cp2.parent_port_id = p.id)
-           LIMIT 1),
-          -- Level 1: child (gimbal → weapon)
-          child.name,
-          (SELECT vc3.name FROM vehicle_ports cp
-           JOIN vehicle_components vc3 ON vc3.uuid = cp.equipped_item_uuid
-             AND vc3.game_version_id = (SELECT MAX(game_version_id) FROM vehicle_components WHERE uuid = cp.equipped_item_uuid AND game_version_id <= ${vq})
-           WHERE cp.parent_port_id = p.id
-           LIMIT 1)
-        ) AS child_name,
-        COALESCE(
-          (SELECT vc4.name FROM vehicle_ports gcp
-           JOIN vehicle_components vc4 ON vc4.uuid = gcp.equipped_item_uuid
-             AND vc4.game_version_id = (SELECT MAX(game_version_id) FROM vehicle_components WHERE uuid = gcp.equipped_item_uuid AND game_version_id <= ${vq})
-           WHERE gcp.parent_port_id IN (SELECT cp2.id FROM vehicle_ports cp2 WHERE cp2.parent_port_id = p.id)
-           LIMIT 1),
-          child.name,
-          (SELECT vc3.name FROM vehicle_ports cp
-           JOIN vehicle_components vc3 ON vc3.uuid = cp.equipped_item_uuid
-             AND vc3.game_version_id = (SELECT MAX(game_version_id) FROM vehicle_components WHERE uuid = cp.equipped_item_uuid AND game_version_id <= ${vq})
-           WHERE cp.parent_port_id = p.id
-           LIMIT 1),
-          vc.name
-        ) AS component_name,
-        COALESCE(
-          (SELECT vc4.type FROM vehicle_ports gcp
-           JOIN vehicle_components vc4 ON vc4.uuid = gcp.equipped_item_uuid
-             AND vc4.game_version_id = (SELECT MAX(game_version_id) FROM vehicle_components WHERE uuid = gcp.equipped_item_uuid AND game_version_id <= ${vq})
-           WHERE gcp.parent_port_id IN (SELECT cp2.id FROM vehicle_ports cp2 WHERE cp2.parent_port_id = p.id)
-           LIMIT 1),
-          child.type,
-          (SELECT vc3.type FROM vehicle_ports cp
-           JOIN vehicle_components vc3 ON vc3.uuid = cp.equipped_item_uuid
-             AND vc3.game_version_id = (SELECT MAX(game_version_id) FROM vehicle_components WHERE uuid = cp.equipped_item_uuid AND game_version_id <= ${vq})
-           WHERE cp.parent_port_id = p.id
-           LIMIT 1),
-          vc.type
-        ) AS component_type,
-        COALESCE(child.sub_type, vc.sub_type) AS sub_type,
-        COALESCE(child.size, vc.size) AS component_size,
-        COALESCE(child.grade, vc.grade) AS grade,
-        COALESCE(child.power_output, vc.power_output) AS power_output,
-        COALESCE(vc.overpower_performance, child.overpower_performance) AS overpower_performance,
-        COALESCE(vc.overclock_performance, child.overclock_performance) AS overclock_performance,
-        COALESCE(vc.overclock_threshold_min, child.overclock_threshold_min) AS overclock_threshold_min,
-        COALESCE(vc.overclock_threshold_max, child.overclock_threshold_max) AS overclock_threshold_max,
-        COALESCE(vc.thermal_output, child.thermal_output) AS thermal_output,
-        COALESCE(vc.cooling_rate, child.cooling_rate) AS cooling_rate,
-        COALESCE(vc.max_temperature, child.max_temperature) AS max_temperature,
-        COALESCE(vc.overheat_temperature, child.overheat_temperature) AS overheat_temperature,
-        COALESCE(vc.shield_hp, child.shield_hp) AS shield_hp,
-        COALESCE(vc.shield_regen, child.shield_regen) AS shield_regen,
-        COALESCE(vc.resist_physical, child.resist_physical) AS resist_physical,
-        COALESCE(vc.resist_energy, child.resist_energy) AS resist_energy,
-        COALESCE(vc.resist_distortion, child.resist_distortion) AS resist_distortion,
-        COALESCE(vc.resist_thermal, child.resist_thermal) AS resist_thermal,
-        COALESCE(vc.regen_delay, child.regen_delay) AS regen_delay,
-        COALESCE(vc.downed_regen_delay, child.downed_regen_delay) AS downed_regen_delay,
-        COALESCE(vc.quantum_speed, child.quantum_speed) AS quantum_speed,
-        COALESCE(vc.quantum_range, child.quantum_range) AS quantum_range,
-        COALESCE(vc.fuel_rate, child.fuel_rate) AS fuel_rate,
-        COALESCE(vc.spool_time, child.spool_time) AS spool_time,
-        COALESCE(vc.cooldown_time, child.cooldown_time) AS cooldown_time,
-        COALESCE(vc.stage1_accel, child.stage1_accel) AS stage1_accel,
-        COALESCE(vc.stage2_accel, child.stage2_accel) AS stage2_accel,
-        COALESCE(vc.rounds_per_minute, child.rounds_per_minute) AS rounds_per_minute,
-        COALESCE(vc.ammo_container_size, child.ammo_container_size) AS ammo_container_size,
-        COALESCE(vc.damage_per_shot, child.damage_per_shot) AS damage_per_shot,
-        COALESCE(vc.damage_type, child.damage_type) AS damage_type,
-        COALESCE(vc.projectile_speed, child.projectile_speed) AS projectile_speed,
-        COALESCE(vc.effective_range, child.effective_range) AS effective_range,
-        COALESCE(vc.dps, child.dps) AS dps,
-        COALESCE(vc.heat_per_shot, child.heat_per_shot) AS heat_per_shot,
-        COALESCE(vc.power_draw, child.power_draw) AS power_draw,
-        COALESCE(vc.fire_modes, child.fire_modes) AS fire_modes,
-        COALESCE(vc.rotation_speed, child.rotation_speed) AS rotation_speed,
-        COALESCE(vc.min_pitch, child.min_pitch) AS min_pitch,
-        COALESCE(vc.max_pitch, child.max_pitch) AS max_pitch,
-        COALESCE(vc.min_yaw, child.min_yaw) AS min_yaw,
-        COALESCE(vc.max_yaw, child.max_yaw) AS max_yaw,
-        COALESCE(vc.gimbal_type, child.gimbal_type) AS gimbal_type,
-        COALESCE(vc.thrust_force, child.thrust_force) AS thrust_force,
-        COALESCE(vc.fuel_burn_rate, child.fuel_burn_rate) AS fuel_burn_rate,
-        COALESCE(vc.radar_range, child.radar_range) AS radar_range,
-        COALESCE(vc.radar_angle, child.radar_angle) AS radar_angle,
-        COALESCE(vc.qed_range, child.qed_range) AS qed_range,
-        COALESCE(vc.qed_strength, child.qed_strength) AS qed_strength,
-        COALESCE(m.name, child.manufacturer_name) AS manufacturer_name,
-        COALESCE(vc.class, m.class, child.class, child.manufacturer_class) AS component_class,
-        COALESCE(child.damage_physical, vc.damage_physical, 0) AS damage_physical,
-        COALESCE(child.damage_energy, vc.damage_energy, 0) AS damage_energy,
-        COALESCE(child.damage_distortion, vc.damage_distortion, 0) AS damage_distortion,
-        COALESCE(child.damage_thermal, vc.damage_thermal, 0) AS damage_thermal,
-        COALESCE(child.penetration, vc.penetration, 0) AS penetration,
-        COALESCE(child.weapon_range, vc.weapon_range, 0) AS weapon_range,
-        COALESCE(vc.resist_physical_min, child.resist_physical_min) AS resist_physical_min,
-        COALESCE(vc.resist_energy_min, child.resist_energy_min) AS resist_energy_min,
-        COALESCE(vc.resist_distortion_min, child.resist_distortion_min) AS resist_distortion_min,
-        COALESCE(vc.resist_thermal_min, child.resist_thermal_min) AS resist_thermal_min,
-        COALESCE(vc.absorb_physical_min, child.absorb_physical_min) AS absorb_physical_min,
-        COALESCE(vc.absorb_physical_max, child.absorb_physical_max) AS absorb_physical_max
+        mount.name AS mount_name,
+        COALESCE(d.name, mount.name) AS child_name,
+        COALESCE(d.name, mount.name) AS component_name,
+        COALESCE(d.type, mount.type) AS component_type,
+        COALESCE(d.sub_type, mount.sub_type) AS sub_type,
+        COALESCE(d.size, mount.size) AS component_size,
+        COALESCE(d.grade, mount.grade) AS grade,
+        COALESCE(d.dps, mount.dps) AS dps,
+        COALESCE(d.damage_per_shot, mount.damage_per_shot) AS damage_per_shot,
+        COALESCE(d.damage_type, mount.damage_type) AS damage_type,
+        COALESCE(d.rounds_per_minute, mount.rounds_per_minute) AS rounds_per_minute,
+        COALESCE(d.projectile_speed, mount.projectile_speed) AS projectile_speed,
+        COALESCE(d.effective_range, mount.effective_range) AS effective_range,
+        COALESCE(d.ammo_container_size, mount.ammo_container_size) AS ammo_container_size,
+        COALESCE(d.shield_hp, mount.shield_hp) AS shield_hp,
+        COALESCE(d.shield_regen, mount.shield_regen) AS shield_regen,
+        COALESCE(d.resist_physical, mount.resist_physical) AS resist_physical,
+        COALESCE(d.resist_energy, mount.resist_energy) AS resist_energy,
+        COALESCE(d.resist_distortion, mount.resist_distortion) AS resist_distortion,
+        COALESCE(d.resist_thermal, mount.resist_thermal) AS resist_thermal,
+        COALESCE(d.regen_delay, mount.regen_delay) AS regen_delay,
+        COALESCE(d.downed_regen_delay, mount.downed_regen_delay) AS downed_regen_delay,
+        COALESCE(d.power_output, mount.power_output) AS power_output,
+        COALESCE(d.overpower_performance, mount.overpower_performance) AS overpower_performance,
+        COALESCE(d.overclock_performance, mount.overclock_performance) AS overclock_performance,
+        COALESCE(d.thermal_output, mount.thermal_output) AS thermal_output,
+        COALESCE(d.cooling_rate, mount.cooling_rate) AS cooling_rate,
+        COALESCE(d.quantum_speed, mount.quantum_speed) AS quantum_speed,
+        COALESCE(d.quantum_range, mount.quantum_range) AS quantum_range,
+        COALESCE(d.fuel_rate, mount.fuel_rate) AS fuel_rate,
+        COALESCE(d.spool_time, mount.spool_time) AS spool_time,
+        COALESCE(d.radar_range, mount.radar_range) AS radar_range,
+        COALESCE(d.radar_angle, mount.radar_angle) AS radar_angle,
+        COALESCE(d.power_draw, mount.power_draw) AS power_draw,
+        COALESCE(d.rotation_speed, mount.rotation_speed) AS rotation_speed,
+        COALESCE(d.damage_physical, mount.damage_physical, 0) AS damage_physical,
+        COALESCE(d.damage_energy, mount.damage_energy, 0) AS damage_energy,
+        COALESCE(d.damage_distortion, mount.damage_distortion, 0) AS damage_distortion,
+        COALESCE(d.damage_thermal, mount.damage_thermal, 0) AS damage_thermal,
+        COALESCE(d.penetration, mount.penetration, 0) AS penetration,
+        COALESCE(d.weapon_range, mount.weapon_range, 0) AS weapon_range,
+        COALESCE(d.resist_physical_min, mount.resist_physical_min) AS resist_physical_min,
+        COALESCE(d.resist_energy_min, mount.resist_energy_min) AS resist_energy_min,
+        COALESCE(d.resist_distortion_min, mount.resist_distortion_min) AS resist_distortion_min,
+        COALESCE(d.resist_thermal_min, mount.resist_thermal_min) AS resist_thermal_min,
+        COALESCE(d.absorb_physical_min, mount.absorb_physical_min) AS absorb_physical_min,
+        COALESCE(d.absorb_physical_max, mount.absorb_physical_max) AS absorb_physical_max,
+        COALESCE(d.manufacturer_name, mm.name) AS manufacturer_name,
+        COALESCE(wc.cnt, 0) AS weapon_count
       FROM ship_ports p
-      LEFT JOIN vehicle_components vc ON vc.uuid = p.equipped_item_uuid
-        AND vc.game_version_id = (SELECT MAX(game_version_id) FROM vehicle_components WHERE uuid = p.equipped_item_uuid AND game_version_id <= ${vq})
-      LEFT JOIN manufacturers m ON m.id = vc.manufacturer_id
-      LEFT JOIN child_components child ON child.parent_port_id = p.id AND child.rn = 1
-      WHERE p.category_label IS NOT NULL
+      LEFT JOIN vehicle_components mount ON mount.uuid = p.equipped_item_uuid
+        AND mount.game_version_id = (SELECT MAX(game_version_id) FROM vehicle_components WHERE uuid = p.equipped_item_uuid AND game_version_id <= ${vq})
+      LEFT JOIN manufacturers mm ON mm.id = mount.manufacturer_id
+      LEFT JOIN deepest d ON d.root_id = p.id AND d.rn = 1
+      LEFT JOIN weapon_count wc ON wc.root_id = p.id
+      WHERE p.parent_port_id IS NULL
+        AND p.category_label IS NOT NULL
         AND p.port_type IN ('weapon', 'turret', 'missile', 'shield', 'power', 'cooler',
             'quantum_drive', 'jump_drive', 'countermeasure', 'sensor', 'module',
             'personal_storage', 'cargo_grid')
-        -- Exclude child ports that duplicate their parent's category (gimbal→weapon shown via parent)
-        AND (
-          p.parent_port_id IS NULL
-          OR NOT EXISTS (
-            SELECT 1 FROM ship_ports pp
-            WHERE pp.id = p.parent_port_id
-              AND pp.category_label IS NOT NULL
-              AND pp.category_label = p.category_label
-              AND pp.port_type != 'turret'
-          )
-        )
-        -- Exclude noise: Display/MFD/Screen items, individual missile attach points, empty size-1 ports
-        AND COALESCE(
-          COALESCE(child.type, vc.type),
-          'KEEP'
-        ) NOT IN ('Display', 'SeatDashboard', 'Seat', 'SeatAccess')
+        -- Exclude ports with only noise components (Display, etc.)
+        AND (d.root_id IS NOT NULL OR mount.type NOT IN ('Display', 'SeatDashboard', 'Seat', 'SeatAccess') OR mount.uuid IS NULL)
+        -- Exclude individual missile slots (keep the rack)
         AND p.name NOT LIKE 'missile_%_attach'
-        AND NOT (
-          p.port_type = 'weapon'
-          AND vc.uuid IS NULL
-          AND child.parent_port_id IS NULL
-          AND p.size_max <= 1
-        )
-      ORDER BY COALESCE(p.category_label, 'Weapons'), p.name`,
+      ORDER BY
+        CASE p.category_label
+          WHEN 'Weapons' THEN 1 WHEN 'Turrets' THEN 2 WHEN 'Missiles' THEN 3
+          WHEN 'Shields' THEN 4 WHEN 'Power' THEN 5 WHEN 'Cooling' THEN 6
+          WHEN 'Quantum Drive' THEN 7 WHEN 'Jump Drive' THEN 8
+          WHEN 'Countermeasures' THEN 9 WHEN 'Sensors' THEN 10
+          WHEN 'Modules' THEN 11 ELSE 20 END,
+        p.size_max DESC, p.name`,
     )
     .bind(slug)
     .all();
