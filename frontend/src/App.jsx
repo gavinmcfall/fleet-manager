@@ -300,7 +300,7 @@ function SidebarContent({ expandedMenu, setExpandedMenu, onNavClick }) {
 
   const handleSignOut = async () => {
     await signOut()
-    navigate('/login')
+    navigate('/')
   }
 
   return (
