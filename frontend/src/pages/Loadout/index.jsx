@@ -35,13 +35,25 @@ export default function Loadout() {
     }
   }, [fleetLoadout])
 
-  // Group components by category
+  // Group components by category, re-parenting turret children into the Turrets group
   const grouped = useMemo(() => {
     if (!stockComponents) return []
+
+    // Build set of turret port_ids so we can re-parent their children
+    const turretIds = new Set(
+      stockComponents
+        .filter(c => c.port_type === 'turret' && !c.parent_port_id)
+        .map(c => c.port_id)
+    )
+
     const groups = {}
     for (const comp of stockComponents) {
-      const cat = getPortCategory(comp.port_type, comp.category_label)
-      if (!groups[cat]) groups[cat] = { label: cat, portType: comp.port_type, items: [] }
+      // If this component's parent is a turret, force it into the Turrets group
+      const isTurretChild = comp.parent_port_id && turretIds.has(comp.parent_port_id)
+      // Missile racks on turret mounts should go in Missiles, not Turrets
+      const isMissileRack = comp.component_type === 'MissileLauncher'
+      const cat = isMissileRack ? 'Missiles' : isTurretChild ? 'Turrets' : getPortCategory(comp.port_type, comp.category_label)
+      if (!groups[cat]) groups[cat] = { label: cat, portType: isTurretChild ? 'turret' : comp.port_type, items: [] }
       groups[cat].items.push(comp)
     }
     return PORT_CATEGORY_ORDER.filter(cat => groups[cat]).map(cat => groups[cat])
@@ -465,6 +477,44 @@ function SectionCard({ group, collapsed, setCollapsed, overrides, onOpenPicker, 
                   onClickWeapon={() => onOpenPicker(item.port_id, item.port_type)}
                   onAddToCart={() => onAddToCart?.(item)}
                 />
+              )
+            }
+
+            // Missile racks — show rack name + missile count
+            if (item.component_type === 'MissileLauncher') {
+              const rackName = item.mount_name || item.component_name || 'Missile Rack'
+              const missileCount = item.missile_count || 0
+              const missileName = item.child_name
+              return (
+                <div key={item.port_id} className="flex items-center gap-2 px-3 py-2 border-b border-white/[0.03] cursor-pointer hover:bg-white/[0.03] transition-colors"
+                  onClick={() => onOpenPicker(item.port_id, 'missile')}>
+                  <span className="text-[11px] w-7 text-center flex-shrink-0 font-mono bg-white/[0.06] border border-white/[0.1] rounded px-1.5 py-px text-gray-400">
+                    S{item.size_max}
+                  </span>
+                  <div className="flex-1 min-w-0">
+                    <div className="text-sm text-gray-200 font-medium">{rackName}</div>
+                    {missileName && missileCount > 0 && (
+                      <div className="text-[11px] text-gray-500 mt-0.5">{missileCount}× {missileName} · S{item.component_size}</div>
+                    )}
+                    {!missileName && missileCount > 0 && (
+                      <div className="text-[11px] text-gray-500 mt-0.5">{missileCount} missiles</div>
+                    )}
+                  </div>
+                  <span className="font-mono text-[12px] text-gray-500 flex-shrink-0">{missileCount}×</span>
+                </div>
+              )
+            }
+
+            // Empty/locked ports (door turrets, etc.) — show with padlock
+            if (!item.component_name && !item.child_name && !item.mount_name) {
+              return (
+                <div key={item.port_id} className="flex items-center gap-2 px-3 py-2 border-b border-white/[0.03] opacity-40">
+                  <span className="text-[11px] w-7 text-center flex-shrink-0 font-mono bg-white/[0.06] border border-white/[0.1] rounded px-1.5 py-px text-gray-500">
+                    S{item.size_max}
+                  </span>
+                  <span className="text-sm text-gray-600">Empty</span>
+                  <span className="text-[11px] text-gray-700 ml-auto">🔒</span>
+                </div>
               )
             }
 

@@ -258,8 +258,16 @@ export async function getShipLoadout(db: D1Database, slug: string, versionId?: n
         FROM port_tree pt
         JOIN vehicle_components vc ON vc.uuid = pt.equipped_item_uuid
           AND vc.game_version_id = (SELECT MAX(game_version_id) FROM vehicle_components WHERE uuid = pt.equipped_item_uuid AND game_version_id <= ${vq})
-        WHERE vc.type = 'WeaponGun' AND pt.depth > 0
+        WHERE vc.type IN ('WeaponGun', 'Missile') AND pt.depth > 0
         GROUP BY pt.root_id
+      ),
+      -- Count missile slots under missile racks
+      missile_count AS (
+        SELECT sp.parent_port_id AS rack_id, COUNT(*) AS cnt
+        FROM ship_ports sp
+        WHERE sp.name LIKE 'missile_%_attach'
+          AND sp.parent_port_id IS NOT NULL
+        GROUP BY sp.parent_port_id
       )
       SELECT
         p.id AS port_id,
@@ -317,13 +325,15 @@ export async function getShipLoadout(db: D1Database, slug: string, versionId?: n
         COALESCE(d.absorb_physical_min, mount.absorb_physical_min) AS absorb_physical_min,
         COALESCE(d.absorb_physical_max, mount.absorb_physical_max) AS absorb_physical_max,
         COALESCE(d.manufacturer_name, mm.name) AS manufacturer_name,
-        COALESCE(wc.cnt, 0) AS weapon_count
+        COALESCE(wc.cnt, 0) AS weapon_count,
+        COALESCE(mc.cnt, 0) AS missile_count
       FROM ship_ports p
       LEFT JOIN vehicle_components mount ON mount.uuid = p.equipped_item_uuid
         AND mount.game_version_id = (SELECT MAX(game_version_id) FROM vehicle_components WHERE uuid = p.equipped_item_uuid AND game_version_id <= ${vq})
       LEFT JOIN manufacturers mm ON mm.id = mount.manufacturer_id
       LEFT JOIN deepest d ON d.root_id = p.id AND d.rn = 1
       LEFT JOIN weapon_count wc ON wc.root_id = p.id
+      LEFT JOIN missile_count mc ON mc.rack_id = p.id
       WHERE p.category_label IS NOT NULL
         AND p.port_type IN ('weapon', 'turret', 'missile', 'shield', 'power', 'cooler',
             'quantum_drive', 'jump_drive', 'countermeasure', 'sensor', 'module',
