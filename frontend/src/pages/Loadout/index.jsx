@@ -406,8 +406,55 @@ function SectionCard({ group, collapsed, setCollapsed, overrides, onOpenPicker, 
             const override = overrides[item.port_id]
             const isOverridden = !!override
 
-            // Weapon/turret sections use WeaponBlock for parent-child rendering
-            if (isWeaponSection || item.port_type === 'weapon' || item.port_type === 'turret') {
+            // Turret housing (top-level turret) — render as section header, not interactive
+            if (item.port_type === 'turret' && !item.parent_port_id) {
+              // Find children of this turret in the same group
+              const children = group.items.filter(c => c.parent_port_id === item.port_id)
+              const turretLabel = item.mount_name || item.component_name || item.port_name
+              // Friendly position from port name
+              const posHint = item.port_name?.replace('hardpoint_turret_', '').replace(/_/g, ' ')
+              return (
+                <div key={item.port_id}>
+                  <div className="px-3 py-1 text-[12px] text-gray-600 bg-white/[0.01] font-medium uppercase tracking-wider border-t border-white/[0.04] first:border-t-0">
+                    {turretLabel}{posHint ? ` · ${posHint}` : ''}
+                    {item.weapon_count > 0 && <span className="text-gray-700 ml-1">({item.weapon_count}× weapons)</span>}
+                  </div>
+                  {children.length > 0 ? children.map(child => {
+                    const childOverride = overrides[child.port_id]
+                    return (
+                      <WeaponBlock
+                        key={child.port_id}
+                        item={childOverride ? { ...child, ...childOverride } : child}
+                        isCustomized={!!childOverride}
+                        weaponGroups={[]}
+                        onClickMount={() => onOpenPicker(child.port_id, child.port_type)}
+                        onClickWeapon={() => onOpenPicker(child.port_id, child.port_type)}
+                        onAddToCart={() => onAddToCart?.(child)}
+                      />
+                    )
+                  }) : (
+                    // Turret with no separate mount children — show the resolved weapon directly
+                    <WeaponBlock
+                      key={`${item.port_id}-weapon`}
+                      item={override ? { ...item, ...override } : item}
+                      isCustomized={isOverridden}
+                      weaponGroups={[]}
+                      onClickMount={() => onOpenPicker(item.port_id, item.port_type)}
+                      onClickWeapon={() => onOpenPicker(item.port_id, item.port_type)}
+                      onAddToCart={() => onAddToCart?.(item)}
+                    />
+                  )}
+                </div>
+              )
+            }
+
+            // Skip turret children — they're rendered inside their parent above
+            if (item.parent_port_id && group.items.some(p => p.port_id === item.parent_port_id && p.port_type === 'turret')) {
+              return null
+            }
+
+            // Weapon/missile sections use WeaponBlock for parent-child rendering
+            if (isWeaponSection || item.port_type === 'weapon') {
               return (
                 <WeaponBlock
                   key={item.port_id}

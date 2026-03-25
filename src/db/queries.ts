@@ -194,7 +194,8 @@ export async function getShipLoadout(db: D1Database, slug: string, versionId?: n
         ${deltaVersionJoin('vehicle_ports', 'vp', 'uuid', versionId)}
         WHERE vp.vehicle_id = (SELECT v.id FROM vehicles v ${vehicleVersionJoin(versionId)} WHERE v.slug = ?)
       ),
-      -- Walk from each top-level port down to its deepest child with a real component
+      -- Walk from each returned port down to its deepest child with a real component.
+      -- Starts from top-level ports AND turret children (which are also returned in results).
       port_tree AS (
         SELECT
           p.id AS root_id,
@@ -202,8 +203,11 @@ export async function getShipLoadout(db: D1Database, slug: string, versionId?: n
           p.equipped_item_uuid,
           0 AS depth
         FROM ship_ports p
-        WHERE p.parent_port_id IS NULL
-          AND p.category_label IS NOT NULL
+        WHERE p.category_label IS NOT NULL
+          AND (
+            p.parent_port_id IS NULL
+            OR EXISTS (SELECT 1 FROM ship_ports tp WHERE tp.id = p.parent_port_id AND tp.port_type = 'turret' AND tp.parent_port_id IS NULL)
+          )
         UNION ALL
         SELECT
           pt.root_id,
@@ -320,11 +324,19 @@ export async function getShipLoadout(db: D1Database, slug: string, versionId?: n
       LEFT JOIN manufacturers mm ON mm.id = mount.manufacturer_id
       LEFT JOIN deepest d ON d.root_id = p.id AND d.rn = 1
       LEFT JOIN weapon_count wc ON wc.root_id = p.id
-      WHERE p.parent_port_id IS NULL
-        AND p.category_label IS NOT NULL
+      WHERE p.category_label IS NOT NULL
         AND p.port_type IN ('weapon', 'turret', 'missile', 'shield', 'power', 'cooler',
             'quantum_drive', 'jump_drive', 'countermeasure', 'sensor', 'module',
             'personal_storage', 'cargo_grid')
+        -- Return top-level ports OR weapon-mount children of turrets
+        AND (
+          p.parent_port_id IS NULL
+          OR EXISTS (
+            SELECT 1 FROM ship_ports tp
+            WHERE tp.id = p.parent_port_id AND tp.port_type = 'turret'
+              AND tp.parent_port_id IS NULL
+          )
+        )
         -- Exclude ports with only noise components (Display, etc.)
         AND (d.root_id IS NOT NULL OR mount.type NOT IN ('Display', 'SeatDashboard', 'Seat', 'SeatAccess') OR mount.uuid IS NULL)
         -- Exclude individual missile slots (keep the rack)
