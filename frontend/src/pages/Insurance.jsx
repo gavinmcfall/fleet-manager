@@ -1,13 +1,21 @@
 import React, { useMemo } from 'react'
 import { useSearchParams } from 'react-router-dom'
 import { useAnalysis } from '../hooks/useAPI'
-import { Shield, ShieldAlert, ShieldQuestion, Calendar, DollarSign, Tag } from 'lucide-react'
+import { Shield, ShieldAlert, ShieldQuestion, Calendar, Tag } from 'lucide-react'
 import PageHeader from '../components/PageHeader'
 import LoadingState from '../components/LoadingState'
 import ErrorState from '../components/ErrorState'
 import StatCard from '../components/StatCard'
 import FilterSelect from '../components/FilterSelect'
 import InsuranceBadge from '../components/InsuranceBadge'
+
+/** "December 15, 2015" → "Dec 15, 2015" (fixed-width 3-char month) */
+function formatPledgeDate(raw) {
+  if (!raw) return raw
+  const d = new Date(raw)
+  if (isNaN(d.getTime())) return raw
+  return d.toLocaleDateString('en-US', { month: 'short', day: '2-digit', year: 'numeric' })
+}
 
 export default function Insurance() {
   const { data: analysis, loading, error, refetch } = useAnalysis()
@@ -174,13 +182,13 @@ function InsuranceRow({ ship }) {
         </span>
         <span className="w-44 text-right text-xs font-mono text-gray-500 whitespace-nowrap">
           {ship.pledge_date && (
-            <span className="flex items-center gap-1 justify-end"><Calendar className="w-3 h-3" />{ship.pledge_date}</span>
+            <span className="flex items-center gap-1 justify-end"><Calendar className="w-3 h-3" />{formatPledgeDate(ship.pledge_date)}</span>
           )}
         </span>
-        <span className="w-8 text-center">
+        <span className="w-10 flex items-center justify-center shrink-0">
           {!!ship.warbond && <span className="badge badge-warbond">WB</span>}
         </span>
-        <span className="w-28 text-right">
+        <span className="w-24 shrink-0">
           <InsuranceBadge isLifetime={ship.is_lifetime} label={ship.insurance_label || (ship.is_lifetime ? 'LTI' : 'Standard')} />
         </span>
       </div>
