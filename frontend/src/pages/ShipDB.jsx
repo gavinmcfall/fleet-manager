@@ -3,6 +3,7 @@ import { Link, useSearchParams } from 'react-router-dom'
 import { useShips } from '../hooks/useAPI'
 import { Database, ArrowUpDown, ChevronLeft, ChevronRight, ChevronsLeft, ChevronsRight } from 'lucide-react'
 import PageHeader from '../components/PageHeader'
+import CommunityTools from '../components/CommunityTools'
 import LoadingState from '../components/LoadingState'
 import ErrorState from '../components/ErrorState'
 import FilterSelect from '../components/FilterSelect'
@@ -320,6 +321,8 @@ export default function ShipDB() {
           </button>
         </div>
       )}
+
+      <CommunityTools />
     </div>
   )
 }

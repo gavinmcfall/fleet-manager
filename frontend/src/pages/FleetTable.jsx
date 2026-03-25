@@ -11,6 +11,7 @@ import SearchInput from '../components/SearchInput'
 import InsuranceBadge from '../components/InsuranceBadge'
 import StatusBadge from '../components/StatusBadge'
 import ShipImage from '../components/ShipImage'
+import CommunityTools from '../components/CommunityTools'
 
 /** Get display value and numeric sort value for a fleet entry's cost.
  * Prefers current_value_cents (from upgrade chain / pledge data) over raw pledge_cost string. */
@@ -331,6 +332,8 @@ export default function FleetTable() {
           </table>
         </div>
       </div>
+
+      <CommunityTools />
     </div>
   )
 }
