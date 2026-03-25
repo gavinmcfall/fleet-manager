@@ -41,17 +41,13 @@ export default function Dashboard() {
           <p className="text-gray-400 text-base mb-8 max-w-lg mx-auto">
             Import your Star Citizen hangar, track insurance and pledges, analyze fleet composition, and get AI-powered fleet recommendations.
           </p>
-          <div className="flex items-center justify-center gap-3 mb-8">
+          <div className="flex items-center justify-center gap-3">
             <Link to="/login" className="btn-primary inline-flex items-center gap-2 px-6 py-2.5">
               <LogIn className="w-4 h-4" /> Sign In
             </Link>
             <Link to="/register" className="btn-secondary inline-flex items-center gap-2 px-6 py-2.5">
               Create Account
             </Link>
-          </div>
-          <div className="inline-flex items-center gap-2 px-3 py-1.5 bg-sc-accent/10 border border-sc-accent/30 rounded-full">
-            <span className="w-1.5 h-1.5 rounded-full bg-sc-accent animate-pulse shrink-0" />
-            <span className="text-xs font-mono text-sc-accent tracking-wider">Free to use &middot; No credit card required</span>
           </div>
         </div>
 
