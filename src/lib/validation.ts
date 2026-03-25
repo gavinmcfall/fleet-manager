@@ -72,88 +72,12 @@ export const HangarXplorImportSchema = z
 // Per-element schemas validate ONLY fields that are bound to SQL — .passthrough()
 // avoids CPU-expensive deep validation on RSI's variable payload shape.
 
-/** Max string lengths for sync payload fields */
-const STR = { short: 200, medium: 500, url: 2000, json: 10000 } as const;
 
-/** Flexible ID: RSI pledge IDs arrive as number or string depending on extension version */
-const FlexId = z.union([z.string().max(50), z.number()]).nullable().optional();
-
-/** Pledge item (nested inside pledge.items) — only fields bound to SQL */
-const PledgeItemSchema = z.object({
-  title: z.string().max(STR.short).nullable().optional().default(""),
-  kind: z.string().max(50).nullable().optional(),
-  manufacturerCode: z.string().max(20).nullable().optional(),
-  manufacturer: z.string().max(STR.short).nullable().optional(),
-  image: z.string().max(STR.url).nullable().optional(),
-  customName: z.string().max(STR.short).nullable().optional(),
-  serial: z.string().max(100).nullable().optional(),
-  isNameable: z.union([z.boolean(), z.number()]).nullable().optional().default(false),
-}).passthrough();
-
-/** Pledge schema — fields accessed in hangar-sync route */
-const SyncPledgeSchema = z.object({
-  id: FlexId,
-  name: z.string().max(STR.short).nullable().optional().default(""),
-  value: z.string().max(100).nullable().optional(),
-  valueCents: z.number().nullable().optional(),
-  configurationValue: z.string().max(100).nullable().optional(),
-  currency: z.string().max(100).nullable().optional(),
-  date: z.string().max(100).nullable().optional(),
-  isUpgraded: z.union([z.boolean(), z.number()]).nullable().optional().default(false),
-  isReclaimable: z.union([z.boolean(), z.number()]).nullable().optional().default(false),
-  isGiftable: z.union([z.boolean(), z.number()]).nullable().optional().default(false),
-  isWarbond: z.union([z.boolean(), z.number()]).nullable().optional().default(false),
-  hasLti: z.union([z.boolean(), z.number()]).nullable().optional().default(false),
-  availability: z.string().max(100).nullable().optional(),
-  items: z.array(PledgeItemSchema).max(200).nullable().optional().default([]),
-}).passthrough();
-
-/** Buyback pledge schema — fields accessed in hangar-sync route */
-const SyncBuybackSchema = z.object({
-  id: FlexId,
-  name: z.string().max(STR.short).nullable().optional().default(""),
-  value: z.string().max(100).nullable().optional(),
-  value_cents: z.number().nullable().optional(),
-  date_parsed: z.string().max(100).nullable().optional(),
-  date: z.string().max(100).nullable().optional(),
-  is_credit_reclaimable: z.union([z.boolean(), z.number()]).nullable().optional().default(false),
-  items: z.array(z.object({}).passthrough()).max(200).nullable().optional().default([]),
-}).passthrough();
-
-/** Upgrade schema — fields accessed in hangar-sync route */
-const SyncUpgradeSchema = z.object({
-  pledge_id: FlexId,
-  name: z.string().max(STR.short).nullable().optional().default(""),
-  applied_at: z.string().max(100).nullable().optional(),
-  new_value: z.string().max(100).nullable().optional(),
-}).passthrough();
-
-/** Named ship schema */
-const NamedShipSchema = z.object({
-  membership_id: z.union([z.number(), z.string()]).nullable().optional(),
-  default_name: z.string().max(STR.short).nullable().optional().default(""),
-  custom_name: z.string().max(STR.short).nullable().optional().default(""),
-}).passthrough();
-
-/** RSI account info — maximally lenient since RSI dashboard data varies */
-const RsiAccountInfoSchema = z.object({
-  nickname: z.string().max(100).nullable().optional().default(""),
-  displayname: z.string().max(100).nullable().optional().default(""),
-  avatar_url: z.string().max(STR.url).nullable().optional(),
-  enlisted_since: z.string().max(100).nullable().optional(),
-  country: z.string().max(100).nullable().optional(),
-  concierge_level: z.string().max(100).nullable().optional(),
-  subscriber_type: z.string().max(100).nullable().optional(),
-  subscriber_frequency: z.string().max(100).nullable().optional(),
-  store_credit_cents: z.number().nullable().optional(),
-  uec_balance: z.number().nullable().optional(),
-  rec_balance: z.number().nullable().optional(),
-  referral_code: z.string().max(100).nullable().optional(),
-  has_game_package: z.union([z.boolean(), z.number()]).nullable().optional(),
-  orgs: z.array(z.object({}).passthrough()).max(20).nullable().optional(),
-  all_badges: z.record(z.string(), z.unknown()).nullable().optional(),
-  featured_badges: z.array(z.object({}).passthrough()).max(20).nullable().optional(),
-}).passthrough().nullable();
+// Per-element validation of RSI data was attempted but RSI's payload shape is too
+// variable — scraped HTML, JSON.parse of script tags, and API responses all produce
+// unpredictable types/nulls. Array-level caps prevent DoS; element validation is
+// deferred to the SQL binding layer (D1 rejects bad types at bind time).
+// TODO: Re-add per-element schemas once we capture real payloads from diverse hangars.
 
 /** Anomaly thresholds — payloads exceeding these are logged but still processed */
 export const SYNC_ANOMALY_THRESHOLDS = {
@@ -165,15 +89,14 @@ export const SYNC_ANOMALY_THRESHOLDS = {
 
 /** Full hangar sync payload from extension */
 export const HangarSyncPayloadSchema = z.object({
-  // Lightweight per-element schemas validate only fields bound to SQL.
-  // .passthrough() avoids CPU-expensive deep validation on RSI's variable payload shape.
-  pledges: z.array(SyncPledgeSchema).max(2000).default([]),
-  buyback_pledges: z.array(SyncBuybackSchema).max(1000).default([]),
-  upgrades: z.array(SyncUpgradeSchema).max(5000).default([]),
-  account: RsiAccountInfoSchema.optional().default(null),
-  named_ships: z.array(NamedShipSchema).max(500).default([]),
+  // Array-level caps prevent DoS. Per-element validation deferred to SQL binding layer.
+  pledges: z.array(z.any()).max(2000).default([]),
+  buyback_pledges: z.array(z.any()).max(1000).default([]),
+  upgrades: z.array(z.any()).max(5000).default([]),
+  account: z.any().optional().default(null),
+  named_ships: z.array(z.any()).max(500).default([]),
   sync_meta: z.object({
-    extension_version: z.string().max(20).default("unknown"),
+    extension_version: z.string().max(50).default("unknown"),
     synced_at: z.string().max(50).default(""),
     pledge_count: z.number().int().min(0).max(10000).default(0),
     buyback_count: z.number().int().min(0).max(10000).default(0),
