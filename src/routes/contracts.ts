@@ -21,17 +21,19 @@ export function contractRoutes<E extends HonoEnv>() {
     const dvjWeapons = deltaVersionJoin('fps_weapons', 'fw', 'uuid', patch)
 
     return cachedJson(c, `contracts:${versionId}:${cacheSlug(giver ?? "all")}`, async () => {
-      let query = `SELECT c.*, v.slug AS reward_vehicle_slug, fw.uuid AS reward_item_uuid
+      let query = `SELECT c.*,
+          COALESCE(c.reward_vehicle_slug, v.slug) AS reward_vehicle_slug,
+          COALESCE(c.reward_item_uuid, fw.uuid) AS reward_item_uuid
         FROM contracts c
         ${dvjContracts}
         LEFT JOIN (
           SELECT v.* FROM vehicles v
           ${VEHICLE_VERSION_JOIN}
-        ) v ON v.name = c.reward_text
+        ) v ON v.name = c.reward_text AND c.reward_vehicle_slug IS NULL
         LEFT JOIN (
           SELECT fw.* FROM fps_weapons fw
           ${dvjWeapons}
-        ) fw ON fw.name = c.reward_text
+        ) fw ON fw.name = c.reward_text AND c.reward_item_uuid IS NULL
         WHERE c.is_active = 1`
       const params: string[] = []
 

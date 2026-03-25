@@ -771,8 +771,9 @@ export function gamedataRoutes<E extends HonoEnv>() {
     const versionId = await resolveVersionId(db, patchCode)
     const dvjTypes = deltaVersionJoin('mission_types', 'mt', 'uuid', patchCode)
     const dvjGivers = deltaVersionJoin('mission_givers', 'mg', 'uuid', patchCode)
+    const dvjMissions = deltaVersionJoin('missions', 'm', 'uuid', patchCode)
     return cachedJson(c, `gd:missions:${versionId}`, async () => {
-      const [typesResult, giversResult] = await Promise.all([
+      const [typesResult, giversResult, missionsResult] = await Promise.all([
         db.prepare(
           `SELECT mt.* FROM mission_types mt
            ${dvjTypes}
@@ -791,11 +792,23 @@ export function gamedataRoutes<E extends HonoEnv>() {
              AND mg.name != '<= UNINITIALIZED =>'
            ORDER BY mg.name`,
         ).all(),
+        db.prepare(
+          `SELECT m.id, m.title, m.display_name as giver_name, m.description,
+             m.reward_amount, m.reward_currency, m.is_lawful, m.difficulty,
+             m.category, m.subcategory as availability,
+             m.location_hint as type_slug,
+             m.reputation_reward_size as rep_summary
+           FROM missions m
+           ${dvjMissions}
+           WHERE m.not_for_release = 0
+           ORDER BY m.category, m.reward_amount DESC`,
+        ).all(),
       ])
 
       return {
         types: typesResult.results,
         givers: giversResult.results,
+        missions: missionsResult.results,
       }
     })
   })

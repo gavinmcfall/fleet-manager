@@ -1,484 +1,637 @@
-import React, { useState, useMemo, useEffect, useRef, useCallback } from 'react'
+import React, { useState, useMemo, useCallback } from 'react'
 import { Link, useSearchParams } from 'react-router-dom'
-import { FileText, ChevronDown, ChevronUp, Package, MapPin, Users, Crosshair } from 'lucide-react'
+import { ChevronDown, ChevronUp, Package, Users, Crosshair, Shield, Coins, AlertTriangle, FileText, Star } from 'lucide-react'
 import { useContracts, useAPI } from '../hooks/useAPI'
 import PageHeader from '../components/PageHeader'
 import LoadingState from '../components/LoadingState'
 import ErrorState from '../components/ErrorState'
 import SearchInput from '../components/SearchInput'
+import StatCard from '../components/StatCard'
 
-// ── Contract constants ──────────────────────────────────────────────────────
+// ── Faction logos from game data (CF Images) ────────────────────────────────
 
-const GIVER_TABS = [
-  { key: 'all',    label: 'All' },
-  { key: 'wikelo', label: 'Wikelo' },
-  { key: 'gfs',    label: "Gilly's Flight School" },
-  { key: 'ruto',   label: 'Ruto' },
-]
-
-const GIVER_BADGE = {
-  wikelo: 'bg-purple-900/50 text-purple-300 border border-purple-700/50',
-  gfs:    'bg-blue-900/50 text-blue-300 border border-blue-700/50',
-  ruto:   'bg-orange-900/50 text-orange-300 border border-orange-700/50',
+const FACTION_LOGOS = {
+  "ArcCorp": "https://imagedelivery.net/JnUjHiDCDHvj44u4fjoYBg/27c262c6-92ee-4a28-da94-4f89a346ea00/thumb",
+  "BitZeros": "https://imagedelivery.net/JnUjHiDCDHvj44u4fjoYBg/7aefb7ea-382e-47f6-a764-c3a1ed6a4100/thumb",
+  "BlacJac": "https://imagedelivery.net/JnUjHiDCDHvj44u4fjoYBg/b87b8b32-4d6d-470c-28fd-65d8dc4deb00/thumb",
+  "Bounty Hunters Guild": "https://imagedelivery.net/JnUjHiDCDHvj44u4fjoYBg/2c470ed3-c48f-4f7d-6602-edfa4c11ef00/thumb",
+  "CDF": "https://imagedelivery.net/JnUjHiDCDHvj44u4fjoYBg/b24f29b8-0884-4f05-18b5-e0f58701b400/thumb",
+  "CFP": "https://imagedelivery.net/JnUjHiDCDHvj44u4fjoYBg/7b5eddef-f623-42e0-3fcb-e89cab339f00/thumb",
+  "Clovus Darneely": "https://imagedelivery.net/JnUjHiDCDHvj44u4fjoYBg/7c33c780-9165-4555-2a8e-9c6bb10e9800/thumb",
+  "Constantine Hurston": "https://imagedelivery.net/JnUjHiDCDHvj44u4fjoYBg/548b0c5e-0cda-45e5-5106-11f21e82c400/thumb",
+  "Covalex": "https://imagedelivery.net/JnUjHiDCDHvj44u4fjoYBg/cc4c870b-cc07-47a3-d92c-f68b4704de00/thumb",
+  "Crusader Industries": "https://imagedelivery.net/JnUjHiDCDHvj44u4fjoYBg/996a1753-fbaf-4f89-b8a8-7170deb19200/thumb",
+  "Crusader Security": "https://imagedelivery.net/JnUjHiDCDHvj44u4fjoYBg/3f935ae0-34db-4cc3-a366-de4525096900/thumb",
+  "Headhunters": "https://imagedelivery.net/JnUjHiDCDHvj44u4fjoYBg/92c123e0-7cfd-49a8-7773-8e50bc5a8a00/thumb",
+  "Hurston Dynamics": "https://imagedelivery.net/JnUjHiDCDHvj44u4fjoYBg/27339355-f4d7-410f-ae7f-8c9a50e1e800/thumb",
+  "Miles Eckhart": "https://imagedelivery.net/JnUjHiDCDHvj44u4fjoYBg/f25e6101-0e33-4791-f610-dcae7e779c00/thumb",
+  "Nine Tails": "https://imagedelivery.net/JnUjHiDCDHvj44u4fjoYBg/d1b3c772-6ad1-4f28-9442-4f8eae83fd00/thumb",
+  "NorthRock": "https://imagedelivery.net/JnUjHiDCDHvj44u4fjoYBg/0a4117c0-bc8b-4767-9f2d-28c62e3bb900/thumb",
+  "Recco Battaglia": "https://imagedelivery.net/JnUjHiDCDHvj44u4fjoYBg/32e468f1-f6eb-4e3f-89ab-34dfbb29fe00/thumb",
+  "Rough & Ready": "https://imagedelivery.net/JnUjHiDCDHvj44u4fjoYBg/3325e026-6f73-40be-1e6d-af1daed26d00/thumb",
+  "Ruto": "https://imagedelivery.net/JnUjHiDCDHvj44u4fjoYBg/cc3d3f9d-b164-465e-f783-8d2d847c1d00/thumb",
+  "Tarpits": "https://imagedelivery.net/JnUjHiDCDHvj44u4fjoYBg/925577fc-724c-4b5e-d32a-528603b56700/thumb",
+  "Tecia Pacheco": "https://imagedelivery.net/JnUjHiDCDHvj44u4fjoYBg/f860ed6b-0e2c-44d1-c71d-de1f52d57400/thumb",
+  "Vaughn": "https://imagedelivery.net/JnUjHiDCDHvj44u4fjoYBg/f3a02e36-4094-40b4-7072-2f178d791d00/thumb",
+  "Wallace Klim": "https://imagedelivery.net/JnUjHiDCDHvj44u4fjoYBg/66b49547-c443-4970-77ee-2900bfc9a600/thumb",
+  "XenoThreat": "https://imagedelivery.net/JnUjHiDCDHvj44u4fjoYBg/37dfdeb3-7678-424f-83b9-6b5323616900/thumb",
+  "microTech": "https://imagedelivery.net/JnUjHiDCDHvj44u4fjoYBg/5174f2e7-4cd2-416c-da33-60c4f6703800/thumb",
+  "Courier": "https://imagedelivery.net/JnUjHiDCDHvj44u4fjoYBg/192e600f-3f01-4c30-f237-846fad451e00/thumb",
+  "Bounty": "https://imagedelivery.net/JnUjHiDCDHvj44u4fjoYBg/2c470ed3-c48f-4f7d-6602-edfa4c11ef00/thumb",
+  "Hired Muscle": "https://imagedelivery.net/JnUjHiDCDHvj44u4fjoYBg/5bd232e1-2143-435b-6d63-84ea08582700/thumb",
+  "Assassination": "https://imagedelivery.net/JnUjHiDCDHvj44u4fjoYBg/5bd232e1-2143-435b-6d63-84ea08582700/thumb",
+  "Security": "https://imagedelivery.net/JnUjHiDCDHvj44u4fjoYBg/5bd232e1-2143-435b-6d63-84ea08582700/thumb",
 }
 
-const CATEGORY_BADGE = {
-  'Small Items':         'bg-green-900/40 text-green-300',
-  'Standard':            'bg-gray-700/60 text-gray-300',
-  'Favours':             'bg-yellow-900/40 text-yellow-300',
-  'Vehicle Delivery':    'bg-indigo-900/40 text-indigo-300',
-  'Combat Gauntlet':     'bg-blue-900/40 text-blue-300',
-  'Navy Patrol Training':'bg-sky-900/40 text-sky-300',
-  'Waste Disposal':      'bg-amber-900/40 text-amber-300',
-  'Synced Assassination':'bg-red-900/40 text-red-300',
+/** Get faction logo URL from a rep scope name like "Ruto" or "Hurston Dynamics (Security)" */
+function getFactionLogo(scopeName) {
+  // Direct match
+  if (FACTION_LOGOS[scopeName]) return FACTION_LOGOS[scopeName]
+  // Strip parenthetical scope: "Hurston Dynamics (Security)" → "Hurston Dynamics"
+  const base = scopeName.replace(/\s*\(.*\)$/, '')
+  return FACTION_LOGOS[base] || null
 }
 
-const MISSION_TYPE_BADGE = {
-  'Bounty Hunter':    'bg-red-900/40 text-red-300',
-  'Mercenary':        'bg-red-900/40 text-red-200',
-  'Delivery':         'bg-indigo-900/40 text-indigo-300',
-  'Hauling':          'bg-amber-900/40 text-amber-300',
-  'Mining':           'bg-yellow-900/40 text-yellow-300',
-  'Ship Mining':      'bg-yellow-900/40 text-yellow-200',
-  'Hand Mining':      'bg-yellow-900/40 text-yellow-200',
-  'Salvage':          'bg-teal-900/40 text-teal-300',
-  'Racing':           'bg-cyan-900/40 text-cyan-300',
-  'Rescue':           'bg-green-900/40 text-green-300',
-  'Investigation':    'bg-purple-900/40 text-purple-300',
-  'Research':         'bg-violet-900/40 text-violet-300',
-  'ECN Alert':        'bg-orange-900/40 text-orange-300',
-  'PvP Missions':     'bg-rose-900/40 text-rose-300',
-  'Service Beacons':  'bg-sky-900/40 text-sky-300',
-}
+// ── Shared ──────────────────────────────────────────────────────────────────
 
 function cleanDesc(text) {
   if (!text) return ''
   return text.replace(/<[^>]+>/g, '').trim()
 }
 
-function parseRequirements(contract) {
-  if (!contract.requirements_json) return null
+function Pill({ active, onClick, children }) {
+  return (
+    <button
+      onClick={onClick}
+      className={`px-3 py-1.5 rounded-full text-xs font-medium transition-all duration-200 border whitespace-nowrap ${
+        active
+          ? 'bg-sc-accent/15 text-sc-accent border-sc-accent/30 shadow-[0_0_8px_rgba(34,211,238,0.15)]'
+          : 'bg-white/[0.03] text-gray-400 border-white/[0.06] hover:border-white/[0.12] hover:text-gray-300'
+      }`}
+    >
+      {children}
+    </button>
+  )
+}
+
+// ── Source / type badges ────────────────────────────────────────────────────
+
+const SOURCE_BADGE = {
+  contract:       { label: 'Contract', style: 'bg-purple-500/10 text-purple-400 border-purple-500/20' },
+  mission_board:  { label: 'Board', style: 'bg-emerald-500/10 text-emerald-400 border-emerald-500/20' },
+  service_beacon: { label: 'Beacon', style: 'bg-blue-500/10 text-blue-400 border-blue-500/20' },
+  dynamic:        { label: 'Dynamic', style: 'bg-white/[0.04] text-gray-500 border-white/[0.06]' },
+}
+
+const CATEGORY_LABELS = {
+  Bounty: 'Bounty', Cargo: 'Cargo', Cave: 'Cave', Collection: 'Collection',
+  Defense: 'Defense', Delivery: 'Delivery', General: 'General', Investigation: 'Investigation',
+  Mercenary: 'Mercenary', Mining: 'Mining', Prison: 'Prison', Retrieval: 'Retrieval',
+  Salvage: 'Salvage', 'Search & Rescue': 'Search & Rescue', Support: 'Support',
+  'Combat Gauntlet': 'Combat Gauntlet', 'Navy Patrol Training': 'Navy Patrol',
+  'Small Items': 'Collection', 'Standard': 'Collection', 'Favours': 'Favours',
+  'Vehicle Delivery': 'Delivery', 'Waste Disposal': 'Collection',
+  'Synced Assassination': 'Bounty', Events: 'Events', 'Combined Ops': 'Combined',
+  Recovery: 'Recovery', Theft: 'Theft', Tutorial: 'Tutorial', Exploration: 'Exploration',
+}
+
+function parseRequirements(json) {
+  if (!json || json === 'random') return null
   try {
-    const reqs = JSON.parse(contract.requirements_json)
+    const reqs = JSON.parse(json)
     return reqs.length > 0 ? reqs : null
   } catch { return null }
 }
 
-const GUILD_TO_GIVER = {
-  thecollector: 'wikelo',
-  hockrowagency_facilitydelve: 'gfs',
-}
+// ── Unified row ─────────────────────────────────────────────────────────────
 
-// ── Contract card ───────────────────────────────────────────────────────────
-
-function ContractCard({ contract, highlighted }) {
-  const cardRef = useRef(null)
+function EntryRow({ entry, repFocus }) {
   const [expanded, setExpanded] = useState(false)
+  const source = SOURCE_BADGE[entry.source] || SOURCE_BADGE.dynamic
+  const reward = entry.reward_amount || 0
+  const desc = cleanDesc(entry.description)
+  const requirements = parseRequirements(entry.requirements_json)
 
-  useEffect(() => {
-    if (highlighted && cardRef.current) {
-      cardRef.current.scrollIntoView({ behavior: 'smooth', block: 'center' })
-    }
-  }, [highlighted])
-  const desc = cleanDesc(contract.description)
-  const isLong = desc.length > 200
-  const requirements = parseRequirements(contract)
+  // Extract focused rep amount if filtering by rep
+  let focusedRep = null
+  if (repFocus && entry.rep_summary) {
+    const match = entry.rep_summary.split(', ').find(p => p.startsWith(repFocus + ':'))
+    if (match) focusedRep = match.split(':')[1]?.trim()
+  }
 
   return (
-    <div
-      ref={cardRef}
-      id={`contract-${contract.id}`}
-      className={`panel p-4 space-y-3 transition-all duration-700 ${highlighted ? 'ring-2 ring-sc-accent/60 bg-sc-accent/5' : ''}`}
-    >
-      <div className="flex items-start justify-between gap-3">
-        <h3 className="font-display font-semibold text-white text-sm leading-tight flex-1 min-w-0">
-          {contract.title}
-        </h3>
-        <span className={`text-[10px] font-display uppercase tracking-wide px-2 py-0.5 rounded shrink-0 ${GIVER_BADGE[contract.giver_slug] || 'bg-gray-700 text-gray-300'}`}>
-          {{ wikelo: 'Wikelo', gfs: 'GFS', ruto: 'Ruto' }[contract.giver_slug] || contract.giver_slug}
+    <div className="border-b border-sc-border/30 last:border-0">
+      <button onClick={() => setExpanded(!expanded)} className="w-full text-left px-4 py-3 flex items-center gap-3 hover:bg-white/[0.02] transition-colors">
+        <div className="flex-1 min-w-0">
+          <span className="text-sm text-gray-200">{entry.title}</span>
+          {entry.giver_display && (
+            <span className="text-[10px] text-gray-600 ml-2 font-mono hidden sm:inline">{entry.giver_display}</span>
+          )}
+        </div>
+        <span className={`w-[4.5rem] text-center text-[10px] font-mono px-1.5 py-0.5 rounded border shrink-0 ${source.style}`}>
+          {source.label}
         </span>
-      </div>
-
-      <div className="flex flex-wrap items-center gap-2">
-        <span className={`text-[10px] font-mono px-2 py-0.5 rounded ${CATEGORY_BADGE[contract.category] || 'bg-gray-700/60 text-gray-400'}`}>
-          {contract.category}
-        </span>
-        {contract.sequence_num != null && (
-          <span className="text-[10px] font-mono text-gray-500">
-            #{contract.sequence_num}{contract.category === 'Combat Gauntlet' ? ' of 8' : contract.category === 'Navy Patrol Training' ? ' of 3' : ''}
+        {repFocus ? (
+          <span className="w-28 text-right text-xs font-mono shrink-0">
+            {focusedRep ? (
+              <span className={focusedRep.includes('+') ? 'text-emerald-400' : 'text-red-400'}>{focusedRep} rep</span>
+            ) : <span className="text-gray-700">—</span>}
+          </span>
+        ) : (
+          <span className="w-48 text-right text-xs font-mono shrink-0" title={entry.reward_text || ''}>
+            {entry.reward_text ? (
+              <span className={entry.reward_vehicle_slug ? 'text-sc-accent2' : entry.reward_currency === 'MG Scrip' ? 'text-blue-300' : 'text-sc-warn'}>
+                {entry.reward_text}
+              </span>
+            ) : reward > 0 ? (
+              <><span className="text-sc-warn">{reward.toLocaleString()}</span> <span className="text-gray-600">aUEC</span></>
+            ) : (
+              <span className="text-gray-700">—</span>
+            )}
           </span>
         )}
-      </div>
-
-      {contract.reward_text && (
-        <div className="flex items-center gap-2">
-          <span className="text-[10px] font-display uppercase tracking-wider text-gray-500">Reward</span>
-          {contract.reward_vehicle_slug ? (
-            <Link to={`/ships/${contract.reward_vehicle_slug}`} className="text-xs font-mono text-sc-accent2 hover:text-sc-accent transition-colors underline underline-offset-2 decoration-sc-accent2/30 hover:decoration-sc-accent/60">
-              {contract.reward_text}
-            </Link>
-          ) : contract.reward_item_uuid ? (
-            <Link to={`/loot/${contract.reward_item_uuid}`} className="text-xs font-mono text-sc-accent2 hover:text-sc-accent transition-colors underline underline-offset-2 decoration-sc-accent2/30 hover:decoration-sc-accent/60">
-              {contract.reward_text}
-            </Link>
-          ) : contract.reward_set_slug ? (
-            <Link to={`/loot/sets/${contract.reward_set_slug}`} className="text-xs font-mono text-sc-accent2 hover:text-sc-accent transition-colors underline underline-offset-2 decoration-sc-accent2/30 hover:decoration-sc-accent/60">
-              {contract.reward_text}
-            </Link>
-          ) : (
-            <span className={`text-xs font-mono ${contract.reward_currency === 'aUEC' ? 'text-sc-melt' : contract.reward_currency === 'MG Scrip' ? 'text-blue-300' : 'text-sc-accent2'}`}>
-              {contract.reward_text}
-            </span>
+        <span className="w-16 text-center shrink-0">
+          {entry.is_unlawful && (
+            <span className="text-[10px] font-mono px-1.5 py-0.5 rounded bg-red-500/10 text-red-400 border border-red-500/20">Unlawful</span>
           )}
-        </div>
-      )}
-
-      {requirements && (
-        <div className="space-y-1.5">
-          <div className="flex items-center gap-1.5">
-            <Package className="w-3 h-3 text-gray-500" />
-            <span className="text-[10px] font-display uppercase tracking-wider text-gray-500">Requirements</span>
-          </div>
-          <ul className="space-y-0.5 pl-1">
-            {requirements.map((req, i) => (
-              <li key={i} className="flex items-center gap-2 text-xs font-mono text-gray-300">
-                <span className="text-sc-accent2 min-w-[2ch] text-right">{req.quantity}x</span>
-                <span>{req.item}</span>
-              </li>
-            ))}
-          </ul>
-        </div>
-      )}
-      {contract.requirements_json === 'random' && (
-        <div className="flex items-center gap-1.5">
-          <Package className="w-3 h-3 text-gray-500" />
-          <span className="text-[10px] font-display uppercase tracking-wider text-gray-500">Requirements</span>
-          <span className="text-xs font-mono text-gray-400 italic">Randomized each time</span>
-        </div>
-      )}
-
-      {desc && (
-        <div className="text-xs text-gray-400 leading-relaxed">
-          <p className="whitespace-pre-line">
-            {isLong && !expanded ? desc.slice(0, 200) + '…' : desc}
-          </p>
-          {isLong && (
-            <button
-              onClick={() => setExpanded((e) => !e)}
-              className="mt-1 flex items-center gap-1 text-[10px] font-display uppercase tracking-wide text-gray-500 hover:text-gray-300 transition-colors"
-            >
-              {expanded ? <ChevronUp className="w-3 h-3" /> : <ChevronDown className="w-3 h-3" />}
-              {expanded ? 'Show less' : 'Show more'}
-            </button>
-          )}
-        </div>
-      )}
-
-      {contract.notes && (
-        <p className="text-[10px] font-mono text-amber-400 italic">{contract.notes}</p>
-      )}
-    </div>
-  )
-}
-
-// ── Mission type card ───────────────────────────────────────────────────────
-
-function MissionTypeCard({ type }) {
-  const desc = cleanDesc(type.description)
-  return (
-    <div className="panel p-4 space-y-2">
-      <div className="flex items-start justify-between gap-2">
-        <h3 className="font-display font-semibold text-white text-sm leading-tight flex-1 min-w-0">
-          {type.name}
-        </h3>
-        <span className={`text-[10px] font-display uppercase tracking-wide px-2 py-0.5 rounded shrink-0 ${MISSION_TYPE_BADGE[type.name] || 'bg-gray-700/60 text-gray-400'}`}>
-          {type.name}
         </span>
-      </div>
-      {desc && (
-        <p className="text-xs text-gray-400 leading-relaxed line-clamp-3">{desc}</p>
+        <span className="w-5 shrink-0 flex items-center justify-center">
+          {expanded ? <ChevronUp className="w-3.5 h-3.5 text-gray-500" /> : <ChevronDown className="w-3.5 h-3.5 text-gray-500" />}
+        </span>
+      </button>
+      {expanded && (
+        <div className="px-4 pb-3 space-y-2">
+          {desc ? (
+            <p className="text-xs text-gray-400 leading-relaxed whitespace-pre-line">{desc}</p>
+          ) : (
+            <p className="text-xs text-gray-600 italic">No description available</p>
+          )}
+
+          {/* Contract-specific: requirements */}
+          {requirements && (
+            <div className="space-y-1">
+              <div className="flex items-center gap-1.5">
+                <Package className="w-3 h-3 text-gray-600" />
+                <span className="text-[10px] font-mono uppercase tracking-wider text-gray-600">Requirements</span>
+              </div>
+              <ul className="space-y-0.5 pl-1">
+                {requirements.map((req, i) => (
+                  <li key={i} className="flex items-center gap-2 text-xs font-mono text-gray-300">
+                    <span className="text-sc-accent2 min-w-[2ch] text-right">{req.quantity}x</span>
+                    <span>{req.item}</span>
+                  </li>
+                ))}
+              </ul>
+            </div>
+          )}
+          {entry.requirements_json === 'random' && (
+            <div className="flex items-center gap-1.5">
+              <Package className="w-3 h-3 text-gray-600" />
+              <span className="text-xs font-mono text-gray-500 italic">Randomized each time</span>
+            </div>
+          )}
+
+          {/* Contract-specific: linked reward */}
+          {entry.reward_vehicle_slug && (
+            <div className="text-xs font-mono">
+              Reward: <Link to={`/ships/${entry.reward_vehicle_slug}`} className="text-sc-accent2 hover:text-sc-accent transition-colors">{entry.reward_text}</Link>
+            </div>
+          )}
+          {entry.reward_item_uuid && (
+            <div className="text-xs font-mono">
+              Reward: <Link to={`/loot/${entry.reward_item_uuid}`} className="text-sc-accent2 hover:text-sc-accent transition-colors">{entry.reward_text}</Link>
+            </div>
+          )}
+
+          {/* Mission-specific: rep */}
+          {entry.rep_summary && (
+            <div className="text-[11px] font-mono">
+              <span className="text-gray-500">Rep: </span>
+              {entry.rep_summary.split(', ').map((r, i) => (
+                <span key={i} className={`${r.includes('+') ? 'text-emerald-400' : 'text-red-400'} ${i > 0 ? 'ml-1' : ''}`}>
+                  {r}{i < entry.rep_summary.split(', ').length - 1 ? ',' : ''}
+                </span>
+              ))}
+            </div>
+          )}
+
+          {/* Meta row */}
+          <div className="flex flex-wrap gap-x-4 gap-y-1 text-[11px] font-mono text-gray-600">
+            {entry.giver_display && <span>From: <span className="text-gray-400">{entry.giver_display}</span></span>}
+            {entry.category_display && <span>Category: <span className="text-gray-400">{entry.category_display}</span></span>}
+            {entry.sequence_num != null && <span>#{entry.sequence_num}</span>}
+          </div>
+
+          {entry.notes && <p className="text-[10px] font-mono text-amber-400/80 italic">{entry.notes}</p>}
+        </div>
       )}
     </div>
   )
 }
 
-// ── Mission giver card ──────────────────────────────────────────────────────
+// ── Type / Giver cards ──────────────────────────────────────────────────────
 
-function MissionGiverCard({ giver }) {
+function TypeCard({ type, count, onClick }) {
+  return (
+    <button onClick={onClick} className="panel p-4 text-left w-full hover:border-sc-accent/30 transition-colors group">
+      <div className="flex items-center justify-between gap-2">
+        <h3 className="font-display font-semibold text-white text-sm group-hover:text-sc-accent transition-colors">{type.name}</h3>
+        <span className="text-[10px] font-mono px-2 py-0.5 rounded bg-sc-accent/10 text-sc-accent border border-sc-accent/20 shrink-0">{count} missions</span>
+      </div>
+      {type.description && <p className="text-xs text-gray-500 mt-1.5 leading-relaxed">{cleanDesc(type.description)}</p>}
+    </button>
+  )
+}
+
+function GiverCard({ giver, count, onClick }) {
   const desc = cleanDesc(giver.description)
   return (
-    <div className="panel p-4 space-y-2">
-      <div className="flex items-start justify-between gap-2">
-        <h3 className="font-display font-semibold text-white text-sm leading-tight flex-1 min-w-0">
-          {giver.name}
-        </h3>
+    <button onClick={onClick} className="panel p-4 text-left w-full hover:border-sc-accent/30 transition-colors group flex flex-col">
+      <div className="flex items-center justify-between gap-2 mb-1.5">
+        <h3 className="font-display font-semibold text-white text-sm group-hover:text-sc-accent transition-colors">{giver.name}</h3>
+        <span className="text-[10px] font-mono px-2 py-0.5 rounded bg-sc-accent/10 text-sc-accent border border-sc-accent/20 shrink-0">{count} missions</span>
       </div>
-      <div className="flex flex-wrap items-center gap-2">
-        {giver.faction_name && (
-          <span className="inline-flex items-center gap-1 text-[10px] font-mono px-1.5 py-0.5 rounded-full bg-sc-accent/15 text-sc-accent border border-sc-accent/30">
-            <Users className="w-2.5 h-2.5" />
-            {giver.faction_name}
-          </span>
-        )}
-        {giver.location_name && (
-          <span className="inline-flex items-center gap-1 text-[10px] font-mono text-gray-500">
-            <MapPin className="w-2.5 h-2.5" />
-            {giver.location_name}
-          </span>
-        )}
-      </div>
-      {desc && (
-        <p className="text-xs text-gray-400 leading-relaxed line-clamp-3">{desc}</p>
+      {giver.faction_name && (
+        <span className="inline-flex items-center gap-1 text-[10px] font-mono px-1.5 py-0.5 rounded-full bg-sc-accent/10 text-sc-accent border border-sc-accent/20 mb-2">
+          <Users className="w-2.5 h-2.5" />{giver.faction_name}
+        </span>
       )}
-    </div>
-  )
-}
-
-// ── Contracts tab ───────────────────────────────────────────────────────────
-
-function ContractsTab() {
-  const { data: contracts, loading, error, refetch } = useContracts()
-  const VALID_GIVERS = GIVER_TABS.map(t => t.key)
-  const [searchParams, setSearchParams] = useSearchParams()
-  const guildParam = searchParams.get('guild')
-  const highlightParam = searchParams.get('highlight')
-  const giverParam = searchParams.get('giver') || (guildParam ? (GUILD_TO_GIVER[guildParam] || 'all') : 'all')
-  const giverTab = VALID_GIVERS.includes(giverParam) ? giverParam : 'all'
-  const setGiverTab = useCallback((t) => {
-    setSearchParams(prev => {
-      const next = new URLSearchParams(prev)
-      next.delete('guild')
-      if (t === 'all') next.delete('giver')
-      else next.set('giver', t)
-      return next
-    }, { replace: true })
-  }, [setSearchParams])
-  const [search, setSearch] = useState('')
-  const [highlightId, setHighlightId] = useState(highlightParam ? Number(highlightParam) : null)
-  const [showAll, setShowAll] = useState(false)
-  const INITIAL_COUNT = 30
-
-  useEffect(() => {
-    if (highlightId) {
-      const t = setTimeout(() => setHighlightId(null), 4000)
-      return () => clearTimeout(t)
-    }
-  }, [highlightId])
-
-  const filtered = useMemo(() => {
-    if (!contracts) return []
-    let items = contracts
-    if (giverTab !== 'all') items = items.filter((c) => c.giver_slug === giverTab)
-    if (search) {
-      const q = search.toLowerCase()
-      items = items.filter((c) =>
-        c.title.toLowerCase().includes(q) ||
-        c.category.toLowerCase().includes(q) ||
-        (c.description && cleanDesc(c.description).toLowerCase().includes(q)) ||
-        (c.requirements_json && c.requirements_json.toLowerCase().includes(q))
-      )
-    }
-    return items
-  }, [contracts, giverTab, search])
-
-  useEffect(() => { setShowAll(false) }, [giverTab, search])
-
-  const visible = showAll ? filtered : filtered.slice(0, INITIAL_COUNT)
-  const hasMore = !showAll && filtered.length > INITIAL_COUNT
-
-  if (loading) return <div className="py-8 text-center text-gray-500 font-mono text-sm">Loading contracts...</div>
-  if (error) return <ErrorState message={error} onRetry={refetch} />
-
-  return (
-    <div className="space-y-4">
-      <div className="flex flex-wrap gap-1.5">
-        {GIVER_TABS.map((tab) => (
-          <button
-            key={tab.key}
-            onClick={() => setGiverTab(tab.key)}
-            className={`px-3 py-1.5 rounded text-xs font-display uppercase tracking-wide transition-all duration-150 ${
-              giverTab === tab.key
-                ? 'bg-sc-accent/20 text-sc-accent border border-sc-accent/40'
-                : 'text-gray-400 hover:text-gray-300 border border-sc-border hover:border-gray-600'
-            }`}
-          >
-            {tab.label}
-          </button>
-        ))}
-      </div>
-
-      <SearchInput value={search} onChange={setSearch} placeholder="Search contracts..." className="max-w-md" />
-
-      <span className="text-xs font-mono text-gray-500">{filtered.length} contracts</span>
-
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">
-        {visible.map((contract) => (
-          <ContractCard key={contract.id} contract={contract} highlighted={contract.id === highlightId} />
-        ))}
-      </div>
-
-      {hasMore && (
-        <div className="text-center pt-2">
-          <button onClick={() => setShowAll(true)} className="btn-secondary text-xs px-6">
-            Show all ({filtered.length - INITIAL_COUNT} more)
-          </button>
-        </div>
-      )}
-
-      {filtered.length === 0 && (
-        <div className="text-center py-12 text-gray-500 font-mono text-sm">No contracts found.</div>
-      )}
-    </div>
-  )
-}
-
-// ── Missions tab ────────────────────────────────────────────────────────────
-
-function MissionsTab() {
-  const { data: missions, loading, error, refetch } = useAPI('/gamedata/missions')
-  const [searchParams, setSearchParams] = useSearchParams()
-  const search = searchParams.get('q') || ''
-  const view = searchParams.get('mview') || 'types'
-  const setSearch = useCallback((val) => {
-    setSearchParams(prev => {
-      const next = new URLSearchParams(prev)
-      if (val) next.set('q', val)
-      else next.delete('q')
-      return next
-    }, { replace: true })
-  }, [setSearchParams])
-  const setView = useCallback((val) => {
-    setSearchParams(prev => {
-      const next = new URLSearchParams(prev)
-      if (val === 'types') next.delete('mview')
-      else next.set('mview', val)
-      return next
-    }, { replace: true })
-  }, [setSearchParams])
-
-  const types = missions?.types || []
-  const givers = missions?.givers || []
-
-  const filteredTypes = useMemo(() => {
-    if (!search) return types.filter(t => t.name !== '<= UNINITIALIZED =>' && t.name !== '<= PLACEHOLDER =>')
-    const q = search.toLowerCase()
-    return types.filter(t =>
-      t.name !== '<= UNINITIALIZED =>' && t.name !== '<= PLACEHOLDER =>' &&
-      (t.name.toLowerCase().includes(q) || (t.description && cleanDesc(t.description).toLowerCase().includes(q)))
-    )
-  }, [types, search])
-
-  const filteredGivers = useMemo(() => {
-    if (!search) return givers
-    const q = search.toLowerCase()
-    return givers.filter(g =>
-      g.name.toLowerCase().includes(q) ||
-      (g.faction_name && g.faction_name.toLowerCase().includes(q)) ||
-      (g.location_name && g.location_name.toLowerCase().includes(q)) ||
-      (g.description && cleanDesc(g.description).toLowerCase().includes(q))
-    )
-  }, [givers, search])
-
-  if (loading) return <div className="py-8 text-center text-gray-500 font-mono text-sm">Loading missions...</div>
-  if (error) return <ErrorState message={error} onRetry={refetch} />
-
-  const currentList = view === 'types' ? filteredTypes : filteredGivers
-
-  return (
-    <div className="space-y-4">
-      <div className="flex flex-wrap gap-1.5">
-        <button
-          onClick={() => setView('types')}
-          className={`px-3 py-1.5 rounded text-xs font-display uppercase tracking-wide transition-all duration-150 ${
-            view === 'types'
-              ? 'bg-sc-accent/20 text-sc-accent border border-sc-accent/40'
-              : 'text-gray-400 hover:text-gray-300 border border-sc-border hover:border-gray-600'
-          }`}
-        >
-          <span className="flex items-center gap-1.5"><Crosshair className="w-3 h-3" /> Types ({filteredTypes.length})</span>
-        </button>
-        <button
-          onClick={() => setView('givers')}
-          className={`px-3 py-1.5 rounded text-xs font-display uppercase tracking-wide transition-all duration-150 ${
-            view === 'givers'
-              ? 'bg-sc-accent/20 text-sc-accent border border-sc-accent/40'
-              : 'text-gray-400 hover:text-gray-300 border border-sc-border hover:border-gray-600'
-          }`}
-        >
-          <span className="flex items-center gap-1.5"><Users className="w-3 h-3" /> Givers ({filteredGivers.length})</span>
-        </button>
-      </div>
-
-      <SearchInput
-        value={search}
-        onChange={setSearch}
-        placeholder={view === 'types' ? 'Search mission types...' : 'Search mission givers...'}
-        className="max-w-md"
-      />
-
-      <span className="text-xs font-mono text-gray-500">{currentList.length} {view === 'types' ? 'mission types' : 'mission givers'}</span>
-
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">
-        {view === 'types'
-          ? filteredTypes.map(t => <MissionTypeCard key={t.id} type={t} />)
-          : filteredGivers.map(g => <MissionGiverCard key={g.id} giver={g} />)
-        }
-      </div>
-
-      {currentList.length === 0 && (
-        <div className="text-center py-12 text-gray-500 font-mono text-sm">No {view === 'types' ? 'mission types' : 'mission givers'} found.</div>
-      )}
-    </div>
+      {desc && <p className="text-xs text-gray-500 leading-relaxed">{desc}</p>}
+    </button>
   )
 }
 
 // ── Main page ───────────────────────────────────────────────────────────────
 
-const MAIN_TABS = [
-  { key: 'contracts', label: 'Contracts', icon: FileText },
-  { key: 'missions',  label: 'Mission Board', icon: Crosshair },
-]
-
 export default function Contracts() {
+  const { data: contracts, loading: cLoading, error: cError } = useContracts()
+  const { data: missionData, loading: mLoading, error: mError } = useAPI('/gamedata/missions')
   const [searchParams, setSearchParams] = useSearchParams()
-  const tabParam = searchParams.get('tab')
-  const activeTab = tabParam === 'missions' ? 'missions' : 'contracts'
-  const setActiveTab = useCallback((tab) => {
+
+  const search = searchParams.get('q') || ''
+  const view = searchParams.get('view') || 'all'
+  const sourceFilter = searchParams.get('source') || ''
+  const categoryFilter = searchParams.get('cat') || ''
+  const typeFilter = searchParams.get('type') || ''
+  const giverFilter = searchParams.get('giver') || ''
+  const repFilter = searchParams.get('rep') || ''
+
+  const setParam = useCallback((key, val, replace = false) => {
     setSearchParams(prev => {
       const next = new URLSearchParams(prev)
-      if (tab === 'contracts') next.delete('tab')
-      else next.set('tab', tab)
+      if (val) next.set(key, val)
+      else next.delete(key)
       return next
-    }, { replace: true })
+    }, { replace })
+  }, [setSearchParams])
+  const setParams = useCallback((updates, replace = false) => {
+    setSearchParams(prev => {
+      const next = new URLSearchParams(prev)
+      for (const [key, val] of Object.entries(updates)) {
+        if (val) next.set(key, val)
+        else next.delete(key)
+      }
+      return next
+    }, { replace })
   }, [setSearchParams])
 
+  // Normalize contracts + missions into one list
+  const allEntries = useMemo(() => {
+    const entries = []
+
+    // Contracts → unified shape
+    for (const c of (contracts || [])) {
+      entries.push({
+        id: `c-${c.id}`,
+        title: c.title,
+        description: c.description,
+        source: 'contract',
+        category: c.category,
+        category_display: c.category,
+        giver_display: { wikelo: 'Wikelo', gfs: "Gilly's Flight School", ruto: 'Ruto' }[c.giver_slug] || c.giver_slug,
+        reward_amount: c.reward_amount || 0,
+        reward_text: c.reward_text || null,
+        reward_currency: c.reward_currency,
+        reward_vehicle_slug: c.reward_vehicle_slug,
+        reward_item_uuid: c.reward_item_uuid,
+        is_unlawful: false,
+        requirements_json: c.requirements_json,
+        sequence_num: c.sequence_num,
+        notes: c.notes,
+        type_slug: null,
+        rep_summary: null,
+      })
+    }
+
+    // Missions → unified shape
+    for (const m of (missionData?.missions || [])) {
+      entries.push({
+        id: `m-${m.id}`,
+        title: m.title,
+        description: m.description,
+        source: m.availability || 'dynamic',
+        category: m.category,
+        category_display: CATEGORY_LABELS[m.category] || m.category,
+        giver_display: m.giver_name || null,
+        reward_amount: m.reward_amount || 0,
+        reward_text: null,
+        reward_currency: 'aUEC',
+        reward_vehicle_slug: null,
+        reward_item_uuid: null,
+        is_unlawful: !m.is_lawful,
+        requirements_json: null,
+        sequence_num: null,
+        notes: null,
+        type_slug: m.type_slug,
+        rep_summary: m.rep_summary,
+      })
+    }
+
+    return entries
+  }, [contracts, missionData])
+
+  // Filter
+  const filtered = useMemo(() => {
+    let items = allEntries
+    if (sourceFilter) items = items.filter(e => e.source === sourceFilter)
+    if (categoryFilter) items = items.filter(e => e.category === categoryFilter)
+    if (typeFilter) items = items.filter(e => e.type_slug === typeFilter || e.type_slug === ('missiontype-' + typeFilter.replace('missiontype-', '')))
+    if (giverFilter) items = items.filter(e => e.giver_display === giverFilter)
+    if (repFilter) items = items.filter(e => e.rep_summary && e.rep_summary.includes(repFilter + ':'))
+    if (search.trim()) {
+      const q = search.toLowerCase()
+      items = items.filter(e =>
+        (e.title && e.title.toLowerCase().includes(q)) ||
+        (e.description && e.description.toLowerCase().includes(q)) ||
+        (e.giver_display && e.giver_display.toLowerCase().includes(q))
+      )
+    }
+    // Sort: reward descending
+    items.sort((a, b) => (b.reward_amount || 0) - (a.reward_amount || 0))
+    return items
+  }, [allEntries, sourceFilter, categoryFilter, typeFilter, giverFilter, repFilter, search])
+
+  // Categories + source counts for filters
+  const categories = useMemo(() => {
+    const counts = {}
+    for (const e of allEntries) counts[e.category] = (counts[e.category] || 0) + 1
+    return Object.entries(counts).sort((a, b) => b[1] - a[1])
+  }, [allEntries])
+
+  const sourceCounts = useMemo(() => {
+    const counts = { contract: 0, mission_board: 0, service_beacon: 0, dynamic: 0 }
+    for (const e of allEntries) counts[e.source] = (counts[e.source] || 0) + 1
+    return counts
+  }, [allEntries])
+
+  // Types + givers for browse views
+  const types = missionData?.types || []
+  const givers = missionData?.givers || []
+
+  const missionCountByType = useMemo(() => {
+    const counts = {}
+    for (const e of allEntries) if (e.type_slug) counts[e.type_slug] = (counts[e.type_slug] || 0) + 1
+    return counts
+  }, [allEntries])
+
+  const entryCountByGiver = useMemo(() => {
+    const counts = {}
+    for (const e of allEntries) if (e.giver_display) counts[e.giver_display] = (counts[e.giver_display] || 0) + 1
+    return counts
+  }, [allEntries])
+
+  const filteredTypes = useMemo(() => {
+    return types.filter(t => t.name !== '<= UNINITIALIZED =>' && t.name !== '<= PLACEHOLDER =>' && (missionCountByType[t.slug] || 0) > 0)
+  }, [types, missionCountByType])
+
+  // Build unified giver list (mission givers + contract givers)
+  const allGivers = useMemo(() => {
+    const gMap = new Map()
+    for (const g of givers) {
+      if ((entryCountByGiver[g.name] || 0) > 0) {
+        gMap.set(g.name, { name: g.name, description: g.description, faction_name: g.faction_name })
+      }
+    }
+    // Add contract givers with descriptions
+    const contractGiverInfo = {
+      'Wikelo': { description: 'Come to Wikelo Emporium for fine made things. Always looking for useful things. Will trade or make in return.', faction_name: null },
+      "Gilly's Flight School": { description: 'Instructor Lucas "Gilly" Baramsco has served in six squadrons and has over ten years of teaching experience. Offers combat gauntlets and navy patrol training courses.', faction_name: null },
+      'Ruto': { description: 'One of the best known info brokers in Stanton. Only appearing as a hologram of former Imperator Kelos Costigan, Ruto manages a vast network of criminal activity and connections.', faction_name: null },
+    }
+    for (const [name, info] of Object.entries(contractGiverInfo)) {
+      if ((entryCountByGiver[name] || 0) > 0 && !gMap.has(name)) {
+        gMap.set(name, { name, ...info })
+      }
+    }
+    return [...gMap.values()].sort((a, b) => (entryCountByGiver[b.name] || 0) - (entryCountByGiver[a.name] || 0))
+  }, [givers, entryCountByGiver])
+
+  // Rep scopes — extract from rep_summary strings
+  const repScopes = useMemo(() => {
+    const scopes = {}
+    for (const e of allEntries) {
+      if (!e.rep_summary) continue
+      for (const part of e.rep_summary.split(', ')) {
+        const [scope, amtStr] = part.split(':').map(s => s.trim())
+        if (!scope) continue
+        if (!scopes[scope]) scopes[scope] = { name: scope, missions: [], totalPositive: 0, totalNegative: 0 }
+        const amt = parseInt(amtStr) || 0
+        if (amt > 0) scopes[scope].totalPositive += amt
+        else scopes[scope].totalNegative += amt
+        scopes[scope].missions.push(e)
+      }
+    }
+    return Object.values(scopes).sort((a, b) => b.missions.length - a.missions.length)
+  }, [allEntries])
+
+  const hasActiveFilter = sourceFilter || categoryFilter || typeFilter || giverFilter || repFilter
+
+  const loading = cLoading || mLoading
+  const error = cError || mError
+
+  if (loading) return <LoadingState message="Loading missions & contracts..." />
+  if (error) return <ErrorState message={error} />
+
+  // Stats
+  const totalReward = allEntries.reduce((s, e) => s + (e.reward_amount || 0), 0)
+  const avgReward = allEntries.length > 0 ? Math.round(totalReward / allEntries.length) : 0
+  const unlawfulCount = allEntries.filter(e => e.is_unlawful).length
+
   return (
-    <div className="space-y-4 animate-fade-in-up">
+    <div className="space-y-6 animate-fade-in-up">
       <PageHeader
         title="MISSIONS & CONTRACTS"
-        subtitle="Mission types, givers, and named NPC contract chains"
-        actions={<FileText className="w-5 h-5 text-gray-500" />}
+        subtitle={`${allEntries.length} entries from in-game mission board, service beacons, and NPC contracts`}
       />
 
-      <div className="flex gap-0 border-b border-sc-border">
-        {MAIN_TABS.map(({ key, label, icon: Icon }) => (
-          <button
-            key={key}
-            onClick={() => setActiveTab(key)}
-            className={`px-4 py-2 text-xs font-display uppercase tracking-wide border-b-2 transition-colors -mb-px flex items-center gap-1.5 ${
-              activeTab === key
-                ? 'border-sc-accent text-sc-accent'
-                : 'border-transparent text-gray-400 hover:text-gray-200'
-            }`}
-          >
-            <Icon className="w-3.5 h-3.5" />
-            {label}
-          </button>
-        ))}
+      {/* Stats */}
+      <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
+        <StatCard icon={Crosshair} label="Missions" value={sourceCounts.mission_board + sourceCounts.dynamic + sourceCounts.service_beacon} />
+        <StatCard icon={FileText} label="Contracts" value={sourceCounts.contract} />
+        <StatCard icon={Coins} label="Avg Reward" value={`${avgReward.toLocaleString()} aUEC`} color="text-sc-warn" />
+        <StatCard icon={AlertTriangle} label="Unlawful" value={unlawfulCount} color="text-red-400" />
       </div>
 
-      {activeTab === 'contracts' && <ContractsTab />}
-      {activeTab === 'missions' && <MissionsTab />}
+      {/* View pills */}
+      <div className="flex flex-wrap gap-2">
+        <Pill active={view === 'all'} onClick={() => setParam('view', '')}>
+          All <span className="opacity-60 ml-1">{allEntries.length}</span>
+        </Pill>
+        <Pill active={view === 'types'} onClick={() => setParam('view', 'types')}>
+          <span className="flex items-center gap-1.5"><Crosshair className="w-3 h-3" /> Types <span className="opacity-60">{filteredTypes.length}</span></span>
+        </Pill>
+        <Pill active={view === 'givers'} onClick={() => setParam('view', 'givers')}>
+          <span className="flex items-center gap-1.5"><Users className="w-3 h-3" /> Givers <span className="opacity-60">{allGivers.length}</span></span>
+        </Pill>
+        <Pill active={view === 'reputation'} onClick={() => setParam('view', 'reputation')}>
+          <span className="flex items-center gap-1.5"><Star className="w-3 h-3" /> Reputation <span className="opacity-60">{repScopes.length}</span></span>
+        </Pill>
+      </div>
+
+      {/* Filters */}
+      {view === 'all' && (
+        <div className="flex flex-wrap gap-3 items-start">
+          <SearchInput value={search} onChange={v => setParam('q', v, true)} placeholder="Search..." className="max-w-sm flex-1" />
+          <select value={sourceFilter} onChange={e => setParam('source', e.target.value)} className="bg-sc-darker border border-sc-border rounded-lg px-3 py-2 text-xs text-gray-300 font-mono focus:outline-none focus:border-sc-accent/40">
+            <option value="">All Sources</option>
+            <option value="contract">Contracts ({sourceCounts.contract})</option>
+            <option value="mission_board">Mission Board ({sourceCounts.mission_board})</option>
+            <option value="service_beacon">Service Beacons ({sourceCounts.service_beacon})</option>
+            <option value="dynamic">Dynamic ({sourceCounts.dynamic})</option>
+          </select>
+          <select value={categoryFilter} onChange={e => setParam('cat', e.target.value)} className="bg-sc-darker border border-sc-border rounded-lg px-3 py-2 text-xs text-gray-300 font-mono focus:outline-none focus:border-sc-accent/40">
+            <option value="">All Categories</option>
+            {categories.map(([cat, count]) => (
+              <option key={cat} value={cat}>{CATEGORY_LABELS[cat] || cat} ({count})</option>
+            ))}
+          </select>
+        </div>
+      )}
+
+      {view !== 'all' && (
+        <SearchInput value={search} onChange={v => setParam('q', v, true)} placeholder="Search..." className="max-w-sm" />
+      )}
+
+      {/* Active filter tags */}
+      {hasActiveFilter && view === 'all' && (
+        <div className="flex flex-wrap items-center gap-2">
+          <span className="text-xs text-gray-600">Filtered:</span>
+          {sourceFilter && (
+            <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded text-xs bg-sc-accent/10 text-sc-accent border border-sc-accent/20">
+              {SOURCE_BADGE[sourceFilter]?.label || sourceFilter}
+              <button onClick={() => setParam('source', '')} className="hover:text-white ml-1">&times;</button>
+            </span>
+          )}
+          {categoryFilter && (
+            <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded text-xs bg-sc-accent/10 text-sc-accent border border-sc-accent/20">
+              {CATEGORY_LABELS[categoryFilter] || categoryFilter}
+              <button onClick={() => setParam('cat', '')} className="hover:text-white ml-1">&times;</button>
+            </span>
+          )}
+          {typeFilter && (
+            <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded text-xs bg-sc-accent/10 text-sc-accent border border-sc-accent/20">
+              {types.find(t => t.slug === typeFilter)?.name || typeFilter}
+              <button onClick={() => setParam('type', '')} className="hover:text-white ml-1">&times;</button>
+            </span>
+          )}
+          {giverFilter && (
+            <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded text-xs bg-sc-accent/10 text-sc-accent border border-sc-accent/20">
+              {giverFilter}
+              <button onClick={() => setParam('giver', '')} className="hover:text-white ml-1">&times;</button>
+            </span>
+          )}
+          {repFilter && (
+            <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded text-xs bg-emerald-500/10 text-emerald-400 border border-emerald-500/20">
+              <Star className="w-3 h-3" /> {repFilter}
+              <button onClick={() => setParam('rep', '')} className="hover:text-white ml-1">&times;</button>
+            </span>
+          )}
+          <button onClick={() => setParams({ source: '', cat: '', type: '', giver: '', rep: '' })} className="text-xs text-gray-500 hover:text-gray-300 transition-colors">Clear all</button>
+        </div>
+      )}
+
+      {/* All entries view */}
+      {view === 'all' && (
+        <>
+          <p className="text-xs font-mono text-gray-600">{filtered.length} results</p>
+          {filtered.length === 0 ? (
+            <div className="panel p-12 text-center">
+              <Crosshair className="w-10 h-10 mx-auto mb-3 text-gray-700" />
+              <p className="text-gray-500 text-sm">No missions or contracts match your filters.</p>
+            </div>
+          ) : (
+            <div className="panel overflow-hidden">
+              {filtered.slice(0, 200).map(e => <EntryRow key={e.id} entry={e} repFocus={repFilter || null} />)}
+              {filtered.length > 200 && (
+                <div className="px-4 py-3 text-xs text-gray-600 font-mono text-center border-t border-sc-border/30">
+                  Showing 200 of {filtered.length} — refine your search
+                </div>
+              )}
+            </div>
+          )}
+        </>
+      )}
+
+      {/* Types view */}
+      {view === 'types' && (
+        <>
+          <p className="text-xs font-mono text-gray-600">{filteredTypes.length} types — click to filter</p>
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">
+            {filteredTypes.map(t => (
+              <TypeCard key={t.id} type={t} count={missionCountByType[t.slug] || 0} onClick={() => setParams({ view: '', type: t.slug, cat: '', giver: '', source: '' })} />
+            ))}
+          </div>
+        </>
+      )}
+
+      {/* Givers view */}
+      {view === 'givers' && (
+        <>
+          <p className="text-xs font-mono text-gray-600">{allGivers.length} givers — click to filter</p>
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">
+            {allGivers.map(g => (
+              <GiverCard key={g.name} giver={g} count={entryCountByGiver[g.name] || 0} onClick={() => setParams({ view: '', giver: g.name, cat: '', type: '', source: '' })} />
+            ))}
+          </div>
+        </>
+      )}
+
+      {/* Reputation view */}
+      {view === 'reputation' && (
+        <>
+          <p className="text-xs font-mono text-gray-600">{repScopes.length} reputation tracks — click to see missions</p>
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">
+            {repScopes.map(scope => {
+              const logo = getFactionLogo(scope.name)
+              const initials = scope.name.split(/[\s()]+/).filter(Boolean).map(w => w[0]).join('').slice(0, 3).toUpperCase()
+              return (
+                <button
+                  key={scope.name}
+                  onClick={() => setParams({ view: '', rep: scope.name, cat: '', type: '', giver: '', source: '' })}
+                  className="panel overflow-hidden text-left w-full hover:border-sc-accent/30 transition-colors group flex"
+                >
+                  <div className="flex-1 p-4">
+                    <div className="flex items-center gap-2 mb-2">
+                      <Star className="w-4 h-4 text-emerald-400 shrink-0" />
+                      <h3 className="font-display font-semibold text-white text-sm group-hover:text-sc-accent transition-colors">{scope.name}</h3>
+                    </div>
+                    <span className="text-[10px] font-mono px-2 py-0.5 rounded bg-sc-accent/10 text-sc-accent border border-sc-accent/20">
+                      {scope.missions.length} missions
+                    </span>
+                  </div>
+                  <div className="w-24 shrink-0 flex items-center justify-center p-2">
+                    {logo ? (
+                      <img src={logo} alt={scope.name} className="w-16 h-16 object-contain opacity-60 group-hover:opacity-100 transition-opacity" />
+                    ) : (
+                      <span className="text-xl font-display font-bold text-gray-700 group-hover:text-gray-500 transition-colors">{initials}</span>
+                    )}
+                  </div>
+                </button>
+              )
+            })}
+          </div>
+        </>
+      )}
     </div>
   )
 }

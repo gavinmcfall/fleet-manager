@@ -214,6 +214,30 @@
   .prose-fleet :where(pre) {
     @apply bg-sc-darker/80 border border-sc-border rounded-lg;
   }
+  .prose-fleet :where(table) {
+    @apply w-full text-sm border-collapse;
+  }
+  .prose-fleet :where(thead) {
+    @apply border-b border-sc-border;
+  }
+  .prose-fleet :where(th) {
+    @apply text-left text-xs font-mono text-gray-400 uppercase tracking-wider px-3 py-2 bg-sc-darker/40;
+  }
+  .prose-fleet :where(td) {
+    @apply px-3 py-2 text-gray-300 border-b border-sc-border/30;
+  }
+  .prose-fleet :where(tr:hover td) {
+    @apply bg-white/[0.02];
+  }
+  .prose-fleet :where(strong) {
+    @apply text-white font-semibold;
+  }
+  .prose-fleet :where(hr) {
+    @apply border-sc-border/40;
+  }
+  .prose-fleet :where(blockquote) {
+    @apply border-l-2 border-sc-accent/30 pl-4 italic text-gray-400;
+  }
 }
 
 /* Respect user motion preferences */
