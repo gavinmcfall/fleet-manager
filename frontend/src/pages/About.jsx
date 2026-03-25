@@ -52,7 +52,7 @@ export default function About() {
                 <img
                   src={member.avatar}
                   alt={member.name}
-                  className="w-28 h-28 rounded-lg object-cover border-2 border-sc-border"
+                  className="w-36 h-36 rounded-lg object-cover border-2 border-sc-border"
                 />
               </div>
               <div className="flex-1 min-w-0">
