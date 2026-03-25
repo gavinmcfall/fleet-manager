@@ -483,12 +483,12 @@ export interface GapItem {
   role: string;
   priority: string;
   description: string;
-  suggestions: string[];
+  suggestions: { name: string; slug: string }[];
 }
 
 export interface RedundancyGroup {
   role: string;
-  ships: string[];
+  ships: { name: string; slug: string; fleet_id: number }[];
   notes: string;
 }
 

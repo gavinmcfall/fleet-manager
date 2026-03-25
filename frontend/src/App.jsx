@@ -1,6 +1,6 @@
 import React, { useState, Suspense, lazy } from 'react'
 import { Routes, Route, NavLink, useLocation, useNavigate } from 'react-router-dom'
-import { Rocket, BarChart3, Shield, Upload, RefreshCw, Database, Settings as SettingsIcon, ChevronDown, ChevronRight, ChevronLeft, History, Menu, X, LogOut, LogIn, User, Wrench, Users, Building2, FileText, Search, MapPin, Palette, ShoppingCart, Hammer, Briefcase, Star, Scale, Crosshair, BookOpen, Layers, TrendingUp, Languages, Heart, FlaskConical } from 'lucide-react'
+import { Rocket, BarChart3, Shield, Upload, RefreshCw, Database, Settings as SettingsIcon, ChevronDown, ChevronRight, ChevronLeft, History, Menu, X, LogOut, LogIn, User, Wrench, Users, Building2, FileText, Search, MapPin, Palette, ShoppingCart, Hammer, Briefcase, Star, Scale, Crosshair, BookOpen, Layers, TrendingUp, Languages, Heart, FlaskConical, Sparkles } from 'lucide-react'
 import LoadingState from './components/LoadingState'
 import ErrorBoundary from './components/ErrorBoundary'
 import RequireAuth from './components/RequireAuth'
@@ -19,6 +19,7 @@ import ResetPassword from './pages/ResetPassword'
 
 const FleetTable = lazy(() => import('./pages/FleetTable'))
 const Insurance = lazy(() => import('./pages/Insurance'))
+const Insights = lazy(() => import('./pages/Insights'))
 const Analysis = lazy(() => import('./pages/Analysis'))
 const AnalysisHistory = lazy(() => import('./pages/AnalysisHistory'))
 const Import = lazy(() => import('./pages/Import'))
@@ -88,11 +89,12 @@ const authNavItems = [
       { to: '/fleet', icon: Rocket, label: 'Fleet' },
       { to: '/insurance', icon: Shield, label: 'Insurance' },
       {
-        to: '/analysis',
-        icon: RefreshCw,
+        to: '/insights',
+        icon: BarChart3,
         label: 'Analysis',
         submenu: [
-          { to: '/analysis', icon: RefreshCw, label: 'Current' },
+          { to: '/insights', icon: BarChart3, label: 'Insights' },
+          { to: '/analysis', icon: Sparkles, label: 'AI Analysis' },
           { to: '/analysis/history', icon: History, label: 'History' },
         ],
       },
@@ -207,15 +209,17 @@ function VersionSelector() {
 function renderNavItem(item, location, expandedMenu, setExpandedMenu, onNavClick) {
   const { to, icon: Icon, label, submenu } = item
   const hasSubmenu = submenu && submenu.length > 0
-  const isParentActive = location.pathname.startsWith(to)
-  const isExpanded = expandedMenu === to
+  const isParentActive = hasSubmenu
+    ? submenu.some(s => location.pathname === s.to || location.pathname.startsWith(s.to + '/'))
+    : location.pathname.startsWith(to)
 
   if (hasSubmenu) {
     return (
       <div key={to} role="listitem">
-        <button
-          onClick={() => setExpandedMenu(isExpanded ? null : to)}
-          aria-expanded={isExpanded}
+        <NavLink
+          to={submenu[0].to}
+          end
+          onClick={onNavClick}
           className={`w-full flex items-center gap-3 px-3 py-2.5 rounded text-sm font-medium transition-all duration-150 ${
             isParentActive
               ? 'bg-sc-accent/10 text-sc-accent border-l-2 border-l-sc-accent border-r border-t border-b border-sc-accent/20'
@@ -224,14 +228,9 @@ function renderNavItem(item, location, expandedMenu, setExpandedMenu, onNavClick
         >
           <Icon className="w-4 h-4" aria-hidden="true" />
           <span className="font-display tracking-wide text-xs uppercase flex-1 text-left">{label}</span>
-          {isExpanded ? (
-            <ChevronDown className="w-3 h-3" aria-hidden="true" />
-          ) : (
-            <ChevronRight className="w-3 h-3" aria-hidden="true" />
-          )}
-        </button>
+        </NavLink>
 
-        {isExpanded && (
+        {isParentActive && (
           <div className="ml-4 mt-0.5 space-y-0.5 border-l-2 border-sc-border pl-2" role="list">
             {submenu.map((sub) => (
               <NavLink
@@ -669,6 +668,7 @@ export default function App() {
                       <Route path="/loadout/:slug" element={<RequireAuth><Suspense fallback={<LoadingState fullScreen />}><Loadout /></Suspense></RequireAuth>} />
                       <Route path="/fleet" element={<RequireAuth><FleetTable /></RequireAuth>} />
                       <Route path="/insurance" element={<RequireAuth><Insurance /></RequireAuth>} />
+                      <Route path="/insights" element={<RequireAuth><Insights /></RequireAuth>} />
                       <Route path="/analysis" element={<RequireAuth><Analysis /></RequireAuth>} />
                       <Route path="/analysis/history" element={<RequireAuth><AnalysisHistory /></RequireAuth>} />
                       <Route path="/sync-import" element={<RequireAuth><Import /></RequireAuth>} />

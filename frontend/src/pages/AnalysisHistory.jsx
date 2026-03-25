@@ -1,5 +1,6 @@
 import React, { useState } from 'react'
 import ReactMarkdown from 'react-markdown'
+import remarkGfm from 'remark-gfm'
 import { useSearchParams } from 'react-router-dom'
 import { useAIAnalysisHistory, deleteAIAnalysis } from '../hooks/useAPI'
 import useTimezone from '../hooks/useTimezone'
@@ -137,7 +138,7 @@ export default function AnalysisHistory() {
               {isExpanded && (
                 <div className="border-t border-sc-border p-5">
                   <div className="prose-fleet">
-                    <ReactMarkdown>{item.analysis}</ReactMarkdown>
+                    <ReactMarkdown remarkPlugins={[remarkGfm]}>{item.analysis}</ReactMarkdown>
                   </div>
                 </div>
               )}

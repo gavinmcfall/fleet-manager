@@ -103,17 +103,24 @@ export function analysisRoutes() {
   // POST /api/llm/generate-analysis
   routes.post("/llm/generate-analysis",
     validate("json", z.object({
+      provider: z.string().max(20).optional(),
       model: z.string().max(100).optional(),
+      context: z.string().max(1000).optional(),
     })),
     async (c) => {
     const db = c.env.DB;
     const userID = getAuthUser(c).id;
+    const body = c.req.valid("json");
+
+    // If provider specified, use that config; otherwise first available
+    const configQuery = body.provider
+      ? "SELECT provider, encrypted_api_key, model FROM user_llm_configs WHERE user_id = ? AND provider = ?"
+      : "SELECT provider, encrypted_api_key, model FROM user_llm_configs WHERE user_id = ? LIMIT 1";
+    const configBinds = body.provider ? [userID, body.provider] : [userID];
 
     const config = await db
-      .prepare(
-        "SELECT provider, encrypted_api_key, model FROM user_llm_configs WHERE user_id = ? LIMIT 1",
-      )
-      .bind(userID)
+      .prepare(configQuery)
+      .bind(...configBinds)
       .first<{ provider: string; encrypted_api_key: string; model: string }>();
 
     if (!config?.encrypted_api_key) {
@@ -128,8 +135,6 @@ export function analysisRoutes() {
       return c.json({ error: "Failed to decrypt API key" }, 500);
     }
 
-    // Allow model override from request body
-    const body = c.req.valid("json");
     const provider = config.provider || "anthropic";
     const defaultModel = c.env.LLM_DEFAULT_MODEL || DEFAULT_MODELS[provider] || "claude-sonnet-4-6";
     const model = body.model || config.model || defaultModel;
@@ -160,7 +165,10 @@ export function analysisRoutes() {
           production_status: e.production_status,
           warbond: e.warbond,
       }));
-      const userPrompt = `Fleet data:\n\n${JSON.stringify(sanitizedFleet)}\n\nProvide a comprehensive fleet analysis.`;
+      const contextSection = body.context?.trim()
+        ? `\n\nAdditional context from the user:\n${body.context.trim()}`
+        : "";
+      const userPrompt = `Fleet data:\n\n${JSON.stringify(sanitizedFleet)}\n\nProvide a comprehensive fleet analysis.${contextSection}`;
 
       const analysisText = await callLLM(provider, apiKey, {
         model,
@@ -529,7 +537,7 @@ export function analyzeFleet(fleet: UserFleetEntry[], _allVehicles: Vehicle[], t
 
   const sizeDistribution: Record<string, number> = {};
   const roleCategories: Record<string, string[]> = {};
-  const focusCategories: Record<string, string[]> = {};
+  const focusCategories: Record<string, { name: string; slug: string; fleet_id: number }[]> = {};
   const ltiShips: Array<{
     ship_name: string;
     custom_name?: string;
@@ -572,7 +580,11 @@ export function analyzeFleet(fleet: UserFleetEntry[], _allVehicles: Vehicle[], t
     if (!focusCategories[focus]) {
       focusCategories[focus] = [];
     }
-    focusCategories[focus].push(entry.vehicle_name ?? "Unknown");
+    focusCategories[focus].push({
+      name: entry.vehicle_name ?? "Unknown",
+      slug: entry.vehicle_slug ?? "",
+      fleet_id: entry.id,
+    });
 
     // Insurance
     const insEntry = {
@@ -608,43 +620,65 @@ export function analyzeFleet(fleet: UserFleetEntry[], _allVehicles: Vehicle[], t
     role: string;
     priority: string;
     description: string;
-    suggestions: string[];
+    suggestions: { name: string; slug: string }[];
   }[] = [
     {
       role: "Mining",
       priority: "high",
       description: "No dedicated mining ship",
-      suggestions: ["MISC Prospector", "ARGO MOLE", "Greycat ROC"],
+      suggestions: [
+        { name: "Prospector", slug: "prospector" },
+        { name: "MOLE", slug: "mole" },
+        { name: "ROC", slug: "roc" },
+      ],
     },
     {
       role: "Salvage",
       priority: "high",
       description: "No salvage capability",
-      suggestions: ["Drake Vulture", "Aegis Reclaimer"],
+      suggestions: [
+        { name: "Vulture", slug: "vulture" },
+        { name: "Reclaimer", slug: "reclaimer" },
+      ],
     },
     {
       role: "Medical",
       priority: "medium",
       description: "No medical ship",
-      suggestions: ["RSI Apollo Medivac", "Crusader C8R Pisces Rescue", "Drake Cutlass Red"],
+      suggestions: [
+        { name: "Apollo Medivac", slug: "apollo-medivac" },
+        { name: "C8R Pisces Rescue", slug: "c8r-pisces-rescue" },
+        { name: "Cutlass Red", slug: "cutlass-red" },
+      ],
     },
     {
       role: "Refueling",
       priority: "medium",
       description: "No refueling capability",
-      suggestions: ["MISC Starfarer Gemini", "MISC Starfarer"],
+      suggestions: [
+        { name: "Starfarer Gemini", slug: "starfarer-gemini" },
+        { name: "Starfarer", slug: "starfarer" },
+      ],
     },
     {
       role: "Exploration",
       priority: "medium",
       description: "No dedicated exploration ship",
-      suggestions: ["RSI Constellation Aquila", "Anvil Carrack", "MISC Freelancer DUR"],
+      suggestions: [
+        { name: "Constellation Aquila", slug: "constellation-aquila" },
+        { name: "Carrack", slug: "carrack" },
+        { name: "Freelancer DUR", slug: "freelancer-dur" },
+      ],
     },
     {
       role: "Cargo",
       priority: "low",
       description: "No dedicated cargo hauler",
-      suggestions: ["Drake Caterpillar", "MISC Hull C", "RSI Constellation Taurus"],
+      suggestions: [
+        { name: "Caterpillar", slug: "caterpillar" },
+        { name: "Hull C", slug: "hull-c" },
+        { name: "Constellation Taurus", slug: "constellation-taurus" },
+      ],
     },
   ];
 

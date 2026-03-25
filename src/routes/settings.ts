@@ -16,34 +16,33 @@ export function settingsRoutes() {
     const db = c.env.DB;
     const userID = getAuthUser(c).id;
 
-    const config = await db
+    const configs = await db
       .prepare(
-        "SELECT id, provider, encrypted_api_key, model FROM user_llm_configs WHERE user_id = ? LIMIT 1",
+        "SELECT id, provider, encrypted_api_key, model FROM user_llm_configs WHERE user_id = ? ORDER BY provider",
       )
       .bind(userID)
-      .first<{
+      .all<{
         id: number;
         provider: string;
         encrypted_api_key: string;
         model: string;
       }>();
 
-    let provider = "";
-    let maskedKey = "";
-    let model = "";
-    let apiKeySet = false;
+    // Build per-provider info
+    const providers: Record<string, { api_key_set: boolean; api_key_mask: string; model: string }> = {};
+    let firstProvider = "";
+    let firstModel = "";
+    let anyKeySet = false;
 
-    if (config) {
-      provider = config.provider;
-      model = config.model ?? "";
+    for (const config of configs.results) {
+      let maskedKey = "";
+      let keySet = false;
       if (config.encrypted_api_key) {
-        apiKeySet = true;
+        keySet = true;
+        anyKeySet = true;
         if (c.env.ENCRYPTION_KEY) {
           try {
-            const decrypted = await decrypt(
-              config.encrypted_api_key,
-              c.env.ENCRYPTION_KEY,
-            );
+            const decrypted = await decrypt(config.encrypted_api_key, c.env.ENCRYPTION_KEY);
             maskedKey = maskAPIKey(decrypted);
           } catch {
             maskedKey = "***error***";
@@ -52,13 +51,19 @@ export function settingsRoutes() {
           maskedKey = maskAPIKey(config.encrypted_api_key);
         }
       }
+      providers[config.provider] = { api_key_set: keySet, api_key_mask: maskedKey, model: config.model ?? "" };
+      if (!firstProvider) {
+        firstProvider = config.provider;
+        firstModel = config.model ?? "";
+      }
     }
 
     return c.json({
-      provider,
-      api_key_set: apiKeySet,
-      api_key_mask: maskedKey,
-      model,
+      provider: firstProvider,
+      api_key_set: anyKeySet,
+      api_key_mask: providers[firstProvider]?.api_key_mask ?? "",
+      model: firstModel,
+      providers,
     });
   });
 
@@ -91,15 +96,35 @@ export function settingsRoutes() {
       return c.json({ error: "Invalid provider" }, 400);
     }
 
+    // Model-only update (no new api_key) — just update the model column
     if (!body.api_key?.trim()) {
-      return c.json({ error: "API key is required when provider is set" }, 400);
+      const existing = await db
+        .prepare("SELECT id FROM user_llm_configs WHERE user_id = ? AND provider = ?")
+        .bind(userID, body.provider)
+        .first();
+      if (!existing) {
+        return c.json({ error: "API key is required for new provider" }, 400);
+      }
+      if (body.model) {
+        await db
+          .prepare("UPDATE user_llm_configs SET model = ?, updated_at = datetime('now') WHERE user_id = ? AND provider = ?")
+          .bind(body.model, userID, body.provider)
+          .run();
+      }
+      return c.json({ ok: true, message: "Model updated" });
+    }
+
+    // Clear key for this provider
+    if (body.api_key === '') {
+      await db.prepare("DELETE FROM user_llm_configs WHERE user_id = ? AND provider = ?")
+        .bind(userID, body.provider).run();
+      return c.json({ ok: true, message: "Provider key removed" });
     }
 
     let encryptedKey = body.api_key;
     if (c.env.ENCRYPTION_KEY) {
       encryptedKey = await encrypt(body.api_key, c.env.ENCRYPTION_KEY);
     } else if (c.env.API_TOKEN) {
-      // Production mode (API_TOKEN set) but no ENCRYPTION_KEY — refuse to store plaintext
       return c.json({ error: "ENCRYPTION_KEY not configured — cannot store API key securely" }, 500);
     }
 

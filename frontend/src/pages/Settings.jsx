@@ -1,9 +1,9 @@
 import React, { useState, useEffect } from 'react'
 import { useLLMConfig, setLLMConfig, testLLMConnection, usePreferences } from '../hooks/useAPI'
-import { Settings as SettingsIcon, Key, CheckCircle, XCircle, Loader, Trash2, Eye, EyeOff, Type, Globe, Shield } from 'lucide-react'
+import { Key, CheckCircle, XCircle, Loader, Trash2, Eye, EyeOff, Type, Globe, Shield } from 'lucide-react'
 import PageHeader from '../components/PageHeader'
 import PanelSection from '../components/PanelSection'
-import FilterSelect from '../components/FilterSelect'
+import ProviderLogo, { PROVIDER_INFO } from '../components/ProviderLogo'
 import ConfirmDialog from '../components/ConfirmDialog'
 import useFontPreference from '../hooks/useFontPreference'
 import useTimezone from '../hooks/useTimezone'
@@ -18,6 +18,12 @@ const FONT_OPTIONS = [
 
 const ALL_TIMEZONES = Intl.supportedValuesOf('timeZone')
 
+const PROVIDERS = [
+  { value: 'anthropic', label: 'Claude', company: 'Anthropic', desc: 'Opus 4.6, Sonnet 4.6, Haiku 4.5' },
+  { value: 'openai', label: 'ChatGPT', company: 'OpenAI', desc: 'GPT-5.2, GPT-4o, GPT-4o Mini' },
+  { value: 'google', label: 'Gemini', company: 'Google', desc: '2.5 Pro, Flash, Flash-Lite' },
+]
+
 export default function Settings() {
   const { fontPreference, setFontPreference } = useFontPreference()
   const { timezone, setTimezone } = useTimezone()
@@ -25,10 +31,8 @@ export default function Settings() {
   const [tzDropdownOpen, setTzDropdownOpen] = useState(false)
   const { data: config, refetch } = useLLMConfig()
   const { data: preferences, refetch: refetchPrefs } = usePreferences()
-  const [provider, setProvider] = useState('')
+  const [activeProvider, setActiveProvider] = useState('anthropic')
   const [apiKey, setAPIKey] = useState('')
-  const [model, setModel] = useState('')
-  const [models, setModels] = useState([])
   const [testing, setTesting] = useState(false)
   const [testResult, setTestResult] = useState(null)
   const [saving, setSaving] = useState(false)
@@ -37,34 +41,20 @@ export default function Settings() {
   const [notification, setNotification] = useState(null)
   const [confirmDialog, setConfirmDialog] = useState({ open: false })
 
-  useEffect(() => {
-    if (config) {
-      setProvider(config.provider || '')
-      setModel(config.model || '')
-    }
-  }, [config])
-
   const showNotification = (msg, variant = 'info') => {
     setNotification({ msg, variant })
     setTimeout(() => setNotification(null), 3000)
   }
 
-  const handleTestConnection = async () => {
-    if (!provider || !apiKey) return
+  const providerConfig = config?.providers?.[activeProvider]
 
+  const handleTestConnection = async () => {
+    if (!activeProvider || !apiKey) return
     setTesting(true)
     setTestResult(null)
-    setModels([])
-
     try {
-      const result = await testLLMConnection(provider, apiKey)
-      const modelsList = result.models || []
-      setModels(modelsList)
-      setTestResult({ success: true, modelCount: modelsList.length })
-
-      if (modelsList.length > 0 && !model) {
-        setModel(modelsList[0].id)
-      }
+      const result = await testLLMConnection(activeProvider, apiKey)
+      setTestResult({ success: true, modelCount: result.models?.length || 0 })
     } catch (err) {
       setTestResult({ success: false, error: err.message })
     } finally {
@@ -75,11 +65,12 @@ export default function Settings() {
   const handleSave = async () => {
     setSaving(true)
     try {
-      await setLLMConfig({ provider, api_key: apiKey, model })
+      await setLLMConfig({ provider: activeProvider, api_key: apiKey })
       setSaved(true)
       setTimeout(() => setSaved(false), 2000)
       refetch()
       setAPIKey('')
+      setTestResult(null)
     } catch (err) {
       showNotification('Failed to save: ' + err.message, 'error')
     } finally {
@@ -90,23 +81,20 @@ export default function Settings() {
   const handleClear = () => {
     setConfirmDialog({
       open: true,
-      title: 'Remove LLM Configuration',
-      message: 'This will delete your encrypted API key and model settings. You will need to re-configure to use AI fleet analysis.',
+      title: `Remove ${PROVIDERS.find(p => p.value === activeProvider)?.label || activeProvider} Key`,
+      message: 'This will delete the encrypted API key for this provider.',
       variant: 'danger',
-      confirmLabel: 'Remove Configuration',
+      confirmLabel: 'Remove Key',
       onConfirm: async () => {
         setConfirmDialog({ open: false })
         try {
-          await setLLMConfig({ provider: '', api_key: '', model: '' })
-          setProvider('')
+          await setLLMConfig({ provider: activeProvider, api_key: '' })
           setAPIKey('')
-          setModel('')
-          setModels([])
           setTestResult(null)
           await refetch()
-          showNotification('LLM configuration cleared successfully', 'success')
+          showNotification('API key removed', 'success')
         } catch (err) {
-          showNotification('Failed to clear configuration: ' + err.message, 'error')
+          showNotification('Failed: ' + err.message, 'error')
         }
       },
     })
@@ -116,7 +104,7 @@ export default function Settings() {
     <div className="space-y-6 animate-fade-in-up">
       <PageHeader
         title="SETTINGS"
-        subtitle="Configure LLM provider for AI fleet analysis"
+        subtitle="Display, timezone, and AI provider settings"
       />
 
       {/* Inline notification */}
@@ -222,158 +210,93 @@ export default function Settings() {
         </div>
       </PanelSection>
 
-      <PanelSection title="LLM Provider" icon={SettingsIcon}>
+      <PanelSection title="AI Providers" icon={Key}>
         <div className="p-5 space-y-4">
           <p className="text-sm text-gray-400">
-            Choose your AI provider. You'll need to provide your own API key.
+            Add API keys for one or more providers. You can switch between them when generating AI analysis.
           </p>
 
-          <div className="space-y-2">
-            {[
-              { value: 'anthropic', label: 'Anthropic (Claude)', desc: 'Claude Opus 4.6, Sonnet 4.6, Haiku 4.5' },
-              { value: 'openai', label: 'OpenAI (ChatGPT)', desc: 'GPT-5.2, GPT-4o, GPT-4o Mini' },
-              { value: 'google', label: 'Google (Gemini)', desc: 'Gemini 2.5 Pro, Flash, Flash-Lite' },
-            ].map((p) => (
-              <label
-                key={p.value}
-                className={`block p-4 rounded border-2 cursor-pointer transition-colors ${
-                  provider === p.value
-                    ? 'border-sc-accent bg-sc-accent/10'
-                    : 'border-sc-border hover:border-sc-accent2/40'
-                }`}
-              >
-                <input
-                  type="radio"
-                  name="provider"
-                  value={p.value}
-                  checked={provider === p.value}
-                  onChange={(e) => { setProvider(e.target.value); setModels([]); setModel(''); setTestResult(null) }}
-                  className="mr-3"
-                />
-                <span className="text-white font-medium">{p.label}</span>
-                <span className="text-xs text-gray-500 ml-2">{p.desc}</span>
-              </label>
-            ))}
+          {/* Provider tabs */}
+          <div className="flex gap-2">
+            {PROVIDERS.map((p) => {
+              const isConfigured = config?.providers?.[p.value]?.api_key_set
+              return (
+                <button
+                  key={p.value}
+                  onClick={() => { setActiveProvider(p.value); setAPIKey(''); setTestResult(null); setShowApiKey(false) }}
+                  className={`px-4 py-2.5 rounded-lg text-sm font-medium transition-all border flex items-center gap-2 ${
+                    activeProvider === p.value
+                      ? 'bg-sc-accent/10 text-sc-accent border-sc-accent/30'
+                      : 'bg-white/[0.03] text-gray-400 border-white/[0.06] hover:border-white/[0.12] hover:text-gray-300'
+                  }`}
+                >
+                  <ProviderLogo provider={p.value} className={`w-4 h-4 ${activeProvider === p.value ? 'text-sc-accent' : PROVIDER_INFO[p.value]?.color || ''}`} />
+                  {p.label}
+                  {isConfigured && <CheckCircle className="w-3.5 h-3.5 text-emerald-400" />}
+                </button>
+              )
+            })}
           </div>
-        </div>
-      </PanelSection>
 
-      {provider && (
-        <PanelSection title="API Key" icon={Key}>
-          <div className="p-5 space-y-4">
-            <p className="text-sm text-gray-400">
-              Your API key is encrypted and stored securely. It never leaves your server.
-            </p>
-
-            {config?.api_key_set && (
-              <div className="p-3 rounded bg-sc-accent/10 border border-sc-accent/20 text-xs text-sc-accent">
-                Current key: <span className="font-mono">{config.api_key_mask}</span>
+          {/* Active provider config */}
+          <div className="p-4 rounded-lg bg-white/[0.02] border border-sc-border/40 space-y-4">
+            <div className="flex items-center justify-between">
+              <div>
+                <span className="text-sm text-white font-medium">
+                  {PROVIDERS.find(p => p.value === activeProvider)?.company}
+                </span>
+                <span className="text-xs text-gray-500 ml-2">
+                  {PROVIDERS.find(p => p.value === activeProvider)?.desc}
+                </span>
               </div>
-            )}
+              {providerConfig?.api_key_set && (
+                <span className="text-xs font-mono text-sc-accent bg-sc-accent/10 px-2 py-1 rounded">
+                  {providerConfig.api_key_mask}
+                </span>
+              )}
+            </div>
 
             <div className="relative">
               <input
                 type={showApiKey ? 'text' : 'password'}
                 value={apiKey}
                 onChange={(e) => setAPIKey(e.target.value)}
-                placeholder="Enter your API key"
+                placeholder={providerConfig?.api_key_set ? 'Enter new key to replace' : 'Enter your API key'}
                 className="w-full bg-sc-darker border border-sc-border rounded px-3 py-2 pr-10 text-sm font-mono text-gray-300 placeholder:text-gray-500 focus:outline-none focus:border-sc-accent/50 focus:ring-1 focus:ring-sc-accent/20 transition-colors"
               />
               {apiKey && (
-                <button
-                  type="button"
-                  onClick={() => setShowApiKey(!showApiKey)}
-                  className="absolute right-2 top-1/2 -translate-y-1/2 text-gray-500 hover:text-gray-300 transition-colors"
-                >
+                <button type="button" onClick={() => setShowApiKey(!showApiKey)} className="absolute right-2 top-1/2 -translate-y-1/2 text-gray-500 hover:text-gray-300 transition-colors">
                   {showApiKey ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
                 </button>
               )}
             </div>
 
-            <button
-              onClick={handleTestConnection}
-              disabled={!apiKey || testing}
-              className="btn-primary flex items-center gap-2"
-            >
-              {testing ? (
-                <>
-                  <Loader className="w-3.5 h-3.5 animate-spin" />
-                  Testing Connection...
-                </>
-              ) : (
-                'Test Connection'
+            <div className="flex items-center gap-2">
+              <button onClick={handleTestConnection} disabled={!apiKey || testing} className="btn-secondary flex items-center gap-2 text-sm">
+                {testing ? <><Loader className="w-3.5 h-3.5 animate-spin" /> Testing...</> : 'Test Connection'}
+              </button>
+              <button onClick={handleSave} disabled={!apiKey || saving} className="btn-primary flex items-center gap-2 text-sm">
+                {saved ? <><CheckCircle className="w-4 h-4" /> Saved!</> : saving ? <><Loader className="w-4 h-4 animate-spin" /> Saving...</> : 'Save Key'}
+              </button>
+              {providerConfig?.api_key_set && (
+                <button onClick={handleClear} className="btn-ghost text-sc-danger flex items-center gap-1.5 text-sm ml-auto">
+                  <Trash2 className="w-3.5 h-3.5" /> Remove
+                </button>
               )}
-            </button>
+            </div>
 
             {testResult && (
-              <div
-                className={`p-3 rounded flex items-center gap-2 ${
-                  testResult.success
-                    ? 'bg-sc-success/10 border border-sc-success/20 text-sc-success'
-                    : 'bg-sc-danger/10 border border-sc-danger/20 text-sc-danger'
-                }`}
-              >
-                {testResult.success ? (
-                  <>
-                    <CheckCircle className="w-4 h-4" />
-                    Connection successful! Found {testResult.modelCount} model{testResult.modelCount !== 1 ? 's' : ''}.
-                  </>
-                ) : (
-                  <>
-                    <XCircle className="w-4 h-4" />
-                    {testResult.error}
-                  </>
-                )}
+              <div className={`p-3 rounded flex items-center gap-2 text-sm ${
+                testResult.success
+                  ? 'bg-sc-success/10 border border-sc-success/20 text-sc-success'
+                  : 'bg-sc-danger/10 border border-sc-danger/20 text-sc-danger'
+              }`}>
+                {testResult.success ? <><CheckCircle className="w-4 h-4" /> Connection successful!</> : <><XCircle className="w-4 h-4" /> {testResult.error}</>}
               </div>
             )}
           </div>
-        </PanelSection>
-      )}
-
-      {models.length > 0 && (
-        <PanelSection title="Select Model">
-          <div className="p-5">
-            <FilterSelect
-              value={model}
-              onChange={(e) => setModel(e.target.value)}
-              options={models.map((m) => ({ value: m.id, label: m.name }))}
-              className="w-full"
-            />
-          </div>
-        </PanelSection>
-      )}
-
-      {provider && apiKey && model && (
-        <button
-          onClick={handleSave}
-          disabled={saving}
-          className="btn-primary w-full flex items-center justify-center gap-2"
-        >
-          {saved ? (
-            <>
-              <CheckCircle className="w-4 h-4" />
-              Saved!
-            </>
-          ) : saving ? (
-            <>
-              <Loader className="w-4 h-4 animate-spin" />
-              Saving...
-            </>
-          ) : (
-            'Save Configuration'
-          )}
-        </button>
-      )}
-
-      {config?.api_key_set && (
-        <button
-          onClick={handleClear}
-          className="w-full flex items-center justify-center gap-2 px-4 py-2 rounded border-2 border-sc-danger/30 text-sc-danger hover:bg-sc-danger/10 transition-colors text-sm font-medium"
-        >
-          <Trash2 className="w-3.5 h-3.5" />
-          Clear Configuration
-        </button>
-      )}
+        </div>
+      </PanelSection>
 
       <ConfirmDialog
         open={confirmDialog.open}
