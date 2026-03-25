@@ -4,6 +4,7 @@ import { Rocket, BarChart3, Shield, Upload, RefreshCw, Database, Settings as Set
 import LoadingState from './components/LoadingState'
 import ErrorBoundary from './components/ErrorBoundary'
 import RequireAuth from './components/RequireAuth'
+import RequireFeature from './components/RequireFeature'
 import useFontPreference from './hooks/useFontPreference'
 import { authClient, useSession, signOut } from './lib/auth-client'
 import { TimezoneProvider } from './hooks/useTimezone'
@@ -64,25 +65,42 @@ const LocalizationBuilder = lazy(() => import('./pages/LocalizationBuilder'))
 const Loadout = lazy(() => import('./pages/Loadout'))
 const NotFound = lazy(() => import('./pages/NotFound'))
 
+// Game Data and Reference are public — visible to all users
+const gameDataGroup = {
+  group: 'Game Data',
+  icon: Crosshair,
+  items: [
+    { to: '/loot', icon: Search, label: 'Item Finder' },
+    { to: '/poi', icon: MapPin, label: 'Locations' },
+    { to: '/contracts', icon: FileText, label: 'Missions' },
+    { to: '/shops', icon: ShoppingCart, label: 'Shops' },
+    { to: '/trade', icon: TrendingUp, label: 'Trade' },
+    { to: '/mining', icon: Hammer, label: 'Mining Guide' },
+    { to: '/npc-loadouts', icon: Users, label: 'NPC Loadouts' },
+  ],
+}
+
+const referenceGroup = {
+  group: 'Reference',
+  icon: BookOpen,
+  items: [
+    { to: '/ships', icon: Database, label: 'Ship DB' },
+    { to: '/paints', icon: Palette, label: 'Paints' },
+    { to: '/careers', icon: Briefcase, label: 'Careers & Roles' },
+    { to: '/reputation', icon: Star, label: 'Reputation' },
+    { to: '/law', icon: Scale, label: 'Law System' },
+  ],
+}
+
 const publicNavItems = [
   { to: '/', icon: BarChart3, label: 'Dashboard' },
+  gameDataGroup,
+  referenceGroup,
 ]
 
 const authNavItems = [
   { to: '/', icon: BarChart3, label: 'Dashboard' },
-  {
-    group: 'Game Data',
-    icon: Crosshair,
-    items: [
-      { to: '/loot', icon: Search, label: 'Item Finder' },
-      { to: '/poi', icon: MapPin, label: 'Locations' },
-      { to: '/contracts', icon: FileText, label: 'Missions' },
-      { to: '/shops', icon: ShoppingCart, label: 'Shops' },
-      { to: '/trade', icon: TrendingUp, label: 'Trade' },
-      { to: '/mining', icon: Hammer, label: 'Mining Guide' },
-      { to: '/npc-loadouts', icon: Users, label: 'NPC Loadouts' },
-    ],
-  },
+  gameDataGroup,
   { to: '/crafting', icon: FlaskConical, label: 'Crafting', minVersion: '4.7' },
   {
     group: 'My Fleet',
@@ -104,17 +122,7 @@ const authNavItems = [
       { to: '/sync-import', icon: Upload, label: 'Sync & Import' },
     ],
   },
-  {
-    group: 'Reference',
-    icon: BookOpen,
-    items: [
-      { to: '/ships', icon: Database, label: 'Ship DB' },
-      { to: '/paints', icon: Palette, label: 'Paints' },
-      { to: '/careers', icon: Briefcase, label: 'Careers & Roles' },
-      { to: '/reputation', icon: Star, label: 'Reputation' },
-      { to: '/law', icon: Scale, label: 'Law System' },
-    ],
-  },
+  referenceGroup,
   { to: '/settings', icon: SettingsIcon, label: 'Settings' },
   { to: '/orgs', icon: Building2, label: 'Orgs' },
 ]
@@ -666,29 +674,29 @@ export default function App() {
                       {/* Public routes */}
                       <Route path="/" element={<Dashboard />} />
 
-                      {/* Protected routes */}
-                      <Route path="/ships" element={<RequireAuth><ShipDB /></RequireAuth>} />
-                      <Route path="/ships/:slug" element={<RequireAuth><ShipDetail /></RequireAuth>} />
-                      <Route path="/paints" element={<RequireAuth><PaintBrowser /></RequireAuth>} />
-                      <Route path="/loot" element={<RequireAuth><LootDB /></RequireAuth>} />
-                      <Route path="/loot/sets/:setSlug" element={<RequireAuth><ArmorSetDetail /></RequireAuth>} />
-                      <Route path="/loot/:uuid" element={<RequireAuth><LootDB /></RequireAuth>} />
-                      <Route path="/poi" element={<RequireAuth><POI /></RequireAuth>} />
-                      <Route path="/poi/:slug" element={<RequireAuth><POIDetail /></RequireAuth>} />
-                      <Route path="/poi/:type/:slug" element={<RequireAuth><POIDetail /></RequireAuth>} />
-                      <Route path="/contracts" element={<RequireAuth><Contracts /></RequireAuth>} />
-                      <Route path="/shops" element={<RequireAuth><Shops /></RequireAuth>} />
-                      <Route path="/trade" element={<RequireAuth><TradeCommodities /></RequireAuth>} />
-                      <Route path="/mining" element={<RequireAuth><Mining /></RequireAuth>} />
-                      <Route path="/mining/element/:id" element={<RequireAuth><MiningElementDetail /></RequireAuth>} />
-                      <Route path="/mining/location/:id" element={<RequireAuth><MiningLocationDetail /></RequireAuth>} />
-                      <Route path="/mining/:type/:id" element={<RequireAuth><MiningEquipmentDetail /></RequireAuth>} />
-                      <Route path="/crafting" element={<RequireAuth><Suspense fallback={<LoadingState fullScreen />}><Crafting /></Suspense></RequireAuth>} />
-                      <Route path="/crafting/:id" element={<RequireAuth><Suspense fallback={<LoadingState fullScreen />}><BlueprintDetail /></Suspense></RequireAuth>} />
-                      <Route path="/careers" element={<RequireAuth><Careers /></RequireAuth>} />
-                      <Route path="/reputation" element={<RequireAuth><Reputation /></RequireAuth>} />
-                      <Route path="/law" element={<RequireAuth><LawSystem /></RequireAuth>} />
-                      <Route path="/npc-loadouts" element={<RequireAuth><NPCLoadouts /></RequireAuth>} />
+                      {/* Public game data routes */}
+                      <Route path="/ships" element={<ShipDB />} />
+                      <Route path="/ships/:slug" element={<ShipDetail />} />
+                      <Route path="/paints" element={<PaintBrowser />} />
+                      <Route path="/loot" element={<LootDB />} />
+                      <Route path="/loot/sets/:setSlug" element={<ArmorSetDetail />} />
+                      <Route path="/loot/:uuid" element={<LootDB />} />
+                      <Route path="/poi" element={<POI />} />
+                      <Route path="/poi/:slug" element={<POIDetail />} />
+                      <Route path="/poi/:type/:slug" element={<POIDetail />} />
+                      <Route path="/contracts" element={<Contracts />} />
+                      <Route path="/shops" element={<Shops />} />
+                      <Route path="/trade" element={<TradeCommodities />} />
+                      <Route path="/mining" element={<Mining />} />
+                      <Route path="/mining/element/:id" element={<MiningElementDetail />} />
+                      <Route path="/mining/location/:id" element={<MiningLocationDetail />} />
+                      <Route path="/mining/:type/:id" element={<MiningEquipmentDetail />} />
+                      <Route path="/crafting" element={<Suspense fallback={<LoadingState fullScreen />}><Crafting /></Suspense>} />
+                      <Route path="/crafting/:id" element={<Suspense fallback={<LoadingState fullScreen />}><BlueprintDetail /></Suspense>} />
+                      <Route path="/careers" element={<Careers />} />
+                      <Route path="/reputation" element={<Reputation />} />
+                      <Route path="/law" element={<LawSystem />} />
+                      <Route path="/npc-loadouts" element={<NPCLoadouts />} />
                       <Route path="/loadout/:slug" element={<RequireAuth><Suspense fallback={<LoadingState fullScreen />}><Loadout /></Suspense></RequireAuth>} />
                       <Route path="/fleet" element={<RequireAuth><FleetTable /></RequireAuth>} />
                       <Route path="/insurance" element={<RequireAuth><Insurance /></RequireAuth>} />
@@ -704,8 +712,8 @@ export default function App() {
                       <Route path="/orgs" element={<RequireAuth><Orgs /></RequireAuth>} />
                       <Route path="/orgs/:slug" element={<RequireAuth><OrgProfile /></RequireAuth>} />
                       <Route path="/orgs/:slug/settings" element={<RequireAuth><OrgSettings /></RequireAuth>} />
-                      <Route path="/orgs/:slug/ops/:opId" element={<RequireAuth><OpDetail /></RequireAuth>} />
-                      <Route path="/join/:code" element={<JoinOp />} />
+                      <Route path="/orgs/:slug/ops/:opId" element={<RequireAuth><RequireFeature flag="ops"><OpDetail /></RequireFeature></RequireAuth>} />
+                      <Route path="/join/:code" element={<RequireFeature flag="ops"><JoinOp /></RequireFeature>} />
                       <Route path="*" element={<NotFound />} />
                     </Routes>
                   </Suspense>

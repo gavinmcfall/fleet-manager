@@ -4,7 +4,7 @@ import {
   ExternalLink, Users, Rocket, BarChart3, Building2, Globe,
   MessageSquare, Tv, Youtube, Settings, ShieldCheck, ChevronDown, Crosshair
 } from 'lucide-react'
-import { useOrgProfile, useOrgFleet, useOrgMembers, useOrgAnalysis } from '../hooks/useAPI'
+import { useOrgProfile, useOrgFleet, useOrgMembers, useOrgAnalysis, useStatus } from '../hooks/useAPI'
 import { useSession } from '../lib/auth-client'
 import PageHeader from '../components/PageHeader'
 import LoadingState from '../components/LoadingState'
@@ -15,9 +15,9 @@ import CreateOp from './OrgOps/CreateOp'
 
 const RSI_BASE = 'https://robertsspaceindustries.com'
 
-const TABS = [
+const ALL_TABS = [
   { id: 'fleet', label: 'Fleet', icon: Rocket },
-  { id: 'ops', label: 'Ops', icon: Crosshair },
+  { id: 'ops', label: 'Ops', icon: Crosshair, featureFlag: 'ops' },
   { id: 'members', label: 'Members', icon: Users },
   { id: 'analysis', label: 'Analysis', icon: BarChart3 },
   { id: 'about', label: 'About', icon: Building2 },
@@ -277,7 +277,10 @@ export default function OrgProfile() {
   const { slug } = useParams()
   const { data: session } = useSession()
   const { data: org, loading, error, refetch } = useOrgProfile(slug)
-  const VALID_TABS = ['fleet', 'ops', 'members', 'analysis', 'about']
+  const { data: status } = useStatus()
+  const features = status?.features || {}
+  const TABS = ALL_TABS.filter(t => !t.featureFlag || features[t.featureFlag])
+  const VALID_TABS = TABS.map(t => t.id)
   const [showCreateOp, setShowCreateOp] = useState(false)
   const [searchParams, setSearchParams] = useSearchParams()
   const tabParam = searchParams.get('tab')

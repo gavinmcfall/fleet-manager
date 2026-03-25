@@ -708,7 +708,11 @@ export function orgRoutes() {
     return c.json({ stats });
   });
 
-  // ── Ops sub-router ──────────────────────────────────────────────────
+  // ── Ops sub-router (staging only) ───────────────────────────────────
+  routes.use("/:slug/ops/*", async (c, next) => {
+    if (c.env.ENVIRONMENT === "production") return c.json({ error: "Not found" }, 404);
+    return next();
+  });
   routes.route("/:slug/ops", opsRoutes());
 
   return routes;

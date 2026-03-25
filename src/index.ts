@@ -349,6 +349,9 @@ app.get("/api/status", async (c) => {
       sync_schedule: "0 3 * * *",
       db_driver: "d1",
     },
+    features: {
+      ops: c.env.ENVIRONMENT !== "production",
+    },
   });
 });
 
@@ -402,6 +405,11 @@ app.route("/api/loot", lootRoutes());
 app.route("/api/patches", patchRoutes());
 app.route("/api/gamedata", gamedataRoutes<HonoEnv>());
 app.route("/api/localization", localizationRoutes());
+// Ops: staging only
+app.use("/api/ops/*", async (c, next) => {
+  if (c.env.ENVIRONMENT === "production") return c.json({ error: "Not found" }, 404);
+  return next();
+});
 app.route("/api/ops", publicOpsRoutes());
 app.route("/api/users", reputationRoutes());
 app.route("/api/companion", companionRoutes());
