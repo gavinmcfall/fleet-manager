@@ -4,7 +4,7 @@ import { getAuthUser, type HonoEnv } from "../lib/types";
 import { validate } from "../lib/validation";
 import { versionSubquery, deltaVersionJoin } from "../lib/constants";
 import { cachedJson, resolveVersionId, cacheSlug } from "../lib/cache";
-import { getShipLoadout } from "../db/queries";
+import { getShipLoadout, getShipModules } from "../db/queries";
 
 // --- Validation schemas ---
 
@@ -78,6 +78,16 @@ export function loadoutRoutes() {
     const versionId = await resolveVersionId(c.env.DB, patch);
     return cachedJson(c, `loadout:components:${versionId}:${cacheSlug(slug)}`, async () => {
       return getShipLoadout(c.env.DB, slug, versionId);
+    });
+  });
+
+  // GET /api/loadout/:slug/modules — available modules for module ports
+  app.get("/:slug/modules", async (c) => {
+    const slug = c.req.param("slug");
+    const patch = c.req.query("patch");
+    const versionId = await resolveVersionId(c.env.DB, patch);
+    return cachedJson(c, `loadout:modules:${versionId}:${cacheSlug(slug)}`, async () => {
+      return getShipModules(c.env.DB, slug, versionId);
     });
   });
 

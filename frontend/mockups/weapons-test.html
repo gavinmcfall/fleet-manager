@@ -1,0 +1,230 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>SC Bridge — Weapons Section Test</title>
+<script src="https://cdn.tailwindcss.com"></script>
+<link href="https://fonts.googleapis.com/css2?family=Electrolize&family=Inter:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+<script>
+tailwind.config = {
+  theme: { extend: { colors: {
+    'sc-darker': '#0a0e14', 'sc-dark': '#0f1319', 'sc-panel': '#141920',
+    'sc-border': 'rgba(255,255,255,0.06)', 'sc-accent': '#22d3ee',
+    'dmg-physical': '#f59e0b', 'dmg-energy': '#22c55e', 'dmg-distortion': '#6366f1',
+  }}}
+}
+</script>
+<style>
+  body { font-family: 'Inter', sans-serif; background: #0a0e14; color: #e5e7eb; padding: 24px; }
+  .font-hud { font-family: 'Electrolize', sans-serif; }
+  .font-mono { font-family: 'JetBrains Mono', monospace; }
+  .badge-size { background: rgba(255,255,255,0.06); border: 1px solid rgba(255,255,255,0.1); border-radius: 4px; padding: 1px 6px; font-family: 'JetBrains Mono', monospace; font-size: 12px; color: #9ca3af; flex-shrink: 0; }
+  .badge-grade { font-family: 'JetBrains Mono', monospace; font-size: 12px; padding: 1px 4px; border-radius: 3px; flex-shrink: 0; }
+  .grade-C { background: rgba(156,163,175,0.1); color: #9ca3af; border: 1px solid rgba(156,163,175,0.2); }
+  /* Damage type symbols — distinct shapes for colorblind accessibility */
+  .dmg-sym { flex-shrink: 0; width: 12px; height: 12px; display: inline-block; vertical-align: middle; }
+  .stat-pill { font-family: 'JetBrains Mono', monospace; font-size: 13px; color: #6b7280; }
+  .section-card { background: rgba(255,255,255,0.02); border: 1px solid rgba(255,255,255,0.05); border-radius: 8px; overflow: hidden; max-width: 700px; }
+  .section-header { background: rgba(255,255,255,0.02); border-bottom: 1px solid rgba(255,255,255,0.06); padding: 8px 12px; display: flex; align-items: center; justify-content: space-between; }
+  /* Weapon group badges */
+  .wg { width: 18px; height: 18px; border-radius: 4px; display: inline-flex; align-items: center; justify-content: center; font-size: 12px; font-weight: 600; cursor: pointer; transition: all 150ms; }
+  .wg-on { background: rgba(34,211,238,0.2); color: #22d3ee; border: 1px solid rgba(34,211,238,0.4); }
+  .wg-off { background: rgba(255,255,255,0.03); color: #4b5563; border: 1px solid rgba(255,255,255,0.08); }
+  .wg-off:hover { background: rgba(255,255,255,0.06); color: #9ca3af; }
+  /* Hardpoint block */
+  .hp { border-bottom: 1px solid rgba(255,255,255,0.04); padding: 4px 12px 8px; }
+  .hp:last-child { border-bottom: none; }
+  .hp.hp-custom { background: rgba(34,211,238,0.02); }
+  /* Mount row */
+  .hp-mount { display: flex; align-items: center; gap: 8px; padding: 4px 0 0; cursor: pointer; border-radius: 4px; transition: background 150ms; }
+  .hp-mount:hover { background: rgba(255,255,255,0.03); margin: 0 -4px; padding-left: 4px; padding-right: 4px; }
+  /* Child weapon row — indented so badge aligns with mount text */
+  .hp-child { display: flex; align-items: center; gap: 8px; padding: 4px 0 0; cursor: pointer; border-radius: 4px; transition: background 150ms; margin-left: 34px; /* = badge-size width + gap to align under text */ }
+  .hp-child:hover { background: rgba(255,255,255,0.03); margin-left: 30px; padding-left: 4px; padding-right: 4px; }
+  /* SVG └ bracket */
+  .bracket { flex-shrink: 0; width: 16px; height: 22px; margin-left: -16px; margin-right: 0; color: rgba(255,255,255,0.15); }
+  /* Mount type icon */
+  .mount-ico { width: 14px; height: 14px; flex-shrink: 0; color: #6b7280; }
+  .hp-mount:hover .mount-ico { color: #9ca3af; }
+  /* Tooltip for mount icon */
+  .tip { position: relative; }
+  .tip::after { content: attr(data-tip); position: absolute; left: 50%; transform: translateX(-50%); bottom: calc(100% + 6px); background: #1e293b; color: #e2e8f0; font-size: 12px; padding: 4px 8px; border-radius: 4px; white-space: nowrap; pointer-events: none; opacity: 0; transition: opacity 150ms; border: 1px solid rgba(255,255,255,0.1); }
+  .tip:hover::after { opacity: 1; }
+</style>
+</head>
+<body>
+
+<div class="section-card">
+  <div class="section-header">
+    <div class="flex items-center gap-2">
+      <svg class="w-4 h-4 text-sc-accent" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 10V3L4 14h7v7l9-11h-7z"/></svg>
+      <span class="text-[13px] font-semibold uppercase tracking-wider text-gray-400 font-hud">Weapons</span>
+      <span class="text-[12px] text-gray-600">6 hardpoints</span>
+    </div>
+    <button class="text-[12px] text-gray-600 hover:text-gray-400 cursor-pointer transition-colors">RESET</button>
+  </div>
+
+  <!-- ===== Weapon 1: Gimballed ===== -->
+  <div class="hp">
+    <div class="hp-mount">
+      <span class="badge-size">S3</span>
+      <span class="tip" data-tip="Gimballed — click to swap to fixed mount (gains +1 weapon size)">
+        <svg class="mount-ico" viewBox="0 0 16 16" fill="none"><circle cx="8" cy="8" r="5.5" stroke="currentColor" stroke-width="1.2"/><circle cx="8" cy="8" r="1.5" fill="currentColor"/><line x1="8" y1="1" x2="8" y2="4" stroke="currentColor" stroke-width="1"/><line x1="8" y1="12" x2="8" y2="15" stroke="currentColor" stroke-width="1"/><line x1="1" y1="8" x2="4" y2="8" stroke="currentColor" stroke-width="1"/><line x1="12" y1="8" x2="15" y2="8" stroke="currentColor" stroke-width="1"/></svg>
+      </span>
+      <span class="text-[13px] text-gray-500">VariPuck S3 Gimbal Mount</span>
+      <div class="flex gap-1 ml-auto">
+        <div class="wg wg-on">1</div><div class="wg wg-off">2</div><div class="wg wg-off">3</div><div class="wg wg-off">4</div>
+      </div>
+    </div>
+    <div class="hp-child">
+      <svg class="bracket" viewBox="0 0 16 22" fill="none"><path d="M 2 0 L 2 14 Q 2 18 6 18 L 16 18" stroke="currentColor" stroke-width="1.5" fill="none" stroke-linecap="round"/></svg>
+      <span class="badge-size">S3</span>
+      <span class="text-sm text-gray-200 font-medium">CF-337 Panther Repeater</span>
+      <span class="badge-grade grade-C">C</span>
+      <span class="text-[12px] text-gray-600">KLWE</span>
+      <div class="flex items-center gap-2 ml-auto flex-shrink-0">
+        <svg class="dmg-sym" viewBox="0 0 10 10" title="Energy"><polygon points="5,0 10,5 5,10 0,5" fill="#22c55e"/></svg>
+        <span class="stat-pill">207 <span class="text-gray-600">dps</span></span>
+        <span class="stat-pill">131 <span class="text-gray-600">&#945;</span></span>
+      </div>
+      <button class="p-1 text-gray-700 hover:text-emerald-400 transition-colors cursor-pointer flex-shrink-0" title="Add to cart">
+        <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 3h2l.4 2M7 13h10l4-8H5.4m0 0L5.4 5M7 13l-2.293 2.293c-.63.63-.184 1.707.707 1.707H17m0 0a2 2 0 100 4 2 2 0 000-4zm-8 2a2 2 0 100 4 2 2 0 000-4z"/></svg>
+      </button>
+    </div>
+  </div>
+
+  <!-- ===== Weapon 2: Gimballed (same) ===== -->
+  <div class="hp">
+    <div class="hp-mount">
+      <span class="badge-size">S3</span>
+      <span class="tip" data-tip="Gimballed — click to swap to fixed (+1 size)">
+        <svg class="mount-ico" viewBox="0 0 16 16" fill="none"><circle cx="8" cy="8" r="5.5" stroke="currentColor" stroke-width="1.2"/><circle cx="8" cy="8" r="1.5" fill="currentColor"/><line x1="8" y1="1" x2="8" y2="4" stroke="currentColor" stroke-width="1"/><line x1="8" y1="12" x2="8" y2="15" stroke="currentColor" stroke-width="1"/><line x1="1" y1="8" x2="4" y2="8" stroke="currentColor" stroke-width="1"/><line x1="12" y1="8" x2="15" y2="8" stroke="currentColor" stroke-width="1"/></svg>
+      </span>
+      <span class="text-[13px] text-gray-500">VariPuck S3 Gimbal Mount</span>
+      <div class="flex gap-1 ml-auto">
+        <div class="wg wg-on">1</div><div class="wg wg-off">2</div><div class="wg wg-off">3</div><div class="wg wg-off">4</div>
+      </div>
+    </div>
+    <div class="hp-child">
+      <svg class="bracket" viewBox="0 0 16 22" fill="none"><path d="M 2 0 L 2 14 Q 2 18 6 18 L 16 18" stroke="currentColor" stroke-width="1.5" fill="none" stroke-linecap="round"/></svg>
+      <span class="badge-size">S3</span>
+      <span class="text-sm text-gray-200 font-medium">CF-337 Panther Repeater</span>
+      <span class="badge-grade grade-C">C</span>
+      <span class="text-[12px] text-gray-600">KLWE</span>
+      <div class="flex items-center gap-2 ml-auto flex-shrink-0">
+        <svg class="dmg-sym" viewBox="0 0 10 10" title="Energy"><polygon points="5,0 10,5 5,10 0,5" fill="#22c55e"/></svg>
+        <span class="stat-pill">207 <span class="text-gray-600">dps</span></span>
+        <span class="stat-pill">131 <span class="text-gray-600">&#945;</span></span>
+      </div>
+      <button class="p-1 text-gray-700 hover:text-emerald-400 transition-colors cursor-pointer flex-shrink-0">
+        <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 3h2l.4 2M7 13h10l4-8H5.4m0 0L5.4 5M7 13l-2.293 2.293c-.63.63-.184 1.707.707 1.707H17m0 0a2 2 0 100 4 2 2 0 000-4zm-8 2a2 2 0 100 4 2 2 0 000-4z"/></svg>
+      </button>
+    </div>
+  </div>
+
+  <!-- ===== Weapon 3: CUSTOMIZED (cyan glow, different weapon) ===== -->
+  <div class="hp hp-custom">
+    <div class="hp-mount">
+      <span class="badge-size">S3</span>
+      <span class="tip" data-tip="Gimballed — click to swap to fixed (+1 size)">
+        <svg class="mount-ico" viewBox="0 0 16 16" fill="none"><circle cx="8" cy="8" r="5.5" stroke="currentColor" stroke-width="1.2"/><circle cx="8" cy="8" r="1.5" fill="currentColor"/><line x1="8" y1="1" x2="8" y2="4" stroke="currentColor" stroke-width="1"/><line x1="8" y1="12" x2="8" y2="15" stroke="currentColor" stroke-width="1"/><line x1="1" y1="8" x2="4" y2="8" stroke="currentColor" stroke-width="1"/><line x1="12" y1="8" x2="15" y2="8" stroke="currentColor" stroke-width="1"/></svg>
+      </span>
+      <span class="text-[13px] text-gray-500">VariPuck S3 Gimbal Mount</span>
+      <div class="flex gap-1 ml-auto">
+        <div class="wg wg-off">1</div><div class="wg wg-on">2</div><div class="wg wg-off">3</div><div class="wg wg-off">4</div>
+      </div>
+    </div>
+    <div class="hp-child">
+      <svg class="bracket" viewBox="0 0 16 22" fill="none"><path d="M 2 0 L 2 14 Q 2 18 6 18 L 16 18" stroke="currentColor" stroke-width="1.5" fill="none" stroke-linecap="round"/></svg>
+      <span class="badge-size">S3</span>
+      <span class="text-sm text-sc-accent font-medium" style="text-shadow: 0 0 8px rgba(34,211,238,0.3)">Mantis GT-220 Gatling</span>
+      <span class="badge-grade grade-C">C</span>
+      <span class="text-[12px] text-gray-600">GATS</span>
+      <span class="text-[13px] text-sc-accent bg-sc-accent/10 px-1 rounded">custom</span>
+      <div class="flex items-center gap-2 ml-auto flex-shrink-0">
+        <svg class="dmg-sym" viewBox="0 0 10 10" title="Ballistic"><rect x="1" y="1" width="8" height="8" rx="1" fill="#f59e0b"/></svg>
+        <span class="stat-pill text-sc-accent">354 <span class="text-gray-600">dps</span></span>
+        <span class="stat-pill text-sc-accent">19 <span class="text-gray-600">&#945;</span></span>
+      </div>
+      <button class="p-1 text-gray-700 hover:text-emerald-400 transition-colors cursor-pointer flex-shrink-0">
+        <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 3h2l.4 2M7 13h10l4-8H5.4m0 0L5.4 5M7 13l-2.293 2.293c-.63.63-.184 1.707.707 1.707H17m0 0a2 2 0 100 4 2 2 0 000-4zm-8 2a2 2 0 100 4 2 2 0 000-4z"/></svg>
+      </button>
+    </div>
+  </div>
+
+  <!-- ===== Weapon 4: Stock gimballed ===== -->
+  <div class="hp">
+    <div class="hp-mount">
+      <span class="badge-size">S3</span>
+      <span class="tip" data-tip="Gimballed — click to swap to fixed (+1 size)">
+        <svg class="mount-ico" viewBox="0 0 16 16" fill="none"><circle cx="8" cy="8" r="5.5" stroke="currentColor" stroke-width="1.2"/><circle cx="8" cy="8" r="1.5" fill="currentColor"/><line x1="8" y1="1" x2="8" y2="4" stroke="currentColor" stroke-width="1"/><line x1="8" y1="12" x2="8" y2="15" stroke="currentColor" stroke-width="1"/><line x1="1" y1="8" x2="4" y2="8" stroke="currentColor" stroke-width="1"/><line x1="12" y1="8" x2="15" y2="8" stroke="currentColor" stroke-width="1"/></svg>
+      </span>
+      <span class="text-[13px] text-gray-500">VariPuck S3 Gimbal Mount</span>
+      <div class="flex gap-1 ml-auto">
+        <div class="wg wg-off">1</div><div class="wg wg-on">2</div><div class="wg wg-off">3</div><div class="wg wg-off">4</div>
+      </div>
+    </div>
+    <div class="hp-child">
+      <svg class="bracket" viewBox="0 0 16 22" fill="none"><path d="M 2 0 L 2 14 Q 2 18 6 18 L 16 18" stroke="currentColor" stroke-width="1.5" fill="none" stroke-linecap="round"/></svg>
+      <span class="badge-size">S3</span>
+      <span class="text-sm text-gray-200 font-medium">CF-337 Panther Repeater</span>
+      <span class="badge-grade grade-C">C</span>
+      <span class="text-[12px] text-gray-600">KLWE</span>
+      <div class="flex items-center gap-2 ml-auto flex-shrink-0">
+        <svg class="dmg-sym" viewBox="0 0 10 10" title="Energy"><polygon points="5,0 10,5 5,10 0,5" fill="#22c55e"/></svg>
+        <span class="stat-pill">207 <span class="text-gray-600">dps</span></span>
+        <span class="stat-pill">131 <span class="text-gray-600">&#945;</span></span>
+      </div>
+      <button class="p-1 text-gray-700 hover:text-emerald-400 transition-colors cursor-pointer flex-shrink-0">
+        <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 3h2l.4 2M7 13h10l4-8H5.4m0 0L5.4 5M7 13l-2.293 2.293c-.63.63-.184 1.707.707 1.707H17m0 0a2 2 0 100 4 2 2 0 000-4zm-8 2a2 2 0 100 4 2 2 0 000-4z"/></svg>
+      </button>
+    </div>
+  </div>
+
+  <!-- ===== Weapon 5: FIXED — single row at parent level, no child ===== -->
+  <div class="hp">
+    <!-- Fixed weapon: same row position as where VariPuck would be -->
+    <div class="hp-mount" style="padding-top: 6px; padding-bottom: 2px;">
+      <span class="badge-size">S4</span>
+      <span class="tip" data-tip="Fixed mount — click to swap to gimbal (weapon size -1)">
+        <svg class="mount-ico" viewBox="0 0 16 16" fill="none"><rect x="2.5" y="2.5" width="11" height="11" stroke="currentColor" stroke-width="1.2" rx="1"/><circle cx="8" cy="8" r="1.5" fill="currentColor"/><line x1="8" y1="0.5" x2="8" y2="4" stroke="currentColor" stroke-width="1"/><line x1="8" y1="12" x2="8" y2="15.5" stroke="currentColor" stroke-width="1"/><line x1="0.5" y1="8" x2="4" y2="8" stroke="currentColor" stroke-width="1"/><line x1="12" y1="8" x2="15.5" y2="8" stroke="currentColor" stroke-width="1"/></svg>
+      </span>
+      <span class="text-sm text-gray-200 font-medium">CF-447 Rhino Repeater</span>
+      <span class="badge-grade grade-C">C</span>
+      <span class="text-[12px] text-gray-600">KLWE</span>
+      <span class="text-[13px] text-amber-400 bg-amber-500/10 px-1 rounded border border-amber-500/15">fixed</span>
+      <div class="flex gap-1 ml-auto">
+        <div class="wg wg-off">1</div><div class="wg wg-off">2</div><div class="wg wg-off">3</div><div class="wg wg-on">4</div>
+      </div>
+    </div>
+    <!-- Stats on second line, right-aligned -->
+    <div class="flex items-center justify-end gap-2 pb-1.5 pr-0">
+      <svg class="dmg-sym" viewBox="0 0 10 10" title="Energy"><polygon points="5,0 10,5 5,10 0,5" fill="#22c55e"/></svg>
+      <span class="stat-pill">413 <span class="text-gray-600">dps</span></span>
+      <span class="stat-pill">262 <span class="text-gray-600">&#945;</span></span>
+      <button class="p-1 text-gray-700 hover:text-emerald-400 transition-colors cursor-pointer flex-shrink-0" title="Add to cart">
+        <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 3h2l.4 2M7 13h10l4-8H5.4m0 0L5.4 5M7 13l-2.293 2.293c-.63.63-.184 1.707.707 1.707H17m0 0a2 2 0 100 4 2 2 0 000-4zm-8 2a2 2 0 100 4 2 2 0 000-4z"/></svg>
+      </button>
+    </div>
+  </div>
+
+</div>
+
+<p class="mt-6 text-[13px] text-gray-600 max-w-[700px] leading-relaxed">
+  <strong class="text-gray-400">Layout rules:</strong><br>
+  <strong>Gimballed</strong> = 2 rows: mount row (VariPuck + gimbal icon + WG) then child row (└ bracket + weapon + stats).<br>
+  <strong>Fixed</strong> = 1 row: weapon sits at parent level (fixed icon + "fixed" badge + WG), stats on second line right-aligned. No bracket, no child indentation.<br><br>
+  <strong class="text-gray-400">Interactions:</strong><br>
+  <strong>Gimbal mount row</strong>: click to open picker → swap to a different mount type (fixed, gimbal) or remove the mount entirely.<br>
+  <strong>Weapon child row</strong>: click to open picker → swap the weapon on this mount.<br>
+  <strong>Fixed weapon row</strong>: click to open picker → swap the weapon, or switch to a gimbal mount (weapon size -1).<br>
+  <strong>Weapon group badges</strong> (1-4): click to toggle assignment to fire groups.<br><br>
+  <strong class="text-gray-400">Icons:</strong>
+  <svg style="display:inline;vertical-align:middle;width:14px;height:14px;color:#9ca3af" viewBox="0 0 16 16" fill="none"><circle cx="8" cy="8" r="5.5" stroke="currentColor" stroke-width="1.2"/><circle cx="8" cy="8" r="1.5" fill="currentColor"/><line x1="8" y1="1" x2="8" y2="4" stroke="currentColor" stroke-width="1"/><line x1="8" y1="12" x2="8" y2="15" stroke="currentColor" stroke-width="1"/><line x1="1" y1="8" x2="4" y2="8" stroke="currentColor" stroke-width="1"/><line x1="12" y1="8" x2="15" y2="8" stroke="currentColor" stroke-width="1"/></svg> = Gimballed (circle + crosshair — rotational freedom)
+  &nbsp;
+  <svg style="display:inline;vertical-align:middle;width:14px;height:14px;color:#9ca3af" viewBox="0 0 16 16" fill="none"><rect x="2.5" y="2.5" width="11" height="11" stroke="currentColor" stroke-width="1.2" rx="1"/><circle cx="8" cy="8" r="1.5" fill="currentColor"/><line x1="8" y1="0.5" x2="8" y2="4" stroke="currentColor" stroke-width="1"/><line x1="8" y1="12" x2="8" y2="15.5" stroke="currentColor" stroke-width="1"/><line x1="0.5" y1="8" x2="4" y2="8" stroke="currentColor" stroke-width="1"/><line x1="12" y1="8" x2="15.5" y2="8" stroke="currentColor" stroke-width="1"/></svg> = Fixed (square + crosshair — locked, no articulation)
+</p>
+
+</body>
+</html>

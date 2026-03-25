@@ -1,0 +1,715 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>SC Bridge — Loadout Builder v2 Mockup</title>
+<script src="https://cdn.tailwindcss.com"></script>
+<link href="https://fonts.googleapis.com/css2?family=Electrolize&family=Inter:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+<script>
+tailwind.config = {
+  theme: {
+    extend: {
+      colors: {
+        'sc-darker': '#0a0e14',
+        'sc-dark': '#0f1319',
+        'sc-panel': '#141920',
+        'sc-border': 'rgba(255,255,255,0.06)',
+        'sc-accent': '#22d3ee',
+        'dmg-physical': '#f59e0b',
+        'dmg-energy': '#22c55e',
+        'dmg-distortion': '#6366f1',
+        'dmg-thermal': '#ef4444',
+      }
+    }
+  }
+}
+</script>
+<style>
+  body { font-family: 'Inter', sans-serif; background: #0a0e14; color: #e5e7eb; }
+  .font-hud { font-family: 'Electrolize', sans-serif; }
+  .font-mono { font-family: 'JetBrains Mono', monospace; }
+  .glow-text { text-shadow: 0 0 20px rgba(34,211,238,0.2); }
+  .stat-glow { text-shadow: 0 0 12px rgba(34,211,238,0.3); }
+  .badge-size { background: rgba(255,255,255,0.06); border: 1px solid rgba(255,255,255,0.1); border-radius: 4px; padding: 1px 6px; font-family: 'JetBrains Mono', monospace; font-size: 12px; color: #9ca3af; }
+  .badge-grade { font-family: 'JetBrains Mono', monospace; font-size: 12px; padding: 1px 4px; border-radius: 3px; }
+  .grade-A { background: rgba(34,211,238,0.1); color: #22d3ee; border: 1px solid rgba(34,211,238,0.2); }
+  .grade-B { background: rgba(34,197,94,0.1); color: #22c55e; border: 1px solid rgba(34,197,94,0.2); }
+  .grade-C { background: rgba(156,163,175,0.1); color: #9ca3af; border: 1px solid rgba(156,163,175,0.2); }
+  .dmg-bar { height: 3px; border-radius: 2px; }
+  .dmg-sym { flex-shrink: 0; width: 12px; height: 12px; display: inline-block; vertical-align: middle; }
+  .section-card { background: rgba(255,255,255,0.02); border: 1px solid rgba(255,255,255,0.05); border-radius: 8px; overflow: hidden; }
+  .section-header { background: rgba(255,255,255,0.02); border-bottom: 1px solid rgba(255,255,255,0.06); padding: 8px 12px; display: flex; align-items: center; justify-content: space-between; }
+  /* Hardpoint blocks (from weapons-test) */
+  .hp { border-bottom: 1px solid rgba(255,255,255,0.04); padding: 4px 12px 8px; }
+  .hp:last-child { border-bottom: none; }
+  .hp.hp-custom { background: rgba(34,211,238,0.02); }
+  .hp-mount { display: flex; align-items: center; gap: 8px; padding: 4px 0 0; cursor: pointer; border-radius: 4px; transition: background 150ms; }
+  .hp-mount:hover { background: rgba(255,255,255,0.03); margin: 0 -4px; padding-left: 4px; padding-right: 4px; }
+  .hp-child { display: flex; align-items: center; gap: 8px; padding: 4px 0 0; cursor: pointer; border-radius: 4px; transition: background 150ms; margin-left: 34px; }
+  .hp-child:hover { background: rgba(255,255,255,0.03); margin-left: 30px; padding-left: 4px; padding-right: 4px; }
+  .bracket { flex-shrink: 0; width: 16px; height: 22px; margin-left: -16px; margin-right: 0; color: rgba(255,255,255,0.15); }
+  .mount-ico { width: 14px; height: 14px; flex-shrink: 0; color: #6b7280; }
+  .hp-mount:hover .mount-ico { color: #9ca3af; }
+  .tip { position: relative; }
+  .tip::after { content: attr(data-tip); position: absolute; left: 50%; transform: translateX(-50%); bottom: calc(100% + 6px); background: #1e293b; color: #e2e8f0; font-size: 12px; padding: 4px 8px; border-radius: 4px; white-space: nowrap; pointer-events: none; opacity: 0; transition: opacity 150ms; border: 1px solid rgba(255,255,255,0.1); z-index: 10; }
+  .tip:hover::after { opacity: 1; }
+  .wg { width: 20px; height: 20px; border-radius: 4px; display: inline-flex; align-items: center; justify-content: center; font-size: 11px; font-weight: 600; cursor: pointer; transition: all 150ms; }
+  .wg-on { background: rgba(34,211,238,0.2); color: #22d3ee; border: 1px solid rgba(34,211,238,0.4); }
+  .wg-off { background: rgba(255,255,255,0.03); color: #4b5563; border: 1px solid rgba(255,255,255,0.08); }
+  .wg-off:hover { background: rgba(255,255,255,0.06); color: #9ca3af; }
+  .port-row { display: flex; align-items: center; gap: 8px; padding: 6px 12px; border-bottom: 1px solid rgba(255,255,255,0.03); cursor: pointer; transition: background 200ms; }
+  .port-row:hover { background: rgba(255,255,255,0.03); }
+  .stat-pill { font-family: 'JetBrains Mono', monospace; font-size: 13px; color: #6b7280; }
+  .summary-cell { display: flex; flex-direction: column; align-items: center; justify-content: center; min-height: 56px; }
+  .summary-value { font-family: 'Electrolize', sans-serif; font-size: 24px; line-height: 1; white-space: nowrap; }
+  .summary-label { font-size: 11px; text-transform: uppercase; letter-spacing: 0.05em; color: #6b7280; margin-top: 4px; }
+  .summary-unit { font-size: 13px; color: #6b7280; margin-left: 2px; }
+  .module-slot { background: rgba(139,92,246,0.05); border: 1px dashed rgba(139,92,246,0.2); border-radius: 6px; padding: 8px 12px; cursor: pointer; transition: all 200ms; }
+  .module-slot:hover { background: rgba(139,92,246,0.1); border-color: rgba(139,92,246,0.4); }
+  /* Hardpoint block — one per weapon */
+  .hp-block { padding: 0 12px; border-bottom: 1px solid rgba(255,255,255,0.04); }
+  .hp-block:last-child { border-bottom: none; }
+  .hp-block.hp-custom { background: rgba(34,211,238,0.02); }
+  /* Mount row (parent — gimbal/fixed) */
+  .hp-mount { display: flex; align-items: center; gap: 8px; padding: 6px 0 2px 0; cursor: pointer; transition: background 150ms; }
+  .hp-mount:hover { background: rgba(255,255,255,0.02); margin: 0 -4px; padding-left: 4px; padding-right: 4px; border-radius: 4px; }
+  /* Weapon row (child — indented with └ bracket) */
+  .hp-weapon { display: flex; align-items: center; gap: 8px; padding: 2px 0 6px 0; cursor: pointer; transition: background 150ms; }
+  .hp-weapon:hover { background: rgba(255,255,255,0.02); margin: 0 -4px; padding-left: 4px; padding-right: 4px; border-radius: 4px; }
+  /* The └ bracket connector — SVG inline */
+  .hp-bracket { flex-shrink: 0; width: 20px; height: 24px; color: rgba(255,255,255,0.15); }
+  /* Weapon group badges */
+  /* Gimbal/fixed icons */
+  .mount-icon { width: 14px; height: 14px; flex-shrink: 0; opacity: 0.5; }
+  .hp-mount:hover .mount-icon { opacity: 0.8; }
+  /* TTK table */
+  .ttk-row { display: grid; grid-template-columns: 1fr 80px 80px 80px; gap: 4px; padding: 4px 8px; font-size: 13px; border-bottom: 1px solid rgba(255,255,255,0.03); }
+  .ttk-row:hover { background: rgba(255,255,255,0.02); }
+  .ttk-header { font-size: 12px; color: #6b7280; text-transform: uppercase; letter-spacing: 0.04em; background: rgba(255,255,255,0.02); }
+</style>
+</head>
+<body class="min-h-screen">
+
+<!-- ============================================================ -->
+<!-- SHIP HERO HEADER                                              -->
+<!-- ============================================================ -->
+<div class="relative bg-sc-panel border-b border-sc-border">
+  <div class="max-w-[1400px] mx-auto flex items-stretch">
+    <div class="w-80 h-44 flex-shrink-0 overflow-hidden relative">
+      <img src="https://imagedelivery.net/JnUjHiDCDHvj44u4fjoYBg/1c6bd50c-b17a-4a34-dc3e-94e5aa2a1d00/large" alt="Asgard" class="w-full h-full object-cover opacity-80">
+      <div class="absolute inset-0 bg-gradient-to-r from-transparent to-sc-panel"></div>
+    </div>
+    <div class="flex-1 px-6 py-4 flex flex-col justify-between">
+      <div>
+        <div class="flex items-center gap-3">
+          <h1 class="font-hud text-2xl text-white glow-text tracking-wide">ASGARD</h1>
+          <span class="text-[12px] bg-sc-accent/10 text-sc-accent px-2 py-0.5 rounded border border-sc-accent/20 font-medium">Fleet Ship</span>
+          <span class="text-[12px] bg-amber-500/10 text-amber-400 px-2 py-0.5 rounded border border-amber-500/20 font-medium">3 customized</span>
+        </div>
+        <p class="text-sm text-gray-500 mt-1">
+          <span class="text-gray-400">Anvil Aerospace</span> · Dropship · Combat · Large · Crew 1
+        </p>
+        <div class="flex items-center gap-4 mt-2 text-[13px] text-gray-500 font-mono">
+          <span>HP <span class="text-gray-300">77,000</span></span>
+          <span>SCM <span class="text-gray-300">203</span> m/s</span>
+          <span>Mass <span class="text-gray-300">610,246</span> kg</span>
+          <span>Cargo <span class="text-gray-300">180</span> SCU</span>
+        </div>
+      </div>
+      <div class="flex items-center gap-2 mt-3">
+        <button class="px-3 py-1.5 text-sm bg-sc-accent/20 hover:bg-sc-accent/30 text-sc-accent border border-sc-accent/30 rounded transition-all font-medium cursor-pointer">Save Loadout</button>
+        <button class="px-3 py-1.5 text-sm bg-emerald-500/10 hover:bg-emerald-500/20 text-emerald-400 border border-emerald-500/20 rounded transition-all flex items-center gap-1 cursor-pointer">
+          <svg class="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 3h2l.4 2M7 13h10l4-8H5.4M7 13L5.4 5M7 13l-2.293 2.293c-.63.63-.184 1.707.707 1.707H17m0 0a2 2 0 100 4 2 2 0 000-4zm-8 2a2 2 0 100 4 2 2 0 000-4z"/></svg>
+          Non-Stock to Cart
+        </button>
+        <button class="px-3 py-1.5 text-sm bg-white/[0.04] hover:bg-white/[0.08] text-gray-400 border border-white/[0.06] rounded transition-all flex items-center gap-1 cursor-pointer">
+          <svg class="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"/></svg>
+          Reset All
+        </button>
+        <div class="ml-auto">
+          <button class="relative px-3 py-1.5 text-sm bg-white/[0.04] hover:bg-white/[0.08] text-gray-400 border border-white/[0.06] rounded transition-all flex items-center gap-1 cursor-pointer">
+            <svg class="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 3h2l.4 2M7 13h10l4-8H5.4M7 13L5.4 5M7 13l-2.293 2.293c-.63.63-.184 1.707.707 1.707H17m0 0a2 2 0 100 4 2 2 0 000-4zm-8 2a2 2 0 100 4 2 2 0 000-4z"/></svg>
+            Cart
+            <span class="absolute -top-1.5 -right-1.5 bg-sc-accent text-black text-[13px] font-bold w-4 h-4 rounded-full flex items-center justify-center" style="box-shadow: 0 0 6px rgba(34,211,238,0.5)">2</span>
+          </button>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ============================================================ -->
+<!-- STATS SUMMARY BAR                                             -->
+<!-- ============================================================ -->
+<div class="bg-sc-dark/80 backdrop-blur border-b border-sc-border">
+  <div class="max-w-[1400px] mx-auto px-4 py-3">
+    <div class="flex items-stretch">
+      <!-- SECTION 1: DPS / Alpha / Damage breakdown -->
+      <div class="flex-1 flex flex-col gap-1.5 pr-4">
+        <!-- DPS + Alpha — large numbers -->
+        <div class="flex items-stretch gap-px">
+          <div class="flex-1 summary-cell bg-white/[0.02] rounded-l-md" style="min-height: 64px;">
+            <div class="flex items-baseline gap-1"><span class="font-hud text-[36px] text-sc-accent stat-glow leading-none">1,239</span><span class="text-[15px] text-gray-500 ml-1">dps</span></div>
+            <div class="summary-label">Sustained DPS</div>
+          </div>
+          <div class="flex-1 summary-cell bg-white/[0.02] rounded-r-md" style="min-height: 64px;">
+            <div class="flex items-baseline gap-1"><span class="font-hud text-[36px] text-white leading-none">262</span><span class="text-[15px] text-gray-500 ml-1">dmg</span></div>
+            <div class="summary-label">Alpha Strike</div>
+          </div>
+        </div>
+        <!-- 2x2 per-type DPS breakdown — always shows all 4 types -->
+        <div class="grid grid-cols-2 gap-px bg-white/[0.03] rounded-md overflow-hidden flex-1">
+          <!-- Ballistic -->
+          <div class="flex items-center gap-2 px-3 py-2 bg-sc-dark">
+            <svg class="dmg-sym flex-shrink-0" style="width:14px;height:14px" viewBox="0 0 10 10"><rect x="1" y="1" width="8" height="8" rx="1" fill="#f59e0b"/></svg>
+            <div>
+              <div class="font-hud text-[18px] text-dmg-physical leading-none">629 <span class="text-[12px] text-gray-500">dps</span></div>
+              <div class="text-[10px] text-gray-500 mt-0.5">Ballistic · 131 alpha</div>
+            </div>
+          </div>
+          <!-- Energy -->
+          <div class="flex items-center gap-2 px-3 py-2 bg-sc-dark">
+            <svg class="dmg-sym flex-shrink-0" style="width:14px;height:14px" viewBox="0 0 10 10"><polygon points="5,0 10,5 5,10 0,5" fill="#22c55e"/></svg>
+            <div>
+              <div class="font-hud text-[18px] text-dmg-energy leading-none">610 <span class="text-[12px] text-gray-500">dps</span></div>
+              <div class="text-[10px] text-gray-500 mt-0.5">Energy · 131 alpha</div>
+            </div>
+          </div>
+          <!-- Distortion -->
+          <div class="flex items-center gap-2 px-3 py-2 bg-sc-dark">
+            <svg class="dmg-sym flex-shrink-0" style="width:14px;height:14px" viewBox="0 0 10 10"><polygon points="5,0.5 9.3,2.8 9.3,7.2 5,9.5 0.7,7.2 0.7,2.8" fill="#6366f1"/></svg>
+            <div>
+              <div class="font-hud text-[18px] text-gray-600 leading-none">0 <span class="text-[12px] text-gray-600">dps</span></div>
+              <div class="text-[10px] text-gray-600 mt-0.5">Distortion · 0 alpha</div>
+            </div>
+          </div>
+          <!-- Thermal -->
+          <div class="flex items-center gap-2 px-3 py-2 bg-sc-dark">
+            <svg class="dmg-sym flex-shrink-0" style="width:14px;height:14px" viewBox="0 0 10 10"><polygon points="5,0.5 9.5,8.5 0.5,8.5" fill="#ef4444"/></svg>
+            <div>
+              <div class="font-hud text-[18px] text-gray-600 leading-none">0 <span class="text-[12px] text-gray-600">dps</span></div>
+              <div class="text-[10px] text-gray-600 mt-0.5">Thermal · 0 alpha</div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- SECTION 2: Power Distribution (Erkul-style vertical pip columns) -->
+      <div class="flex-shrink-0 px-4 border-l border-r border-white/[0.06]" style="width: 260px;">
+        <!-- Output / Consumption header -->
+        <div class="flex items-center justify-between mb-1">
+          <span class="text-[11px] text-gray-500 uppercase tracking-wider font-medium">Output</span>
+          <span class="text-[13px] font-mono"><span class="text-sc-accent">0</span><span class="text-gray-600"> / 30</span></span>
+        </div>
+        <div class="flex items-center gap-2 mb-3">
+          <span class="text-[11px] text-gray-500 uppercase tracking-wider font-medium">Consumption</span>
+          <div class="flex-1 h-2 bg-white/[0.04] rounded-full overflow-hidden"><div class="h-full bg-emerald-500/60 rounded-full" style="width:36%"></div></div>
+          <span class="text-[12px] font-mono text-emerald-400">36%</span>
+        </div>
+        <!-- Vertical pip columns — each column = a subsystem, pips stack bottom-up -->
+        <div class="flex items-end gap-1.5 justify-center" style="height: 70px;">
+          <!-- Shield column (2 filled / 5 total) -->
+          <div class="flex flex-col-reverse gap-0.5 items-center">
+            <div class="text-[9px] font-mono text-blue-400 mt-0.5">2</div>
+            <div class="w-5 h-2.5 rounded-sm bg-blue-500/40 border border-blue-500/50"></div>
+            <div class="w-5 h-2.5 rounded-sm bg-blue-500/40 border border-blue-500/50"></div>
+            <div class="w-5 h-2.5 rounded-sm bg-white/[0.04] border border-white/[0.06]"></div>
+            <div class="w-5 h-2.5 rounded-sm bg-white/[0.04] border border-white/[0.06]"></div>
+            <div class="w-5 h-2.5 rounded-sm bg-white/[0.04] border border-white/[0.06]"></div>
+          </div>
+          <!-- Weapon column (5 filled / 6 total) -->
+          <div class="flex flex-col-reverse gap-0.5 items-center">
+            <div class="text-[9px] font-mono text-emerald-400 mt-0.5">5</div>
+            <div class="w-5 h-2.5 rounded-sm bg-emerald-500/40 border border-emerald-500/50"></div>
+            <div class="w-5 h-2.5 rounded-sm bg-emerald-500/40 border border-emerald-500/50"></div>
+            <div class="w-5 h-2.5 rounded-sm bg-emerald-500/40 border border-emerald-500/50"></div>
+            <div class="w-5 h-2.5 rounded-sm bg-emerald-500/40 border border-emerald-500/50"></div>
+            <div class="w-5 h-2.5 rounded-sm bg-emerald-500/40 border border-emerald-500/50"></div>
+            <div class="w-5 h-2.5 rounded-sm bg-white/[0.04] border border-white/[0.06]"></div>
+          </div>
+          <!-- Thruster column (3 filled / 5 total) -->
+          <div class="flex flex-col-reverse gap-0.5 items-center">
+            <div class="text-[9px] font-mono text-emerald-400 mt-0.5">3</div>
+            <div class="w-5 h-2.5 rounded-sm bg-emerald-500/40 border border-emerald-500/50"></div>
+            <div class="w-5 h-2.5 rounded-sm bg-emerald-500/40 border border-emerald-500/50"></div>
+            <div class="w-5 h-2.5 rounded-sm bg-emerald-500/40 border border-emerald-500/50"></div>
+            <div class="w-5 h-2.5 rounded-sm bg-white/[0.04] border border-white/[0.06]"></div>
+            <div class="w-5 h-2.5 rounded-sm bg-white/[0.04] border border-white/[0.06]"></div>
+          </div>
+          <!-- Cooler column (2 filled / 3 total) -->
+          <div class="flex flex-col-reverse gap-0.5 items-center">
+            <div class="text-[9px] font-mono text-emerald-400 mt-0.5">2</div>
+            <div class="w-5 h-2.5 rounded-sm bg-emerald-500/40 border border-emerald-500/50"></div>
+            <div class="w-5 h-2.5 rounded-sm bg-emerald-500/40 border border-emerald-500/50"></div>
+            <div class="w-5 h-2.5 rounded-sm bg-white/[0.04] border border-white/[0.06]"></div>
+          </div>
+          <!-- Radar column (2 filled / 3 total) -->
+          <div class="flex flex-col-reverse gap-0.5 items-center">
+            <div class="text-[9px] font-mono text-emerald-400 mt-0.5">2</div>
+            <div class="w-5 h-2.5 rounded-sm bg-emerald-500/40 border border-emerald-500/50"></div>
+            <div class="w-5 h-2.5 rounded-sm bg-emerald-500/40 border border-emerald-500/50"></div>
+            <div class="w-5 h-2.5 rounded-sm bg-white/[0.04] border border-white/[0.06]"></div>
+          </div>
+          <!-- QDrive column (2 filled / 3 total) -->
+          <div class="flex flex-col-reverse gap-0.5 items-center">
+            <div class="text-[9px] font-mono text-emerald-400 mt-0.5">2</div>
+            <div class="w-5 h-2.5 rounded-sm bg-emerald-500/40 border border-emerald-500/50"></div>
+            <div class="w-5 h-2.5 rounded-sm bg-emerald-500/40 border border-emerald-500/50"></div>
+            <div class="w-5 h-2.5 rounded-sm bg-white/[0.04] border border-white/[0.06]"></div>
+          </div>
+        </div>
+        <!-- System icons row below columns -->
+        <div class="flex gap-1.5 justify-center mt-1">
+          <svg class="w-4 h-4 text-blue-400" fill="none" stroke="currentColor" viewBox="0 0 24 24" title="Shields"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m5.618-4.016A11.955 11.955 0 0112 2.944a11.955 11.955 0 01-8.618 3.04A12.02 12.02 0 003 9c0 5.591 3.824 10.29 9 11.622 5.176-1.332 9-6.03 9-11.622 0-1.042-.133-2.052-.382-3.016z"/></svg>
+          <svg class="w-4 h-4 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24" title="Weapons"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 10V3L4 14h7v7l9-11h-7z"/></svg>
+          <svg class="w-4 h-4 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24" title="Thrusters"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 7h8m0 0v8m0-8l-8 8-4-4-6 6"/></svg>
+          <svg class="w-4 h-4 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24" title="Coolers"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M20 7l-8-4-8 4m16 0l-8 4m8-4v10l-8 4m0-10L4 7m8 4v10M4 7v10l8 4"/></svg>
+          <svg class="w-4 h-4 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24" title="Radar"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9.75 17L9 20l-1 1h8l-1-1-.75-3M3 13h18M5 17h14a2 2 0 002-2V5a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z"/></svg>
+          <svg class="w-4 h-4 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24" title="Quantum"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3.055 11H5a2 2 0 012 2v1a2 2 0 002 2 2 2 0 012 2v2.945M8 3.935V5.5A2.5 2.5 0 0010.5 8h.5a2 2 0 012 2 2 2 0 104 0 2 2 0 012-2h1.064M15 20.488V18a2 2 0 012-2h3.064"/></svg>
+        </div>
+        <!-- Mode toggle -->
+        <div class="flex gap-1 mt-2">
+          <button class="flex-1 px-2 py-1 text-[10px] font-medium rounded bg-sc-accent/20 text-sc-accent border border-sc-accent/30 cursor-pointer text-center">SCM</button>
+          <button class="flex-1 px-2 py-1 text-[10px] font-medium rounded bg-white/[0.04] text-gray-500 border border-white/[0.06] cursor-pointer hover:bg-white/[0.08] transition-colors text-center">NAV</button>
+          <button class="flex-1 px-2 py-1 text-[10px] font-medium rounded bg-white/[0.04] text-gray-500 border border-white/[0.06] cursor-pointer hover:bg-white/[0.08] transition-colors text-center">SCAN</button>
+          <button class="flex-1 px-2 py-1 text-[10px] font-medium rounded bg-white/[0.04] text-gray-500 border border-white/[0.06] cursor-pointer hover:bg-white/[0.08] transition-colors text-center">RES</button>
+        </div>
+        <div class="text-[9px] text-gray-600 text-center mt-1.5">Mode affects power distribution & stats</div>
+      </div>
+
+      <!-- SECTION 3: 3x2 stat grid -->
+      <div class="flex-1 pl-4">
+        <div class="grid grid-cols-3 gap-px bg-white/[0.03] rounded-md overflow-hidden h-full">
+          <div class="summary-cell bg-sc-dark">
+            <div class="flex items-baseline gap-1"><span class="summary-value text-blue-400">36,960</span><span class="summary-unit">hp</span></div>
+            <div class="summary-label">Shield HP</div>
+          </div>
+          <div class="summary-cell bg-sc-dark">
+            <div class="flex items-baseline gap-1"><span class="summary-value text-amber-400">12,000</span><span class="summary-unit">hp</span></div>
+            <div class="summary-label">Hull HP</div>
+          </div>
+          <div class="summary-cell bg-sc-dark">
+            <div class="flex items-baseline gap-1"><span class="summary-value text-purple-400">97.5</span><span class="summary-unit">SCU</span></div>
+            <div class="summary-label">QT Fuel</div>
+          </div>
+          <div class="summary-cell bg-sc-dark">
+            <div class="flex items-baseline gap-1"><span class="summary-value text-blue-300">254</span><span class="summary-unit">hp/s</span></div>
+            <div class="summary-label">Shield Regen</div>
+          </div>
+          <div class="summary-cell bg-sc-dark">
+            <div class="flex items-baseline gap-1"><span class="summary-value text-orange-400">610K</span><span class="summary-unit">kg</span></div>
+            <div class="summary-label">H2 Fuel</div>
+          </div>
+          <div class="summary-cell bg-sc-dark">
+            <div class="flex items-baseline gap-1"><span class="summary-value text-gray-300">203</span><span class="summary-unit">m/s</span></div>
+            <div class="summary-label">SCM Speed</div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ============================================================ -->
+<!-- MAIN CONTENT: TWO-COLUMN LAYOUT                               -->
+<!-- ============================================================ -->
+<div class="max-w-[1400px] mx-auto p-4">
+  <div class="grid grid-cols-1 lg:grid-cols-2 gap-4">
+
+    <!-- ======== LEFT COLUMN: WEAPONS / TURRETS / MISSILES ======== -->
+    <div class="space-y-4">
+
+      <!-- WEAPONS (using weapons-test.html pattern) -->
+      <div class="section-card">
+        <div class="section-header">
+          <div class="flex items-center gap-2">
+            <svg class="w-4 h-4 text-sc-accent" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 10V3L4 14h7v7l9-11h-7z"/></svg>
+            <span class="text-[13px] font-semibold uppercase tracking-wider text-gray-400 font-hud">Weapons</span>
+            <span class="text-[12px] text-gray-600">6 hardpoints</span>
+          </div>
+          <button class="text-[12px] text-gray-600 hover:text-gray-400 cursor-pointer transition-colors">RESET</button>
+        </div>
+
+        <!-- Gimballed weapon 1 -->
+        <div class="hp">
+          <div class="hp-mount">
+            <span class="badge-size">S3</span>
+            <span class="tip" data-tip="Gimballed — click to swap to fixed (+1 weapon size)"><svg class="mount-ico" viewBox="0 0 16 16" fill="none"><circle cx="8" cy="8" r="5.5" stroke="currentColor" stroke-width="1.2"/><circle cx="8" cy="8" r="1.5" fill="currentColor"/><line x1="8" y1="1" x2="8" y2="4" stroke="currentColor" stroke-width="1"/><line x1="8" y1="12" x2="8" y2="15" stroke="currentColor" stroke-width="1"/><line x1="1" y1="8" x2="4" y2="8" stroke="currentColor" stroke-width="1"/><line x1="12" y1="8" x2="15" y2="8" stroke="currentColor" stroke-width="1"/></svg></span>
+            <span class="text-[13px] text-gray-500">VariPuck S3 Gimbal Mount</span>
+            <div class="flex gap-1 ml-auto"><div class="wg wg-on">1</div><div class="wg wg-off">2</div><div class="wg wg-off">3</div><div class="wg wg-off">4</div></div>
+          </div>
+          <div class="hp-child">
+            <svg class="bracket" viewBox="0 0 16 22" fill="none"><path d="M 2 0 L 2 14 Q 2 18 6 18 L 16 18" stroke="currentColor" stroke-width="1.5" fill="none" stroke-linecap="round"/></svg>
+            <span class="badge-size">S3</span>
+            <span class="text-sm text-gray-200 font-medium">CF-337 Panther Repeater</span>
+            <span class="badge-grade grade-C">C</span>
+            <span class="text-[12px] text-gray-600">KLWE</span>
+            <div class="flex items-center gap-2 ml-auto flex-shrink-0">
+              <svg class="dmg-sym" viewBox="0 0 10 10"><polygon points="5,0 10,5 5,10 0,5" fill="#22c55e"/></svg>
+              <span class="stat-pill">207 <span class="text-gray-600">dps</span></span>
+              <span class="stat-pill">131 <span class="text-gray-600">&#945;</span></span>
+            </div>
+            <button class="p-1 text-gray-700 hover:text-emerald-400 transition-colors cursor-pointer flex-shrink-0"><svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 3h2l.4 2M7 13h10l4-8H5.4m0 0L5.4 5M7 13l-2.293 2.293c-.63.63-.184 1.707.707 1.707H17m0 0a2 2 0 100 4 2 2 0 000-4zm-8 2a2 2 0 100 4 2 2 0 000-4z"/></svg></button>
+          </div>
+        </div>
+        <!-- Gimballed weapon 2 -->
+        <div class="hp">
+          <div class="hp-mount">
+            <span class="badge-size">S3</span>
+            <span class="tip" data-tip="Gimballed"><svg class="mount-ico" viewBox="0 0 16 16" fill="none"><circle cx="8" cy="8" r="5.5" stroke="currentColor" stroke-width="1.2"/><circle cx="8" cy="8" r="1.5" fill="currentColor"/><line x1="8" y1="1" x2="8" y2="4" stroke="currentColor" stroke-width="1"/><line x1="8" y1="12" x2="8" y2="15" stroke="currentColor" stroke-width="1"/><line x1="1" y1="8" x2="4" y2="8" stroke="currentColor" stroke-width="1"/><line x1="12" y1="8" x2="15" y2="8" stroke="currentColor" stroke-width="1"/></svg></span>
+            <span class="text-[13px] text-gray-500">VariPuck S3 Gimbal Mount</span>
+            <div class="flex gap-1 ml-auto"><div class="wg wg-on">1</div><div class="wg wg-off">2</div><div class="wg wg-off">3</div><div class="wg wg-off">4</div></div>
+          </div>
+          <div class="hp-child">
+            <svg class="bracket" viewBox="0 0 16 22" fill="none"><path d="M 2 0 L 2 14 Q 2 18 6 18 L 16 18" stroke="currentColor" stroke-width="1.5" fill="none" stroke-linecap="round"/></svg>
+            <span class="badge-size">S3</span>
+            <span class="text-sm text-gray-200 font-medium">CF-337 Panther Repeater</span>
+            <span class="badge-grade grade-C">C</span>
+            <span class="text-[12px] text-gray-600">KLWE</span>
+            <div class="flex items-center gap-2 ml-auto flex-shrink-0">
+              <svg class="dmg-sym" viewBox="0 0 10 10"><polygon points="5,0 10,5 5,10 0,5" fill="#22c55e"/></svg>
+              <span class="stat-pill">207 <span class="text-gray-600">dps</span></span>
+              <span class="stat-pill">131 <span class="text-gray-600">&#945;</span></span>
+            </div>
+            <button class="p-1 text-gray-700 hover:text-emerald-400 transition-colors cursor-pointer flex-shrink-0"><svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 3h2l.4 2M7 13h10l4-8H5.4m0 0L5.4 5M7 13l-2.293 2.293c-.63.63-.184 1.707.707 1.707H17m0 0a2 2 0 100 4 2 2 0 000-4zm-8 2a2 2 0 100 4 2 2 0 000-4z"/></svg></button>
+          </div>
+        </div>
+        <!-- Gimballed weapon 3: CUSTOMIZED -->
+        <div class="hp hp-custom">
+          <div class="hp-mount">
+            <span class="badge-size">S3</span>
+            <span class="tip" data-tip="Gimballed"><svg class="mount-ico" viewBox="0 0 16 16" fill="none"><circle cx="8" cy="8" r="5.5" stroke="currentColor" stroke-width="1.2"/><circle cx="8" cy="8" r="1.5" fill="currentColor"/><line x1="8" y1="1" x2="8" y2="4" stroke="currentColor" stroke-width="1"/><line x1="8" y1="12" x2="8" y2="15" stroke="currentColor" stroke-width="1"/><line x1="1" y1="8" x2="4" y2="8" stroke="currentColor" stroke-width="1"/><line x1="12" y1="8" x2="15" y2="8" stroke="currentColor" stroke-width="1"/></svg></span>
+            <span class="text-[13px] text-gray-500">VariPuck S3 Gimbal Mount</span>
+            <div class="flex gap-1 ml-auto"><div class="wg wg-off">1</div><div class="wg wg-on">2</div><div class="wg wg-off">3</div><div class="wg wg-off">4</div></div>
+          </div>
+          <div class="hp-child">
+            <svg class="bracket" viewBox="0 0 16 22" fill="none"><path d="M 2 0 L 2 14 Q 2 18 6 18 L 16 18" stroke="currentColor" stroke-width="1.5" fill="none" stroke-linecap="round"/></svg>
+            <span class="badge-size">S3</span>
+            <span class="text-sm text-sc-accent font-medium" style="text-shadow: 0 0 8px rgba(34,211,238,0.3)">Mantis GT-220 Gatling</span>
+            <span class="badge-grade grade-C">C</span>
+            <span class="text-[12px] text-gray-600">GATS</span>
+            <span class="text-[12px] text-sc-accent bg-sc-accent/10 px-1 rounded">custom</span>
+            <div class="flex items-center gap-2 ml-auto flex-shrink-0">
+              <svg class="dmg-sym" viewBox="0 0 10 10"><rect x="1" y="1" width="8" height="8" rx="1" fill="#f59e0b"/></svg>
+              <span class="stat-pill text-sc-accent">354 <span class="text-gray-600">dps</span></span>
+              <span class="stat-pill text-sc-accent">19 <span class="text-gray-600">&#945;</span></span>
+            </div>
+            <button class="p-1 text-gray-700 hover:text-emerald-400 transition-colors cursor-pointer flex-shrink-0"><svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 3h2l.4 2M7 13h10l4-8H5.4m0 0L5.4 5M7 13l-2.293 2.293c-.63.63-.184 1.707.707 1.707H17m0 0a2 2 0 100 4 2 2 0 000-4zm-8 2a2 2 0 100 4 2 2 0 000-4z"/></svg></button>
+          </div>
+        </div>
+        <!-- Gimballed weapon 4 -->
+        <div class="hp">
+          <div class="hp-mount">
+            <span class="badge-size">S3</span>
+            <span class="tip" data-tip="Gimballed"><svg class="mount-ico" viewBox="0 0 16 16" fill="none"><circle cx="8" cy="8" r="5.5" stroke="currentColor" stroke-width="1.2"/><circle cx="8" cy="8" r="1.5" fill="currentColor"/><line x1="8" y1="1" x2="8" y2="4" stroke="currentColor" stroke-width="1"/><line x1="8" y1="12" x2="8" y2="15" stroke="currentColor" stroke-width="1"/><line x1="1" y1="8" x2="4" y2="8" stroke="currentColor" stroke-width="1"/><line x1="12" y1="8" x2="15" y2="8" stroke="currentColor" stroke-width="1"/></svg></span>
+            <span class="text-[13px] text-gray-500">VariPuck S3 Gimbal Mount</span>
+            <div class="flex gap-1 ml-auto"><div class="wg wg-off">1</div><div class="wg wg-on">2</div><div class="wg wg-off">3</div><div class="wg wg-off">4</div></div>
+          </div>
+          <div class="hp-child">
+            <svg class="bracket" viewBox="0 0 16 22" fill="none"><path d="M 2 0 L 2 14 Q 2 18 6 18 L 16 18" stroke="currentColor" stroke-width="1.5" fill="none" stroke-linecap="round"/></svg>
+            <span class="badge-size">S3</span>
+            <span class="text-sm text-gray-200 font-medium">CF-337 Panther Repeater</span>
+            <span class="badge-grade grade-C">C</span>
+            <span class="text-[12px] text-gray-600">KLWE</span>
+            <div class="flex items-center gap-2 ml-auto flex-shrink-0">
+              <svg class="dmg-sym" viewBox="0 0 10 10"><polygon points="5,0 10,5 5,10 0,5" fill="#22c55e"/></svg>
+              <span class="stat-pill">207 <span class="text-gray-600">dps</span></span>
+              <span class="stat-pill">131 <span class="text-gray-600">&#945;</span></span>
+            </div>
+            <button class="p-1 text-gray-700 hover:text-emerald-400 transition-colors cursor-pointer flex-shrink-0"><svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 3h2l.4 2M7 13h10l4-8H5.4m0 0L5.4 5M7 13l-2.293 2.293c-.63.63-.184 1.707.707 1.707H17m0 0a2 2 0 100 4 2 2 0 000-4zm-8 2a2 2 0 100 4 2 2 0 000-4z"/></svg></button>
+          </div>
+        </div>
+        <!-- Fixed weapon 5: single row, no child -->
+        <div class="hp">
+          <div class="hp-mount" style="padding-top: 6px; padding-bottom: 2px;">
+            <span class="badge-size">S4</span>
+            <span class="tip" data-tip="Fixed mount — click to swap to gimbal (weapon size -1)"><svg class="mount-ico" viewBox="0 0 16 16" fill="none"><rect x="2.5" y="2.5" width="11" height="11" stroke="currentColor" stroke-width="1.2" rx="1"/><circle cx="8" cy="8" r="1.5" fill="currentColor"/><line x1="8" y1="0.5" x2="8" y2="4" stroke="currentColor" stroke-width="1"/><line x1="8" y1="12" x2="8" y2="15.5" stroke="currentColor" stroke-width="1"/><line x1="0.5" y1="8" x2="4" y2="8" stroke="currentColor" stroke-width="1"/><line x1="12" y1="8" x2="15.5" y2="8" stroke="currentColor" stroke-width="1"/></svg></span>
+            <span class="text-sm text-gray-200 font-medium">CF-447 Rhino Repeater</span>
+            <span class="badge-grade grade-C">C</span>
+            <span class="text-[12px] text-gray-600">KLWE</span>
+            <span class="text-[12px] text-amber-400 bg-amber-500/10 px-1 rounded border border-amber-500/15">fixed</span>
+            <div class="flex gap-1 ml-auto"><div class="wg wg-off">1</div><div class="wg wg-off">2</div><div class="wg wg-off">3</div><div class="wg wg-on">4</div></div>
+          </div>
+          <div class="flex items-center justify-end gap-2 pb-1.5">
+            <svg class="dmg-sym" viewBox="0 0 10 10"><polygon points="5,0 10,5 5,10 0,5" fill="#22c55e"/></svg>
+            <span class="stat-pill">413 <span class="text-gray-600">dps</span></span>
+            <span class="stat-pill">262 <span class="text-gray-600">&#945;</span></span>
+            <button class="p-1 text-gray-700 hover:text-emerald-400 transition-colors cursor-pointer flex-shrink-0"><svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 3h2l.4 2M7 13h10l4-8H5.4m0 0L5.4 5M7 13l-2.293 2.293c-.63.63-.184 1.707.707 1.707H17m0 0a2 2 0 100 4 2 2 0 000-4zm-8 2a2 2 0 100 4 2 2 0 000-4z"/></svg></button>
+          </div>
+        </div>
+      </div>
+
+      <!-- TURRETS (using weapons-test pattern) -->
+      <div class="section-card">
+        <div class="section-header">
+          <div class="flex items-center gap-2">
+            <svg class="w-4 h-4 text-orange-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><circle cx="12" cy="12" r="3" stroke-width="2"/><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 2v4m0 12v4m10-10h-4M6 12H2"/></svg>
+            <span class="text-[13px] font-semibold uppercase tracking-wider text-gray-400 font-hud">Turrets</span>
+          </div>
+          <button class="text-[12px] text-gray-600 hover:text-gray-400 cursor-pointer transition-colors">RESET</button>
+        </div>
+        <!-- Pilot Turret · Nose -->
+        <div class="px-3 py-1 text-[12px] text-gray-600 bg-white/[0.01] font-medium uppercase tracking-wider">Pilot Turret · Nose</div>
+        <div class="hp">
+          <div class="hp-mount">
+            <span class="badge-size">S3</span>
+            <span class="tip" data-tip="Gimballed"><svg class="mount-ico" viewBox="0 0 16 16" fill="none"><circle cx="8" cy="8" r="5.5" stroke="currentColor" stroke-width="1.2"/><circle cx="8" cy="8" r="1.5" fill="currentColor"/><line x1="8" y1="1" x2="8" y2="4" stroke="currentColor" stroke-width="1"/><line x1="8" y1="12" x2="8" y2="15" stroke="currentColor" stroke-width="1"/><line x1="1" y1="8" x2="4" y2="8" stroke="currentColor" stroke-width="1"/><line x1="12" y1="8" x2="15" y2="8" stroke="currentColor" stroke-width="1"/></svg></span>
+            <span class="text-[13px] text-gray-500">VariPuck S3</span>
+            <div class="flex gap-1 ml-auto"><div class="wg wg-on">1</div><div class="wg wg-off">2</div><div class="wg wg-off">3</div><div class="wg wg-off">4</div></div>
+          </div>
+          <div class="hp-child">
+            <svg class="bracket" viewBox="0 0 16 22" fill="none"><path d="M 2 0 L 2 14 Q 2 18 6 18 L 16 18" stroke="currentColor" stroke-width="1.5" fill="none" stroke-linecap="round"/></svg>
+            <span class="badge-size">S3</span>
+            <span class="text-sm text-gray-200 font-medium">CF-337 Panther Repeater</span>
+            <span class="badge-grade grade-C">C</span>
+            <div class="flex items-center gap-2 ml-auto"><svg class="dmg-sym" viewBox="0 0 10 10"><polygon points="5,0 10,5 5,10 0,5" fill="#22c55e"/></svg><span class="stat-pill">207 dps</span></div>
+          </div>
+        </div>
+        <div class="hp">
+          <div class="hp-mount">
+            <span class="badge-size">S3</span>
+            <span class="tip" data-tip="Gimballed"><svg class="mount-ico" viewBox="0 0 16 16" fill="none"><circle cx="8" cy="8" r="5.5" stroke="currentColor" stroke-width="1.2"/><circle cx="8" cy="8" r="1.5" fill="currentColor"/><line x1="8" y1="1" x2="8" y2="4" stroke="currentColor" stroke-width="1"/><line x1="8" y1="12" x2="8" y2="15" stroke="currentColor" stroke-width="1"/><line x1="1" y1="8" x2="4" y2="8" stroke="currentColor" stroke-width="1"/><line x1="12" y1="8" x2="15" y2="8" stroke="currentColor" stroke-width="1"/></svg></span>
+            <span class="text-[13px] text-gray-500">VariPuck S3</span>
+            <div class="flex gap-1 ml-auto"><div class="wg wg-on">1</div><div class="wg wg-off">2</div><div class="wg wg-off">3</div><div class="wg wg-off">4</div></div>
+          </div>
+          <div class="hp-child">
+            <svg class="bracket" viewBox="0 0 16 22" fill="none"><path d="M 2 0 L 2 14 Q 2 18 6 18 L 16 18" stroke="currentColor" stroke-width="1.5" fill="none" stroke-linecap="round"/></svg>
+            <span class="badge-size">S3</span>
+            <span class="text-sm text-gray-200 font-medium">CF-337 Panther Repeater</span>
+            <span class="badge-grade grade-C">C</span>
+            <div class="flex items-center gap-2 ml-auto"><svg class="dmg-sym" viewBox="0 0 10 10"><polygon points="5,0 10,5 5,10 0,5" fill="#22c55e"/></svg><span class="stat-pill">207 dps</span></div>
+          </div>
+        </div>
+        <!-- Manned Turret · Bottom -->
+        <div class="px-3 py-1 text-[12px] text-gray-600 bg-white/[0.01] font-medium uppercase tracking-wider border-t border-white/[0.04]">Manned Turret · Bottom</div>
+        <div class="hp">
+          <div class="hp-mount">
+            <span class="badge-size">S4</span>
+            <span class="tip" data-tip="Gimballed"><svg class="mount-ico" viewBox="0 0 16 16" fill="none"><circle cx="8" cy="8" r="5.5" stroke="currentColor" stroke-width="1.2"/><circle cx="8" cy="8" r="1.5" fill="currentColor"/><line x1="8" y1="1" x2="8" y2="4" stroke="currentColor" stroke-width="1"/><line x1="8" y1="12" x2="8" y2="15" stroke="currentColor" stroke-width="1"/><line x1="1" y1="8" x2="4" y2="8" stroke="currentColor" stroke-width="1"/><line x1="12" y1="8" x2="15" y2="8" stroke="currentColor" stroke-width="1"/></svg></span>
+            <span class="text-[13px] text-gray-500">VariPuck S4</span>
+            <div class="flex gap-1 ml-auto"><div class="wg wg-off">1</div><div class="wg wg-off">2</div><div class="wg wg-on">3</div><div class="wg wg-off">4</div></div>
+          </div>
+          <div class="hp-child">
+            <svg class="bracket" viewBox="0 0 16 22" fill="none"><path d="M 2 0 L 2 14 Q 2 18 6 18 L 16 18" stroke="currentColor" stroke-width="1.5" fill="none" stroke-linecap="round"/></svg>
+            <span class="badge-size">S4</span>
+            <span class="text-sm text-gray-200 font-medium">CF-447 Rhino Repeater</span>
+            <span class="badge-grade grade-C">C</span>
+            <div class="flex items-center gap-2 ml-auto"><svg class="dmg-sym" viewBox="0 0 10 10"><polygon points="5,0 10,5 5,10 0,5" fill="#22c55e"/></svg><span class="stat-pill">413 dps</span></div>
+          </div>
+        </div>
+        <div class="hp">
+          <div class="hp-mount">
+            <span class="badge-size">S4</span>
+            <span class="tip" data-tip="Gimballed"><svg class="mount-ico" viewBox="0 0 16 16" fill="none"><circle cx="8" cy="8" r="5.5" stroke="currentColor" stroke-width="1.2"/><circle cx="8" cy="8" r="1.5" fill="currentColor"/><line x1="8" y1="1" x2="8" y2="4" stroke="currentColor" stroke-width="1"/><line x1="8" y1="12" x2="8" y2="15" stroke="currentColor" stroke-width="1"/><line x1="1" y1="8" x2="4" y2="8" stroke="currentColor" stroke-width="1"/><line x1="12" y1="8" x2="15" y2="8" stroke="currentColor" stroke-width="1"/></svg></span>
+            <span class="text-[13px] text-gray-500">VariPuck S4</span>
+          </div>
+          <div class="hp-child">
+            <svg class="bracket" viewBox="0 0 16 22" fill="none"><path d="M 2 0 L 2 14 Q 2 18 6 18 L 16 18" stroke="currentColor" stroke-width="1.5" fill="none" stroke-linecap="round"/></svg>
+            <span class="badge-size">S4</span>
+            <span class="text-sm text-gray-200 font-medium">CF-447 Rhino Repeater</span>
+            <span class="badge-grade grade-C">C</span>
+            <div class="flex items-center gap-2 ml-auto"><svg class="dmg-sym" viewBox="0 0 10 10"><polygon points="5,0 10,5 5,10 0,5" fill="#22c55e"/></svg><span class="stat-pill">413 dps</span></div>
+          </div>
+        </div>
+      </div>
+
+      <!-- MISSILES -->
+      <div class="section-card">
+        <div class="section-header">
+          <div class="flex items-center gap-2">
+            <svg class="w-4 h-4 text-red-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17.657 18.657A8 8 0 016.343 7.343S7 9 9 10c0-2 .5-5 2.986-7C14 5 16.09 5.777 17.656 7.343A7.975 7.975 0 0120 13a7.975 7.975 0 01-2.343 5.657z"/></svg>
+            <span class="text-[13px] font-semibold uppercase tracking-wider text-gray-400 font-hud">Missiles</span>
+          </div>
+        </div>
+        <div class="port-row group">
+          <span class="badge-size">S7</span>
+          <div class="flex-1 min-w-0">
+            <div class="text-sm text-gray-200 font-medium">Anvil Asgard S07 Missile Rack</div>
+            <div class="text-[12px] text-gray-500 mt-0.5">16× Arrester III · S3 · <span class="text-dmg-physical">Cross-section</span> IR</div>
+          </div>
+          <div class="flex items-center gap-2 flex-shrink-0">
+            <span class="stat-pill font-semibold text-gray-400">16×</span>
+            <span class="stat-pill">40,423 <span class="text-gray-600">total</span></span>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- ======== RIGHT COLUMN: SYSTEMS + TTK ======== -->
+    <div class="space-y-4">
+
+      <!-- SHIELDS -->
+      <div class="section-card">
+        <div class="section-header">
+          <div class="flex items-center gap-2">
+            <svg class="w-4 h-4 text-blue-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m5.618-4.016A11.955 11.955 0 0112 2.944a11.955 11.955 0 01-8.618 3.04A12.02 12.02 0 003 9c0 5.591 3.824 10.29 9 11.622 5.176-1.332 9-6.03 9-11.622 0-1.042-.133-2.052-.382-3.016z"/></svg>
+            <span class="text-[13px] font-semibold uppercase tracking-wider text-gray-400 font-hud">Shields</span>
+            <span class="text-[12px] text-gray-600">4</span>
+          </div>
+          <button class="text-[12px] text-gray-600 hover:text-gray-400 cursor-pointer transition-colors">RESET</button>
+        </div>
+        <div class="port-row group"><span class="badge-size">S2</span><div class="flex-1"><div class="flex items-center gap-2"><span class="text-sm text-gray-200">FullStop</span><span class="badge-grade grade-C">C</span><span class="text-[12px] text-gray-600">GODI</span></div></div><span class="stat-pill">9,240 hp</span></div>
+        <div class="port-row group"><span class="badge-size">S2</span><div class="flex-1"><div class="flex items-center gap-2"><span class="text-sm text-gray-200">FullStop</span><span class="badge-grade grade-C">C</span><span class="text-[12px] text-gray-600">GODI</span></div></div><span class="stat-pill">9,240 hp</span></div>
+        <div class="port-row group"><span class="badge-size">S2</span><div class="flex-1"><div class="flex items-center gap-2"><span class="text-sm text-gray-200">FullStop</span><span class="badge-grade grade-C">C</span><span class="text-[12px] text-gray-600">GODI</span></div></div><span class="stat-pill">9,240 hp</span></div>
+        <div class="port-row group"><span class="badge-size">S2</span><div class="flex-1"><div class="flex items-center gap-2"><span class="text-sm text-gray-200">FullStop</span><span class="badge-grade grade-C">C</span><span class="text-[12px] text-gray-600">GODI</span></div></div><span class="stat-pill">9,240 hp</span></div>
+        <div class="px-3 py-2 bg-white/[0.01] border-t border-white/[0.04]">
+          <div class="flex items-center gap-4 text-[12px] font-mono">
+            <span class="text-dmg-physical">4.4% <span class="text-gray-600">phys resist</span></span>
+            <span class="text-dmg-energy">-15.9% <span class="text-gray-600">enrg resist</span></span>
+            <span class="text-dmg-distortion">78.5% <span class="text-gray-600">dist resist</span></span>
+          </div>
+        </div>
+      </div>
+
+      <!-- POWER / COOLERS / QD / CM / SENSORS — compact -->
+      <div class="section-card">
+        <div class="section-header">
+          <div class="flex items-center gap-2">
+            <svg class="w-4 h-4 text-yellow-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 10V3L4 14h7v7l9-11h-7z"/></svg>
+            <span class="text-[13px] font-semibold uppercase tracking-wider text-gray-400 font-hud">Power Plants</span>
+            <span class="text-[12px] text-gray-600">2</span>
+          </div>
+        </div>
+        <div class="port-row group"><span class="badge-size">S2</span><div class="flex-1"><div class="flex items-center gap-2"><span class="text-sm text-gray-200">Maelstrom</span><span class="badge-grade grade-C">C</span><span class="text-[12px] text-gray-600">AEGS</span></div></div><span class="stat-pill">4,200 pwr</span></div>
+        <div class="port-row group"><span class="badge-size">S2</span><div class="flex-1"><div class="flex items-center gap-2"><span class="text-sm text-gray-200">Maelstrom</span><span class="badge-grade grade-C">C</span></div></div><span class="stat-pill">4,200 pwr</span></div>
+      </div>
+
+      <div class="section-card">
+        <div class="section-header"><div class="flex items-center gap-2"><svg class="w-4 h-4 text-cyan-300" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M20 7l-8-4-8 4m16 0l-8 4m8-4v10l-8 4m0-10L4 7m8 4v10M4 7v10l8 4"/></svg><span class="text-[13px] font-semibold uppercase tracking-wider text-gray-400 font-hud">Coolers</span><span class="text-[12px] text-gray-600">3</span></div></div>
+        <div class="port-row group"><span class="badge-size">S2</span><div class="flex-1"><div class="flex items-center gap-2"><span class="text-sm text-gray-200">Arctic</span><span class="badge-grade grade-C">C</span><span class="text-[12px] text-gray-600">AEGS</span></div></div><span class="stat-pill">46/s</span></div>
+        <div class="port-row group"><span class="badge-size">S2</span><div class="flex-1"><div class="flex items-center gap-2"><span class="text-sm text-gray-200">Arctic</span><span class="badge-grade grade-C">C</span></div></div><span class="stat-pill">46/s</span></div>
+        <div class="port-row group"><span class="badge-size">S2</span><div class="flex-1"><div class="flex items-center gap-2"><span class="text-sm text-gray-200">Arctic</span><span class="badge-grade grade-C">C</span></div></div><span class="stat-pill">46/s</span></div>
+      </div>
+
+      <div class="grid grid-cols-2 gap-4">
+        <div class="section-card">
+          <div class="section-header"><div class="flex items-center gap-2"><svg class="w-4 h-4 text-purple-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 7h8m0 0v8m0-8l-8 8-4-4-6 6"/></svg><span class="text-[13px] font-semibold uppercase tracking-wider text-gray-400 font-hud">QDrive</span></div></div>
+          <div class="port-row group"><span class="badge-size">S2</span><div class="flex-1"><span class="text-sm text-gray-200">Odyssey</span></div><span class="stat-pill">120 Mm/s</span></div>
+        </div>
+        <div class="section-card">
+          <div class="section-header"><div class="flex items-center gap-2"><svg class="w-4 h-4 text-green-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9.75 17L9 20l-1 1h8l-1-1-.75-3M3 13h18M5 17h14a2 2 0 002-2V5a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z"/></svg><span class="text-[13px] font-semibold uppercase tracking-wider text-gray-400 font-hud">Sensors</span></div></div>
+          <div class="port-row group"><span class="badge-size">S2</span><div class="flex-1"><span class="text-sm text-gray-200">Surveyor</span></div><span class="stat-pill">14.4 km</span></div>
+        </div>
+      </div>
+
+    </div><!-- end right column -->
+  </div><!-- end grid -->
+
+  <!-- ============================================================ -->
+  <!-- MODULES SECTION (full-width, below the two columns)          -->
+  <!-- ============================================================ -->
+  <div class="mt-4">
+    <div class="section-card">
+      <div class="section-header">
+        <div class="flex items-center gap-2">
+          <svg class="w-4 h-4 text-purple-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 11H5m14 0a2 2 0 012 2v6a2 2 0 01-2 2H5a2 2 0 01-2-2v-6a2 2 0 012-2m14 0V9a2 2 0 00-2-2M5 11V9a2 2 0 012-2m0 0V5a2 2 0 012-2h6a2 2 0 012 2v2M7 7h10"/></svg>
+          <span class="text-[13px] font-semibold uppercase tracking-wider text-gray-400 font-hud">Modules</span>
+          <span class="text-[12px] text-gray-500">(Retaliator example)</span>
+        </div>
+      </div>
+      <div class="p-3 grid grid-cols-1 md:grid-cols-2 gap-3">
+        <div>
+          <div class="text-[12px] text-gray-500 uppercase tracking-wider mb-1.5">Front Bay</div>
+          <div class="module-slot">
+            <div class="flex items-center justify-between">
+              <div>
+                <div class="text-sm text-purple-300 font-medium">Retaliator Torpedo Front Module</div>
+                <div class="text-[12px] text-gray-500 mt-0.5">4× Argos IX Torpedo (S9) · CS tracking</div>
+              </div>
+              <span class="badge-size">S3</span>
+            </div>
+            <div class="flex gap-1.5 mt-2">
+              <span class="text-[13px] px-1.5 py-0.5 rounded bg-purple-500/20 text-purple-300 border border-purple-500/20 cursor-pointer">Torpedo</span>
+              <span class="text-[13px] px-1.5 py-0.5 rounded bg-white/[0.04] text-gray-500 border border-white/[0.06] cursor-pointer hover:bg-white/[0.08] transition-colors">Cargo</span>
+              <span class="text-[13px] px-1.5 py-0.5 rounded bg-white/[0.04] text-gray-500 border border-white/[0.06] cursor-pointer hover:bg-white/[0.08] transition-colors">Unladen</span>
+            </div>
+          </div>
+        </div>
+        <div>
+          <div class="text-[12px] text-gray-500 uppercase tracking-wider mb-1.5">Rear Bay</div>
+          <div class="module-slot">
+            <div class="flex items-center justify-between">
+              <div>
+                <div class="text-sm text-purple-300 font-medium">Retaliator Torpedo Rear Module</div>
+                <div class="text-[12px] text-gray-500 mt-0.5">2× Argos IX Torpedo (S9) · CS tracking</div>
+              </div>
+              <span class="badge-size">S3</span>
+            </div>
+            <div class="flex gap-1.5 mt-2">
+              <span class="text-[13px] px-1.5 py-0.5 rounded bg-purple-500/20 text-purple-300 border border-purple-500/20 cursor-pointer">Torpedo</span>
+              <span class="text-[13px] px-1.5 py-0.5 rounded bg-white/[0.04] text-gray-500 border border-white/[0.06] cursor-pointer hover:bg-white/[0.08] transition-colors">Cargo</span>
+              <span class="text-[13px] px-1.5 py-0.5 rounded bg-white/[0.04] text-gray-500 border border-white/[0.06] cursor-pointer hover:bg-white/[0.08] transition-colors">Unladen</span>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ============================================================ -->
+  <!-- TTK PANEL (full-width, bottom)                               -->
+  <!-- ============================================================ -->
+  <div class="mt-4">
+    <div class="section-card">
+      <div class="section-header">
+        <div class="flex items-center gap-2">
+          <svg class="w-4 h-4 text-red-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"/></svg>
+          <span class="text-[13px] font-semibold uppercase tracking-wider text-gray-400 font-hud">Time to Kill (Estimated)</span>
+        </div>
+      </div>
+      <div class="px-3 py-1.5 text-[12px] text-gray-600 bg-white/[0.01] border-b border-white/[0.04] leading-relaxed">
+        Approximate TTK assuming stock target loadout, 100% accuracy, no evasion. Targets may have upgraded shields/armor. Distortion damage disrupts systems but does not directly reduce HP.
+      </div>
+      <div class="ttk-row ttk-header font-mono">
+        <div>Target</div>
+        <div class="text-right">Shield</div>
+        <div class="text-right">Hull</div>
+        <div class="text-right">Total TTK</div>
+      </div>
+      <div class="px-2 py-1 text-[13px] text-gray-600 uppercase tracking-wider bg-white/[0.01]">Fighters</div>
+      <div class="ttk-row hover:bg-white/[0.02] cursor-pointer font-mono text-gray-400">
+        <div class="text-gray-300">Arrow</div>
+        <div class="text-right text-blue-400">2.8s</div>
+        <div class="text-right text-amber-400">3.1s</div>
+        <div class="text-right text-white font-medium">5.9s</div>
+      </div>
+      <div class="ttk-row hover:bg-white/[0.02] cursor-pointer font-mono text-gray-400">
+        <div class="text-gray-300">Gladius</div>
+        <div class="text-right text-blue-400">3.4s</div>
+        <div class="text-right text-amber-400">3.1s</div>
+        <div class="text-right text-white font-medium">6.5s</div>
+      </div>
+      <div class="ttk-row hover:bg-white/[0.02] cursor-pointer font-mono text-gray-400">
+        <div class="text-gray-300">Hornet F7C-M</div>
+        <div class="text-right text-blue-400">5.1s</div>
+        <div class="text-right text-amber-400">6.2s</div>
+        <div class="text-right text-white font-medium">11.3s</div>
+      </div>
+      <div class="px-2 py-1 text-[13px] text-gray-600 uppercase tracking-wider bg-white/[0.01]">Medium</div>
+      <div class="ttk-row hover:bg-white/[0.02] cursor-pointer font-mono text-gray-400">
+        <div class="text-gray-300">Cutlass Black</div>
+        <div class="text-right text-blue-400">6.8s</div>
+        <div class="text-right text-amber-400">6.9s</div>
+        <div class="text-right text-white font-medium">13.7s</div>
+      </div>
+      <div class="px-2 py-1 text-[13px] text-gray-600 uppercase tracking-wider bg-white/[0.01]">Large</div>
+      <div class="ttk-row hover:bg-white/[0.02] cursor-pointer font-mono text-gray-400">
+        <div class="text-gray-300">Constellation Andromeda</div>
+        <div class="text-right text-blue-400">14.2s</div>
+        <div class="text-right text-amber-400">14.3s</div>
+        <div class="text-right text-white font-medium">28.5s</div>
+      </div>
+      <div class="ttk-row hover:bg-white/[0.02] cursor-pointer font-mono text-gray-400">
+        <div class="text-gray-300">Hammerhead</div>
+        <div class="text-right text-blue-400">32.1s</div>
+        <div class="text-right text-amber-400">24.3s</div>
+        <div class="text-right text-white font-medium">56.4s</div>
+      </div>
+    </div>
+  </div>
+
+</div>
+<div class="h-16"></div>
+</body>
+</html>

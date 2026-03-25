@@ -1,22 +1,47 @@
 # Session Journal
 
 ## Current Focus
-Fresh database approach for clean data reset. Plan approved, dry run first.
+Loadout page overhaul: data pipeline complete (ports, modules, combat stats, parent links). HTML mockup iterated with Gavin. React implementation next.
 
 ## What's Next
-1. **IMMEDIATE: Execute fresh DB plan** (plan at `.claude/plans/modular-crunching-nygaard.md`)
-   - Create sc-companion-test D1 database
-   - Write export_prod.py to merge v32+v33 game data
-   - Bootstrap Better Auth + apply 146 migrations
-   - Load merged game data + user data
-   - Verify everything
-   - If clean: repeat for sc-companion-v2 (prod) and sc-companion-staging-v2
-   - Cut over wrangler.toml
-2. Build 4.7.0 delta extraction pipeline
-3. Close GitHub issues (37 open) before Saturday March 29 launch
-4. KV cache purge after data is finalized
+1. Implement loadout page in React from approved mockup (loadout-v2.html + weapons-test.html)
+2. Wire up TTK calculations using armor/shield/damage data now in DB
+3. Wire up power pip system using ship pool data
+4. Continue closing GitHub issues before Saturday March 29 launch
+5. Build 4.7.0 delta extraction pipeline for when 4.7 goes LIVE
 
 ## Log
+
+### 2026-03-26 10:30 — Completed: Combat stats pipeline + loadout mockup design
+- **Migration 0148**: Added combat stat columns to vehicles (armor_hp, damage multipliers, deflection, signatures, power pools) and vehicle_components (per-type damage, penetration, weapon_range, shield absorb)
+- **combat_stats/extract.py**: New extraction script for weapon damage types (from ammo params), shield resistances, ship armor stats, power pools, cross-section signatures, parent vehicle links
+- **Parent vehicle links**: 47 variants linked to base models via parent_vehicle_id + armor inheritance
+- **Coverage**: 98% armor (260/263 flyable), 97% power pools, 94% signatures
+- **Key data findings**: Fire rate from `fireActions[].fireRate` (Rapid) or `sequenceEntries[].weaponAction.fireRate` (Single). Shield resist is [Phys,Energy,Dist,Therm,Bio,Stun] array. Armor has damageMultiplier + deflection (flat per-hit reduction). Power pools are FixedPowerPool(WeaponGun, poolSize) + DynamicPowerPool(Shield, maxItemCount). Mode exclusions: Shields OFF in NAV, QDrive OFF in SCM.
+- **Loadout mockup**: `frontend/mockups/loadout-v2.html` + `weapons-test.html` — iterated with Gavin over ~10 rounds. Features: parent→child weapon hierarchy with └ bracket, gimbal/fixed icons, weapon group badges (1-4), damage type shapes (■▰◆⬡▲) for colorblind accessibility, 3-section summary bar (DPS+damage breakdown | power pips | 3×2 stat grid), TTK panel, modules section
+- **Jump drive fix**: Added `hardpoint_jump_drive` prefix → "Jump Drive" category, fixed 193 ports on both DBs
+
+### 2026-03-26 07:30 — Completed: Ship ports extraction overhaul + module system
+- **extract.py rewrite**: Added ~25 missing port prefixes (weapons, turrets, missiles, modules, countermeasures), fixed filter logic to keep children of typed parents, added port size resolution from DataCore (AttachDef.Size + SItemPortContainerComponentParams.Ports[].MinSize/MaxSize), added entityClassName follow for modules with internal loadouts
+- **extract_modules.py**: New script discovers all compatible modules per ship port via tag matching (AttachDef.Tags). Indexes all Module-type items in scitem/ships/module/ directory
+- **Migration 0145**: `vehicle_modules` table — uuid, vehicle_id, port_name, class_name, display_name, size, tags, is_default, has_loadout, game_version_id
+- **Backend**: `getShipModules()` query + `GET /api/loadout/:slug/modules` endpoint with KV caching
+- **Data loaded**: Both prod + staging — 10,003 ports (up from 3,951), 9,362 with sizes (94%), 21 modules across Retaliator (8) + Apollo Medivac/Triage variants
+- **Validated against 7 ships** (Apollo, Redeemer, Corsair, Perseus, Retaliator, Asgard, F8C) — all weapon hierarchies match Erkul/DataCore
+- Typecheck + build clean
+
+### 2026-03-26 06:00 — Completed: Production DB cutover + v1.0.0 launch prep
+- **Production DB cutover**: Fresh `sc-companion-v2` (0f2fd623) fully loaded — 87 game tables, 21 users, 916 fleet entries, 1,088,220 loot locations
+- **Fixed missing `twoFactorEnabled`** column on prod user table — was blocking new signups
+- **Fixed stale FKs** on `vehicle_career_assignments` and `vehicle_role_assignments` — referenced `_old` tables
+- **Ops feature flag**: Backend returns 404 in production, frontend hides tab/routes via `features.ops` from `/api/status`
+- **Public access**: Game Data + Reference routes no longer require login
+- **Extension install page**: Replaced store links with "Coming Soon" pill + manual install sections with GitHub release downloads
+- **About page**: Team bios (Vengeance, Mr_Xul, Mallachi) with avatars, mission statement, Ko-fi link
+- **Community Tools**: CCU Game card on Fleet and Ship DB pages
+- **Sidebar**: v2.0.0 → v1.0.0, NZVengeance → About link
+- **Auth**: Sign-out redirects to `/` not `/login`, removed "Registration is by invitation only" pill
+- **11 commits pushed** to both main and staging
 
 ### 2026-03-23 19:00 — Completed: 100% manufacturer coverage + extraction pipeline fixes
 - **Manufacturer coverage**: 0 NULL manufacturer_id across ALL tables on both prod and staging

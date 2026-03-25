@@ -345,6 +345,21 @@ export async function getShipLoadout(db: D1Database, slug: string, versionId?: n
   return result.results as Record<string, unknown>[];
 }
 
+export async function getShipModules(db: D1Database, slug: string, versionId?: number): Promise<Record<string, unknown>[]> {
+  const result = await db
+    .prepare(
+      `SELECT vm.id, vm.uuid, vm.port_name, vm.class_name, vm.display_name,
+              vm.size, vm.is_default, vm.has_loadout
+       FROM vehicle_modules vm
+       ${deltaVersionJoin('vehicle_modules', 'vm', 'uuid', versionId)}
+       WHERE vm.vehicle_id = (SELECT v.id FROM vehicles v ${vehicleVersionJoin(versionId)} WHERE v.slug = ?)
+       ORDER BY vm.port_name, vm.is_default DESC, vm.display_name`
+    )
+    .bind(slug)
+    .all();
+  return result.results as Record<string, unknown>[];
+}
+
 // ============================================================
 // Paint Operations
 // ============================================================

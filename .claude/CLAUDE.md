@@ -6,7 +6,7 @@ data, and item stats. Deployed as a Cloudflare Worker with a D1 database and Rea
 
 ## Tech Stack
 - **Backend:** TypeScript, Hono framework, Cloudflare Workers
-- **Database:** Cloudflare D1 (SQLite dialect), 123 migrations
+- **Database:** Cloudflare D1 (SQLite dialect), 144 migrations
 - **Frontend:** React SPA (Vite), Tailwind CSS, Lucide icons, Recharts
 - **Auth:** Better Auth v1.4.18 with Kysely D1 dialect
 - **Deployment:** `wrangler deploy` via GitHub Actions on push to `main` or `staging`
@@ -62,12 +62,17 @@ data, and item stats. Deployed as a Cloudflare Worker with a D1 database and Rea
 - `pipeline.ts` — Sync pipeline orchestration (RSI image sync only; paint metadata comes from DataCore extraction scripts, not live sync)
 
 ### Frontend (`/frontend/src/pages/`)
-React SPA. 38 page components including: `Dashboard`, `FleetTable`, `ShipDB`, `ShipDetail`,
-`Insurance`, `Analysis`, `AnalysisHistory`, `Import`, `Account`, `LootDB/`, `POI`, `POIDetail`,
+React SPA. 41 page components including: `Dashboard`, `FleetTable`, `ShipDB`, `ShipDetail`,
+`Insurance`, `Analysis`, `AnalysisHistory`, `Insights`, `Import`, `Account/`, `LootDB/`, `POI`, `POIDetail`,
 `Contracts`, `Orgs`, `OrgProfile`, `OrgSettings`, `Settings`, `Admin`, `UserManagement`,
 `Login`, `Register`, `ForgotPassword`, `ResetPassword`, `TwoFactorVerify`, `VerifyEmail`,
 `AcceptInvitation`, `Shops`, `TradeCommodities`, `LawSystem`, `Reputation`, `Careers`,
-`MiningGuide`, `PaintBrowser`, `NPCLoadouts`, `ArmorSetDetail`, `Privacy`, `Terms`, `NotFound`.
+`MiningGuide`, `PaintBrowser`, `NPCLoadouts`, `ArmorSetDetail`, `Crafting/`, `About`,
+`Privacy`, `Terms`, `NotFound`.
+
+**Public pages** (no login required): All Game Data pages (loot, POI, contracts, shops, trade, mining, NPC loadouts), all Reference pages (ships, paints, careers, reputation, law), About, crafting.
+
+**Feature-flagged**: Org Ops — hidden in production via `features.ops` from `/api/status` (ENVIRONMENT-based).
 
 All filter/sort/pagination state uses URL query strings (`useSearchParams`) for deep-linking.
 
@@ -184,13 +189,13 @@ source ~/.secrets && npx wrangler d1 migrations apply sc-companion-staging --rem
 
 ### Production
 - **Worker:** `sc-bridge` → `scbridge.app`
-- **D1:** `sc-companion` (`56875a7e-0ebd-4455-887d-5d1e1afdb416`)
+- **D1:** `sc-companion-v2` (`0f2fd623-0a47-492b-aa43-0773cced850b`)
 - **R2:** `sc-bridge-avatars`
 - **Deploy trigger:** push to `main`
 
 ### Staging
 - **Worker:** `sc-bridge-staging` → `staging.scbridge.app`
-- **D1:** `sc-companion-staging` (`6c6a387b-362f-4dda-88dc-b441b6dc268f`)
+- **D1:** `sc-companion-staging-v2` (`210c084b-6e14-415f-af45-46157e5d53a5`)
 - **R2:** `sc-bridge-avatars-staging`
 - **Deploy trigger:** push to `staging` branch
 - **Crons:** disabled (empty array)
@@ -237,12 +242,12 @@ have caused bugs before or are easy to get wrong.
 
 ### Migrations
 - Files: `src/db/migrations/NNNN_description.sql` — sequential, zero-padded 4-digit
-- Apply (prod): `source ~/.secrets && npx wrangler d1 migrations apply sc-companion --remote`
-- Apply (staging): `source ~/.secrets && npx wrangler d1 migrations apply sc-companion-staging --remote --env staging`
+- Apply (prod): `source ~/.secrets && npx wrangler d1 migrations apply sc-companion-v2 --remote`
+- Apply (staging): `source ~/.secrets && npx wrangler d1 migrations apply sc-companion-staging-v2 --remote --env staging`
 - Never skip numbers. Never rename an applied migration file.
 - **Never ALTER a PK or UNIQUE constraint in-place** — create new table, copy data, drop old.
 - Index naming: `idx_{table}_{column}` — e.g., `idx_loot_map_type`
-- Current last migration: **0142_clustering_preset_uuid_per_version.sql**
+- Current last migration: **0148_combat_stats.sql**
 
 ### Out-of-Band Columns
 Previously these columns were applied via `wrangler d1 execute` outside migration files.
