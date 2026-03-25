@@ -128,7 +128,7 @@ export function createAuth(env: Env) {
       updateAge: 60 * 60 * 24, // Refresh daily
       cookieCache: {
         enabled: true,
-        maxAge: 5 * 60, // 5 min cache
+        maxAge: 60, // 1 min — reduced from 5 min to narrow banned-user window (M-05)
       },
     },
     user: {
@@ -188,7 +188,7 @@ export function createAuth(env: Env) {
     account: {
       accountLinking: {
         enabled: true,
-        trustedProviders: ["google", "discord", "github", "twitch"],
+        trustedProviders: [],
       },
     },
     databaseHooks: {

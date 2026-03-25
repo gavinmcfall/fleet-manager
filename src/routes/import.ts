@@ -6,7 +6,7 @@ import { loadInsuranceTypes } from "../db/queries";
 import { logEvent } from "../lib/logger";
 import { logUserChange } from "../lib/change-history";
 import { validate, HangarXplorImportSchema, HangarSyncPayloadSchema, SYNC_ANOMALY_THRESHOLDS } from "../lib/validation";
-import { VEHICLE_VERSION_CAP } from "../lib/constants";
+import { VEHICLE_VERSION_CAP, isTrustedExtension } from "../lib/constants";
 import {
   preloadVehicleMap,
   findVehicleSlugLocal,
@@ -30,6 +30,18 @@ export function importRoutes() {
     const db = c.env.DB;
     const userID = c.get("user")!.id;
 
+    // Rate limit: reject if last import was < 30 seconds ago (L-36 concurrent import guard)
+    const lastImport = await db
+      .prepare("SELECT MAX(imported_at) as last FROM user_fleet WHERE user_id = ?")
+      .bind(userID)
+      .first<{ last: string | null }>();
+    if (lastImport?.last) {
+      const elapsed = Date.now() - new Date(lastImport.last + "Z").getTime();
+      if (elapsed < 30000) {
+        return c.json({ error: "Please wait 30 seconds between imports" }, 429);
+      }
+    }
+
     const entries: HangarXplorEntry[] = c.req.valid("json");
 
     // Preload all vehicle slugs+names into memory (avoids per-entry queries)
@@ -38,8 +50,7 @@ export function importRoutes() {
 
     // Build all insert statements first, then batch with the delete
     const insertStmts: D1PreparedStatement[] = [];
-    let stubStmts: D1PreparedStatement[] = [];
-    const stubSlugs: string[] = [];
+    const skippedShips: string[] = [];
 
     for (const entry of entries) {
       const displayName = entry.name;
@@ -53,22 +64,11 @@ export function importRoutes() {
 
       // Find matching vehicle in preloaded map
       const candidates = [codeSlug, nameSlug, lookupSlug, compactCode, compactName];
-      let matchedSlug = findVehicleSlugLocal(vehicleMap, candidates, displayName);
+      const matchedSlug = findVehicleSlugLocal(vehicleMap, candidates, displayName);
       if (!matchedSlug) {
-        matchedSlug = codeSlug;
-        // Need to create a stub — queue for batch insert
-        if (!vehicleMap.slugToID.has(matchedSlug)) {
-          stubStmts.push(
-            db
-              .prepare(
-                `INSERT INTO vehicles (slug, name, game_version_id, updated_at)
-                VALUES (?, ?, (SELECT id FROM game_versions WHERE is_default = 1), datetime('now'))
-                ON CONFLICT(slug, game_version_id) DO UPDATE SET name=excluded.name, updated_at=excluded.updated_at`,
-              )
-              .bind(matchedSlug, displayName),
-          );
-          stubSlugs.push(matchedSlug);
-        }
+        // Skip unmatched ships instead of creating stubs in shared vehicles table
+        skippedShips.push(displayName);
+        continue;
       }
 
       // Detect custom name
@@ -110,7 +110,7 @@ export function importRoutes() {
         }
       }
 
-      // Queue insert (vehicleID resolved after stubs are created)
+      // Queue fleet insert
       insertStmts.push(
         db
           .prepare(
@@ -134,33 +134,34 @@ export function importRoutes() {
       );
     }
 
-    // Execute: stubs first (if any), then delete+insert as a batch
-    if (stubStmts.length > 0) {
-      // Batch stub vehicle creation (max 100 per batch for D1)
-      for (let i = 0; i < stubStmts.length; i += 100) {
-        await db.batch(stubStmts.slice(i, i + 100));
-      }
-      console.log(`[import] Created ${stubStmts.length} stub vehicles: ${stubSlugs.join(", ")}`);
+    // Log unmatched ships so we can add them to the vehicles table via extraction scripts
+    if (skippedShips.length > 0) {
+      console.warn(`[import] Skipped ${skippedShips.length} unmatched ships: ${JSON.stringify(skippedShips.slice(0, 20))}`);
+      logEvent("hangarxplor_unmatched", {
+        count: skippedShips.length,
+        items: skippedShips.slice(0, 50),
+      });
     }
 
     // Insert-then-swap using shared helper
     await executeFleetSwap(db, userID, insertStmts);
     const imported = insertStmts.length;
 
-    console.log(`[import] HangarXplor import complete: ${imported}/${entries.length}`);
+    console.log(`[import] HangarXplor import complete: ${imported}/${entries.length}, ${skippedShips.length} skipped`);
     logEvent("fleet_import", {
       entries: entries.length,
       imported,
-      stubs_created: stubStmts.length,
-      stub_slugs: stubSlugs,
+      skipped: skippedShips.length,
     });
     await logUserChange(db, userID, "fleet_imported", {
-      metadata: { vehicle_count: imported, total_entries: entries.length },
+      metadata: { vehicle_count: imported, total_entries: entries.length, skipped_count: skippedShips.length },
       ipAddress: c.req.header("cf-connecting-ip") ?? c.req.header("x-forwarded-for"),
     });
     return c.json({
       imported,
       total: entries.length,
+      skipped: skippedShips.length,
+      skipped_ships: skippedShips.slice(0, 20),
       message: "Import complete",
     });
   });
@@ -189,7 +190,7 @@ export function importRoutes() {
 
     // --- Anomaly detection ---
     const totalFleetValueCents = payload.pledges.reduce(
-      (sum: number, p: { valueCents?: number }) => sum + (p.valueCents ?? 0), 0,
+      (sum, p) => sum + (p.valueCents ?? 0), 0 as number,
     );
     const isAnomalous =
       payload.pledges.length > SYNC_ANOMALY_THRESHOLDS.pledgeCount ||
@@ -213,7 +214,7 @@ export function importRoutes() {
     const skippedItems: string[] = [];
 
     for (const pledge of payload.pledges) {
-      const shipItems = pledge.items.filter((item: { kind?: string }) => item.kind === "Ship");
+      const shipItems = pledge.items.filter((item) => item.kind === "Ship");
 
       for (const item of shipItems) {
         const displayName = item.title;
@@ -239,7 +240,7 @@ export function importRoutes() {
         // Titles are like "Lifetime Insurance", "120 Month Insurance", "6 Month Insurance"
         let insuranceTypeID: number | null = null;
         const insuranceItem = pledge.items.find(
-          (i: { kind?: string | null; title?: string }) => i.kind === "Insurance",
+          (i) => i.kind === "Insurance",
         );
         const insTitle = (insuranceItem?.title ?? "").toLowerCase();
         if (pledge.hasLti || insTitle.includes("lifetime") || insTitle.includes("lti")) {
@@ -291,7 +292,7 @@ export function importRoutes() {
 
     // Log unmatched items so we can add them to the vehicles table via extraction scripts
     if (skippedItems.length > 0) {
-      console.warn(`[hangar-sync] Skipped ${skippedItems.length} unmatched items: ${skippedItems.slice(0, 20).join(", ")}`);
+      console.warn(`[hangar-sync] Skipped ${skippedItems.length} unmatched items: ${JSON.stringify(skippedItems.slice(0, 20))}`);
       logEvent("hangar_sync_unmatched", {
         user_id: userID,
         count: skippedItems.length,
@@ -357,8 +358,11 @@ export function importRoutes() {
         .run();
       hasProfile = true;
 
-      // Extension runs from the user's authenticated RSI session — auto-verify
-      if (acct.nickname) {
+      // Auto-verify RSI identity ONLY when request comes from a trusted extension
+      // (running on the user's authenticated RSI session). Non-extension callers
+      // (e.g. HangarXplor JSON paste) must use the bio-key verification flow.
+      const origin = c.req.header("Origin") || "";
+      if (acct.nickname && isTrustedExtension(origin)) {
         await db
           .prepare(
             `INSERT INTO user_rsi_profile (user_id, handle, display_name, avatar_url, enlisted_at, verified_at, verified_handle, fetched_at)
@@ -428,7 +432,7 @@ export function importRoutes() {
         userID,
         payload.pledges.length,
         imported,
-        payload.pledges.reduce((sum: number, p: { items: unknown[] }) => sum + p.items.length, 0),
+        payload.pledges.reduce((sum, p) => sum + p.items.length, 0 as number),
       )
       .run();
     const syncId = syncResult.meta.last_row_id;
@@ -510,7 +514,7 @@ export function importRoutes() {
 
     const itemStmts: D1PreparedStatement[] = [];
     for (const pledge of payload.pledges) {
-      const userPledgeId = pledgeIdMap.get(pledge.id);
+      const userPledgeId = pledgeIdMap.get(Number(pledge.id));
       if (!userPledgeId) continue;
 
       for (let idx = 0; idx < pledge.items.length; idx++) {
@@ -566,7 +570,7 @@ export function importRoutes() {
     const upgradeStmts: D1PreparedStatement[] = [];
     for (let idx = 0; idx < payload.upgrades.length; idx++) {
       const upgrade = payload.upgrades[idx];
-      const userPledgeId = pledgeIdMap.get(upgrade.pledge_id);
+      const userPledgeId = pledgeIdMap.get(Number(upgrade.pledge_id));
       if (!userPledgeId) continue; // Skip orphaned upgrades
 
       upgradeStmts.push(

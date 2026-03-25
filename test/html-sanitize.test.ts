@@ -99,6 +99,41 @@ describe("sanitizeHtml", () => {
       const input = '<img src="data:text/html,<script>alert(1)</script>">';
       expect(sanitizeHtml(input)).not.toContain('src="data:');
     });
+
+    it("strips HTML entity-encoded javascript: in href (decimal)", () => {
+      const input = '<a href="&#106;avascript:alert(1)">Click</a>';
+      expect(sanitizeHtml(input)).not.toContain("href");
+    });
+
+    it("strips HTML entity-encoded javascript: in href (hex)", () => {
+      const input = '<a href="&#x6A;avascript:alert(1)">Click</a>';
+      expect(sanitizeHtml(input)).not.toContain("href");
+    });
+
+    it("strips fully entity-encoded javascript: in href", () => {
+      const input = '<a href="&#106;&#97;&#118;&#97;&#115;&#99;&#114;&#105;&#112;&#116;&#58;alert(1)">Click</a>';
+      expect(sanitizeHtml(input)).not.toContain("href");
+    });
+
+    it("strips entity-encoded data: URI in src", () => {
+      const input = '<img src="&#100;&#97;&#116;&#97;:text/html,<script>alert(1)</script>">';
+      expect(sanitizeHtml(input)).not.toContain("src");
+    });
+
+    it("strips javascript: with whitespace obfuscation", () => {
+      const input = '<a href="java\tscript:alert(1)">Click</a>';
+      expect(sanitizeHtml(input)).not.toContain("href");
+    });
+
+    it("strips single-quoted javascript: href", () => {
+      const input = "<a href='javascript:alert(1)'>Click</a>";
+      expect(sanitizeHtml(input)).not.toContain("javascript:");
+    });
+
+    it("strips single-quoted entity-encoded javascript: href", () => {
+      const input = "<a href='&#106;avascript:alert(1)'>Click</a>";
+      expect(sanitizeHtml(input)).not.toContain("href");
+    });
   });
 
   describe("safe content preservation", () => {

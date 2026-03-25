@@ -38,10 +38,10 @@ export async function sendEmail(
   to: string,
   subject: string,
   html: string,
-): Promise<void> {
+): Promise<boolean> {
   if (!env.RESEND_API_KEY) {
     console.warn("[email] RESEND_API_KEY not set — skipping email send");
-    return;
+    return false;
   }
 
   const resp = await fetch("https://api.resend.com/emails", {
@@ -61,7 +61,9 @@ export async function sendEmail(
   if (!resp.ok) {
     const text = await resp.text();
     console.error(`[email] Failed to send to ${to}: ${resp.status} ${text}`);
-  } else {
-    console.log(`[email] Sent "${subject}" to ${to}`);
+    return false;
   }
+
+  console.log(`[email] Sent "${subject}" to ${to}`);
+  return true;
 }

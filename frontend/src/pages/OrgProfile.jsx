@@ -1,4 +1,5 @@
 import React, { useState, useCallback } from 'react'
+import DOMPurify from 'dompurify'
 import { useParams, Link, useSearchParams } from 'react-router-dom'
 import {
   ExternalLink, Users, Rocket, BarChart3, Building2, Globe,
@@ -262,7 +263,7 @@ function OrgAbout({ org }) {
           {expandedSection === id && (
             <div
               className="px-4 pb-4 prose prose-invert prose-sm max-w-none text-gray-300"
-              dangerouslySetInnerHTML={{ __html: content }}
+              dangerouslySetInnerHTML={{ __html: DOMPurify.sanitize(content) }}
             />
           )}
         </div>

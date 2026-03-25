@@ -33,7 +33,7 @@ export default class ErrorBoundary extends React.Component {
           ) : (
             <>
               <p className="text-sc-danger font-display tracking-wide">Something went wrong</p>
-              <p className="text-sm font-mono">{this.state.error?.message}</p>
+              <p className="text-sm text-gray-500">An unexpected error occurred. Please refresh the page.</p>
             </>
           )}
           <button

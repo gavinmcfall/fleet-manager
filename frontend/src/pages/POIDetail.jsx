@@ -1,4 +1,4 @@
-import React, { useMemo } from 'react'
+import React, { useMemo, useState } from 'react'
 import { useParams, Link, useSearchParams } from 'react-router-dom'
 import { MapPin, ArrowLeft, Store, ChevronDown, ChevronRight } from 'lucide-react'
 import { useLootLocationDetail, useLocationShops } from '../hooks/useAPI'

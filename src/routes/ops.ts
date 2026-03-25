@@ -1,9 +1,17 @@
-import { Hono } from "hono";
+import { Hono, type Context } from "hono";
 import { z } from "zod";
 import { getAuthUser, type HonoEnv } from "../lib/types";
 import { validate } from "../lib/validation";
 import { getOrgMembership, canManageOp } from "../lib/org-auth";
 import { calculatePayouts, type ParticipantInput } from "../lib/ops-payout";
+
+/** Parse an integer route param, returning null if not a valid number */
+function parseIntParam(c: Context, name: string): number | null {
+  const raw = c.req.param(name);
+  if (!raw) return null;
+  const val = parseInt(raw, 10);
+  return isNaN(val) ? null : val;
+}
 
 /**
  * /api/orgs/:slug/ops/* — Org Operations (mining runs, cargo hauls, etc.)
@@ -107,7 +115,8 @@ export function opsRoutes() {
   routes.get("/:opId", async (c) => {
     const user = getAuthUser(c);
     const slug = c.req.param("slug")!;
-    const opId = parseInt(c.req.param("opId"), 10);
+    const opId = parseIntParam(c, "opId");
+    if (!opId) return c.json({ error: "Invalid ID" }, 400);
     const db = c.env.DB;
 
     const ctx = await getOrgMembership(db, slug, user.id);
@@ -193,7 +202,8 @@ export function opsRoutes() {
     async (c) => {
       const user = getAuthUser(c);
       const slug = c.req.param("slug")!;
-      const opId = parseInt(c.req.param("opId"), 10);
+      const opId = parseIntParam(c, "opId");
+      if (!opId) return c.json({ error: "Invalid ID" }, 400);
       const db = c.env.DB;
 
       const ctx = await getOrgMembership(db, slug, user.id);
@@ -260,7 +270,8 @@ export function opsRoutes() {
   routes.delete("/:opId", async (c) => {
     const user = getAuthUser(c);
     const slug = c.req.param("slug")!;
-    const opId = parseInt(c.req.param("opId"), 10);
+    const opId = parseIntParam(c, "opId");
+    if (!opId) return c.json({ error: "Invalid ID" }, 400);
     const db = c.env.DB;
 
     const ctx = await getOrgMembership(db, slug, user.id);
@@ -297,7 +308,8 @@ export function opsRoutes() {
   routes.post("/:opId/join", async (c) => {
     const user = getAuthUser(c);
     const slug = c.req.param("slug")!;
-    const opId = parseInt(c.req.param("opId"), 10);
+    const opId = parseIntParam(c, "opId");
+    if (!opId) return c.json({ error: "Invalid ID" }, 400);
     const db = c.env.DB;
 
     const ctx = await getOrgMembership(db, slug, user.id);
@@ -328,7 +340,8 @@ export function opsRoutes() {
   routes.post("/:opId/leave", async (c) => {
     const user = getAuthUser(c);
     const slug = c.req.param("slug")!;
-    const opId = parseInt(c.req.param("opId"), 10);
+    const opId = parseIntParam(c, "opId");
+    if (!opId) return c.json({ error: "Invalid ID" }, 400);
     const db = c.env.DB;
 
     const ctx = await getOrgMembership(db, slug, user.id);
@@ -377,7 +390,8 @@ export function opsRoutes() {
     async (c) => {
       const user = getAuthUser(c);
       const slug = c.req.param("slug")!;
-      const opId = parseInt(c.req.param("opId"), 10);
+      const opId = parseIntParam(c, "opId");
+      if (!opId) return c.json({ error: "Invalid ID" }, 400);
       const db = c.env.DB;
 
       const ctx = await getOrgMembership(db, slug, user.id);
@@ -415,8 +429,9 @@ export function opsRoutes() {
   routes.delete("/:opId/ships/:shipId", async (c) => {
     const user = getAuthUser(c);
     const slug = c.req.param("slug")!;
-    const opId = parseInt(c.req.param("opId"), 10);
-    const shipId = parseInt(c.req.param("shipId"), 10);
+    const opId = parseIntParam(c, "opId");
+    const shipId = parseIntParam(c, "shipId");
+    if (!opId || !shipId) return c.json({ error: "Invalid ID" }, 400);
     const db = c.env.DB;
 
     const ctx = await getOrgMembership(db, slug, user.id);
@@ -430,8 +445,8 @@ export function opsRoutes() {
 
     // Ship owner or op admin can remove
     const op = await db
-      .prepare("SELECT created_by FROM org_ops WHERE id = ?")
-      .bind(opId)
+      .prepare("SELECT created_by FROM org_ops WHERE id = ? AND org_id = ?")
+      .bind(opId, ctx.orgId)
       .first<{ created_by: string }>();
     if (ship.owner_user_id !== user.id && (!op || !canManageOp(ctx.role, user.id, op.created_by))) {
       return c.json({ error: "Forbidden" }, 403);
@@ -452,7 +467,8 @@ export function opsRoutes() {
     async (c) => {
       const user = getAuthUser(c);
       const slug = c.req.param("slug")!;
-      const opId = parseInt(c.req.param("opId"), 10);
+      const opId = parseIntParam(c, "opId");
+      if (!opId) return c.json({ error: "Invalid ID" }, 400);
       const db = c.env.DB;
 
       const ctx = await getOrgMembership(db, slug, user.id);
@@ -471,6 +487,15 @@ export function opsRoutes() {
         .first<{ status: string }>();
       if (!op || op.status !== "active") {
         return c.json({ error: "Can only log earnings for active ops" }, 400);
+      }
+
+      // Rate limit: max 50 earnings entries per user per op
+      const earningsCount = await db
+        .prepare("SELECT COUNT(*) as cnt FROM org_op_earnings WHERE org_op_id = ? AND logged_by = ?")
+        .bind(opId, user.id)
+        .first<{ cnt: number }>();
+      if (earningsCount && earningsCount.cnt >= 50) {
+        return c.json({ error: "Maximum earnings entries reached for this operation" }, 400);
       }
 
       const body = c.req.valid("json");
@@ -494,7 +519,8 @@ export function opsRoutes() {
     async (c) => {
       const user = getAuthUser(c);
       const slug = c.req.param("slug")!;
-      const opId = parseInt(c.req.param("opId"), 10);
+      const opId = parseIntParam(c, "opId");
+      if (!opId) return c.json({ error: "Invalid ID" }, 400);
       const db = c.env.DB;
 
       const ctx = await getOrgMembership(db, slug, user.id);
@@ -505,6 +531,14 @@ export function opsRoutes() {
         .bind(opId, user.id)
         .first();
       if (!participant) return c.json({ error: "Must be a participant" }, 403);
+
+      const op = await db
+        .prepare("SELECT status FROM org_ops WHERE id = ? AND org_id = ?")
+        .bind(opId, ctx.orgId)
+        .first<{ status: string }>();
+      if (!op || op.status !== "active") {
+        return c.json({ error: "Can only log capital for active ops" }, 400);
+      }
 
       const body = c.req.valid("json");
       await db
@@ -521,7 +555,8 @@ export function opsRoutes() {
   routes.post("/:opId/complete", async (c) => {
     const user = getAuthUser(c);
     const slug = c.req.param("slug")!;
-    const opId = parseInt(c.req.param("opId"), 10);
+    const opId = parseIntParam(c, "opId");
+    if (!opId) return c.json({ error: "Invalid ID" }, 400);
     const db = c.env.DB;
 
     const ctx = await getOrgMembership(db, slug, user.id);
@@ -597,7 +632,8 @@ export function opsRoutes() {
   routes.patch("/:opId/payouts/:userId", async (c) => {
     const user = getAuthUser(c);
     const slug = c.req.param("slug")!;
-    const opId = parseInt(c.req.param("opId"), 10);
+    const opId = parseIntParam(c, "opId");
+    if (!opId) return c.json({ error: "Invalid ID" }, 400);
     const payeeUserId = c.req.param("userId");
     const db = c.env.DB;
 
@@ -627,7 +663,8 @@ export function opsRoutes() {
   routes.post("/:opId/code", async (c) => {
     const user = getAuthUser(c);
     const slug = c.req.param("slug")!;
-    const opId = parseInt(c.req.param("opId"), 10);
+    const opId = parseIntParam(c, "opId");
+    if (!opId) return c.json({ error: "Invalid ID" }, 400);
     const db = c.env.DB;
 
     const ctx = await getOrgMembership(db, slug, user.id);
@@ -643,12 +680,12 @@ export function opsRoutes() {
       return c.json({ error: "Forbidden" }, 403);
     }
 
-    // Generate 4-char alphanumeric code
+    // Generate 8-char alphanumeric code (30^8 ≈ 656 billion keyspace)
     const chars = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789"; // No I/O/0/1 to avoid confusion
     let code = "";
-    const bytes = new Uint8Array(4);
+    const bytes = new Uint8Array(8);
     crypto.getRandomValues(bytes);
-    for (let i = 0; i < 4; i++) {
+    for (let i = 0; i < 8; i++) {
       code += chars[bytes[i] % chars.length];
     }
 
@@ -665,7 +702,8 @@ export function opsRoutes() {
   routes.delete("/:opId/code", async (c) => {
     const user = getAuthUser(c);
     const slug = c.req.param("slug")!;
-    const opId = parseInt(c.req.param("opId"), 10);
+    const opId = parseIntParam(c, "opId");
+    if (!opId) return c.json({ error: "Invalid ID" }, 400);
     const db = c.env.DB;
 
     const ctx = await getOrgMembership(db, slug, user.id);
@@ -710,7 +748,8 @@ export function opsRoutes() {
     async (c) => {
       const user = getAuthUser(c);
       const slug = c.req.param("slug")!;
-      const opId = parseInt(c.req.param("opId"), 10);
+      const opId = parseIntParam(c, "opId");
+      if (!opId) return c.json({ error: "Invalid ID" }, 400);
       const rateeUserId = c.req.param("userId");
       const db = c.env.DB;
       const ip = c.req.header("CF-Connecting-IP") ?? null;
@@ -745,24 +784,44 @@ export function opsRoutes() {
         .first();
       if (!rateePart) return c.json({ error: "Target user is not a participant" }, 400);
 
-      // Rater must have verified account
-      const verified = await db
-        .prepare("SELECT verified_at FROM user_rsi_profile WHERE user_id = ?")
-        .bind(user.id)
-        .first<{ verified_at: string | null }>();
-      if (!verified?.verified_at) {
+      // Rater must have verified account (manual bio-key OR extension-based)
+      const [manualVerified, extensionVerified] = await Promise.all([
+        db
+          .prepare("SELECT verified_at FROM user_rsi_profile WHERE user_id = ?")
+          .bind(user.id)
+          .first<{ verified_at: string | null }>(),
+        db
+          .prepare("SELECT user_id FROM user_rsi_profiles WHERE user_id = ?")
+          .bind(user.id)
+          .first(),
+      ]);
+      if (!manualVerified?.verified_at && !extensionVerified) {
         return c.json({ error: "You must verify your RSI identity before rating" }, 403);
       }
 
-      // Check account age (7 days)
+      // Check account exists and age (7 days)
       const raterAccount = await db
         .prepare("SELECT createdAt FROM user WHERE id = ?")
         .bind(user.id)
         .first<{ createdAt: string }>();
-      if (raterAccount) {
-        const accountAge = Date.now() - new Date(raterAccount.createdAt).getTime();
-        if (accountAge < 7 * 24 * 60 * 60 * 1000) {
-          return c.json({ error: "Account must be at least 7 days old to submit ratings" }, 403);
+      if (!raterAccount) {
+        return c.json({ error: "Account not found" }, 400);
+      }
+      const accountAge = Date.now() - new Date(raterAccount.createdAt).getTime();
+      if (accountAge < 7 * 24 * 60 * 60 * 1000) {
+        return c.json({ error: "Account must be at least 7 days old to submit ratings" }, 403);
+      }
+
+      // Rate-limit: prevent audit log spam (10s cooldown per rater+ratee+op)
+      const recentAudit = await db.prepare(
+        `SELECT created_at FROM rating_audit_log
+         WHERE actor_user_id = ? AND action = 'rate'
+         ORDER BY created_at DESC LIMIT 1`
+      ).bind(user.id).first<{ created_at: string }>();
+      if (recentAudit?.created_at) {
+        const elapsed = Date.now() - new Date(recentAudit.created_at + "Z").getTime();
+        if (elapsed < 10000) {
+          return c.json({ error: "Please wait before updating ratings" }, 429);
         }
       }
 
@@ -820,19 +879,40 @@ export function opsRoutes() {
           .bind(rateeUserId, catId)
           .first<{ cnt: number }>();
         const count = countResult?.cnt ?? 0;
-        const offset = Math.floor(count / 2);
 
-        const medianResult = await db
-          .prepare(
-            `SELECT score FROM player_ratings
-             WHERE ratee_user_id = ? AND rating_category_id = ?
-             ORDER BY score
-             LIMIT 1 OFFSET ?`,
-          )
-          .bind(rateeUserId, catId, offset)
-          .first<{ score: number }>();
-
-        const median = medianResult?.score ?? 0;
+        let median = 0;
+        if (count > 0) {
+          if (count % 2 === 1) {
+            // Odd count: take the middle value
+            const medianResult = await db
+              .prepare(
+                `SELECT score FROM player_ratings
+                 WHERE ratee_user_id = ? AND rating_category_id = ?
+                 ORDER BY score
+                 LIMIT 1 OFFSET ?`,
+              )
+              .bind(rateeUserId, catId, Math.floor(count / 2))
+              .first<{ score: number }>();
+            median = medianResult?.score ?? 0;
+          } else {
+            // Even count: average the two middle values
+            const midRows = await db
+              .prepare(
+                `SELECT score FROM player_ratings
+                 WHERE ratee_user_id = ? AND rating_category_id = ?
+                 ORDER BY score
+                 LIMIT 2 OFFSET ?`,
+              )
+              .bind(rateeUserId, catId, Math.floor(count / 2) - 1)
+              .all<{ score: number }>();
+            const scores = midRows.results;
+            if (scores.length === 2) {
+              median = (scores[0].score + scores[1].score) / 2;
+            } else if (scores.length === 1) {
+              median = scores[0].score;
+            }
+          }
+        }
 
         await db
           .prepare(
@@ -855,7 +935,8 @@ export function opsRoutes() {
   routes.get("/:opId/ratings", async (c) => {
     const user = getAuthUser(c);
     const slug = c.req.param("slug")!;
-    const opId = parseInt(c.req.param("opId"), 10);
+    const opId = parseIntParam(c, "opId");
+    if (!opId) return c.json({ error: "Invalid ID" }, 400);
     const db = c.env.DB;
 
     const ctx = await getOrgMembership(db, slug, user.id);
@@ -924,6 +1005,9 @@ export function publicOpsRoutes() {
 
   // GET /api/ops/join/:code — op summary for join page
   routes.get("/join/:code", async (c) => {
+    const user = c.get("user");
+    if (!user) return c.json({ error: "Unauthorized" }, 401);
+
     const code = c.req.param("code").toUpperCase();
     const db = c.env.DB;
 
@@ -986,7 +1070,7 @@ export function publicOpsRoutes() {
       return c.json({ error: "This op is no longer accepting participants" }, 400);
     }
 
-    // Add participant (non-members joining via code are NOT added to the org)
+    // Add participant
     try {
       await db
         .prepare("INSERT INTO org_op_participants (org_op_id, user_id) VALUES (?, ?)")
@@ -994,6 +1078,23 @@ export function publicOpsRoutes() {
         .run();
     } catch {
       return c.json({ error: "Already joined this op" }, 409);
+    }
+
+    // Auto-add to org as member if not already (so they can access op endpoints)
+    const existingMember = await db
+      .prepare(
+        `SELECT id FROM member WHERE "organizationId" = ? AND "userId" = ?`,
+      )
+      .bind(op.org_id, user.id)
+      .first();
+    if (!existingMember) {
+      await db
+        .prepare(
+          `INSERT INTO member ("id", "organizationId", "userId", "role", "createdAt")
+           VALUES (?, ?, ?, 'member', datetime('now'))`,
+        )
+        .bind(crypto.randomUUID(), op.org_id, user.id)
+        .run();
     }
 
     // Find org slug for redirect

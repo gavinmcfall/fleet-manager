@@ -61,7 +61,6 @@ export async function cachedJson<T>(
         "Content-Type": "application/json",
         "Cache-Control": cacheControl,
         "X-Cache": "HIT",
-        "X-Cache-Key": cacheKey,
       },
     });
   }
@@ -89,7 +88,6 @@ export async function cachedJson<T>(
       "Content-Type": "application/json",
       "Cache-Control": cacheControl,
       "X-Cache": "MISS",
-      "X-Cache-Key": cacheKey,
     },
   });
 }

@@ -11,6 +11,11 @@ import {
  * All sync POST handlers run in the background via executionCtx.waitUntil()
  * and return immediately. This avoids Workers HTTP request timeout (30s CPU).
  */
+
+/** Per-isolate cooldown for RSI sync (admin rate limiting) */
+let lastRsiSyncTime = 0;
+const RSI_SYNC_COOLDOWN_MS = 5 * 60 * 1000; // 5 minutes
+
 export function syncRoutes<E extends { Bindings: Env }>() {
   const routes = new Hono<E>();
 
@@ -32,6 +37,12 @@ export function syncRoutes<E extends { Bindings: Env }>() {
 
   // POST /api/sync/rsi — trigger RSI API image sync (background)
   routes.post("/rsi", async (c) => {
+    const now = Date.now();
+    if (now - lastRsiSyncTime < RSI_SYNC_COOLDOWN_MS) {
+      return c.json({ error: "Sync already triggered recently — wait 5 minutes between syncs" }, 429);
+    }
+    lastRsiSyncTime = now;
+
     const env = c.env;
     c.executionCtx.waitUntil(
       triggerRSISync(env).catch((err) =>

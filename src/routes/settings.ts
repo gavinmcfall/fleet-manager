@@ -183,6 +183,14 @@ export function settingsRoutes() {
 
     const body = c.req.valid("json");
 
+    // Only super_admins can set adminPreviewPatch
+    if (body.adminPreviewPatch !== undefined) {
+      const userRecord = await db.prepare("SELECT role FROM user WHERE id = ?").bind(userID).first<{ role: string | null }>();
+      if (userRecord?.role !== "super_admin") {
+        delete body.adminPreviewPatch;
+      }
+    }
+
     // Load existing prefs for old-value comparison
     const existingRows = await db
       .prepare("SELECT key, value FROM user_settings WHERE user_id = ?")

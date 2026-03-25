@@ -69,9 +69,63 @@ export const HangarXplorImportSchema = z
 // --- Hangar Sync Schemas (RSI extension) ---
 // String length caps prevent payload-stuffing DoS. .passthrough() kept because RSI
 // scraped data varies between pledges — extra fields are normal but we cap known ones.
+// Per-element schemas validate ONLY fields that are bound to SQL — .passthrough()
+// avoids CPU-expensive deep validation on RSI's variable payload shape.
 
 /** Max string lengths for sync payload fields */
 const STR = { short: 200, medium: 500, url: 2000, json: 10000 } as const;
+
+/** Flexible ID: RSI pledge IDs arrive as number or string depending on extension version */
+const FlexId = z.union([z.string().max(50), z.number()]);
+
+/** Pledge item (nested inside pledge.items) — only fields bound to SQL */
+const PledgeItemSchema = z.object({
+  title: z.string().max(STR.short).default(""),
+  kind: z.string().max(50).nullable().optional(),
+  manufacturerCode: z.string().max(20).nullable().optional(),
+  manufacturer: z.string().max(STR.short).nullable().optional(),
+  image: z.string().max(STR.url).nullable().optional(),
+  customName: z.string().max(STR.short).nullable().optional(),
+  serial: z.string().max(100).nullable().optional(),
+  isNameable: z.boolean().optional().default(false),
+}).passthrough();
+
+/** Pledge schema — fields accessed in hangar-sync route */
+const SyncPledgeSchema = z.object({
+  id: FlexId,
+  name: z.string().max(STR.short).default(""),
+  value: z.string().max(50).nullable().optional(),
+  valueCents: z.number().int().min(0).max(100_000_000).nullable().optional(),
+  configurationValue: z.string().max(50).nullable().optional(),
+  currency: z.string().max(10).nullable().optional(),
+  date: z.string().max(50).nullable().optional(),
+  isUpgraded: z.boolean().optional().default(false),
+  isReclaimable: z.boolean().optional().default(false),
+  isGiftable: z.boolean().optional().default(false),
+  isWarbond: z.boolean().optional().default(false),
+  hasLti: z.boolean().optional().default(false),
+  availability: z.string().max(50).nullable().optional(),
+  items: z.array(PledgeItemSchema).max(100).default([]),
+}).passthrough();
+
+/** Buyback pledge schema — fields accessed in hangar-sync route */
+const SyncBuybackSchema = z.object({
+  id: FlexId,
+  name: z.string().max(STR.short).default(""),
+  value_cents: z.number().int().min(0).max(100_000_000).nullable().optional(),
+  date_parsed: z.string().max(50).nullable().optional(),
+  date: z.string().max(50).nullable().optional(),
+  is_credit_reclaimable: z.boolean().optional().default(false),
+  items: z.array(z.object({}).passthrough()).max(100).default([]),
+}).passthrough();
+
+/** Upgrade schema — fields accessed in hangar-sync route */
+const SyncUpgradeSchema = z.object({
+  pledge_id: FlexId,
+  name: z.string().max(STR.short).default(""),
+  applied_at: z.string().max(50).nullable().optional(),
+  new_value: z.string().max(50).nullable().optional(),
+}).passthrough();
 
 /** Named ship schema */
 const NamedShipSchema = z.object({
@@ -110,12 +164,11 @@ export const SYNC_ANOMALY_THRESHOLDS = {
 
 /** Full hangar sync payload from extension */
 export const HangarSyncPayloadSchema = z.object({
-  // Use z.any() for large arrays — Zod per-element validation on 500+ pledges
-  // with nested items causes Workers CPU timeout. The data comes from our own
-  // extension so it's trusted; we validate at the SQL binding level instead.
-  pledges: z.array(z.any()).max(2000).default([]),
-  buyback_pledges: z.array(z.any()).max(1000).default([]),
-  upgrades: z.array(z.any()).max(5000).default([]),
+  // Lightweight per-element schemas validate only fields bound to SQL.
+  // .passthrough() avoids CPU-expensive deep validation on RSI's variable payload shape.
+  pledges: z.array(SyncPledgeSchema).max(2000).default([]),
+  buyback_pledges: z.array(SyncBuybackSchema).max(1000).default([]),
+  upgrades: z.array(SyncUpgradeSchema).max(5000).default([]),
   account: RsiAccountInfoSchema.optional().default(null),
   named_ships: z.array(NamedShipSchema).max(500).default([]),
   sync_meta: z.object({

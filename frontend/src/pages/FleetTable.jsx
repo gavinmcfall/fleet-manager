@@ -257,6 +257,7 @@ export default function FleetTable() {
                     key={rowId || i}
                     className="cursor-pointer transition-colors hover:bg-white/[0.03]"
                     onClick={() => navigate(`/ships/${v.vehicle_slug}`)}
+                    onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); navigate(`/ships/${v.vehicle_slug}`); } }}
                     tabIndex={0}
                     role="row"
                     aria-label={`View details for ${v.vehicle_name}${v.custom_name ? ` "${v.custom_name}"` : ''}`}

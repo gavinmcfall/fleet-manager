@@ -26,7 +26,7 @@ export function vehicleRoutes<E extends { Bindings: Env }>() {
             m.name as manufacturer_name, m.code as manufacturer_code,
             ps.key as production_status
           FROM vehicles v
-          ${vehicleVersionJoin(patch)}
+          ${vehicleVersionJoin(versionId)}
           LEFT JOIN manufacturers m ON m.id = v.manufacturer_id
           LEFT JOIN production_statuses ps ON ps.id = v.production_status_id
           WHERE v.is_paint_variant = 0
@@ -59,7 +59,7 @@ export function vehicleRoutes<E extends { Bindings: Env }>() {
             m.name as manufacturer_name, m.code as manufacturer_code,
             ps.key as production_status
           FROM vehicles v
-          ${vehicleVersionJoin(patch)}
+          ${vehicleVersionJoin(versionId)}
           LEFT JOIN manufacturers m ON m.id = v.manufacturer_id
           LEFT JOIN production_statuses ps ON ps.id = v.production_status_id
           WHERE v.slug = ? AND v.is_paint_variant = 0`,

@@ -2,6 +2,17 @@
  * Shared constants — sync source IDs match seed data in 0001_initial_schema.sql
  */
 
+// CORS — pinned extension IDs for SC Bridge Sync.
+// Extension IDs are stable after store publication. Update these when publishing new extensions.
+export const TRUSTED_EXTENSION_ORIGINS = new Set<string>([
+  "chrome-extension://edndedmmbdbofdphimpcofdccbpbgjib", // Microsoft Edge Add-ons
+  // Add Chrome Web Store ID once approved:
+  // "chrome-extension://gcokkoamjodagagbojhkimfbjjpdfefi",
+]);
+
+export const isTrustedExtension = (origin: string) =>
+  TRUSTED_EXTENSION_ORIGINS.has(origin);
+
 export const SYNC_SOURCE = {
   HANGARXPLOR: 3,
   SCUNPACKED: 4,
@@ -31,36 +42,32 @@ export const VEHICLE_VERSION_JOIN = `INNER JOIN (
  */
 export const VEHICLE_VERSION_CAP = `game_version_id <= (SELECT id FROM game_versions WHERE is_default = 1)`;
 
-/** Version-aware join — accepts optional patch code for user-selected versions.
- * Falls back to the default version if the requested code doesn't exist
- * (e.g. stale PTU codes after version consolidation). */
-export function versionSubquery(patchCode?: string): string {
-  if (!patchCode) return `(SELECT id FROM game_versions WHERE is_default = 1)`;
-  const escaped = patchCode.replace(/'/g, "''");
-  return `(SELECT COALESCE(
-    (SELECT id FROM game_versions WHERE code = '${escaped}'),
-    (SELECT id FROM game_versions WHERE is_default = 1)
-  ))`;
+/** Version-aware subquery — accepts a pre-resolved integer versionId (from resolveVersionId()).
+ * When versionId is provided and valid (>0), interpolates the integer directly (safe — not user input).
+ * Falls back to the default version subquery when versionId is absent or invalid. */
+export function versionSubquery(versionId?: number): string {
+  if (versionId && versionId > 0) return `${versionId}`;
+  return `(SELECT id FROM game_versions WHERE is_default = 1)`;
 }
 
 /**
  * Generic delta-versioned INNER JOIN. Resolves each item to its latest
  * non-removed row at or before the selected game version.
  *
- * Usage: `FROM fps_weapons w ${deltaVersionJoin('fps_weapons', 'w', 'uuid', patchCode)}`
+ * Usage: `FROM fps_weapons w ${deltaVersionJoin('fps_weapons', 'w', 'uuid', versionId)}`
  *
  * @param table     - DB table name
  * @param alias     - table alias used in the outer query
  * @param identityCol - column that identifies the "same item" across versions (usually 'uuid')
- * @param patchCode - optional version code; defaults to the is_default version
+ * @param versionId - pre-resolved version ID from resolveVersionId(); defaults to the is_default version
  */
 export function deltaVersionJoin(
   table: string,
   alias: string,
   identityCol: string = "uuid",
-  patchCode?: string,
+  versionId?: number,
 ): string {
-  const vq = versionSubquery(patchCode);
+  const vq = versionSubquery(versionId);
   return `INNER JOIN (
     SELECT ${identityCol}, MAX(game_version_id) as latest_gv
     FROM ${table}
@@ -70,10 +77,10 @@ export function deltaVersionJoin(
     AND ${alias}.game_version_id = _dv_${alias}.latest_gv`;
 }
 
-export function vehicleVersionJoin(patchCode?: string): string {
-  return deltaVersionJoin("vehicles", "v", "slug", patchCode);
+export function vehicleVersionJoin(versionId?: number): string {
+  return deltaVersionJoin("vehicles", "v", "slug", versionId);
 }
 
-export function vehicleVersionCap(patchCode?: string): string {
-  return `game_version_id <= ${versionSubquery(patchCode)}`;
+export function vehicleVersionCap(versionId?: number): string {
+  return `game_version_id <= ${versionSubquery(versionId)}`;
 }

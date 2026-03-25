@@ -1,5 +1,5 @@
-import React, { useState, Suspense, lazy } from 'react'
-import { Routes, Route, NavLink, useLocation, useNavigate } from 'react-router-dom'
+import React, { useState, useEffect, Suspense, lazy } from 'react'
+import { Routes, Route, NavLink, Navigate, useLocation, useNavigate } from 'react-router-dom'
 import { Rocket, BarChart3, Shield, Upload, RefreshCw, Database, Settings as SettingsIcon, ChevronDown, ChevronRight, ChevronLeft, History, Menu, X, LogOut, LogIn, User, Wrench, Users, Building2, FileText, Search, MapPin, Palette, ShoppingCart, Hammer, Briefcase, Star, Scale, Crosshair, BookOpen, Layers, TrendingUp, Languages, Heart, FlaskConical, Sparkles, EyeOff, Eye } from 'lucide-react'
 import LoadingState from './components/LoadingState'
 import ErrorBoundary from './components/ErrorBoundary'
@@ -142,7 +142,13 @@ function meetsMinVersion(minVersion, activeCode) {
   // Compare major.minor from "4.7.0-ptu.12345" against "4.7"
   const match = activeCode.match(/^(\d+\.\d+)/)
   if (!match) return true
-  return match[1] >= minVersion
+  const actual = match[1].split('.').map(Number)
+  const required = minVersion.split('.').map(Number)
+  for (let i = 0; i < required.length; i++) {
+    if ((actual[i] || 0) > required[i]) return true
+    if ((actual[i] || 0) < required[i]) return false
+  }
+  return true
 }
 
 function getNavItems(role, isLoggedIn, activeCode) {
@@ -160,6 +166,13 @@ function getNavItems(role, isLoggedIn, activeCode) {
 function VersionSelector() {
   const { versions, activeCode, activeVersion, defaultVersion, isPreview, setActiveVersion, loading } = useGameVersion()
   const [open, setOpen] = useState(false)
+
+  useEffect(() => {
+    if (!open) return
+    const handleEsc = (e) => { if (e.key === 'Escape') setOpen(false) }
+    document.addEventListener('keydown', handleEsc)
+    return () => document.removeEventListener('keydown', handleEsc)
+  }, [open])
 
   if (loading || !activeCode) return null
 
@@ -536,6 +549,14 @@ function CollapsedSidebar({ onExpand }) {
   )
 }
 
+function RequireRole({ roles, children }) {
+  const { data: session } = useSession()
+  if (!session?.user?.role || !roles.includes(session.user.role)) {
+    return <Navigate to="/dashboard" replace />
+  }
+  return children
+}
+
 function ImpersonationBanner() {
   const { data: sessionData } = useSession()
   const isImpersonating = !!sessionData?.session?.impersonatedBy
@@ -709,8 +730,8 @@ export default function App() {
                       <Route path="/localization" element={<RequireAuth><Suspense fallback={<LoadingState fullScreen />}><LocalizationBuilder /></Suspense></RequireAuth>} />
                       <Route path="/settings" element={<RequireAuth><Settings /></RequireAuth>} />
                       <Route path="/account" element={<RequireAuth><Account /></RequireAuth>} />
-                      <Route path="/admin" element={<RequireAuth><Admin /></RequireAuth>} />
-                      <Route path="/users" element={<RequireAuth><UserManagement /></RequireAuth>} />
+                      <Route path="/admin" element={<RequireAuth><RequireRole roles={["super_admin"]}><Admin /></RequireRole></RequireAuth>} />
+                      <Route path="/users" element={<RequireAuth><RequireRole roles={["super_admin"]}><UserManagement /></RequireRole></RequireAuth>} />
                       <Route path="/orgs" element={<RequireAuth><Orgs /></RequireAuth>} />
                       <Route path="/orgs/:slug" element={<RequireAuth><OrgProfile /></RequireAuth>} />
                       <Route path="/orgs/:slug/settings" element={<RequireAuth><OrgSettings /></RequireAuth>} />

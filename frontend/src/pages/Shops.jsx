@@ -1,4 +1,4 @@
-import React, { useState, useMemo, useCallback } from 'react'
+import React, { useState, useMemo, useCallback, useEffect } from 'react'
 import { useSearchParams } from 'react-router-dom'
 import { useAPI } from '../hooks/useAPI'
 import PageHeader from '../components/PageHeader'
@@ -60,6 +60,16 @@ function InventoryPanel({ shop, onClose }) {
     `/gamedata/shops/${shop.slug}/inventory`,
     { skip: !shop }
   )
+
+  useEffect(() => {
+    document.body.style.overflow = 'hidden'
+    const handleEsc = (e) => { if (e.key === 'Escape') onClose() }
+    document.addEventListener('keydown', handleEsc)
+    return () => {
+      document.body.style.overflow = ''
+      document.removeEventListener('keydown', handleEsc)
+    }
+  }, [onClose])
 
   const sorted = useMemo(() => sortInventory(inventory), [inventory])
 

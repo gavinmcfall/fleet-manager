@@ -620,7 +620,7 @@ export function orgRoutes() {
       .prepare("SELECT role FROM member WHERE organizationId = ? AND userId = ?")
       .bind(org.id, user.id)
       .first<{ role: string }>();
-    if (!membership) return c.json({ error: "Forbidden" }, 403);
+    if (!membership) return c.json({ error: "Not found" }, 404);
 
     // SAFETY: see fleet endpoint above — callerRole from DB, static SQL literals only
     const callerRole = membership.role;
@@ -689,6 +689,17 @@ export function orgRoutes() {
       .first<{ role: string }>();
     if (!membership) return c.json({ error: "Not found" }, 404);
 
+    // Apply same visibility rules as fleet endpoint
+    const callerRole = membership.role;
+    let statsVisibilityClause: string;
+    if (callerRole === "owner" || callerRole === "admin") {
+      statsVisibilityClause = "uf.org_visibility IN ('public', 'org', 'officers')";
+    } else if (callerRole === "member") {
+      statsVisibilityClause = "uf.org_visibility IN ('public', 'org')";
+    } else {
+      statsVisibilityClause = "uf.org_visibility = 'public'";
+    }
+
     const stats = await db
       .prepare(
         `SELECT
@@ -700,7 +711,7 @@ export function orgRoutes() {
         FROM user_fleet uf
         JOIN member mb ON mb.userId = uf.user_id AND mb.organizationId = ?
         JOIN vehicles v ON v.id = uf.vehicle_id
-        WHERE uf.org_visibility = 'public'`,
+        WHERE ${statsVisibilityClause}`,
       )
       .bind(org.id)
       .first();

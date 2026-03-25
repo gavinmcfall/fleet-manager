@@ -397,6 +397,14 @@ export default function Account() {
       setPasswordError('Password must be at least 8 characters')
       return
     }
+    if (!/[a-zA-Z]/.test(newPassword)) {
+      setPasswordError('Password must contain at least one letter')
+      return
+    }
+    if (!/[0-9]/.test(newPassword)) {
+      setPasswordError('Password must contain at least one number')
+      return
+    }
 
     setPasswordSaving(true)
     try {
@@ -427,6 +435,14 @@ export default function Account() {
     }
     if (initPw.length < 8) {
       setInitPwError('Password must be at least 8 characters')
+      return
+    }
+    if (!/[a-zA-Z]/.test(initPw)) {
+      setInitPwError('Password must contain at least one letter')
+      return
+    }
+    if (!/[0-9]/.test(initPw)) {
+      setInitPwError('Password must contain at least one number')
       return
     }
 
@@ -569,6 +585,7 @@ export default function Account() {
     }
   }
 
+  // TODO: Replace window.confirm with ConfirmDialog for consistent UX
   const handleDeletePasskey = async (passkeyId) => {
     if (!window.confirm('Remove this passkey?')) return
     setPasskeyError(null)

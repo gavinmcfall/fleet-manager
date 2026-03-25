@@ -1,4 +1,4 @@
-import React, { useState, useRef } from 'react'
+import React, { useState, useRef, useEffect } from 'react'
 import { useStatus, importHangarXplor, usePreferences, setPreferences, useUserSyncStatus, deleteSyncData } from '../hooks/useAPI'
 import { Upload, FileJson, CheckCircle, XCircle, AlertTriangle, Loader, RefreshCw, AlertCircle, Plug, Database, Trash2, Download, ExternalLink, ChevronDown } from 'lucide-react'
 import PageHeader from '../components/PageHeader'
@@ -25,12 +25,16 @@ export default function Import() {
   )
   const fileRef = useRef(null)
   const dragCounter = useRef(0)
+  const notifTimer = useRef(null)
+
+  useEffect(() => () => clearTimeout(notifTimer.current), [])
 
   const vehicleCount = appStatus?.vehicles || 0
 
   const showNotification = (msg, variant = 'info') => {
+    clearTimeout(notifTimer.current)
     setNotification({ msg, variant })
-    setTimeout(() => setNotification(null), 3000)
+    notifTimer.current = setTimeout(() => setNotification(null), 3000)
   }
 
   const handleSyncClick = () => {

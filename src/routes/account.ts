@@ -66,35 +66,29 @@ export function accountRoutes() {
       );
     }
 
-    // Count how many auth methods this user has
-    const countResult = await db
-      .prepare("SELECT COUNT(*) as cnt FROM account WHERE userId = ?")
-      .bind(user.id)
-      .first<{ cnt: number }>();
+    // Atomic check-and-delete: only delete if user has >= 2 auth methods (L-17 TOCTOU fix)
+    const result = await db
+      .prepare(
+        `DELETE FROM account WHERE userId = ? AND providerId = ?
+         AND (SELECT COUNT(*) FROM account WHERE userId = ?) >= 2`,
+      )
+      .bind(user.id, body.providerId, user.id)
+      .run();
 
-    if (!countResult || countResult.cnt < 2) {
+    if (!result.meta.changes) {
+      // Either provider doesn't exist or it's the user's only auth method
+      const existing = await db
+        .prepare("SELECT id FROM account WHERE userId = ? AND providerId = ?")
+        .bind(user.id, body.providerId)
+        .first();
+      if (!existing) {
+        return c.json({ error: "Provider not linked to your account" }, 404);
+      }
       return c.json(
         { error: "Cannot unlink your only authentication method" },
         400,
       );
     }
-
-    // Verify the provider actually exists for this user
-    const existing = await db
-      .prepare(
-        "SELECT id FROM account WHERE userId = ? AND providerId = ?",
-      )
-      .bind(user.id, body.providerId)
-      .first();
-
-    if (!existing) {
-      return c.json({ error: "Provider not linked to your account" }, 404);
-    }
-
-    await db
-      .prepare("DELETE FROM account WHERE userId = ? AND providerId = ?")
-      .bind(user.id, body.providerId)
-      .run();
 
     await logUserChange(db, user.id, "provider_unlinked", {
       providerId: body.providerId,
@@ -108,7 +102,11 @@ export function accountRoutes() {
   // POST /api/account/set-password — OAuth-only users: set initial password
   routes.post("/set-password",
     validate("json", z.object({
-      newPassword: z.string().min(8, "Password must be at least 8 characters").max(128, "Password is too long"),
+      newPassword: z.string()
+        .min(8, "Password must be at least 8 characters")
+        .max(128, "Password is too long")
+        .regex(/[a-zA-Z]/, "Password must contain at least one letter")
+        .regex(/[0-9]/, "Password must contain at least one number"),
     })),
     async (c) => {
     const user = getAuthUser(c);
@@ -351,17 +349,27 @@ export function accountRoutes() {
 
     // Find user's pending verification (must be < 24hr old)
     const pending = await db
-      .prepare("SELECT id, handle, verification_key FROM profile_verification_pending WHERE user_id = ? AND created_at > datetime('now', '-24 hours')")
+      .prepare("SELECT id, handle, verification_key, updated_at FROM profile_verification_pending WHERE user_id = ? AND created_at > datetime('now', '-24 hours')")
       .bind(user.id)
-      .first<{ id: number; handle: string; verification_key: string }>();
+      .first<{ id: number; handle: string; verification_key: string; updated_at: string | null }>();
 
     if (!pending) {
       return c.json({ error: "No pending verification — generate a key first" }, 400);
     }
 
-    // Rate limit: 1 check per 30 sec (use pending created_at as a simple throttle)
-    // We use a separate approach — check if there's a recent successful or failed attempt
-    // For simplicity, we just proceed (the RSI fetch is the natural rate limiter)
+    // Rate limit: 1 check per 30 sec to prevent RSI API abuse (M-04)
+    if (pending.updated_at) {
+      const elapsed = Date.now() - new Date(pending.updated_at + "Z").getTime();
+      if (elapsed < 30000) {
+        return c.json({ error: "Please wait 30 seconds between verification checks" }, 429);
+      }
+    }
+
+    // Stamp updated_at to track last check attempt
+    await db
+      .prepare("UPDATE profile_verification_pending SET updated_at = datetime('now') WHERE id = ?")
+      .bind(pending.id)
+      .run();
 
     // Fetch citizen page HTML
     let html: string;

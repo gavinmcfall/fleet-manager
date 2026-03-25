@@ -28,7 +28,7 @@ import { companionAuthRoutes } from "./routes/companion-auth";
 import { loadoutRoutes } from "./routes/loadout";
 import { validateEncryptionKey } from "./lib/crypto";
 import { logEvent } from "./lib/logger";
-import { VEHICLE_VERSION_JOIN } from "./lib/constants";
+import { VEHICLE_VERSION_JOIN, isTrustedExtension } from "./lib/constants";
 import { cachedJson, resolveVersionId, cacheSlug } from "./lib/cache";
 
 const app = new Hono<HonoEnv>();
@@ -121,26 +121,24 @@ app.use("/api/*", async (c, next) => {
   if (contentLength && parseInt(contentLength, 10) > MAX_BODY_BYTES) {
     return c.json({ error: "Request body too large" }, 413);
   }
+  // Require Content-Length on mutation requests to prevent chunked transfer bypass (M-01)
+  const method = c.req.method;
+  if (["POST", "PUT", "PATCH", "DELETE"].includes(method) && !contentLength) {
+    return c.json({ error: "Content-Length header required" }, 411);
+  }
   return next();
 });
 
-// CORS — strict same-origin in production, localhost in dev, pinned extension IDs for SC Bridge Sync
-// Extension IDs are stable after store publication. Update these when publishing new extensions.
-const TRUSTED_EXTENSION_ORIGINS = new Set<string>([
-  "chrome-extension://edndedmmbdbofdphimpcofdccbpbgjib", // Microsoft Edge Add-ons
-  // Add Chrome Web Store ID once approved:
-  // "chrome-extension://gcokkoamjodagagbojhkimfbjjpdfefi",
-]);
-const isTrustedExtension = (origin: string) =>
-  TRUSTED_EXTENSION_ORIGINS.has(origin) ||
-  // Fallback: accept any extension origin only in development
-  ((origin.startsWith("chrome-extension://") || origin.startsWith("moz-extension://")) &&
-    false); // Set to true ONLY during local dev before extension IDs are known
+// CORS — TRUSTED_EXTENSION_ORIGINS and isTrustedExtension imported from ./lib/constants
 
 app.use("/api/*", async (c, next) => {
   const origin = c.req.header("Origin") || "";
   const host = c.req.header("Host") || "";
-  if (!origin) return cors({ origin: `https://${host}` })(c, next);
+  // Use BETTER_AUTH_URL (pinned env var) instead of Host header to prevent header spoofing (M-06)
+  if (!origin) {
+    const baseUrl = c.env.BETTER_AUTH_URL || `https://${host}`;
+    return cors({ origin: baseUrl })(c, next);
+  }
   try {
     // Allow pinned browser extension origins (SC Bridge Sync)
     if (isTrustedExtension(origin)) {
@@ -361,8 +359,8 @@ app.get("/api/ships/:slug/loadout", async (c) => {
   const db = c.env.DB;
   const patch = c.req.query("patch");
   const versionId = await resolveVersionId(db, patch);
-  return cachedJson(c, `ships:loadout:${versionId}:${slug}`, () =>
-    getShipLoadout(db, slug, patch),
+  return cachedJson(c, `ships:loadout:${versionId}:${cacheSlug(slug)}`, () =>
+    getShipLoadout(db, slug, versionId),
   );
 });
 
@@ -373,7 +371,7 @@ app.get("/api/ships/:slug/salvage", async (c) => {
   const patch = c.req.query("patch");
   const versionId = await resolveVersionId(db, patch);
   return cachedJson(c, `ships:salvage:${versionId}:${cacheSlug(slug)}`, () =>
-    getSalvageForShip(db, slug, patch),
+    getSalvageForShip(db, slug, versionId),
   );
 });
 
@@ -383,7 +381,7 @@ app.get("/api/gamedata/salvageable-ships", async (c) => {
   const patch = c.req.query("patch");
   const versionId = await resolveVersionId(db, patch);
   return cachedJson(c, `gd:salvageable-ships:${versionId}`, () =>
-    listSalvageableShips(db, patch),
+    listSalvageableShips(db, versionId),
   );
 });
 

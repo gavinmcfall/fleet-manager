@@ -14,11 +14,14 @@ export function contractRoutes<E extends HonoEnv>() {
   app.get("/", async (c) => {
     const db = c.env.DB
     const giver = c.req.query("giver")
+    if (giver && giver.length > 100) {
+      return c.json({ error: "Invalid filter" }, 400)
+    }
     const patch = c.req.query("patch")
     const versionId = await resolveVersionId(db, patch)
 
-    const dvjContracts = deltaVersionJoin('contracts', 'c', 'contract_key', patch)
-    const dvjWeapons = deltaVersionJoin('fps_weapons', 'fw', 'uuid', patch)
+    const dvjContracts = deltaVersionJoin('contracts', 'c', 'contract_key', versionId)
+    const dvjWeapons = deltaVersionJoin('fps_weapons', 'fw', 'uuid', versionId)
 
     return cachedJson(c, `contracts:${versionId}:${cacheSlug(giver ?? "all")}`, async () => {
       let query = `SELECT c.*,

@@ -23,6 +23,14 @@ export default function ResetPassword() {
       setError('Password must be at least 8 characters')
       return
     }
+    if (!/[a-zA-Z]/.test(password)) {
+      setError('Password must contain at least one letter')
+      return
+    }
+    if (!/[0-9]/.test(password)) {
+      setError('Password must contain at least one number')
+      return
+    }
 
     if (password !== confirmPassword) {
       setError('Passwords do not match')

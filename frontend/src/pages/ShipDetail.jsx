@@ -6,6 +6,7 @@ import {
   Tag, DollarSign, Calendar, PenLine, ArrowUpRight, CircleDot,
 } from 'lucide-react'
 import { useShip, useShipLoadout, useShipPaints, useShipSalvage, useWeaponRacks, useSuitLockers, useFleet, useFleetEntryUpgrades } from '../hooks/useAPI'
+import { useSession } from '../lib/auth-client'
 import ShipImage from '../components/ShipImage'
 import StatusBadge from '../components/StatusBadge'
 import LoadingState from '../components/LoadingState'
@@ -522,7 +523,7 @@ function PledgeSection({ ship }) {
 
 // ─── Overview ─────────────────────────────────────────────────────────────────
 
-function OverviewTab({ ship }) {
+function OverviewTab({ ship, isAuthed }) {
   const crewValue = ship.crew_min != null && ship.crew_max != null
     ? ship.crew_min === ship.crew_max ? String(ship.crew_min) : `${ship.crew_min} – ${ship.crew_max}`
     : null
@@ -576,7 +577,7 @@ function OverviewTab({ ship }) {
 
       <div className="space-y-4">
         <OverviewRightCol ship={ship} />
-        <PledgeSection ship={ship} />
+        {isAuthed && <PledgeSection ship={ship} />}
       </div>
     </div>
   )
@@ -1113,6 +1114,8 @@ export default function ShipDetail() {
     }, { replace: true })
   }, [setSearchParams])
   const { data: ship, loading, error, refetch } = useShip(slug)
+  const { data: session } = useSession()
+  const isAuthed = !!session?.user
 
   if (loading) return <LoadingState message="Loading ship data..." />
   if (error) return <ErrorState message={error} onRetry={refetch} />
@@ -1139,7 +1142,7 @@ export default function ShipDetail() {
         </div>
         <div className="flex items-center gap-2 shrink-0">
           <span className="badge badge-size">{ship.size_label}</span>
-          {ship.pledge_url && (
+          {ship.pledge_url && ship.pledge_url.startsWith('https://') && (
             <a
               href={ship.pledge_url}
               target="_blank"
@@ -1183,7 +1186,7 @@ export default function ShipDetail() {
       </div>
 
       {/* Tab content */}
-      {activeTab === 'overview' && <OverviewTab ship={ship} />}
+      {activeTab === 'overview' && <OverviewTab ship={ship} isAuthed={isAuthed} />}
       {activeTab === 'components' && <ComponentsTab slug={slug} />}
       {activeTab === 'weapons' && <WeaponsTab slug={slug} />}
       {activeTab === 'interior' && <InteriorTab ship={ship} />}

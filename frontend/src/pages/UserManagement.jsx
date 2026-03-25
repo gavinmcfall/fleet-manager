@@ -10,11 +10,15 @@ import ConfirmDialog from '../components/ConfirmDialog'
 
 const ROLES = ['user', 'admin', 'super_admin']
 
+const PAGE_SIZE = 100
+
 export default function UserManagement() {
   const { timezone } = useTimezone()
   const { data: session } = useSession()
   const [users, setUsers] = useState([])
   const [loading, setLoading] = useState(true)
+  const [loadingMore, setLoadingMore] = useState(false)
+  const [hasMore, setHasMore] = useState(false)
   const [error, setError] = useState(null)
   const [actionError, setActionError] = useState(null)
   const [actionLoading, setActionLoading] = useState(null)
@@ -24,14 +28,31 @@ export default function UserManagement() {
     setLoading(true)
     setError(null)
     try {
-      const result = await authClient.admin.listUsers({ query: { limit: 100 } })
-      setUsers(result.data?.users || [])
+      const result = await authClient.admin.listUsers({ query: { limit: PAGE_SIZE } })
+      const fetched = result.data?.users || []
+      setUsers(fetched)
+      setHasMore(fetched.length >= PAGE_SIZE)
     } catch (err) {
       setError(err.message || 'Failed to load users')
     } finally {
       setLoading(false)
     }
   }, [])
+
+  const loadMore = useCallback(async () => {
+    if (loadingMore || !hasMore) return
+    setLoadingMore(true)
+    try {
+      const result = await authClient.admin.listUsers({ query: { limit: PAGE_SIZE, offset: users.length } })
+      const fetched = result.data?.users || []
+      setUsers(prev => [...prev, ...fetched])
+      setHasMore(fetched.length >= PAGE_SIZE)
+    } catch (err) {
+      setActionError(err.message || 'Failed to load more users')
+    } finally {
+      setLoadingMore(false)
+    }
+  }, [loadingMore, hasMore, users.length])
 
   useEffect(() => { fetchUsers() }, [fetchUsers])
 
@@ -195,6 +216,18 @@ export default function UserManagement() {
             </table>
           </div>
         </PanelSection>
+      )}
+
+      {hasMore && (
+        <div className="text-center">
+          <button
+            onClick={loadMore}
+            disabled={loadingMore}
+            className="btn-secondary text-xs"
+          >
+            {loadingMore ? 'Loading...' : `Load More (showing ${users.length})`}
+          </button>
+        </div>
       )}
 
       <ConfirmDialog

@@ -197,6 +197,11 @@ function resolveUrl(url: string): string {
  * Sanitize HTML content from RSI — allowlist of safe tags only.
  * Prevents stored XSS via scraped charter/history/manifesto content.
  *
+ * NOTE: DOMPurify is now the primary XSS defense on the frontend (H-11 fix).
+ * This backend sanitizer is defense-in-depth — it strips dangerous content
+ * before storage so that even if the frontend sanitizer is bypassed, the
+ * stored HTML is already clean.
+ *
  * Strips: script, style, meta, iframe, form, input, button, object, embed,
  * link, base, svg, math, and all event handler attributes (on*).
  * Allows: p, br, strong, em, b, i, u, a, ul, ol, li, h1-h6, blockquote,
@@ -233,11 +238,47 @@ export function sanitizeHtml(html: string): string {
   // Remove style attributes (prevents CSS injection via inline styles)
   clean = clean.replace(/\s+style\s*=\s*(?:"[^"]*"|'[^']*'|[^\s>]+)/gi, "");
 
-  // Remove javascript: and data: in href/src attributes
+  // Decode HTML entities in href/src values before checking for dangerous protocols.
+  // This catches entity-encoded bypass attempts like &#106;avascript: or &#x6A;avascript:
   clean = clean.replace(
-    /\s+(href|src)\s*=\s*(?:"(?:javascript|data|vbscript):[^"]*"|'(?:javascript|data|vbscript):[^']*')/gi,
+    /\s+(href|src)\s*=\s*"([^"]*)"/gi,
+    (_match, attr: string, value: string) => {
+      const decoded = decodeHtmlEntities(value);
+      const normalized = decoded.replace(/[\s\x00-\x1f]+/g, "").toLowerCase();
+      if (/^(?:javascript|data|vbscript):/.test(normalized)) return "";
+      return ` ${attr}="${value}"`;
+    },
+  );
+  clean = clean.replace(
+    /\s+(href|src)\s*=\s*'([^']*)'/gi,
+    (_match, attr: string, value: string) => {
+      const decoded = decodeHtmlEntities(value);
+      const normalized = decoded.replace(/[\s\x00-\x1f]+/g, "").toLowerCase();
+      if (/^(?:javascript|data|vbscript):/.test(normalized)) return "";
+      return ` ${attr}='${value}'`;
+    },
+  );
+
+  // Also strip unquoted dangerous protocol URIs in href/src
+  clean = clean.replace(
+    /\s+(href|src)\s*=\s*(?:javascript|data|vbscript):[^\s>]*/gi,
     "",
   );
 
   return clean;
+}
+
+/**
+ * Decode common HTML entities (numeric decimal, numeric hex, and named)
+ * used to obfuscate dangerous URI schemes like javascript:.
+ */
+function decodeHtmlEntities(str: string): string {
+  return str
+    .replace(/&#x([0-9a-f]+);?/gi, (_, hex) => String.fromCharCode(parseInt(hex, 16)))
+    .replace(/&#(\d+);?/g, (_, dec) => String.fromCharCode(parseInt(dec, 10)))
+    .replace(/&amp;/gi, "&")
+    .replace(/&lt;/gi, "<")
+    .replace(/&gt;/gi, ">")
+    .replace(/&quot;/gi, '"')
+    .replace(/&apos;/gi, "'");
 }

@@ -1,6 +1,7 @@
-import React, { useState } from 'react'
+import React, { useState, useRef, useEffect } from 'react'
 import ReactMarkdown from 'react-markdown'
 import remarkGfm from 'remark-gfm'
+import rehypeSanitize from 'rehype-sanitize'
 import { useSearchParams } from 'react-router-dom'
 import { useAIAnalysisHistory, deleteAIAnalysis } from '../hooks/useAPI'
 import useTimezone from '../hooks/useTimezone'
@@ -20,6 +21,9 @@ export default function AnalysisHistory() {
   const [deleting, setDeleting] = useState(null)
   const [notification, setNotification] = useState(null)
   const [confirmDialog, setConfirmDialog] = useState({ open: false })
+  const notifTimer = useRef(null)
+
+  useEffect(() => () => clearTimeout(notifTimer.current), [])
 
   const handleDelete = (id, e) => {
     e.stopPropagation()
@@ -41,7 +45,8 @@ export default function AnalysisHistory() {
           }
         } catch (err) {
           setNotification({ msg: 'Failed to delete analysis: ' + err.message, variant: 'error' })
-          setTimeout(() => setNotification(null), 3000)
+          clearTimeout(notifTimer.current)
+          notifTimer.current = setTimeout(() => setNotification(null), 3000)
         } finally {
           setDeleting(null)
         }
@@ -138,7 +143,7 @@ export default function AnalysisHistory() {
               {isExpanded && (
                 <div className="border-t border-sc-border p-5">
                   <div className="prose-fleet">
-                    <ReactMarkdown remarkPlugins={[remarkGfm]}>{item.analysis}</ReactMarkdown>
+                    <ReactMarkdown remarkPlugins={[remarkGfm]} rehypePlugins={[rehypeSanitize]}>{item.analysis}</ReactMarkdown>
                   </div>
                 </div>
               )}

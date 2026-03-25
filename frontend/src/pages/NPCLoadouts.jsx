@@ -391,22 +391,27 @@ export default function NPCLoadouts() {
     try {
       await setLootCollectionQuantity(uuid, qty)
       refetchCollection()
-    } catch { /* silent */ }
+    } catch (err) { console.warn('[NPCLoadouts] Collection update failed:', err.message) }
   }, [refetchCollection])
 
   const handleToggleWishlist = useCallback(async (uuid, isWishlisted) => {
     try {
       await toggleLootWishlist(uuid, isWishlisted)
       refetchWishlist()
-    } catch { /* silent */ }
+    } catch (err) { console.warn('[NPCLoadouts] Wishlist toggle failed:', err.message) }
   }, [refetchWishlist])
 
   const setSelectedFaction = useCallback((code) => {
-    if (code) {
-      setSearchParams({ faction: code })
-    } else {
-      setSearchParams({})
-    }
+    setSearchParams(prev => {
+      const next = new URLSearchParams(prev)
+      if (code) {
+        next.set('faction', code)
+      } else {
+        next.delete('faction')
+      }
+      next.delete('loadout')
+      return next
+    }, { replace: true })
   }, [setSearchParams])
 
   if (loading) return <LoadingState message="Loading NPC factions..." />

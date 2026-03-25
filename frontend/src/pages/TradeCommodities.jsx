@@ -1,4 +1,4 @@
-import React, { useState, useMemo, useCallback } from 'react'
+import React, { useState, useMemo, useCallback, useEffect } from 'react'
 import { useSearchParams } from 'react-router-dom'
 import { useAPI } from '../hooks/useAPI'
 import PageHeader from '../components/PageHeader'
@@ -71,6 +71,16 @@ function CommodityPanel({ commodity, onClose }) {
   const listings = commodity.listings || []
   const buyListings = listings.filter(l => l.buy_price > 0)
   const sellListings = listings.filter(l => l.sell_price > 0)
+
+  useEffect(() => {
+    document.body.style.overflow = 'hidden'
+    const handleEsc = (e) => { if (e.key === 'Escape') onClose() }
+    document.addEventListener('keydown', handleEsc)
+    return () => {
+      document.body.style.overflow = ''
+      document.removeEventListener('keydown', handleEsc)
+    }
+  }, [onClose])
 
   return (
     <div className="fixed inset-0 z-50 flex justify-end">

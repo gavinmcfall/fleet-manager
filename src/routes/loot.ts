@@ -39,7 +39,7 @@ export function lootRoutes() {
     const patch = c.req.query("patch");
     const versionId = await resolveVersionId(c.env.DB, patch);
     return cachedJson(c, `loot:items:${versionId}`, () =>
-      getLootItems(c.env.DB, patch),
+      getLootItems(c.env.DB, versionId),
     );
   });
 
@@ -172,7 +172,7 @@ export function lootRoutes() {
     const patch = c.req.query("patch");
     const versionId = await resolveVersionId(c.env.DB, patch);
     return cachedJson(c, `loot:loc-summary:${versionId}`, () =>
-      getLootLocationSummary(c.env.DB, patch),
+      getLootLocationSummary(c.env.DB, versionId),
     );
   });
 
@@ -192,7 +192,7 @@ export function lootRoutes() {
     const patch = c.req.query("patch");
     const versionId = await resolveVersionId(c.env.DB, patch);
     return cachedJson(c, `loot:loc-detail:${versionId}:${type}:${cacheSlug(slug)}`, () =>
-      getLootLocationDetail(c.env.DB, type as "container" | "shop" | "npc" | "contract", slug, patch),
+      getLootLocationDetail(c.env.DB, type as "container" | "shop" | "npc" | "contract", slug, versionId),
     );
   });
 
@@ -201,7 +201,7 @@ export function lootRoutes() {
     const patch = c.req.query("patch");
     const versionId = await resolveVersionId(c.env.DB, patch);
     return cachedJson(c, `loot:sets:${versionId}`, () =>
-      getLootSets(c.env.DB, patch),
+      getLootSets(c.env.DB, versionId),
     );
   });
 
@@ -212,7 +212,7 @@ export function lootRoutes() {
     const patch = c.req.query("patch");
     const versionId = await resolveVersionId(c.env.DB, patch);
     return cachedJson(c, `loot:set-detail:${versionId}:${cacheSlug(setSlug)}`, async () => {
-      const set = await getLootSetBySlug(c.env.DB, setSlug, patch);
+      const set = await getLootSetBySlug(c.env.DB, setSlug, versionId);
       if (!set) return null;
 
       const rewardTexts = SET_SLUG_REWARD_TEXTS[setSlug];
@@ -239,7 +239,7 @@ export function lootRoutes() {
     const patch = c.req.query("patch");
     const versionId = await resolveVersionId(c.env.DB, patch);
     return cachedJson(c, `loot:detail:${versionId}:${cacheSlug(uuid)}`, () =>
-      getLootByUuid(c.env.DB, uuid, patch),
+      getLootByUuid(c.env.DB, uuid, versionId),
     );
   });
 

@@ -299,7 +299,7 @@ export function adminRoutes() {
   // GET /api/admin/ratings/audit — audit log
   routes.get("/ratings/audit", async (c) => {
     const db = c.env.DB;
-    const page = parseInt(c.req.query("page") || "1", 10);
+    const page = parseInt(c.req.query("page") || "1", 10) || 1;
     const perPage = 50;
     const offset = (page - 1) * perPage;
 

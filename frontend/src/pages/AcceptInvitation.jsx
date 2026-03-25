@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from 'react'
-import { useNavigate, useSearchParams } from 'react-router-dom'
+import { Link, useNavigate, useSearchParams } from 'react-router-dom'
 import { CheckCircle, XCircle, Loader2 } from 'lucide-react'
 import { authClient, useSession } from '../lib/auth-client'
 
@@ -83,12 +83,13 @@ export default function AcceptInvitation() {
         return (
           <>
             <p className="text-white font-display tracking-wide">Sign in to accept this invitation</p>
-            <a
-              href={`/login?next=/accept-invitation?id=${encodeURIComponent(invitationId)}`}
+            <Link
+              to="/login"
+              state={{ from: { pathname: `/accept-invitation?id=${invitationId}` } }}
               className="btn-primary text-xs"
             >
               Sign In
-            </a>
+            </Link>
           </>
         )
       default:

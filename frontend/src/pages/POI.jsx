@@ -1,4 +1,4 @@
-import React, { useState, useMemo, useCallback } from 'react'
+import React, { useState, useMemo, useCallback, useEffect } from 'react'
 import { Link, useSearchParams } from 'react-router-dom'
 import { MapPin, Package, ShoppingCart, Swords, ChevronDown, ChevronRight, Store, X } from 'lucide-react'
 import { useLootLocations, useAPI } from '../hooks/useAPI'
@@ -182,6 +182,16 @@ function ShopInventoryPanel({ shop, onClose }) {
     `/gamedata/shops/${shop.slug}/inventory`,
     { skip: !shop }
   )
+
+  useEffect(() => {
+    document.body.style.overflow = 'hidden'
+    const handleEsc = (e) => { if (e.key === 'Escape') onClose() }
+    document.addEventListener('keydown', handleEsc)
+    return () => {
+      document.body.style.overflow = ''
+      document.removeEventListener('keydown', handleEsc)
+    }
+  }, [onClose])
 
   const sorted = useMemo(() => {
     if (!inventory) return []

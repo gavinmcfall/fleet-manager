@@ -28,6 +28,14 @@ export default function Register() {
       setError('Password must be at least 8 characters')
       return
     }
+    if (!/[a-zA-Z]/.test(password)) {
+      setError('Password must contain at least one letter')
+      return
+    }
+    if (!/[0-9]/.test(password)) {
+      setError('Password must contain at least one number')
+      return
+    }
 
     setLoading(true)
 

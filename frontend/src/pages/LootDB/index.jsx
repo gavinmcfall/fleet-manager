@@ -1,4 +1,4 @@
-import React, { useState, useMemo, useCallback, useEffect } from 'react'
+import React, { useState, useMemo, useCallback, useEffect, useRef } from 'react'
 import { useParams, useNavigate, useSearchParams } from 'react-router-dom'
 import {
   Search, ShoppingCart, Package, Swords, FileText, MapPin,
@@ -60,6 +60,10 @@ export default function LootDB() {
   )
 
   const [actionError, setActionError] = useState(null)
+  const actionErrorTimer = useRef(null)
+
+  useEffect(() => () => clearTimeout(actionErrorTimer.current), [])
+
   const [searchParams, setSearchParams] = useSearchParams()
   const VALID_TABS = ['browse', 'collection', 'wishlist']
   const tabParam = searchParams.get('tab')
@@ -152,13 +156,37 @@ export default function LootDB() {
     if (routeUuid) setDetailUuid(routeUuid)
   }, [routeUuid])
 
-  // Collection tab state
-  const [collSearch, setCollSearch] = useState('')
-  const [collCategory, setCollCategory] = useState('all')
+  // Collection tab state (URL params)
+  const collSearch = searchParams.get('coll_search') || ''
+  const collCategory = searchParams.get('coll_category') || 'all'
+  const setCollSearch = useCallback((value) => {
+    setSearchParams(prev => {
+      if (value) prev.set('coll_search', value); else prev.delete('coll_search')
+      return prev
+    }, { replace: true })
+  }, [setSearchParams])
+  const setCollCategory = useCallback((value) => {
+    setSearchParams(prev => {
+      if (value && value !== 'all') prev.set('coll_category', value); else prev.delete('coll_category')
+      return prev
+    }, { replace: true })
+  }, [setSearchParams])
 
-  // Wishlist tab state
-  const [wishSearch, setWishSearch] = useState('')
-  const [wishViewMode, setWishViewMode] = useState('item') // 'item' | 'location'
+  // Wishlist tab state (URL params)
+  const wishSearch = searchParams.get('wish_search') || ''
+  const wishViewMode = searchParams.get('wish_view') || 'item'
+  const setWishSearch = useCallback((value) => {
+    setSearchParams(prev => {
+      if (value) prev.set('wish_search', value); else prev.delete('wish_search')
+      return prev
+    }, { replace: true })
+  }, [setSearchParams])
+  const setWishViewMode = useCallback((value) => {
+    setSearchParams(prev => {
+      if (value && value !== 'item') prev.set('wish_view', value); else prev.delete('wish_view')
+      return prev
+    }, { replace: true })
+  }, [setSearchParams])
   const [collapsedWishGroups, setCollapsedWishGroups] = useState(new Set())
   const [wishShopSort, setWishShopSort] = useState('count') // 'alpha' | 'count'
   const [wishShopSortDesc, setWishShopSortDesc] = useState(true)
@@ -341,7 +369,8 @@ export default function LootDB() {
       refetchCollection()
     } catch (err) {
       setActionError('Collection update failed: ' + err.message)
-      setTimeout(() => setActionError(null), 3000)
+      clearTimeout(actionErrorTimer.current)
+      actionErrorTimer.current = setTimeout(() => setActionError(null), 3000)
     }
   }, [refetchCollection])
 
@@ -351,7 +380,8 @@ export default function LootDB() {
       refetchWishlist()
     } catch (err) {
       setActionError('Wishlist toggle failed: ' + err.message)
-      setTimeout(() => setActionError(null), 3000)
+      clearTimeout(actionErrorTimer.current)
+      actionErrorTimer.current = setTimeout(() => setActionError(null), 3000)
     }
   }, [refetchWishlist])
 
@@ -362,7 +392,8 @@ export default function LootDB() {
       refetchWishlist()
     } catch (err) {
       setActionError('Wishlist update failed: ' + err.message)
-      setTimeout(() => setActionError(null), 3000)
+      clearTimeout(actionErrorTimer.current)
+      actionErrorTimer.current = setTimeout(() => setActionError(null), 3000)
     }
   }, [refetchWishlist])
 

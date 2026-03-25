@@ -2,6 +2,7 @@ import React, { useState, useEffect, useRef } from 'react'
 import { Link } from 'react-router-dom'
 import ReactMarkdown from 'react-markdown'
 import remarkGfm from 'remark-gfm'
+import rehypeSanitize from 'rehype-sanitize'
 import { useLLMConfig, generateAIAnalysis, useLatestAIAnalysis, setLLMConfig } from '../hooks/useAPI'
 import usePrivacyMode from '../hooks/usePrivacyMode'
 import useTimezone from '../hooks/useTimezone'
@@ -43,6 +44,7 @@ export default function Analysis() {
   const [context, setContext] = useState('')
   const { privacyMode } = usePrivacyMode()
   const resultsRef = useRef(null)
+  const generatingRef = useRef(false)
 
   // Load latest analysis on mount
   useEffect(() => {
@@ -94,6 +96,8 @@ export default function Analysis() {
   }
 
   const handleGenerate = async () => {
+    if (generatingRef.current) return
+    generatingRef.current = true
     setGenerating(true)
     setAIError(null)
     try {
@@ -115,6 +119,7 @@ export default function Analysis() {
     } catch (err) {
       setAIError('Failed to generate analysis: ' + err.message)
     } finally {
+      generatingRef.current = false
       setGenerating(false)
     }
   }
@@ -268,7 +273,7 @@ export default function Analysis() {
                 </div>
               ) : (
                 <div className="prose-fleet">
-                  <ReactMarkdown remarkPlugins={[remarkGfm]}>{aiInsights}</ReactMarkdown>
+                  <ReactMarkdown remarkPlugins={[remarkGfm]} rehypePlugins={[rehypeSanitize]}>{aiInsights}</ReactMarkdown>
                 </div>
               )}
             </div>

@@ -1,4 +1,4 @@
-import React, { useState, useMemo, useCallback } from 'react'
+import React, { useMemo, useCallback } from 'react'
 import { useSearchParams } from 'react-router-dom'
 import { useAPI } from '../hooks/useAPI'
 import PageHeader from '../components/PageHeader'
@@ -370,7 +370,18 @@ export default function LawSystem() {
       return next
     }, { replace: true })
   }, [setSearchParams])
-  const [search, setSearch] = useState('')
+  const search = searchParams.get('search') || ''
+  const setSearch = useCallback((val) => {
+    setSearchParams(prev => {
+      const next = new URLSearchParams(prev)
+      if (val) {
+        next.set('search', val)
+      } else {
+        next.delete('search')
+      }
+      return next
+    }, { replace: true })
+  }, [setSearchParams])
 
   // Index overrides by infraction and jurisdiction
   const overridesByInfraction = useMemo(() => {

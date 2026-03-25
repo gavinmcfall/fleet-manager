@@ -77,7 +77,7 @@ export function loadoutRoutes() {
     const patch = c.req.query("patch");
     const versionId = await resolveVersionId(c.env.DB, patch);
     return cachedJson(c, `loadout:components:${versionId}:${cacheSlug(slug)}`, async () => {
-      return getShipLoadout(c.env.DB, slug, patch);
+      return getShipLoadout(c.env.DB, slug, versionId);
     });
   });
 
@@ -91,10 +91,11 @@ export function loadoutRoutes() {
     const portId = parseInt(portIdStr, 10);
     if (isNaN(portId)) return c.json({ error: "port_id must be a number" }, 400);
 
-    const vq = versionSubquery(patch);
+    const versionId = await resolveVersionId(db, patch);
+    const vq = versionSubquery(versionId);
 
     // Get port info (type + size range)
-    const dvjPorts = deltaVersionJoin('vehicle_ports', 'vp', 'uuid', patch);
+    const dvjPorts = deltaVersionJoin('vehicle_ports', 'vp', 'uuid', versionId);
     const port = await db
       .prepare(
         `SELECT vp.port_type, vp.size_min, vp.size_max, vp.equipped_item_uuid
@@ -161,7 +162,7 @@ export function loadoutRoutes() {
                 vc.damage, vc.blast_radius, vc.speed, vc.lock_range,
                 m.name AS manufacturer_name, m.code AS manufacturer_code
          FROM vehicle_components vc
-         ${deltaVersionJoin('vehicle_components', 'vc', 'uuid', patch)}
+         ${deltaVersionJoin('vehicle_components', 'vc', 'uuid', versionId)}
          LEFT JOIN manufacturers m ON m.id = vc.manufacturer_id
          WHERE vc.type IN (${typePlaceholders})
            ${port.size_min === 0 && port.size_max === 0 ? "" : "AND vc.size BETWEEN ? AND ?"}
@@ -183,7 +184,7 @@ export function loadoutRoutes() {
                   s.slug AS shop_slug, s.location_label
            FROM shop_inventory si
            JOIN shops s ON s.id = si.shop_id
-           ${deltaVersionJoin('shops', 's', 'uuid', patch)}
+           ${deltaVersionJoin('shops', 's', 'uuid', versionId)}
            WHERE si.item_uuid IN (${placeholders})
              AND si.game_version_id <= ${vq}`,
         )
@@ -499,7 +500,8 @@ export function loadoutRoutes() {
     const user = getAuthUser(c);
     const db = c.env.DB;
     const patch = c.req.query("patch");
-    const vq = versionSubquery(patch);
+    const versionId = await resolveVersionId(db, patch);
+    const vq = versionSubquery(versionId);
 
     // Get all cart items
     const cartItems = await db
@@ -523,7 +525,7 @@ export function loadoutRoutes() {
         `SELECT si.item_uuid, s.id AS shop_id
          FROM shop_inventory si
          JOIN shops s ON s.id = si.shop_id
-         ${deltaVersionJoin('shops', 's', 'uuid', patch)}
+         ${deltaVersionJoin('shops', 's', 'uuid', versionId)}
          WHERE si.item_uuid IN (${placeholders})
            AND si.buy_price IS NOT NULL
            AND si.game_version_id <= ${vq}`,
