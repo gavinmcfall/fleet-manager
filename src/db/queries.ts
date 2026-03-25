@@ -205,6 +205,10 @@ export async function getShipLoadout(db: D1Database, slug: string, versionId?: n
           vc2.rotation_speed, vc2.min_pitch, vc2.max_pitch, vc2.min_yaw, vc2.max_yaw, vc2.gimbal_type,
           vc2.thrust_force, vc2.fuel_burn_rate, vc2.radar_range, vc2.radar_angle,
           vc2.qed_range, vc2.qed_strength,
+          vc2.damage_physical, vc2.damage_energy, vc2.damage_distortion, vc2.damage_thermal,
+          vc2.penetration, vc2.weapon_range,
+          vc2.resist_physical_min, vc2.resist_energy_min, vc2.resist_distortion_min, vc2.resist_thermal_min,
+          vc2.absorb_physical_min, vc2.absorb_physical_max,
           m2.name AS manufacturer_name, m2.class AS manufacturer_class,
           ROW_NUMBER() OVER (PARTITION BY c.parent_port_id ORDER BY c.id) AS rn
         FROM ship_ports c
@@ -314,19 +318,28 @@ export async function getShipLoadout(db: D1Database, slug: string, versionId?: n
         COALESCE(vc.qed_range, child.qed_range) AS qed_range,
         COALESCE(vc.qed_strength, child.qed_strength) AS qed_strength,
         COALESCE(m.name, child.manufacturer_name) AS manufacturer_name,
-        COALESCE(vc.class, m.class, child.class, child.manufacturer_class) AS component_class
+        COALESCE(vc.class, m.class, child.class, child.manufacturer_class) AS component_class,
+        COALESCE(child.damage_physical, vc.damage_physical, 0) AS damage_physical,
+        COALESCE(child.damage_energy, vc.damage_energy, 0) AS damage_energy,
+        COALESCE(child.damage_distortion, vc.damage_distortion, 0) AS damage_distortion,
+        COALESCE(child.damage_thermal, vc.damage_thermal, 0) AS damage_thermal,
+        COALESCE(child.penetration, vc.penetration, 0) AS penetration,
+        COALESCE(child.weapon_range, vc.weapon_range, 0) AS weapon_range,
+        COALESCE(vc.resist_physical_min, child.resist_physical_min) AS resist_physical_min,
+        COALESCE(vc.resist_energy_min, child.resist_energy_min) AS resist_energy_min,
+        COALESCE(vc.resist_distortion_min, child.resist_distortion_min) AS resist_distortion_min,
+        COALESCE(vc.resist_thermal_min, child.resist_thermal_min) AS resist_thermal_min,
+        COALESCE(vc.absorb_physical_min, child.absorb_physical_min) AS absorb_physical_min,
+        COALESCE(vc.absorb_physical_max, child.absorb_physical_max) AS absorb_physical_max
       FROM ship_ports p
       LEFT JOIN vehicle_components vc ON vc.uuid = p.equipped_item_uuid
         AND vc.game_version_id = (SELECT MAX(game_version_id) FROM vehicle_components WHERE uuid = p.equipped_item_uuid AND game_version_id <= ${vq})
       LEFT JOIN manufacturers m ON m.id = vc.manufacturer_id
       LEFT JOIN child_components child ON child.parent_port_id = p.id AND child.rn = 1
-      WHERE (
-          p.category_label IS NOT NULL
-          OR p.name LIKE '%weapon%'
-          OR p.name LIKE '%gun%'
-          OR p.name LIKE 'Turret%'
-          OR p.name LIKE '%turret_%'
-        )
+      WHERE p.category_label IS NOT NULL
+        AND p.port_type IN ('weapon', 'turret', 'missile', 'shield', 'power', 'cooler',
+            'quantum_drive', 'jump_drive', 'countermeasure', 'sensor', 'module',
+            'personal_storage', 'cargo_grid')
         AND (
           p.parent_port_id IS NULL
           OR NOT EXISTS (
