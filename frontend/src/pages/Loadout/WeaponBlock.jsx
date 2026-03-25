@@ -90,6 +90,8 @@ function GradeBadge({ grade }) {
 export default function WeaponBlock({ item, isCustomized, weaponGroups = [], onClickMount, onClickWeapon, onToggleGroup, onAddToCart }) {
   const hasMount = item.mount_name && item.child_name && item.mount_name !== item.child_name
   const isGimbal = hasMount && (item.sub_type === 'GunTurret' || item.mount_name?.includes('Gimbal') || item.mount_name?.includes('VariPuck'))
+  const weaponCount = item.weapon_count || 0
+  const weaponPrefix = weaponCount > 1 ? `${weaponCount}× ` : ''
   const weaponName = item.child_name || item.component_name
   const dps = item.dps
   const alpha = item.damage_per_shot
@@ -133,7 +135,7 @@ export default function WeaponBlock({ item, isCustomized, weaponGroups = [], onC
           </span>
           <span className={`text-sm font-medium truncate ${isCustomized ? 'text-sc-accent' : 'text-gray-200'}`}
             style={isCustomized ? { textShadow: '0 0 8px rgba(34,211,238,0.3)' } : undefined}>
-            {weaponName || 'Empty'}
+            {weaponPrefix}{weaponName || 'Empty'}
           </span>
           <GradeBadge grade={item.grade} />
           {item.manufacturer_name && <span className="text-[11px] text-gray-600 flex-shrink-0">{item.manufacturer_name}</span>}
