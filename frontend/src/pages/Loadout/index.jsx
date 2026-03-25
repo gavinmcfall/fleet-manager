@@ -116,7 +116,8 @@ export default function Loadout() {
 
   if (stockLoading) return <LoadingState />
   if (stockError) return <div className="p-6 text-red-400">Error: {stockError}</div>
-  if (!stockComponents?.length) return <div className="p-6 text-gray-500">No component data found for this ship.</div>
+
+  const hasComponents = stockComponents?.length > 0
 
   return (
     <div className="min-h-screen animate-fade-in-up">
@@ -163,7 +164,7 @@ export default function Loadout() {
                 </div>
               )}
             </div>
-            <div className="flex items-center gap-2 mt-3 flex-wrap">
+            {hasComponents && <div className="flex items-center gap-2 mt-3 flex-wrap">
               {fleetId && overrideCount > 0 && (
                 <button onClick={handleSave} className="px-3 py-1.5 text-xs bg-sc-accent/20 hover:bg-sc-accent/30 text-sc-accent border border-sc-accent/30 rounded transition-all font-medium cursor-pointer">
                   Save Loadout
@@ -193,15 +194,31 @@ export default function Loadout() {
                   Ship Detail →
                 </Link>
               </div>
-            </div>
+            </div>}
           </div>
         </div>
       </div>
 
+      {/* No loadout data — concept ship or not yet in game */}
+      {!hasComponents && (
+        <div className="max-w-[1400px] mx-auto p-8 text-center">
+          <div className="bg-white/[0.02] border border-white/[0.05] rounded-lg p-8 max-w-lg mx-auto">
+            <div className="text-gray-500 text-sm mb-2">No loadout data available</div>
+            <div className="text-gray-600 text-xs">
+              This ship doesn't have component data in the game files yet.
+              {ship?.classification && <> It's listed as <span className="text-gray-400">{ship.classification}</span>.</>}
+            </div>
+            <Link to={`/ships/${slug}`} className="inline-block mt-4 px-4 py-2 text-xs bg-white/[0.04] hover:bg-white/[0.08] text-gray-400 border border-white/[0.06] rounded transition-colors">
+              ← Back to Ship Detail
+            </Link>
+          </div>
+        </div>
+      )}
+
       {/* ============================================================ */}
       {/* STATS SUMMARY BAR                                             */}
       {/* ============================================================ */}
-      <div className="bg-sc-dark/80 backdrop-blur border-b border-sc-border">
+      {hasComponents && <div className="bg-sc-dark/80 backdrop-blur border-b border-sc-border">
         <div className="max-w-[1400px] mx-auto px-4 py-3">
           <div className="flex items-stretch gap-4">
             {/* LEFT: DPS + Alpha + Damage breakdown */}
@@ -254,8 +271,9 @@ export default function Loadout() {
             </div>
           </div>
         </div>
-      </div>
+      </div>}
 
+      {hasComponents && <>
       {/* ============================================================ */}
       {/* MAIN CONTENT: TWO-COLUMN LAYOUT                               */}
       {/* ============================================================ */}
@@ -307,6 +325,7 @@ export default function Loadout() {
           </div>
         )}
       </div>
+      </>}
 
       {/* Component Picker Modal */}
       {pickerPortId && (
