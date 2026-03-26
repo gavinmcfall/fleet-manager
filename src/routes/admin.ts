@@ -70,6 +70,83 @@ export function adminRoutes() {
   });
 
   /**
+   * POST /api/admin/images/paint-bulk-upload?limit=50&offset=0
+   *
+   * Upload paint images to CF Images. Processes paints that have RSI URLs
+   * but no CF Images URL. Updates paint image_url to CF Images delivery URL.
+   */
+  routes.post("/images/paint-bulk-upload",
+    validate("query", z.object({
+      limit: z.coerce.number().int().min(1).max(100).default(50),
+      offset: z.coerce.number().int().min(0).default(0),
+    })),
+    async (c) => {
+    const token = c.env.CLOUDFLARE_IMAGES_TOKEN;
+    const accountHash = c.env.CF_ACCOUNT_HASH;
+    const accountId = c.env.CF_ACCOUNT_ID;
+
+    if (!token || !accountHash || !accountId) {
+      return c.json({ error: "CF Images credentials not configured" }, 500);
+    }
+
+    const { limit, offset } = c.req.valid("query");
+    const db = c.env.DB;
+
+    // Find paints with RSI URLs (not yet on CF Images)
+    const { results: paints } = await db
+      .prepare(
+        `SELECT id, name, slug, image_url FROM paints
+        WHERE image_url IS NOT NULL AND image_url != ''
+          AND image_url NOT LIKE 'https://imagedelivery.net%'
+        ORDER BY id
+        LIMIT ? OFFSET ?`,
+      )
+      .bind(limit, offset)
+      .all();
+
+    const errors: { name: string; error: string }[] = [];
+
+    const results = await concurrentMap(paints as { id: number; name: string; slug: string; image_url: string }[], 5, async (p) => {
+      try {
+        const cfImagesId = await uploadToCFImages(accountId, token, p.image_url, {
+          slug: p.slug,
+          paint_id: String(p.id),
+          type: "paint",
+        });
+        const deliveryUrl = `https://imagedelivery.net/${accountHash}/${cfImagesId}/medium`;
+        await db
+          .prepare("UPDATE paints SET image_url = ? WHERE id = ?")
+          .bind(deliveryUrl, p.id)
+          .run();
+        return true;
+      } catch (err) {
+        errors.push({ name: p.name, error: String(err) });
+        console.error(`[admin/images] Paint CF upload failed for ${p.name}:`, err);
+        return false;
+      }
+    });
+
+    const succeeded = results.filter(Boolean).length;
+
+    // Count remaining
+    const remaining = await db
+      .prepare(
+        `SELECT COUNT(*) as cnt FROM paints
+        WHERE image_url IS NOT NULL AND image_url != ''
+          AND image_url NOT LIKE 'https://imagedelivery.net%'`,
+      )
+      .first<{ cnt: number }>();
+
+    return c.json({
+      processed: paints.length,
+      succeeded,
+      failed: results.length - succeeded,
+      remaining: remaining?.cnt ?? 0,
+      errors,
+    });
+  });
+
+  /**
    * POST /api/admin/images/upload
    * Body: { slug: string, imageUrl: string }
    *
