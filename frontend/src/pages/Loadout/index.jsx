@@ -61,7 +61,12 @@ export default function Loadout() {
       const isTurretChild = comp.parent_port_id && turretIds.has(comp.parent_port_id)
       // Missile racks on turret mounts should go in Missiles, not Turrets
       const isMissileRack = comp.component_type === 'MissileLauncher'
-      const cat = isMissileRack ? 'Missiles' : isTurretChild ? 'Turrets' : getPortCategory(comp.port_type, comp.category_label)
+      // Jump drives go into the Quantum Drives group
+      const isJumpDrive = comp.port_type === 'jump_drive'
+      const cat = isMissileRack ? 'Missiles'
+        : isJumpDrive ? 'Quantum Drives'
+        : isTurretChild ? 'Turrets'
+        : getPortCategory(comp.port_type, comp.category_label)
       if (!groups[cat]) groups[cat] = { label: cat, portType: isTurretChild ? 'turret' : comp.port_type, items: [] }
       groups[cat].items.push(comp)
     }

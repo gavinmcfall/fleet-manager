@@ -339,7 +339,7 @@ export async function getShipLoadout(db: D1Database, slug: string, versionId?: n
         AND p.port_type IN ('weapon', 'turret', 'missile', 'shield', 'power', 'cooler',
             'quantum_drive', 'jump_drive', 'countermeasure', 'sensor', 'module',
             'personal_storage', 'cargo_grid')
-        -- Return top-level ports OR weapon-mount children of turrets
+        -- Return top-level ports OR weapon-mount children of turrets OR jump drive children of QD
         AND (
           p.parent_port_id IS NULL
           OR EXISTS (
@@ -347,6 +347,10 @@ export async function getShipLoadout(db: D1Database, slug: string, versionId?: n
             WHERE tp.id = p.parent_port_id AND tp.port_type = 'turret'
               AND tp.parent_port_id IS NULL
           )
+          OR (p.port_type = 'jump_drive' AND EXISTS (
+            SELECT 1 FROM ship_ports qp
+            WHERE qp.id = p.parent_port_id AND qp.port_type = 'quantum_drive'
+          ))
         )
         -- Exclude ports with only noise components (Display, etc.)
         AND (d.root_id IS NOT NULL OR mount.type NOT IN ('Display', 'SeatDashboard', 'Seat', 'SeatAccess') OR mount.uuid IS NULL)
