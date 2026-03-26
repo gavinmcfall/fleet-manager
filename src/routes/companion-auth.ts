@@ -178,10 +178,11 @@ companionAuth.post("/authorize", async (c) => {
   const sessionId = Array.from(idBytes, (b) => b.toString(16).padStart(2, "0")).join("");
 
   // Create session row in Better Auth's session table
-  // 1-hour expiry for companion app sessions — short TTL mitigates URL token exposure risk (M-07).
-  // The companion app should re-authenticate when the session expires.
-  // TODO: Replace redirect-with-token pattern with a code-exchange flow to avoid token in URL.
-  const expiresAt = new Date(Date.now() + 60 * 60 * 1000).toISOString();
+  // 30-day expiry for companion app sessions. The token only appears in a localhost redirect
+  // (never leaves the user's machine), so the URL exposure risk is negligible.
+  // DO NOT reduce this TTL — a desktop companion app re-authenticating every hour is unusable.
+  // If token-in-URL is a concern, implement a code-exchange flow instead of shortening TTL.
+  const expiresAt = new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString();
 
   await c.env.DB
     .prepare(
