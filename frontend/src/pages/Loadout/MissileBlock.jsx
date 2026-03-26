@@ -5,9 +5,9 @@ import { DmgShape, getDamageType, fmtDec1 } from './loadoutHelpers'
 /** SVG └ bracket connector */
 function Bracket() {
   return (
-    <svg className="flex-shrink-0 w-4 h-[22px] -ml-4 mr-0" style={{ color: 'rgba(255,255,255,0.15)' }}
-      viewBox="0 0 16 22" fill="none">
-      <path d="M 2 0 L 2 14 Q 2 18 6 18 L 16 18" stroke="currentColor" strokeWidth="1.5" fill="none" strokeLinecap="round" />
+    <svg className="flex-shrink-0 w-3.5 h-[16px] -ml-3.5 mr-0" style={{ color: 'rgba(255,255,255,0.15)' }}
+      viewBox="0 0 14 16" fill="none">
+      <path d="M 2 0 L 2 9 Q 2 13 6 13 L 14 13" stroke="currentColor" strokeWidth="1.5" fill="none" strokeLinecap="round" />
     </svg>
   )
 }
@@ -29,9 +29,9 @@ export default function MissileBlock({ item, onClick, onAddToCart }) {
   const dmgType = getDamageType(item)
 
   return (
-    <div className="border-b border-white/[0.04] px-3 pt-1 pb-0.5">
+    <div className="border-b border-white/[0.04] px-3 py-1">
       {/* Row 1: Rack */}
-      <div className="flex items-center gap-2 py-0.5 cursor-pointer rounded transition-colors hover:bg-white/[0.03] -mx-1 px-1"
+      <div className="flex items-center gap-2 cursor-pointer rounded transition-colors hover:bg-white/[0.03] -mx-1 px-1"
         onClick={onClick}>
         <span className="text-[12px] w-7 text-center flex-shrink-0 font-mono bg-white/[0.06] border border-white/[0.1] rounded px-1.5 py-px text-gray-400">
           S{item.size_max}
@@ -40,7 +40,7 @@ export default function MissileBlock({ item, onClick, onAddToCart }) {
       </div>
       {/* Row 2: └ bracket + count badge + missile name */}
       {missileName && (
-        <div className="flex items-center gap-2 py-0.5 cursor-pointer rounded transition-colors hover:bg-white/[0.03] -mx-1 px-1"
+        <div className="flex items-center gap-1.5 cursor-pointer rounded transition-colors hover:bg-white/[0.03] -mx-1 px-1"
           style={{ marginLeft: '34px' }}
           onClick={onClick}>
           <Bracket />

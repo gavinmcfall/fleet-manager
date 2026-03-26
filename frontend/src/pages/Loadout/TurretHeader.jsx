@@ -1,20 +1,13 @@
 import React from 'react'
 import WeaponBlock from './WeaponBlock'
+import LockedPort from './LockedPort'
 
 /**
  * TurretHeader — renders a turret housing as a section header with its weapon children.
- *
- * Props:
- *   item - the turret port data
- *   children - child weapon ports under this turret
- *   overrides - user customization overrides map
- *   onOpenPicker - handler for opening component picker
- *   onAddToCart - handler for cart button
+ * Locked children (editable=0, e.g. door guns) render via LockedPort, not WeaponBlock.
  */
 export default function TurretHeader({ item, children, overrides = {}, onOpenPicker, onAddToCart }) {
-  // Use mount_name for turret label; if no mount, fall back to humanized port_name (not child weapon name)
   const turretLabel = item.mount_name || item.port_name?.replace('hardpoint_', '').replace(/_/g, ' ')
-  // Friendly position from port name (only when mount has a proper name)
   const posHint = item.mount_name ? item.port_name?.replace('hardpoint_turret_', '').replace(/_/g, ' ') : null
 
   const override = overrides[item.port_id]
@@ -27,6 +20,9 @@ export default function TurretHeader({ item, children, overrides = {}, onOpenPic
         {item.weapon_count > 0 && <span className="text-gray-700 ml-1">({item.weapon_count}× weapons)</span>}
       </div>
       {children.length > 0 ? children.map(child => {
+        if (child.editable === 0 || child.editable === false) {
+          return <LockedPort key={child.port_id} item={child} />
+        }
         const childOverride = overrides[child.port_id]
         return (
           <WeaponBlock
@@ -40,16 +36,19 @@ export default function TurretHeader({ item, children, overrides = {}, onOpenPic
           />
         )
       }) : (
-        // Turret with no separate mount children — show the resolved weapon directly
-        <WeaponBlock
-          key={`${item.port_id}-weapon`}
-          item={override ? { ...item, ...override } : item}
-          isCustomized={isOverridden}
-          weaponGroups={[]}
-          onClickMount={() => onOpenPicker(item.port_id, item.port_type)}
-          onClickWeapon={() => onOpenPicker(item.port_id, item.port_type)}
-          onAddToCart={() => onAddToCart?.(item)}
-        />
+        (item.editable === 0 || item.editable === false) ? (
+          <LockedPort key={`${item.port_id}-locked`} item={item} />
+        ) : (
+          <WeaponBlock
+            key={`${item.port_id}-weapon`}
+            item={override ? { ...item, ...override } : item}
+            isCustomized={isOverridden}
+            weaponGroups={[]}
+            onClickMount={() => onOpenPicker(item.port_id, item.port_type)}
+            onClickWeapon={() => onOpenPicker(item.port_id, item.port_type)}
+            onAddToCart={() => onAddToCart?.(item)}
+          />
+        )
       )}
     </div>
   )
