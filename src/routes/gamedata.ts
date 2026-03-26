@@ -1040,11 +1040,14 @@ export function gamedataRoutes<E extends HonoEnv>() {
         if (!compositionJson) continue
 
         // Extract rock tier from class_name
+        // 4.6 format: "CommonShipMineables_Default" → "Common"
+        // 4.7 format: "Asteroid_CType_Aluminium" → use Common as default
         const tierMatch = className.match(
           /^(Common|Uncommon|Rare|Epic|Legendary)ShipMineables/
         )
-        if (!tierMatch) continue
-        const tier = tierMatch[1]
+        const isAsteroid = /^Asteroid_/.test(className)
+        if (!tierMatch && !isAsteroid) continue
+        const tier = tierMatch ? tierMatch[1] : "Common"
 
         // Parse composition to find elements
         let elements: {
