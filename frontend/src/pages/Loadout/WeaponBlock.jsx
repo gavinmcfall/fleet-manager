@@ -88,7 +88,7 @@ function StatsRow({ item, isCustomized, marginLeft = '76px', onAddToCart }) {
   const statColor = isCustomized ? 'text-sc-accent' : 'text-gray-500'
 
   return (
-    <div className="flex items-center gap-2 pb-1" style={{ marginLeft }}>
+    <div className="flex items-center gap-2 pb-0.5" style={{ marginLeft }}>
       <GradeBadge grade={item.grade} />
       {item.manufacturer_name && <span className="text-[12px] text-gray-600 flex-shrink-0">{item.manufacturer_name}</span>}
       {isCustomized && <span className="text-[11px] text-sc-accent bg-sc-accent/10 px-1 rounded flex-shrink-0">custom</span>}
@@ -118,13 +118,13 @@ export default function WeaponBlock({ item, isCustomized, weaponGroups = [], onC
   const sz = item.component_size || item.size_max
 
   if (hasMount) {
-    // GIMBALLED: 3 rows
+    // GIMBALLED: 3 rows — compact vertical spacing
     return (
-      <div className={`border-b border-white/[0.04] px-3 py-1.5 ${isCustomized ? 'bg-sc-accent/[0.02]' : ''}`}>
+      <div className={`border-b border-white/[0.04] px-3 pt-1 pb-0.5 ${isCustomized ? 'bg-sc-accent/[0.02]' : ''}`}>
         {/* Row 1: Mount + WG 2×2 */}
         <div
           onClick={onClickMount}
-          className="flex items-center gap-2 py-1 cursor-pointer rounded transition-colors hover:bg-white/[0.03] -mx-1 px-1"
+          className="flex items-center gap-2 py-0.5 cursor-pointer rounded transition-colors hover:bg-white/[0.03] -mx-1 px-1"
         >
           <span className="text-[12px] w-7 text-center flex-shrink-0 font-mono bg-white/[0.06] border border-white/[0.1] rounded px-1.5 py-px text-gray-400">
             S{item.size_max}
@@ -137,7 +137,7 @@ export default function WeaponBlock({ item, isCustomized, weaponGroups = [], onC
         {/* Row 2: └ bracket + weapon name (full, not truncated) */}
         <div
           onClick={onClickWeapon}
-          className="flex items-center gap-2 py-1 cursor-pointer rounded transition-colors hover:bg-white/[0.03] -mx-1 px-1"
+          className="flex items-center gap-2 py-0.5 cursor-pointer rounded transition-colors hover:bg-white/[0.03] -mx-1 px-1"
           style={{ marginLeft: '34px' }}
         >
           <Bracket />
@@ -157,13 +157,13 @@ export default function WeaponBlock({ item, isCustomized, weaponGroups = [], onC
     )
   }
 
-  // FIXED: 2 rows — weapon name row + stats row
+  // FIXED: 2 rows — compact vertical spacing
   return (
-    <div className={`border-b border-white/[0.04] px-3 py-1.5 ${isCustomized ? 'bg-sc-accent/[0.02]' : ''}`}>
+    <div className={`border-b border-white/[0.04] px-3 pt-1 pb-0.5 ${isCustomized ? 'bg-sc-accent/[0.02]' : ''}`}>
       {/* Row 1: weapon name + fixed badge + WG 2×2 */}
       <div
         onClick={onClickWeapon}
-        className="flex items-center gap-2 py-1 cursor-pointer rounded transition-colors hover:bg-white/[0.03] -mx-1 px-1"
+        className="flex items-center gap-2 py-0.5 cursor-pointer rounded transition-colors hover:bg-white/[0.03] -mx-1 px-1"
       >
         <span className="text-[12px] w-7 text-center flex-shrink-0 font-mono bg-white/[0.06] border border-white/[0.1] rounded px-1.5 py-px text-gray-400">
           S{sz}

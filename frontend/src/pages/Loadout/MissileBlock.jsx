@@ -29,9 +29,9 @@ export default function MissileBlock({ item, onClick, onAddToCart }) {
   const dmgType = getDamageType(item)
 
   return (
-    <div className="border-b border-white/[0.04] px-3 py-1.5">
+    <div className="border-b border-white/[0.04] px-3 pt-1 pb-0.5">
       {/* Row 1: Rack */}
-      <div className="flex items-center gap-2 py-1 cursor-pointer rounded transition-colors hover:bg-white/[0.03] -mx-1 px-1"
+      <div className="flex items-center gap-2 py-0.5 cursor-pointer rounded transition-colors hover:bg-white/[0.03] -mx-1 px-1"
         onClick={onClick}>
         <span className="text-[12px] w-7 text-center flex-shrink-0 font-mono bg-white/[0.06] border border-white/[0.1] rounded px-1.5 py-px text-gray-400">
           S{item.size_max}
@@ -40,7 +40,7 @@ export default function MissileBlock({ item, onClick, onAddToCart }) {
       </div>
       {/* Row 2: └ bracket + count badge + missile name */}
       {missileName && (
-        <div className="flex items-center gap-2 py-1 cursor-pointer rounded transition-colors hover:bg-white/[0.03] -mx-1 px-1"
+        <div className="flex items-center gap-2 py-0.5 cursor-pointer rounded transition-colors hover:bg-white/[0.03] -mx-1 px-1"
           style={{ marginLeft: '34px' }}
           onClick={onClick}>
           <Bracket />
@@ -53,7 +53,7 @@ export default function MissileBlock({ item, onClick, onAddToCart }) {
       )}
       {/* Row 3: stats */}
       {missileName && (
-        <div className="flex items-center gap-2 pb-1" style={{ marginLeft: '76px' }}>
+        <div className="flex items-center gap-2 pb-0.5" style={{ marginLeft: '76px' }}>
           {item.manufacturer_name && <span className="text-[12px] text-gray-600 flex-shrink-0">{item.manufacturer_name}</span>}
           {dmgType && <DmgShape type={dmgType} />}
           {missileDmg ? <span className="font-mono text-[13px] text-gray-500">{fmtDec1(missileDmg)} <span className="text-gray-600">&#945;</span></span> : null}
