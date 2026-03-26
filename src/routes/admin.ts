@@ -685,7 +685,8 @@ export function adminRoutes() {
     const { results } = await db
       .prepare(`SELECT ic.*,
         v.image_url as current_vehicle_image,
-        (SELECT p.image_url FROM paints p WHERE p.name = REPLACE(REPLACE(ic.title, ' - ', ' '), ' Paint', ' Livery') AND p.image_url LIKE 'https://imagedelivery%' LIMIT 1) as current_paint_image
+        (SELECT p.id FROM paints p WHERE p.name = REPLACE(REPLACE(ic.title, ' - ', ' '), ' Paint', ' Livery') LIMIT 1) as matched_paint_id,
+        (SELECT p.image_url FROM paints p WHERE p.name = REPLACE(REPLACE(ic.title, ' - ', ' '), ' Paint', ' Livery') LIMIT 1) as matched_paint_image
       FROM image_captures ic LEFT JOIN vehicles v ON v.id = ic.vehicle_id WHERE ${where} ORDER BY ic.seen_count DESC, ic.last_seen DESC LIMIT ? OFFSET ?`)
       .bind(...params, perPage, offset)
       .all();

@@ -373,8 +373,8 @@ function ImageCapturePanel() {
             </thead>
             <tbody className="divide-y divide-white/[0.04]">
               {captures.map(cap => {
-                const hasMatch = !!(cap.vehicle_slug || cap.vehicle_id || cap.current_paint_image)
-                const cdnImage = cap.current_vehicle_image || cap.current_paint_image
+                const hasMatch = !!(cap.vehicle_slug || cap.vehicle_id || cap.matched_paint_id)
+                const cdnImage = cap.current_vehicle_image || cap.matched_paint_image
                 const hasCDN = !!(cdnImage && cdnImage.includes('imagedelivery.net'))
                 const isNew = cap.seen_count <= 1
 
