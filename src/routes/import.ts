@@ -227,12 +227,15 @@ export function importRoutes() {
 
     const insertStmts: D1PreparedStatement[] = [];
     const skippedItems: string[] = [];
+    const imageCaptures: { url: string; slug: string | null; title: string }[] = [];
 
     for (const pledge of payload.pledges) {
       const shipItems = (pledge.items ?? []).filter((item: Record<string, unknown>) => item.kind === "Ship");
 
       for (const item of shipItems) {
         const displayName = item.title || "";
+        // Capture image URL if present
+        const imgUrl = typeof item.image === "string" && item.image.startsWith("http") ? item.image : null;
 
         // Generate slug candidates from item title and manufacturer code
         const nameSlug = slugFromName(displayName);
@@ -244,6 +247,9 @@ export function importRoutes() {
 
         const candidates = [codeSlug, nameSlug, compactCode, compactName];
         const matchedSlug = findVehicleSlugLocal(vehicleMap, candidates, displayName);
+        if (imgUrl) {
+          imageCaptures.push({ url: imgUrl, slug: matchedSlug, title: displayName });
+        }
         if (!matchedSlug) {
           // No known vehicle match — skip instead of creating a stub.
           // Stubs from user-supplied data risk polluting the shared vehicles table.
@@ -320,6 +326,31 @@ export function importRoutes() {
       await executeFleetSwap(db, userID, insertStmts);
     }
     const imported = insertStmts.length;
+
+    // --- Capture image URLs for review ---
+    if (imageCaptures.length > 0) {
+      const capStmts = imageCaptures.map((cap) =>
+        db
+          .prepare(
+            `INSERT INTO image_captures (url, source, vehicle_id, vehicle_slug, title)
+            VALUES (?, 'hangar_sync',
+              (SELECT id FROM vehicles WHERE slug = ? AND ${VEHICLE_VERSION_CAP} ORDER BY game_version_id DESC LIMIT 1),
+              ?, ?)
+            ON CONFLICT(url) DO UPDATE SET
+              last_seen = datetime('now'),
+              seen_count = seen_count + 1`,
+          )
+          .bind(cap.url, cap.slug, cap.slug, cap.title),
+      );
+      // Fire-and-forget in background — don't block the sync response
+      c.executionCtx.waitUntil(
+        (async () => {
+          for (let i = 0; i < capStmts.length; i += 100) {
+            await db.batch(capStmts.slice(i, i + 100));
+          }
+        })().catch((err) => console.error("[hangar-sync] Image capture failed:", err)),
+      );
+    }
 
     // --- Profile upsert ---
     let hasProfile = false;
