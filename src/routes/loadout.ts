@@ -6,6 +6,29 @@ import { versionSubquery, deltaVersionJoin } from "../lib/constants";
 import { cachedJson, resolveVersionId, cacheSlug } from "../lib/cache";
 import { getShipLoadout, getShipModules } from "../db/queries";
 
+// D1 has a 100-parameter limit per prepared statement.
+// Batch an IN-clause query into chunks, merging all results.
+const BATCH_SIZE = 50;
+async function batchInQuery<T>(
+  db: D1Database,
+  items: string[],
+  buildQuery: (placeholders: string) => string,
+  preBind: unknown[] = [],
+): Promise<T[]> {
+  if (items.length === 0) return [];
+  const results: T[] = [];
+  for (let i = 0; i < items.length; i += BATCH_SIZE) {
+    const chunk = items.slice(i, i + BATCH_SIZE);
+    const placeholders = chunk.map(() => "?").join(",");
+    const rows = await db
+      .prepare(buildQuery(placeholders))
+      .bind(...preBind, ...chunk)
+      .all();
+    results.push(...(rows.results as T[]));
+  }
+  return results;
+}
+
 // --- Validation schemas ---
 
 const LoadoutBody = z.object({
@@ -186,22 +209,20 @@ export function loadoutRoutes() {
     let shopMap: Record<string, Array<{ shop_id: number; shop_name: string; shop_slug: string; location_label: string; buy_price: number | null }>> = {};
 
     if (componentUuids.length > 0) {
-      // Batch query shops — use IN clause with placeholders
-      const placeholders = componentUuids.map(() => "?").join(",");
-      const shopRows = await db
-        .prepare(
+      const shopRows = await batchInQuery<any>(
+        db,
+        componentUuids,
+        (ph) =>
           `SELECT si.item_uuid, si.buy_price, s.id AS shop_id, s.name AS shop_name,
                   s.slug AS shop_slug, s.location_label
            FROM shop_inventory si
            JOIN shops s ON s.id = si.shop_id
            ${deltaVersionJoin('shops', 's', 'uuid', versionId)}
-           WHERE si.item_uuid IN (${placeholders})
+           WHERE si.item_uuid IN (${ph})
              AND si.game_version_id <= ${vq}`,
-        )
-        .bind(...componentUuids)
-        .all();
+      );
 
-      for (const row of shopRows.results as any[]) {
+      for (const row of shopRows) {
         if (!shopMap[row.item_uuid]) shopMap[row.item_uuid] = [];
         shopMap[row.item_uuid].push({
           shop_id: row.shop_id,
@@ -223,37 +244,37 @@ export function loadoutRoutes() {
         // Loot collection cross-ref via class_name
         const classNames = components.results.map((c: any) => c.class_name).filter(Boolean);
         if (classNames.length > 0) {
-          const clPlaceholders = classNames.map(() => "?").join(",");
-          const collRows = await db
-            .prepare(
+          const collRows = await batchInQuery<any>(
+            db,
+            classNames,
+            (ph) =>
               `SELECT DISTINCT lm.class_name
                FROM user_loot_collection ulc
                JOIN loot_map lm ON lm.id = ulc.loot_item_id
-               WHERE ulc.user_id = ? AND lm.class_name IN (${clPlaceholders})`,
-            )
-            .bind(user.id, ...classNames)
-            .all();
-          for (const row of collRows.results as any[]) {
+               WHERE ulc.user_id = ? AND lm.class_name IN (${ph})`,
+            [user.id],
+          );
+          for (const row of collRows) {
             collectionSet.add(row.class_name);
           }
         }
 
         // Fleet cross-ref: which of user's ships have these components equipped
         if (componentUuids.length > 0) {
-          const fPlaceholders = componentUuids.map(() => "?").join(",");
-          const fleetRows = await db
-            .prepare(
+          const fleetRows = await batchInQuery<any>(
+            db,
+            componentUuids,
+            (ph) =>
               `SELECT vp.equipped_item_uuid, uf.id AS fleet_id,
                       uf.custom_name, v.name AS ship_name
                FROM user_fleet uf
                JOIN vehicles v ON v.id = uf.vehicle_id
                JOIN vehicle_ports vp ON vp.vehicle_id = v.id
                WHERE uf.user_id = ?
-                 AND vp.equipped_item_uuid IN (${fPlaceholders})`,
-            )
-            .bind(user.id, ...componentUuids)
-            .all();
-          for (const row of fleetRows.results as any[]) {
+                 AND vp.equipped_item_uuid IN (${ph})`,
+            [user.id],
+          );
+          for (const row of fleetRows) {
             if (!fleetMap[row.equipped_item_uuid]) fleetMap[row.equipped_item_uuid] = [];
             // Deduplicate by fleet_id
             if (!fleetMap[row.equipped_item_uuid].some((f: any) => f.fleet_id === row.fleet_id)) {
@@ -528,20 +549,20 @@ export function loadoutRoutes() {
 
     // Get all shops that sell any cart item
     const uuids = cartItems.results.map((r: any) => r.component_uuid).filter(Boolean);
-    const placeholders = uuids.map(() => "?").join(",");
 
-    const shopAvail = await db
-      .prepare(
+    const shopAvailRows = await batchInQuery<any>(
+      db,
+      uuids,
+      (ph) =>
         `SELECT si.item_uuid, s.id AS shop_id
          FROM shop_inventory si
          JOIN shops s ON s.id = si.shop_id
          ${deltaVersionJoin('shops', 's', 'uuid', versionId)}
-         WHERE si.item_uuid IN (${placeholders})
+         WHERE si.item_uuid IN (${ph})
            AND si.buy_price IS NOT NULL
            AND si.game_version_id <= ${vq}`,
-      )
-      .bind(...uuids)
-      .all();
+    );
+    const shopAvail = { results: shopAvailRows };
 
     // Build shop → items map
     const shopToItems: Record<number, Set<string>> = {};

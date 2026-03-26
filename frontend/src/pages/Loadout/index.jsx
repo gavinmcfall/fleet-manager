@@ -11,7 +11,7 @@ import TurretHeader from './TurretHeader'
 import LockedPort from './LockedPort'
 import DamageBreakdown from './DamageBreakdown'
 import PowerPips from './PowerPips'
-import { PORT_TYPE_ICONS, PORT_CATEGORY_ORDER, getPortCategory, getPrimaryStat, aggregateCombatStats, fmtInt, fmtDec1, fmtSpeed, getDamageType, DmgShape } from './loadoutHelpers'
+import { PORT_TYPE_ICONS, PORT_CATEGORY_ORDER, getPortCategory, getPrimaryStat, aggregateCombatStats, fmtInt, fmtCompact, fmtDec1, fmtSpeed, getDamageType, DmgShape } from './loadoutHelpers'
 
 export default function Loadout() {
   const { slug } = useParams()
@@ -261,7 +261,7 @@ export default function Loadout() {
                 <div className="flex-1 flex flex-col items-center justify-center bg-white/[0.02] rounded-l-md py-2">
                   <div className="flex items-baseline gap-1">
                     <span className="font-hud text-[32px] text-sc-accent leading-none" style={{ textShadow: '0 0 12px rgba(34,211,238,0.3)' }}>
-                      {combat ? fmtInt(Math.round(combat.totalDps)) : '—'}
+                      {combat ? fmtCompact(Math.round(combat.totalDps)) : '—'}
                     </span>
                     <span className="text-[13px] text-gray-500">dps</span>
                   </div>
@@ -270,7 +270,7 @@ export default function Loadout() {
                 <div className="flex-1 flex flex-col items-center justify-center bg-white/[0.02] rounded-r-md py-2">
                   <div className="flex items-baseline gap-1">
                     <span className="font-hud text-[32px] text-white leading-none">
-                      {combat ? fmtInt(Math.round(combat.totalAlpha)) : '—'}
+                      {combat ? fmtCompact(Math.round(combat.totalAlpha)) : '—'}
                     </span>
                     <span className="text-[13px] text-gray-500">dmg</span>
                   </div>
@@ -300,9 +300,9 @@ export default function Loadout() {
             <div className="flex-shrink-0 w-[300px] flex flex-col gap-1.5">
               {/* Defense: Shield + Armor */}
               <div className="flex gap-px">
-                <StatCell label="Shield HP" value={combat?.totalShieldHp} format={fmtInt} color="text-blue-400" unit="hp" />
-                <StatCell label="Regen/s" value={combat?.totalShieldRegen} format={fmtInt} color="text-blue-300" unit="hp/s" />
-                <StatCell label="Hull HP" value={ship?.armor_hp || ship?.health} format={fmtInt} color="text-amber-400" unit="hp" />
+                <StatCell label="Shield HP" value={combat?.totalShieldHp} format={fmtCompact} color="text-blue-400" unit="hp" />
+                <StatCell label="Regen/s" value={combat?.totalShieldRegen} format={fmtCompact} color="text-blue-300" unit="hp/s" />
+                <StatCell label="Hull HP" value={ship?.armor_hp || ship?.health} format={fmtCompact} color="text-amber-400" unit="hp" />
               </div>
               {/* Vitals: Fuel + Speed */}
               <div className="flex gap-px">

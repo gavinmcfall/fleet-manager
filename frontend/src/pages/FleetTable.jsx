@@ -280,13 +280,15 @@ export default function FleetTable() {
                     </td>
                     <td className="table-cell">
                       <div className="flex items-center gap-2">
-                        <button
-                          onClick={(e) => { e.stopPropagation(); navigate(`/loadout/${v.vehicle_slug}?fleet_id=${v.id}`) }}
-                          className="p-1 text-zinc-600 hover:text-sky-400 transition-colors"
-                          title="Customize loadout"
-                        >
-                          <Wrench className="w-3.5 h-3.5" />
-                        </button>
+                        {v.production_status === 'flight_ready' && (
+                          <button
+                            onClick={(e) => { e.stopPropagation(); navigate(`/loadout/${v.vehicle_slug}?fleet_id=${v.id}`) }}
+                            className="p-1 text-zinc-600 hover:text-sky-400 transition-colors"
+                            title="Customize loadout"
+                          >
+                            <Wrench className="w-3.5 h-3.5" />
+                          </button>
+                        )}
                         <span className="badge badge-size inline-block w-16 text-center">{v.size_label || '?'}</span>
                       </div>
                     </td>

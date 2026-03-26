@@ -96,6 +96,12 @@ export function getPortCategory(portType, categoryLabel) {
 // ─── Stat formatters ──────────────────────────────────────────────────────────
 
 export const fmtInt = (v) => Number(v).toLocaleString(undefined, { maximumFractionDigits: 0 })
+export const fmtCompact = (v) => {
+  const n = Number(v)
+  if (n >= 1_000_000) return `${(n / 1_000_000).toLocaleString(undefined, { maximumFractionDigits: 1 })}M`
+  if (n >= 100_000) return `${(n / 1_000).toLocaleString(undefined, { maximumFractionDigits: 0 })}K`
+  return n.toLocaleString(undefined, { maximumFractionDigits: 0 })
+}
 export const fmtDec1 = (v) => Number(v).toLocaleString(undefined, { maximumFractionDigits: 1 })
 export const fmtPct = (v) => `${(Number(v) * 100).toFixed(1)}%`
 export const fmtSpeed = (v) => `${(Number(v) / 1000000).toLocaleString(undefined, { maximumFractionDigits: 0 })} Mm/s`

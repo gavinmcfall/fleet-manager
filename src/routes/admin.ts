@@ -703,11 +703,66 @@ export function adminRoutes() {
 
   /**
    * POST /api/admin/image-captures/:id/promote
-   * Mark an image as promoted (uploaded to CF Images).
+   * Upload the captured image to CF Images and link it to the vehicle.
+   * For Ship captures: resolves slug → vehicle, uploads to CF Images, sets cf_images_id + delivery URLs.
    */
   routes.post("/image-captures/:id/promote", async (c) => {
     const id = parseInt(c.req.param("id"), 10);
     const db = c.env.DB;
+
+    const cap = await db
+      .prepare("SELECT id, url, kind, vehicle_id, vehicle_slug FROM image_captures WHERE id = ?")
+      .bind(id)
+      .first<{ id: number; url: string; kind: string; vehicle_id: number | null; vehicle_slug: string | null }>();
+    if (!cap) return c.json({ error: "Capture not found" }, 404);
+
+    // For Ship captures, upload to CF Images and link to vehicle
+    if (cap.kind === "Ship" && cap.vehicle_slug) {
+      const token = c.env.CLOUDFLARE_IMAGES_TOKEN;
+      const accountHash = c.env.CF_ACCOUNT_HASH;
+      const accountId = c.env.CF_ACCOUNT_ID;
+
+      if (!token || !accountHash || !accountId) {
+        return c.json({ error: "CF Images credentials not configured" }, 500);
+      }
+
+      // Resolve vehicle_id from slug if not already linked
+      let vehicleId = cap.vehicle_id;
+      if (!vehicleId) {
+        const v = await db
+          .prepare("SELECT id FROM vehicles WHERE slug = ?")
+          .bind(cap.vehicle_slug)
+          .first<{ id: number }>();
+        if (!v) return c.json({ error: `Vehicle not found: ${cap.vehicle_slug}` }, 404);
+        vehicleId = v.id;
+      }
+
+      // Ensure vehicle_images row exists
+      await db
+        .prepare("INSERT OR IGNORE INTO vehicle_images (vehicle_id, updated_at) VALUES (?, datetime('now'))")
+        .bind(vehicleId)
+        .run();
+
+      // Upload to CF Images
+      const cfImagesId = await uploadToCFImages(accountId, token, cap.url, {
+        slug: cap.vehicle_slug,
+        vehicle_id: String(vehicleId),
+        source: "image_capture_promote",
+      });
+
+      // Set CF Images delivery URLs on vehicle + vehicle_images
+      await setVehicleCFImagesID(db, vehicleId, cfImagesId, accountHash);
+
+      // Mark promoted and link vehicle_id
+      await db.batch([
+        db.prepare("UPDATE image_captures SET promoted = 1, vehicle_id = ? WHERE id = ?").bind(vehicleId, id),
+      ]);
+
+      const deliveryUrl = `https://imagedelivery.net/${accountHash}/${cfImagesId}/medium`;
+      return c.json({ ok: true, cf_images_id: cfImagesId, image_url: deliveryUrl });
+    }
+
+    // Non-ship captures: just flag as promoted for now
     await db.prepare("UPDATE image_captures SET promoted = 1 WHERE id = ?").bind(id).run();
     return c.json({ ok: true });
   });

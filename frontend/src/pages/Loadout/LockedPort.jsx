@@ -6,8 +6,17 @@ import { Lock } from 'lucide-react'
  * "Locked" means the player cannot swap this component — it's NOT the same as
  * "fixed mount" (a non-gimballed weapon). Door guns are locked but gimballed.
  */
+function humanizePortName(portName) {
+  if (!portName) return 'Locked'
+  // Strip hardpoint_ prefix, replace underscores with spaces, title-case
+  return portName
+    .replace(/^hardpoint_/, '')
+    .replace(/_/g, ' ')
+    .replace(/\b\w/g, (c) => c.toUpperCase())
+}
+
 export default function LockedPort({ item }) {
-  const name = item.child_name || item.component_name || item.mount_name || 'Locked'
+  const name = item.child_name || item.component_name || item.mount_name || humanizePortName(item.port_name)
 
   return (
     <div className="flex items-center gap-2 px-3 py-2 border-b border-white/[0.03] opacity-60">

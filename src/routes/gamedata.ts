@@ -998,7 +998,7 @@ export function gamedataRoutes<E extends HonoEnv>() {
 
       // Attach to blueprints
       for (const bp of blueprints) {
-        const sources = acquisitionMap.get(bp.id as number)
+        const sources = acquisitionMap.get((bp as Record<string, unknown>).id as number)
         if (sources && sources.length > 0) {
           (bp as Record<string, unknown>).acquisition = sources
         }
