@@ -1,6 +1,6 @@
 import React, { useState, useEffect, Suspense, lazy } from 'react'
 import { Routes, Route, NavLink, Navigate, useLocation, useNavigate } from 'react-router-dom'
-import { Rocket, BarChart3, Shield, Upload, RefreshCw, Database, Settings as SettingsIcon, ChevronDown, ChevronRight, ChevronLeft, History, Menu, X, LogOut, LogIn, User, Wrench, Users, Building2, FileText, Search, MapPin, Palette, ShoppingCart, Hammer, Briefcase, Star, Scale, Crosshair, BookOpen, Layers, TrendingUp, Languages, Heart, FlaskConical, Sparkles, EyeOff, Eye } from 'lucide-react'
+import { Rocket, BarChart3, Shield, Upload, RefreshCw, Database, Settings as SettingsIcon, ChevronDown, ChevronRight, ChevronLeft, History, Menu, X, LogOut, LogIn, User, Wrench, Users, Building2, FileText, Search, MapPin, Palette, ShoppingCart, Hammer, Briefcase, Star, Scale, Crosshair, BookOpen, Layers, TrendingUp, Languages, Heart, FlaskConical, SlidersHorizontal, Sparkles, EyeOff, Eye } from 'lucide-react'
 import LoadingState from './components/LoadingState'
 import ErrorBoundary from './components/ErrorBoundary'
 import RequireAuth from './components/RequireAuth'
@@ -57,6 +57,7 @@ const MiningLocationDetail = lazy(() => import('./pages/Mining/LocationDetail'))
 const MiningEquipmentDetail = lazy(() => import('./pages/Mining/EquipmentDetail'))
 const Crafting = lazy(() => import('./pages/Crafting'))
 const BlueprintDetail = lazy(() => import('./pages/Crafting/BlueprintDetail'))
+const QualitySimPage = lazy(() => import('./pages/Crafting/QualitySimPage'))
 const Careers = lazy(() => import('./pages/Careers'))
 const Reputation = lazy(() => import('./pages/Reputation'))
 const LawSystem = lazy(() => import('./pages/LawSystem'))
@@ -77,7 +78,16 @@ const gameDataGroup = {
     { to: '/shops', icon: ShoppingCart, label: 'Shops' },
     { to: '/trade', icon: TrendingUp, label: 'Trade' },
     { to: '/mining', icon: Hammer, label: 'Mining Guide' },
-    { to: '/crafting', icon: FlaskConical, label: 'Crafting', minVersion: '4.7' },
+    {
+      to: '/crafting',
+      icon: FlaskConical,
+      label: 'Crafting',
+      minVersion: '4.7',
+      submenu: [
+        { to: '/crafting', icon: FlaskConical, label: 'Blueprints' },
+        { to: '/crafting/sim', icon: SlidersHorizontal, label: 'Quality Sim' },
+      ],
+    },
     { to: '/npc-loadouts', icon: Users, label: 'NPC Loadouts' },
   ],
 }
@@ -726,6 +736,7 @@ export default function App() {
                       <Route path="/mining/location/:id" element={<MiningLocationDetail />} />
                       <Route path="/mining/:type/:id" element={<MiningEquipmentDetail />} />
                       <Route path="/crafting" element={<Suspense fallback={<LoadingState fullScreen />}><Crafting /></Suspense>} />
+                      <Route path="/crafting/sim" element={<Suspense fallback={<LoadingState fullScreen />}><QualitySimPage /></Suspense>} />
                       <Route path="/crafting/:id" element={<Suspense fallback={<LoadingState fullScreen />}><BlueprintDetail /></Suspense>} />
                       <Route path="/careers" element={<Careers />} />
                       <Route path="/reputation" element={<Reputation />} />
