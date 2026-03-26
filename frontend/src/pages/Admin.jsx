@@ -279,6 +279,22 @@ function PTUPurgePanel() {
   )
 }
 
+/** Construct large RSI image URL from thumbnail URL */
+function rsiLargeUrl(thumbUrl) {
+  if (!thumbUrl) return null
+  // media.robertsspaceindustries.com/{id}/subscribers_vault_thumbnail.jpg → store_large.jpg
+  return thumbUrl.replace(/\/[^/]+$/, '/store_large.jpg')
+}
+
+/** Status badges for image captures */
+function CaptureBadge({ label, yes }) {
+  return (
+    <span className={`text-[10px] px-1.5 py-px rounded font-mono ${yes ? 'bg-emerald-500/10 text-emerald-400 border border-emerald-500/20' : 'bg-white/[0.04] text-gray-600 border border-white/[0.06]'}`}>
+      {label}: {yes ? 'Yes' : 'No'}
+    </span>
+  )
+}
+
 function ImageCapturePanel() {
   const [captures, setCaptures] = useState([])
   const [kinds, setKinds] = useState([])
@@ -340,45 +356,89 @@ function ImageCapturePanel() {
       ) : captures.length === 0 ? (
         <div className="p-8 text-center text-gray-600 text-sm">No pending image captures</div>
       ) : (
-        <div className="divide-y divide-white/[0.04]">
-          {captures.map(cap => (
-            <div key={cap.id} className="flex items-center gap-3 px-4 py-2 hover:bg-white/[0.02] transition-colors">
-              {/* Thumbnail */}
-              <button onClick={() => setPreview(cap.url)} className="flex-shrink-0 w-16 h-12 rounded overflow-hidden bg-white/[0.04] cursor-pointer hover:ring-1 hover:ring-sc-accent/50 transition-all">
-                <img src={cap.url} alt="" className="w-full h-full object-cover" onError={e => e.target.style.display = 'none'} />
-              </button>
+        /* Table header */
+        <div className="overflow-x-auto">
+          <table className="w-full text-sm">
+            <thead>
+              <tr className="text-[10px] text-gray-500 uppercase tracking-wider border-b border-white/[0.06]">
+                <th className="px-3 py-2 text-left">Image</th>
+                <th className="px-3 py-2 text-left">Title</th>
+                <th className="px-3 py-2 text-left">Type</th>
+                <th className="px-3 py-2 text-center">Matched</th>
+                <th className="px-3 py-2 text-center">CDN</th>
+                <th className="px-3 py-2 text-center">New</th>
+                <th className="px-3 py-2 text-center">Seen</th>
+                <th className="px-3 py-2 text-right">Actions</th>
+              </tr>
+            </thead>
+            <tbody className="divide-y divide-white/[0.04]">
+              {captures.map(cap => {
+                const hasMatch = !!(cap.vehicle_slug || cap.vehicle_id)
+                const hasCDN = !!(cap.current_vehicle_image && cap.current_vehicle_image.includes('imagedelivery.net'))
+                const isNew = cap.seen_count <= 1
 
-              {/* Info */}
-              <div className="flex-1 min-w-0">
-                <div className="text-sm text-gray-200 truncate">{cap.title || 'Untitled'}</div>
-                <div className="flex items-center gap-2 text-[11px] text-gray-600">
-                  {cap.kind && <span className="bg-white/[0.04] px-1.5 py-px rounded">{cap.kind}</span>}
-                  {cap.vehicle_slug && <span className="text-sc-accent">{cap.vehicle_slug}</span>}
-                  <span>seen {cap.seen_count}×</span>
-                </div>
-              </div>
+                return (
+                  <tr key={cap.id} className="hover:bg-white/[0.02] transition-colors">
+                    {/* Thumbnail — click for large preview */}
+                    <td className="px-3 py-2">
+                      <button
+                        onClick={() => setPreview(rsiLargeUrl(cap.url) || cap.url)}
+                        className="flex-shrink-0 w-20 h-14 rounded overflow-hidden bg-white/[0.04] cursor-pointer hover:ring-2 hover:ring-sc-accent/50 transition-all block"
+                      >
+                        <img src={cap.url} alt="" className="w-full h-full object-cover" onError={e => { e.target.style.display = 'none' }} />
+                      </button>
+                    </td>
 
-              {/* Current vehicle image comparison (for ships) */}
-              {cap.current_vehicle_image && (
-                <div className="flex-shrink-0 w-12 h-9 rounded overflow-hidden bg-white/[0.04] border border-white/[0.06]" title="Current CF Images">
-                  <img src={cap.current_vehicle_image} alt="" className="w-full h-full object-cover" />
-                </div>
-              )}
+                    {/* Title + slug */}
+                    <td className="px-3 py-2">
+                      <div className="text-gray-200 truncate max-w-[250px]">{cap.title || 'Untitled'}</div>
+                      {cap.vehicle_slug && <div className="text-[11px] text-sc-accent font-mono">{cap.vehicle_slug}</div>}
+                    </td>
 
-              {/* Actions */}
-              <div className="flex items-center gap-1 flex-shrink-0">
-                <a href={cap.url} target="_blank" rel="noopener" className="p-1.5 text-gray-600 hover:text-gray-300 transition-colors" title="Open original">
-                  <ExternalLink className="w-3.5 h-3.5" />
-                </a>
-                <button onClick={() => handlePromote(cap.id)} className="p-1.5 text-gray-600 hover:text-emerald-400 transition-colors cursor-pointer" title="Promote to CDN">
-                  <ThumbsUp className="w-3.5 h-3.5" />
-                </button>
-                <button onClick={() => handleDecline(cap.id)} className="p-1.5 text-gray-600 hover:text-red-400 transition-colors cursor-pointer" title="Decline (permanent)">
-                  <X className="w-3.5 h-3.5" />
-                </button>
-              </div>
-            </div>
-          ))}
+                    {/* Type/Kind */}
+                    <td className="px-3 py-2">
+                      <span className="text-[11px] bg-white/[0.04] px-2 py-0.5 rounded text-gray-400">{cap.kind || '—'}</span>
+                    </td>
+
+                    {/* Matched to DB */}
+                    <td className="px-3 py-2 text-center">
+                      <CaptureBadge label="DB" yes={hasMatch} />
+                    </td>
+
+                    {/* CDN has image */}
+                    <td className="px-3 py-2 text-center">
+                      <CaptureBadge label="CDN" yes={hasCDN} />
+                    </td>
+
+                    {/* New image (first time seen) */}
+                    <td className="px-3 py-2 text-center">
+                      {isNew
+                        ? <span className="text-[10px] px-1.5 py-px rounded font-mono bg-amber-500/10 text-amber-400 border border-amber-500/20">New</span>
+                        : <span className="text-[10px] text-gray-700">—</span>
+                      }
+                    </td>
+
+                    {/* Seen count */}
+                    <td className="px-3 py-2 text-center">
+                      <span className="font-mono text-[11px] text-gray-500">{cap.seen_count}</span>
+                    </td>
+
+                    {/* Actions */}
+                    <td className="px-3 py-2 text-right">
+                      <div className="flex items-center justify-end gap-1">
+                        <button onClick={() => handlePromote(cap.id)} className="px-2 py-1 text-[10px] bg-emerald-500/10 text-emerald-400 border border-emerald-500/20 rounded hover:bg-emerald-500/20 transition-colors cursor-pointer" title="Promote to CDN">
+                          Promote
+                        </button>
+                        <button onClick={() => handleDecline(cap.id)} className="px-2 py-1 text-[10px] bg-white/[0.04] text-gray-500 border border-white/[0.06] rounded hover:bg-red-500/10 hover:text-red-400 hover:border-red-500/20 transition-colors cursor-pointer" title="Decline permanently">
+                          Ignore
+                        </button>
+                      </div>
+                    </td>
+                  </tr>
+                )
+              })}
+            </tbody>
+          </table>
         </div>
       )}
 
@@ -391,7 +451,7 @@ function ImageCapturePanel() {
         </div>
       )}
 
-      {/* Full-size preview modal */}
+      {/* Full-size preview modal — shows store_large.jpg variant */}
       {preview && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 cursor-pointer" onClick={() => setPreview(null)}>
           <img src={preview} alt="" className="max-w-[90vw] max-h-[90vh] rounded-lg shadow-2xl" />
