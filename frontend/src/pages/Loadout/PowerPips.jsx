@@ -130,39 +130,17 @@ export default function PowerPips({ components, ship, combat }) {
   const handleReset = useCallback(() => setAllocations(null), [])
 
   return (
-    <div className="flex-1 flex flex-col gap-1 min-w-0">
-      {/* Mode tabs + pool info */}
-      <div className="flex items-center justify-between">
-        <div className="flex items-center gap-1">
-          {MODES.map(m => (
-            <button
-              key={m}
-              onClick={() => handleModeChange(m)}
-              className={`px-2.5 py-0.5 text-[10px] font-semibold rounded cursor-pointer transition-colors
-                ${mode === m
-                  ? (m === 'NAV' ? 'bg-amber-500/20 text-amber-400 border border-amber-500/30' : 'bg-sc-accent/20 text-sc-accent border border-sc-accent/30')
-                  : 'bg-white/[0.03] text-gray-600 border border-white/[0.06] hover:text-gray-400'
-                }`}
-            >
-              {m}
-            </button>
-          ))}
-          {isModified && (
-            <button onClick={handleReset} className="flex items-center gap-0.5 px-1.5 py-0.5 text-[10px] text-gray-500 hover:text-gray-300 cursor-pointer transition-colors" title="Reset to defaults">
-              <RotateCcw className="w-2.5 h-2.5" />
-            </button>
-          )}
-        </div>
-        <div className="flex items-center gap-3 text-[10px] font-mono">
-          <span className="text-gray-600">Pool <span className={freePool > 0 ? 'text-sc-accent' : 'text-gray-400'}>{totalAllocated}</span> / {totalPool}</span>
-          {combat?.totalPowerOutput > 0 && (
-            <span className="text-gray-600">Output <span className="text-emerald-400">{Math.round(combat.totalPowerOutput).toLocaleString()}</span> pwr</span>
-          )}
-        </div>
+    <div className="flex-1 flex flex-col gap-1.5 min-w-0">
+      {/* Pool info line */}
+      <div className="flex items-center justify-center gap-4 text-[10px] font-mono">
+        <span className="text-gray-600">Pool <span className={freePool > 0 ? 'text-sc-accent' : 'text-gray-400'}>{totalAllocated}</span> / {totalPool}</span>
+        {combat?.totalPowerOutput > 0 && (
+          <span className="text-gray-600">Output <span className="text-emerald-400">{Math.round(combat.totalPowerOutput).toLocaleString()}</span> pwr</span>
+        )}
       </div>
 
-      {/* Pip columns */}
-      <div className="flex items-end gap-1 px-1" style={{ height: 80 }}>
+      {/* Pip columns — taller area */}
+      <div className="flex items-end gap-1.5 px-2 flex-1" style={{ minHeight: 96 }}>
         {subsystems.map((sub, idx) => {
           const k = sub.instance ? `${sub.key}_${sub.instance}` : sub.key
           const meta = SUBSYSTEM_META[sub.key]
@@ -170,7 +148,7 @@ export default function PowerPips({ components, ship, combat }) {
           const filled = current[k] || 0
 
           return (
-            <div key={`${k}_${idx}`} className="flex-1 min-w-[24px] flex flex-col-reverse gap-0.5">
+            <div key={`${k}_${idx}`} className="flex-1 min-w-[26px] flex flex-col-reverse gap-[3px]">
               {Array.from({ length: sub.max }).map((_, i) => (
                 <div
                   key={i}
@@ -190,14 +168,14 @@ export default function PowerPips({ components, ship, combat }) {
       </div>
 
       {/* Subsystem labels + counts */}
-      <div className="flex items-center gap-1 px-1">
+      <div className="flex items-center gap-1.5 px-2">
         {subsystems.map((sub, idx) => {
           const k = sub.instance ? `${sub.key}_${sub.instance}` : sub.key
           const meta = SUBSYSTEM_META[sub.key]
           const isOff = offSet.has(sub.key)
           const filled = current[k] || 0
           return (
-            <div key={`${k}_${idx}`} className="flex-1 min-w-[24px] text-center">
+            <div key={`${k}_${idx}`} className="flex-1 min-w-[26px] text-center">
               <div className={`text-[9px] uppercase tracking-wider ${isOff ? 'text-gray-700' : meta.color}`}>
                 {meta.label}
               </div>
@@ -207,6 +185,28 @@ export default function PowerPips({ components, ship, combat }) {
             </div>
           )
         })}
+      </div>
+
+      {/* Mode selector + reset — bottom row */}
+      <div className="flex items-center justify-center gap-1.5">
+        {MODES.map(m => (
+          <button
+            key={m}
+            onClick={() => handleModeChange(m)}
+            className={`px-3 py-1 text-[10px] font-semibold rounded cursor-pointer transition-colors
+              ${mode === m
+                ? (m === 'NAV' ? 'bg-amber-500/20 text-amber-400 border border-amber-500/30' : 'bg-sc-accent/20 text-sc-accent border border-sc-accent/30')
+                : 'bg-white/[0.03] text-gray-600 border border-white/[0.06] hover:text-gray-400'
+              }`}
+          >
+            {m}
+          </button>
+        ))}
+        {isModified && (
+          <button onClick={handleReset} className="flex items-center gap-0.5 px-2 py-1 text-[10px] text-gray-500 hover:text-gray-300 border border-white/[0.06] rounded cursor-pointer transition-colors" title="Reset to defaults">
+            <RotateCcw className="w-2.5 h-2.5" /> Reset
+          </button>
+        )}
       </div>
     </div>
   )
