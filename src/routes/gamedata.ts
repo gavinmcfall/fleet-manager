@@ -964,35 +964,36 @@ export function gamedataRoutes<E extends HonoEnv>() {
         }
       })
 
-      // Fetch blueprint acquisition sources (mission/contract reward pools)
+      // Fetch blueprint acquisition sources via contract generator system
       const acquisitionResult = await db.prepare(
-        `SELECT rpi.crafting_blueprint_id, rp.name as pool_name, rp.key as pool_key,
-                cbr.contract_generator_key
+        `SELECT DISTINCT rpi.crafting_blueprint_id,
+                cg.generator_key, cg.display_name, cg.faction_name, cg.mission_type
          FROM crafting_blueprint_reward_pool_items rpi
          JOIN crafting_blueprint_reward_pools rp ON rp.id = rpi.crafting_blueprint_reward_pool_id
-         LEFT JOIN contract_blueprint_reward_pools cbr
-           ON cbr.crafting_blueprint_reward_pool_id = rp.id
-           AND cbr.game_version_id = rp.game_version_id
-         WHERE rp.game_version_id <= ${versionSub(versionId)}`
+         JOIN contract_generator_blueprint_pools cgbp ON cgbp.crafting_blueprint_reward_pool_id = rp.id
+         JOIN contract_generator_contracts cgc ON cgc.id = cgbp.contract_generator_contract_id
+         JOIN contract_generator_careers cgca ON cgca.id = cgc.career_id
+         JOIN contract_generators cg ON cg.id = cgca.contract_generator_id
+         WHERE rp.game_version_id <= ${versionSub(versionId)}
+           AND cg.game_version_id <= ${versionSub(versionId)}`
       ).all()
 
-      // Build acquisition map: blueprint_id → [{ source, detail }]
-      const acquisitionMap = new Map<number, { source: string; detail: string }[]>()
+      // Build acquisition map: blueprint_id → [{ source, generator_key, display_name, ... }]
+      type AcquisitionEntry = { source: string; generator_key: string; display_name: string; faction_name: string; mission_type: string }
+      const acquisitionMap = new Map<number, AcquisitionEntry[]>()
       for (const row of acquisitionResult.results) {
         const bpId = row.crafting_blueprint_id as number
         if (!acquisitionMap.has(bpId)) acquisitionMap.set(bpId, [])
         const entries = acquisitionMap.get(bpId)!
-        const contractKey = row.contract_generator_key as string | null
-        if (contractKey) {
-          const detail = contractKey.replace(/_/g, " ")
-          if (!entries.some(e => e.detail === detail)) {
-            entries.push({ source: "contract", detail })
-          }
-        } else {
-          const poolName = (row.pool_name as string) || (row.pool_key as string) || "unknown"
-          if (!entries.some(e => e.detail === poolName)) {
-            entries.push({ source: "mission_reward", detail: poolName })
-          }
+        const genKey = row.generator_key as string
+        if (!entries.some(e => e.generator_key === genKey)) {
+          entries.push({
+            source: "contract",
+            generator_key: genKey,
+            display_name: (row.display_name as string) || genKey,
+            faction_name: (row.faction_name as string) || "",
+            mission_type: (row.mission_type as string) || "",
+          })
         }
       }
 
@@ -1142,6 +1143,117 @@ export function gamedataRoutes<E extends HonoEnv>() {
         properties: propResult.results,
         resources: resResult.results.map((r) => r.name),
         resource_locations: resourceLocations,
+      }
+    })
+  })
+
+  // GET /api/gamedata/mission/:key — contract generator detail with blueprint pools
+  app.get("/mission/:key", async (c) => {
+    const db = c.env.DB
+    const key = c.req.param("key")
+    const versionId = await resolveVersionId(db, c.req.query("patch"))
+
+    return cachedJson(c, `gd:mission:${versionId}:${cacheSlug(key)}`, async () => {
+      // Get generator
+      const gen = await db.prepare(
+        `SELECT * FROM contract_generators WHERE generator_key = ? AND game_version_id <= ? ORDER BY game_version_id DESC LIMIT 1`
+      ).bind(key, versionId).first()
+      if (!gen) return null
+
+      const genId = gen.id as number
+
+      // Get careers
+      const careers = await db.prepare(
+        `SELECT * FROM contract_generator_careers WHERE contract_generator_id = ? AND game_version_id <= ? ORDER BY system, debug_name`
+      ).bind(genId, versionId).all()
+
+      // Get contracts for all careers
+      const careerIds = careers.results.map(c => c.id as number)
+      const contracts = careerIds.length > 0
+        ? await db.prepare(
+            `SELECT * FROM contract_generator_contracts WHERE career_id IN (${careerIds.join(",")}) AND game_version_id <= ? ORDER BY career_id, difficulty`
+          ).bind(versionId).all()
+        : { results: [] }
+
+      // Get blueprint pools for all contracts
+      const contractIds = contracts.results.map(c => c.id as number)
+      const bpPools = contractIds.length > 0
+        ? await db.prepare(
+            `SELECT cgbp.contract_generator_contract_id, cgbp.chance,
+                    rp.key as pool_key, rp.name as pool_name,
+                    rpi.crafting_blueprint_id, cb.name as blueprint_name,
+                    cb.type as blueprint_type, cb.sub_type as blueprint_sub_type
+             FROM contract_generator_blueprint_pools cgbp
+             JOIN crafting_blueprint_reward_pools rp ON rp.id = cgbp.crafting_blueprint_reward_pool_id
+             JOIN crafting_blueprint_reward_pool_items rpi ON rpi.crafting_blueprint_reward_pool_id = rp.id
+             JOIN crafting_blueprints cb ON cb.id = rpi.crafting_blueprint_id
+             WHERE cgbp.contract_generator_contract_id IN (${contractIds.join(",")})
+               AND cgbp.game_version_id <= ?`
+          ).bind(versionId).all()
+        : { results: [] }
+
+      // Group bp pools by contract
+      const bpByContract = new Map<number, Record<string, unknown>[]>()
+      for (const row of bpPools.results) {
+        const cid = row.contract_generator_contract_id as number
+        if (!bpByContract.has(cid)) bpByContract.set(cid, [])
+        bpByContract.get(cid)!.push(row)
+      }
+
+      // Group contracts by career
+      const contractsByCareer = new Map<number, Record<string, unknown>[]>()
+      for (const c of contracts.results) {
+        const cid = c.career_id as number
+        if (!contractsByCareer.has(cid)) contractsByCareer.set(cid, [])
+        const pools = bpByContract.get(c.id as number) || []
+        // Group by pool_key
+        const poolMap = new Map<string, { pool_key: string; pool_name: string; chance: number; blueprints: { id: number; name: string; type: string; sub_type: string }[] }>()
+        for (const p of pools) {
+          const pk = p.pool_key as string
+          if (!poolMap.has(pk)) {
+            poolMap.set(pk, { pool_key: pk, pool_name: p.pool_name as string, chance: p.chance as number, blueprints: [] })
+          }
+          poolMap.get(pk)!.blueprints.push({
+            id: p.crafting_blueprint_id as number,
+            name: p.blueprint_name as string,
+            type: p.blueprint_type as string,
+            sub_type: p.blueprint_sub_type as string,
+          })
+        }
+        contractsByCareer.get(cid)!.push({
+          ...c,
+          blueprint_pools: [...poolMap.values()],
+        })
+      }
+
+      // Collect all unique blueprints across all contracts
+      const allBlueprints = new Map<number, { id: number; name: string; type: string; sub_type: string }>()
+      for (const row of bpPools.results) {
+        const id = row.crafting_blueprint_id as number
+        if (!allBlueprints.has(id)) {
+          allBlueprints.set(id, {
+            id,
+            name: row.blueprint_name as string,
+            type: row.blueprint_type as string,
+            sub_type: row.blueprint_sub_type as string,
+          })
+        }
+      }
+
+      return {
+        generator: {
+          key: gen.generator_key,
+          display_name: gen.display_name,
+          faction_name: gen.faction_name,
+          guild: gen.guild,
+          mission_type: gen.mission_type,
+        },
+        careers: careers.results.map(career => ({
+          debug_name: career.debug_name,
+          system: career.system,
+          contracts: contractsByCareer.get(career.id as number) || [],
+        })),
+        all_blueprints: [...allBlueprints.values()],
       }
     })
   })

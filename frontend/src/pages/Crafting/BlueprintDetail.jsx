@@ -1,5 +1,5 @@
 import React, { useMemo, useState } from 'react'
-import { useParams, useNavigate, useSearchParams } from 'react-router-dom'
+import { useParams, useNavigate, useSearchParams, Link } from 'react-router-dom'
 import { ArrowLeft, Clock, Layers, FlaskConical, Crosshair, Zap, Target, MapPin, Gift, FileText } from 'lucide-react'
 import { useCrafting } from '../../hooks/useAPI'
 import LoadingState from '../../components/LoadingState'
@@ -240,29 +240,22 @@ export default function BlueprintDetail() {
           <div className="mt-4 pt-4 border-t border-white/[0.06]">
             <h4 className="text-[10px] uppercase tracking-wider text-gray-500 mb-2">How to Obtain</h4>
             <div className="flex flex-wrap gap-2">
-              {blueprint.acquisition.map((src, i) => {
-                if (src.source === 'contract') {
-                  const parts = src.detail.split(' ')
-                  const giver = parts[0].charAt(0).toUpperCase() + parts[0].slice(1)
-                  const missionType = parts.slice(1).join(' ')
-                    .replace(/([a-z])([A-Z])/g, '$1 $2')
-                    .replace(/^./, s => s.toUpperCase())
-                  return (
-                    <span key={i} className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs bg-white/[0.04] border border-white/[0.06] text-gray-400">
-                      <FileText className="w-3 h-3 text-amber-400" />
-                      <span>{giver}</span>
+              {blueprint.acquisition.map((src, i) => (
+                <Link
+                  key={i}
+                  to={`/missions/${src.generator_key}`}
+                  className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs bg-white/[0.04] border border-white/[0.06] text-gray-400 hover:text-sc-accent hover:border-sc-accent/20 transition-colors"
+                >
+                  <FileText className="w-3 h-3 text-amber-400" />
+                  <span>{src.display_name || src.generator_key}</span>
+                  {src.mission_type && (
+                    <>
                       <span className="text-gray-600">—</span>
-                      <span className="text-gray-500">{missionType}</span>
-                    </span>
-                  )
-                }
-                return (
-                  <span key={i} className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs bg-white/[0.04] border border-white/[0.06] text-gray-400">
-                    <Gift className="w-3 h-3 text-emerald-400" />
-                    Mission Reward
-                  </span>
-                )
-              })}
+                      <span className="text-gray-500">{src.mission_type}</span>
+                    </>
+                  )}
+                </Link>
+              ))}
             </div>
           </div>
         )}

@@ -411,6 +411,12 @@ export async function optimizeLoadoutCart() {
   return postJSON('/loadout/cart/optimize', {})
 }
 
+// --- Mission Detail ---
+
+export function useMissionDetail(key) {
+  return useAPI(key ? `/gamedata/mission/${key}` : null)
+}
+
 // --- User Blueprints (Crafting Tracker) ---
 
 export function useUserBlueprints() {

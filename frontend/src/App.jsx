@@ -59,6 +59,7 @@ const Crafting = lazy(() => import('./pages/Crafting'))
 const BlueprintDetail = lazy(() => import('./pages/Crafting/BlueprintDetail'))
 const QualitySimPage = lazy(() => import('./pages/Crafting/QualitySimPage'))
 const SavedBlueprints = lazy(() => import('./pages/Crafting/SavedBlueprints'))
+const MissionDetail = lazy(() => import('./pages/MissionDetail'))
 const Careers = lazy(() => import('./pages/Careers'))
 const Reputation = lazy(() => import('./pages/Reputation'))
 const LawSystem = lazy(() => import('./pages/LawSystem'))
@@ -752,6 +753,7 @@ export default function App() {
                       <Route path="/crafting" element={<Suspense fallback={<LoadingState fullScreen />}><Crafting /></Suspense>} />
                       <Route path="/crafting/sim" element={<Suspense fallback={<LoadingState fullScreen />}><QualitySimPage /></Suspense>} />
                       <Route path="/crafting/saved" element={<RequireAuth><Suspense fallback={<LoadingState fullScreen />}><SavedBlueprints /></Suspense></RequireAuth>} />
+                      <Route path="/missions/:key" element={<Suspense fallback={<LoadingState fullScreen />}><MissionDetail /></Suspense>} />
                       <Route path="/crafting/:id" element={<Suspense fallback={<LoadingState fullScreen />}><BlueprintDetail /></Suspense>} />
                       <Route path="/careers" element={<Careers />} />
                       <Route path="/reputation" element={<Reputation />} />
