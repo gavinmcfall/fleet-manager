@@ -617,20 +617,8 @@ export function accountRoutes() {
       // Localization builder (migration 0127)
       db.prepare("DELETE FROM user_localization_configs WHERE user_id = ?").bind(user.id),
       db.prepare("DELETE FROM user_localization_ship_order WHERE user_id = ?").bind(user.id),
-      // Companion app (migration 0136)
-      db.prepare("DELETE FROM companion_events WHERE user_id = ?").bind(user.id),
+      // Companion app — game event data is not PII, kept for analytics
       db.prepare("DELETE FROM companion_status WHERE user_id = ?").bind(user.id),
-      // Companion gRPC data (migration 0138)
-      db.prepare("DELETE FROM companion_wallet_snapshots WHERE user_id = ?").bind(user.id),
-      db.prepare("DELETE FROM companion_wallet_current WHERE user_id = ?").bind(user.id),
-      db.prepare("DELETE FROM companion_friends WHERE user_id = ?").bind(user.id),
-      db.prepare("DELETE FROM companion_reputation_scores WHERE user_id = ?").bind(user.id),
-      db.prepare("DELETE FROM companion_reputation_history WHERE user_id = ?").bind(user.id),
-      db.prepare("DELETE FROM companion_blueprints WHERE user_id = ?").bind(user.id),
-      db.prepare("DELETE FROM companion_entitlements WHERE user_id = ?").bind(user.id),
-      db.prepare("DELETE FROM companion_missions WHERE user_id = ?").bind(user.id),
-      db.prepare("DELETE FROM companion_stats WHERE user_id = ?").bind(user.id),
-      db.prepare("DELETE FROM companion_sync_log WHERE user_id = ?").bind(user.id),
       // Scrub PII from change history — keep rows (event log) but wipe values + IP
       db.prepare(
         `UPDATE user_change_history SET
