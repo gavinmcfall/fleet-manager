@@ -14,6 +14,7 @@ export interface VehicleMap {
 }
 
 export async function preloadVehicleMap(db: D1Database): Promise<VehicleMap> {
+  // Load active vehicles (non-removed)
   const result = await db
     .prepare(`SELECT v.id, v.slug, v.name FROM vehicles v
       INNER JOIN (
@@ -21,7 +22,8 @@ export async function preloadVehicleMap(db: D1Database): Promise<VehicleMap> {
         FROM vehicles
         WHERE ${VEHICLE_VERSION_CAP}
         GROUP BY slug
-      ) _vv ON v.slug = _vv.slug AND v.game_version_id = _vv.latest_gv`)
+      ) _vv ON v.slug = _vv.slug AND v.game_version_id = _vv.latest_gv
+      WHERE v.removed = 0`)
     .all();
 
   const slugToID = new Map<string, number>();
@@ -33,6 +35,36 @@ export async function preloadVehicleMap(db: D1Database): Promise<VehicleMap> {
     slugToID.set(r.slug, r.id);
     nameToSlug.set(r.name.toLowerCase(), r.slug);
     compactToSlug.set(compactSlug(r.slug), r.slug);
+  }
+
+  // Load removed vehicles with replacements — map old slug/name to replacement vehicle
+  const removed = await db
+    .prepare(`SELECT v.id, v.slug, v.name, rv.id as replacement_id, rv.slug as replacement_slug, rv.name as replacement_name
+      FROM vehicles v
+      INNER JOIN (
+        SELECT slug, MAX(game_version_id) as latest_gv
+        FROM vehicles
+        WHERE ${VEHICLE_VERSION_CAP}
+        GROUP BY slug
+      ) _vv ON v.slug = _vv.slug AND v.game_version_id = _vv.latest_gv
+      JOIN vehicles rv ON rv.id = v.replaced_by_vehicle_id
+      WHERE v.removed = 1 AND v.replaced_by_vehicle_id IS NOT NULL`)
+    .all();
+
+  for (const row of removed.results) {
+    const r = row as { slug: string; name: string; replacement_id: number; replacement_slug: string };
+    // Old slug/name resolve to the replacement vehicle
+    if (!slugToID.has(r.slug)) {
+      slugToID.set(r.slug, r.replacement_id);
+    }
+    const lowerName = r.name.toLowerCase();
+    if (!nameToSlug.has(lowerName)) {
+      nameToSlug.set(lowerName, r.replacement_slug);
+    }
+    const compact = compactSlug(r.slug);
+    if (!compactToSlug.has(compact)) {
+      compactToSlug.set(compact, r.replacement_slug);
+    }
   }
 
   return { slugToID, nameToSlug, compactToSlug };
@@ -88,6 +120,105 @@ export function findVehicleSlugLocal(
   }
 
   return null;
+}
+
+// --- Paint matching ---
+
+export interface PaintMap {
+  normalizedToID: Map<string, number>;
+}
+
+/** Normalize RSI paint title: "100 Series - Blue Ametrine Paint" → "100 series blue ametrine" */
+export function normalizePaintTitle(rsiTitle: string): string {
+  return rsiTitle
+    .replace(/\s*-\s*/g, " ")       // " - " → " "
+    .replace(/\s+paint$/i, "")       // strip trailing " Paint"
+    .replace(/\s+/g, " ")            // collapse whitespace
+    .trim()
+    .toLowerCase();
+}
+
+/** Normalize DB paint name: "100 Series Blue Ametrine Livery" → "100 series blue ametrine" */
+function normalizeDbPaintName(dbName: string): string {
+  return dbName
+    .replace(/\s+camo\s+livery$/i, "")  // strip " Camo Livery"
+    .replace(/\s+livery$/i, "")          // strip " Livery"
+    .replace(/\s+/g, " ")
+    .trim()
+    .toLowerCase();
+}
+
+export async function preloadPaintMap(db: D1Database): Promise<PaintMap> {
+  const result = await db
+    .prepare("SELECT id, name FROM paints WHERE is_base_variant = 0")
+    .all();
+
+  const normalizedToID = new Map<string, number>();
+  for (const row of result.results) {
+    const r = row as { id: number; name: string };
+    const normalized = normalizeDbPaintName(r.name);
+    if (!normalizedToID.has(normalized)) {
+      normalizedToID.set(normalized, r.id);
+    }
+  }
+  return { normalizedToID };
+}
+
+export function findPaintLocal(map: PaintMap, rsiTitle: string): number | null {
+  if (!rsiTitle) return null;
+  const normalized = normalizePaintTitle(rsiTitle);
+  return map.normalizedToID.get(normalized) ?? null;
+}
+
+// --- Buyback name parsers ---
+
+/** Parse buyback ship name: "Standalone Ship - Anvil C8X Pisces Expedition - IAE 2949" → "Anvil C8X Pisces Expedition" */
+export function parseBuybackShipName(pledgeName: string): string {
+  let name = pledgeName;
+  // Strip prefix
+  name = name.replace(/^Standalone Ships?\s*-\s*/i, "");
+  name = name.replace(/^Buggies\s*-\s*/i, "");
+  // Strip trailing suffixes: " - IAE 2949", " - Warbond", " - LTI", " - 10 Year", etc.
+  name = name.replace(/\s*-\s*(Warbond|IAE\s*\d+|LTI|\d+\s*Year|Anniversary\s*\d+|Citizencon\s*\d+).*$/i, "");
+  // Strip "plus {Paint} Paint" suffix (e.g., "C1 Spirit plus Crimson Paint")
+  name = name.replace(/\s+plus\s+.+paint$/i, "");
+  return name.trim();
+}
+
+/** Parse buyback paint name: "Paints - Terrapin - Felicity Paint" → "Terrapin - Felicity Paint" */
+export function parseBuybackPaintName(pledgeName: string): string {
+  return pledgeName.replace(/^Paints\s*-\s*/i, "").trim();
+}
+
+/** Parse CCU names: returns [fromShip, toShip] or null */
+export function parseCCUNames(pledgeName: string): [string, string] | null {
+  let name = pledgeName;
+  // Strip prefixes
+  name = name.replace(/^Ship Upgrades\s*-\s*/i, "");
+  name = name.replace(/^Upgrade\s*-\s*/i, "");
+  // Strip suffixes
+  name = name.replace(/\s+Upgrade$/i, "");
+  name = name.replace(/\s+(Standard|Warbond)\s+Edition$/i, "");
+
+  // Split on " to " — the divider between from and to ships
+  const toIdx = name.toLowerCase().indexOf(" to ");
+  if (toIdx < 1) return null;
+
+  const from = name.slice(0, toIdx).trim();
+  const to = name.slice(toIdx + 4).trim();
+  if (!from || !to) return null;
+
+  return [from, to];
+}
+
+/** Classify buyback pledge type from its name */
+export function classifyBuyback(name: string): "ship" | "paint" | "ccu" | "gear" | "addon" | "other" {
+  if (/^Standalone Ship/i.test(name) || /^Buggies/i.test(name)) return "ship";
+  if (/^Paints/i.test(name)) return "paint";
+  if (/^(Ship Upgrades|Upgrade)\s*-/i.test(name)) return "ccu";
+  if (/^Gear/i.test(name)) return "gear";
+  if (/^Add-Ons/i.test(name)) return "addon";
+  return "other";
 }
 
 // --- Date and value parsing helpers ---

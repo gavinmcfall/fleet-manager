@@ -10,6 +10,12 @@ import { VEHICLE_VERSION_CAP, isTrustedExtension } from "../lib/constants";
 import {
   preloadVehicleMap,
   findVehicleSlugLocal,
+  preloadPaintMap,
+  findPaintLocal,
+  parseBuybackShipName,
+  parseBuybackPaintName,
+  parseCCUNames,
+  classifyBuyback,
   executeFleetSwap,
   executeTableSwap,
   parseRsiDate,
@@ -221,8 +227,9 @@ export function importRoutes() {
       console.warn(`[hangar-sync] ANOMALY: user=${userID} pledges=${payload.pledges.length} value=$${(totalFleetValueCents / 100).toFixed(2)}`);
     }
 
-    // --- Fleet import ---
+    // --- Fleet + Paint import ---
     const vehicleMap = await preloadVehicleMap(db);
+    const paintMap = await preloadPaintMap(db);
     const insuranceMap = await loadInsuranceTypes(db);
 
     const insertStmts: D1PreparedStatement[] = [];
@@ -346,6 +353,40 @@ export function importRoutes() {
     }
     const imported = insertStmts.length;
 
+    // --- Paint matching ---
+    const paintInsertStmts: D1PreparedStatement[] = [];
+    const skippedPaints: string[] = [];
+
+    for (const pledge of payload.pledges) {
+      const skinItems = (pledge.items ?? []).filter((item: Record<string, unknown>) => item.kind === "Skin");
+      for (const item of skinItems) {
+        const title = (item.title as string) || "";
+        const paintId = findPaintLocal(paintMap, title);
+        if (!paintId) {
+          skippedPaints.push(title || "Unknown Paint");
+          continue;
+        }
+        paintInsertStmts.push(
+          db
+            .prepare(
+              `INSERT INTO user_paints (user_id, paint_id, pledge_id, pledge_name, is_buyback, synced_at)
+              VALUES (?, ?, ?, ?, 0, datetime('now'))`,
+            )
+            .bind(userID, paintId, String(pledge.id ?? ""), pledge.name || null),
+        );
+      }
+    }
+
+    // Paint swap
+    if (paintInsertStmts.length > 0) {
+      await executeTableSwap(db, "user_paints", userID, paintInsertStmts);
+    }
+    const paintCount = paintInsertStmts.length;
+
+    if (skippedPaints.length > 0) {
+      console.warn(`[hangar-sync] Skipped ${skippedPaints.length} unmatched paints: ${JSON.stringify(skippedPaints.slice(0, 20))}`);
+    }
+
     // --- Capture ALL image URLs for CDN review ---
     if (imageCaptures.length > 0) {
       const capStmts = imageCaptures.map((cap) =>
@@ -462,24 +503,68 @@ export function importRoutes() {
 
     // --- Buy-back pledges: insert-then-swap ---
     let buybackCount = 0;
+    let buybackMatched = 0;
     if (payload.buyback_pledges.length > 0) {
       const bbStmts: D1PreparedStatement[] = [];
       for (const bb of payload.buyback_pledges) {
+        const bbName = bb.name || "";
+        const bbType = classifyBuyback(bbName);
+
+        // Match buyback to vehicle/paint/CCU
+        let vehicleId: number | null = null;
+        let paintId: number | null = null;
+        let fromVehicleId: number | null = null;
+        let toVehicleId: number | null = null;
+
+        if (bbType === "ship") {
+          const shipName = parseBuybackShipName(bbName);
+          const nameSlug = slugFromName(shipName);
+          const codeSlug = nameSlug;
+          const candidates = [codeSlug, nameSlug, compactSlug(codeSlug), compactSlug(nameSlug)];
+          const matchedSlug = findVehicleSlugLocal(vehicleMap, candidates, shipName);
+          if (matchedSlug) {
+            vehicleId = vehicleMap.slugToID.get(matchedSlug) ?? null;
+            if (vehicleId) buybackMatched++;
+          }
+        } else if (bbType === "paint") {
+          const paintTitle = parseBuybackPaintName(bbName);
+          paintId = findPaintLocal(paintMap, paintTitle);
+          if (paintId) buybackMatched++;
+        } else if (bbType === "ccu") {
+          const parsed = parseCCUNames(bbName);
+          if (parsed) {
+            const [fromName, toName] = parsed;
+            const fromSlug = slugFromName(fromName);
+            const toSlug = slugFromName(toName);
+            const fromMatch = findVehicleSlugLocal(vehicleMap, [fromSlug, compactSlug(fromSlug)], fromName);
+            const toMatch = findVehicleSlugLocal(vehicleMap, [toSlug, compactSlug(toSlug)], toName);
+            if (fromMatch) fromVehicleId = vehicleMap.slugToID.get(fromMatch) ?? null;
+            if (toMatch) toVehicleId = vehicleMap.slugToID.get(toMatch) ?? null;
+            if (fromVehicleId || toVehicleId) buybackMatched++;
+          }
+        }
+
         bbStmts.push(
           db
             .prepare(
               `INSERT INTO user_buyback_pledges (user_id, rsi_pledge_id, name, value_cents, date,
-                is_credit_reclaimable, items_json, synced_at)
-              VALUES (?, ?, ?, ?, ?, ?, ?, datetime('now'))`,
+                is_credit_reclaimable, items_json, buyback_type, vehicle_id, paint_id,
+                from_vehicle_id, to_vehicle_id, synced_at)
+              VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, datetime('now'))`,
             )
             .bind(
               userID,
               bb.id,
-              bb.name,
+              bbName,
               bb.value_cents ?? null,
               bb.date_parsed || bb.date || null,
               bb.is_credit_reclaimable ? 1 : 0,
               (bb.items ?? []).length > 0 ? JSON.stringify(bb.items) : null,
+              bbType,
+              vehicleId,
+              paintId,
+              fromVehicleId,
+              toVehicleId,
             ),
         );
       }
@@ -670,11 +755,14 @@ export function importRoutes() {
     const pledgeItemCount = itemStmts.length;
 
     // --- Log change history ---
-    console.log(`[hangar-sync] Sync complete: ${imported} ships, ${skippedItems.length} skipped, ${buybackCount} buyback, ${upgradeCount} upgrades, ${pledgeStmts.length} pledges, ${pledgeItemCount} items`);
+    console.log(`[hangar-sync] Sync complete: ${imported} ships, ${paintCount} paints, ${skippedItems.length} skipped ships, ${skippedPaints.length} skipped paints, ${buybackCount} buyback (${buybackMatched} matched), ${upgradeCount} upgrades, ${pledgeStmts.length} pledges, ${pledgeItemCount} items`);
     logEvent("hangar_sync", {
       imported,
+      paint_count: paintCount,
       skipped: skippedItems.length,
+      skipped_paints: skippedPaints.length,
       buyback_count: buybackCount,
+      buyback_matched: buybackMatched,
       upgrade_count: upgradeCount,
       pledge_count: pledgeStmts.length,
       pledge_item_count: pledgeItemCount,
@@ -685,8 +773,11 @@ export function importRoutes() {
     await logUserChange(db, userID, "hangar_synced", {
       metadata: {
         vehicle_count: imported,
+        paint_count: paintCount,
         skipped_count: skippedItems.length,
+        skipped_paints: skippedPaints.length,
         buyback_count: buybackCount,
+        buyback_matched: buybackMatched,
         upgrade_count: upgradeCount,
         pledge_count: pledgeStmts.length,
         pledge_item_count: pledgeItemCount,
@@ -697,9 +788,12 @@ export function importRoutes() {
 
     return c.json({
       imported,
+      paint_count: paintCount,
       skipped: skippedItems.length,
       skipped_items: skippedItems.slice(0, 20),
+      skipped_paints: skippedPaints.slice(0, 20),
       buyback_count: buybackCount,
+      buyback_matched: buybackMatched,
       upgrade_count: upgradeCount,
       pledge_count: pledgeStmts.length,
       pledge_item_count: pledgeItemCount,
