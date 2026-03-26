@@ -483,37 +483,70 @@ function SectionCard({ group, collapsed, setCollapsed, overrides, onOpenPicker, 
               )
             }
 
+            // Skip jump drive children — rendered inline by their QD parent below
+            if (item.port_type === 'jump_drive' && item.parent_port_id) {
+              return null
+            }
+
             // System components — simple row
             const displayName = override?.component_name || item.component_name
             const primaryStat = getPrimaryStat(item, override)
             const sz = item.component_size || item.size_max
+            // Find jump drive child if this is a quantum drive
+            const jumpChild = item.port_type === 'quantum_drive'
+              ? group.items.find(c => c.port_type === 'jump_drive' && c.parent_port_id === item.port_id)
+              : null
 
             return (
-              <button
-                key={item.port_id}
-                onClick={() => onOpenPicker(item.port_id, item.port_type)}
-                className={`w-full flex items-center gap-2 px-3 py-2 text-left transition-all duration-200 cursor-pointer border-b border-white/[0.03]
-                  ${isOverridden
-                    ? 'bg-sc-accent/[0.04] border-l-2 border-l-sc-accent/60 hover:bg-sc-accent/[0.08]'
-                    : 'hover:bg-white/[0.03] border-l-2 border-l-transparent'}`}
-              >
-                <span className="text-[11px] w-7 text-center flex-shrink-0 font-mono bg-white/[0.06] border border-white/[0.1] rounded px-1.5 py-px text-gray-400">
-                  S{sz}
-                </span>
-                <span className={`text-sm truncate flex-1 ${isOverridden ? 'text-sc-accent font-medium' : 'text-gray-300'}`}
-                  style={isOverridden ? { textShadow: '0 0 8px rgba(34,211,238,0.3)' } : undefined}>
-                  {displayName || 'Empty'}
-                </span>
-                {item.grade && (
-                  <span className="font-mono text-[11px] px-1 py-px rounded flex-shrink-0 bg-gray-500/10 text-gray-400 border border-gray-500/20">
-                    {item.grade}
+              <div key={item.port_id} className="border-b border-white/[0.03]">
+                <button
+                  onClick={() => onOpenPicker(item.port_id, item.port_type)}
+                  className={`w-full flex items-center gap-2 px-3 py-2 text-left transition-all duration-200 cursor-pointer
+                    ${isOverridden
+                      ? 'bg-sc-accent/[0.04] border-l-2 border-l-sc-accent/60 hover:bg-sc-accent/[0.08]'
+                      : 'hover:bg-white/[0.03] border-l-2 border-l-transparent'}`}
+                >
+                  <span className="text-[12px] w-7 text-center flex-shrink-0 font-mono bg-white/[0.06] border border-white/[0.1] rounded px-1.5 py-px text-gray-400">
+                    S{sz}
                   </span>
+                  <span className={`text-sm truncate flex-1 ${isOverridden ? 'text-sc-accent font-medium' : 'text-gray-300'}`}
+                    style={isOverridden ? { textShadow: '0 0 8px rgba(34,211,238,0.3)' } : undefined}>
+                    {displayName || 'Empty'}
+                  </span>
+                  {item.grade && (
+                    <span className="font-mono text-[11px] px-1 py-px rounded flex-shrink-0 bg-gray-500/10 text-gray-400 border border-gray-500/20">
+                      {item.grade}
+                    </span>
+                  )}
+                  {item.manufacturer_name && <span className="text-[11px] text-gray-600 flex-shrink-0">{item.manufacturer_name}</span>}
+                  {primaryStat && (
+                    <span className="text-[12px] font-mono text-gray-500 flex-shrink-0 tabular-nums ml-auto">{primaryStat}</span>
+                  )}
+                </button>
+                {/* Jump drive child row under quantum drive */}
+                {jumpChild && (
+                  <button
+                    onClick={() => onOpenPicker(jumpChild.port_id, jumpChild.port_type)}
+                    className="w-full flex items-center gap-2 py-1.5 px-1 text-left cursor-pointer rounded transition-colors hover:bg-white/[0.03]"
+                    style={{ marginLeft: '34px' }}
+                  >
+                    <svg className="flex-shrink-0 w-4 h-[22px] -ml-4 mr-0" style={{ color: 'rgba(255,255,255,0.15)' }}
+                      viewBox="0 0 16 22" fill="none">
+                      <path d="M 2 0 L 2 14 Q 2 18 6 18 L 16 18" stroke="currentColor" strokeWidth="1.5" fill="none" strokeLinecap="round" />
+                    </svg>
+                    <span className="text-[12px] w-7 text-center flex-shrink-0 font-mono bg-white/[0.06] border border-white/[0.1] rounded px-1.5 py-px text-gray-400">
+                      S{jumpChild.component_size || jumpChild.size_max}
+                    </span>
+                    <span className="text-sm text-gray-300">{jumpChild.child_name || jumpChild.component_name || 'Jump Drive'}</span>
+                    {jumpChild.grade && (
+                      <span className="font-mono text-[11px] px-1 py-px rounded flex-shrink-0 bg-gray-500/10 text-gray-400 border border-gray-500/20">
+                        {jumpChild.grade}
+                      </span>
+                    )}
+                    {jumpChild.manufacturer_name && <span className="text-[11px] text-gray-600 flex-shrink-0">{jumpChild.manufacturer_name}</span>}
+                  </button>
                 )}
-                {item.manufacturer_name && <span className="text-[11px] text-gray-600 flex-shrink-0">{item.manufacturer_name}</span>}
-                {primaryStat && (
-                  <span className="text-[12px] font-mono text-gray-500 flex-shrink-0 tabular-nums ml-auto">{primaryStat}</span>
-                )}
-              </button>
+              </div>
             )
           })}
         </div>
