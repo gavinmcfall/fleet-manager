@@ -172,16 +172,20 @@ export function findPaintLocal(map: PaintMap, rsiTitle: string): number | null {
 
 // --- Buyback name parsers ---
 
-/** Parse buyback ship name: "Standalone Ship - Anvil C8X Pisces Expedition - IAE 2949" → "Anvil C8X Pisces Expedition" */
+/** Parse buyback ship name: "Standalone Ship - Anvil C8X Pisces Expedition - IAE 2949" → "C8X Pisces Expedition" */
 export function parseBuybackShipName(pledgeName: string): string {
   let name = pledgeName;
   // Strip prefix
   name = name.replace(/^Standalone Ships?\s*-\s*/i, "");
   name = name.replace(/^Buggies\s*-\s*/i, "");
-  // Strip trailing suffixes: " - IAE 2949", " - Warbond", " - LTI", " - 10 Year", etc.
-  name = name.replace(/\s*-\s*(Warbond|IAE\s*\d+|LTI|\d+\s*Year|Anniversary\s*\d+|Citizencon\s*\d+).*$/i, "");
+  // Strip trailing dash-separated suffixes: " - IAE 2949", " - Warbond", " - ILW2950", " - Presale", etc.
+  name = name.replace(/\s*-\s*(Warbond|IAE\s*\d+|ILW\s*\d+|LTI|\d+\s*Year|Anniversary\s*\d+|Citizencon\s*\d+|Gamescom\s*\d+|Presale).*$/i, "");
+  // Strip trailing modifiers without dash
+  name = name.replace(/\s+(LTI\s+Presale|LTI|Presale)$/i, "");
   // Strip "plus {Paint} Paint" suffix (e.g., "C1 Spirit plus Crimson Paint")
   name = name.replace(/\s+plus\s+.+paint$/i, "");
+  // Strip manufacturer prefixes (RSI store uses "Anvil C8X Pisces", DB has "C8X Pisces")
+  name = name.replace(/^(Anvil Aerospace|Aegis Dynamics|Origin Jumpworks|Drake Interplanetary|Crusader Industries|Musashi Industrial|Consolidated Outland|Argo Astronautics|Roberts Space Industries|Kruger Intergalaktik|Greycat Industrial|Anvil|Aegis|RSI|Origin|Drake|Crusader|CNOU|MISC|Argo|Tumbril|Greycat|Aopoa|AOPOA|Esperia|Gatac|Banu|Kruger)\s+/i, "");
   return name.trim();
 }
 
