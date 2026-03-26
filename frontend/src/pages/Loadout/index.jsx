@@ -46,8 +46,17 @@ export default function Loadout() {
         .map(c => c.port_id)
     )
 
+    // Filter out noise child ports (ammo_slot, weapon_controller, empty S0/S1 non-weapon)
+    const NOISE_PORTS = new Set(['ammo_slot', 'weapon_controller', 'ammo_box'])
+    const filtered = stockComponents.filter(c => {
+      if (NOISE_PORTS.has(c.port_name)) return false
+      // Empty non-weapon S0 ports
+      if (c.size_max === 0 && !c.component_name) return false
+      return true
+    })
+
     const groups = {}
-    for (const comp of stockComponents) {
+    for (const comp of filtered) {
       // If this component's parent is a turret, force it into the Turrets group
       const isTurretChild = comp.parent_port_id && turretIds.has(comp.parent_port_id)
       // Missile racks on turret mounts should go in Missiles, not Turrets
@@ -418,6 +427,30 @@ function SectionCard({ group, collapsed, setCollapsed, overrides, onOpenPicker, 
             const override = overrides[item.port_id]
             const isOverridden = !!override
 
+            // Missile racks — show rack name + missile count (check before turret)
+            if (item.component_type === 'MissileLauncher') {
+              const rackName = item.mount_name || item.component_name || 'Missile Rack'
+              const missileCount = item.missile_count || 0
+              const missileName = item.child_name !== rackName ? item.child_name : null
+              return (
+                <div key={item.port_id} className="flex items-center gap-2 px-3 py-2.5 border-b border-white/[0.03] cursor-pointer hover:bg-white/[0.03] transition-colors"
+                  onClick={() => onOpenPicker(item.port_id, 'missile')}>
+                  <span className="text-[11px] w-7 text-center flex-shrink-0 font-mono bg-white/[0.06] border border-white/[0.1] rounded px-1.5 py-px text-gray-400">
+                    S{item.size_max}
+                  </span>
+                  <div className="flex-1 min-w-0">
+                    <div className="text-sm text-gray-200 font-medium">{rackName}</div>
+                    {missileCount > 0 && (
+                      <div className="text-[11px] text-gray-500 mt-0.5">
+                        {missileCount}× {missileName || 'missiles'}{item.component_size ? ` · S${item.component_size}` : ''}
+                      </div>
+                    )}
+                  </div>
+                  <span className="font-mono text-[13px] text-gray-400 font-semibold flex-shrink-0">{missileCount}×</span>
+                </div>
+              )
+            }
+
             // Turret housing (top-level turret) — render as section header, not interactive
             if (item.port_type === 'turret' && !item.parent_port_id) {
               // Find children of this turret in the same group
@@ -477,31 +510,6 @@ function SectionCard({ group, collapsed, setCollapsed, overrides, onOpenPicker, 
                   onClickWeapon={() => onOpenPicker(item.port_id, item.port_type)}
                   onAddToCart={() => onAddToCart?.(item)}
                 />
-              )
-            }
-
-            // Missile racks — show rack name + missile count
-            if (item.component_type === 'MissileLauncher') {
-              const rackName = item.mount_name || item.component_name || 'Missile Rack'
-              const missileCount = item.missile_count || 0
-              const missileName = item.child_name
-              return (
-                <div key={item.port_id} className="flex items-center gap-2 px-3 py-2 border-b border-white/[0.03] cursor-pointer hover:bg-white/[0.03] transition-colors"
-                  onClick={() => onOpenPicker(item.port_id, 'missile')}>
-                  <span className="text-[11px] w-7 text-center flex-shrink-0 font-mono bg-white/[0.06] border border-white/[0.1] rounded px-1.5 py-px text-gray-400">
-                    S{item.size_max}
-                  </span>
-                  <div className="flex-1 min-w-0">
-                    <div className="text-sm text-gray-200 font-medium">{rackName}</div>
-                    {missileName && missileCount > 0 && (
-                      <div className="text-[11px] text-gray-500 mt-0.5">{missileCount}× {missileName} · S{item.component_size}</div>
-                    )}
-                    {!missileName && missileCount > 0 && (
-                      <div className="text-[11px] text-gray-500 mt-0.5">{missileCount} missiles</div>
-                    )}
-                  </div>
-                  <span className="font-mono text-[12px] text-gray-500 flex-shrink-0">{missileCount}×</span>
-                </div>
               )
             }
 
