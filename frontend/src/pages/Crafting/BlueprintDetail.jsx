@@ -1,5 +1,5 @@
 import React, { useMemo, useState } from 'react'
-import { useParams, useNavigate, useSearchParams, Link } from 'react-router-dom'
+import { useParams, useNavigate, useSearchParams } from 'react-router-dom'
 import { ArrowLeft, Clock, Layers, FlaskConical, Crosshair, Zap, Target, MapPin, Gift, FileText } from 'lucide-react'
 import { useCrafting } from '../../hooks/useAPI'
 import LoadingState from '../../components/LoadingState'
@@ -242,23 +242,18 @@ export default function BlueprintDetail() {
             <div className="flex flex-wrap gap-2">
               {blueprint.acquisition.map((src, i) => {
                 if (src.source === 'contract') {
-                  // Split "bitzeros recoveritem" → giver "Bitzeros" + type "Recover Item"
                   const parts = src.detail.split(' ')
                   const giver = parts[0].charAt(0).toUpperCase() + parts[0].slice(1)
                   const missionType = parts.slice(1).join(' ')
-                    .replace(/([a-z])([A-Z])/g, '$1 $2') // camelCase → spaced
+                    .replace(/([a-z])([A-Z])/g, '$1 $2')
                     .replace(/^./, s => s.toUpperCase())
                   return (
-                    <Link
-                      key={i}
-                      to={`/contracts?q=${encodeURIComponent(giver)}`}
-                      className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs bg-white/[0.04] border border-white/[0.06] text-gray-400 hover:text-sc-accent hover:border-sc-accent/20 transition-colors"
-                    >
+                    <span key={i} className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs bg-white/[0.04] border border-white/[0.06] text-gray-400">
                       <FileText className="w-3 h-3 text-amber-400" />
                       <span>{giver}</span>
                       <span className="text-gray-600">—</span>
                       <span className="text-gray-500">{missionType}</span>
-                    </Link>
+                    </span>
                   )
                 }
                 return (
