@@ -154,7 +154,7 @@ export default function Loadout() {
       {/* ============================================================ */}
       <div className="relative bg-sc-panel border-b border-sc-border">
         <div className="max-w-[1400px] mx-auto flex items-stretch">
-          <div className="w-96 h-44 flex-shrink-0 overflow-hidden relative hidden md:block">
+          <div className="flex-1 h-44 flex-shrink-0 overflow-hidden relative hidden md:block">
             {(ship?.image_url_large || ship?.image_url_medium || ship?.image_url) && (
               <img
                 src={ship.image_url_large || ship.image_url_medium || ship.image_url}
@@ -169,12 +169,12 @@ export default function Loadout() {
                 }}
               />
             )}
-            <div className="absolute inset-0 bg-gradient-to-r from-transparent to-sc-panel" />
+            <div className="absolute inset-0 bg-gradient-to-r from-transparent via-transparent via-40% to-sc-panel" />
           </div>
-          <div className="flex-1 px-4 py-3 flex flex-col justify-between">
+          <div className="w-[420px] flex-shrink-0 px-4 py-3 flex flex-col justify-between">
             <div>
               <div className="flex items-center gap-3 flex-wrap">
-                <h1 className="font-hud text-2xl text-white tracking-wide" style={{ textShadow: '0 0 20px rgba(34,211,238,0.15)' }}>
+                <h1 className="font-hud text-3xl text-white tracking-wide" style={{ textShadow: '0 0 20px rgba(34,211,238,0.15)' }}>
                   {ship?.name || slug}
                 </h1>
                 {fleetId && (
@@ -321,6 +321,7 @@ export default function Loadout() {
                 collapsed={collapsed}
                 setCollapsed={setCollapsed}
                 overrides={overrides}
+                onResetCategory={(portIds) => setOverrides(prev => { const next = { ...prev }; portIds.forEach(id => delete next[id]); return next })}
                 onOpenPicker={(portId, portType) => { setPickerPortId(portId); setPickerPortType(portType) }}
                 onAddToCart={async (comp) => { await addToLoadoutCart([{ component_id: comp.component_id || comp.id }]); refetchCart() }}
                 isWeaponSection
@@ -337,6 +338,7 @@ export default function Loadout() {
                 collapsed={collapsed}
                 setCollapsed={setCollapsed}
                 overrides={overrides}
+                onResetCategory={(portIds) => setOverrides(prev => { const next = { ...prev }; portIds.forEach(id => delete next[id]); return next })}
                 onOpenPicker={(portId, portType) => { setPickerPortId(portId); setPickerPortType(portType) }}
                 onAddToCart={async (comp) => { await addToLoadoutCart([{ component_id: comp.component_id || comp.id }]); refetchCart() }}
               />
@@ -352,6 +354,7 @@ export default function Loadout() {
               collapsed={collapsed}
               setCollapsed={setCollapsed}
               overrides={overrides}
+              onResetCategory={(portIds) => setOverrides(prev => { const next = { ...prev }; portIds.forEach(id => delete next[id]); return next })}
               onOpenPicker={(portId, portType) => { setPickerPortId(portId); setPickerPortType(portType) }}
               modules={modules}
             />
@@ -395,7 +398,7 @@ function StatCell({ label, value, format, color, unit }) {
   )
 }
 
-function SectionCard({ group, collapsed, setCollapsed, overrides, onOpenPicker, onAddToCart, modules, isWeaponSection }) {
+function SectionCard({ group, collapsed, setCollapsed, overrides, onResetCategory, onOpenPicker, onAddToCart, modules, isWeaponSection }) {
   const isCollapsed = collapsed[group.label]
   const Icon = PORT_TYPE_ICONS[group.portType]
   const categoryOverrides = group.items.filter(i => overrides[i.port_id]).length
@@ -425,15 +428,7 @@ function SectionCard({ group, collapsed, setCollapsed, overrides, onOpenPicker, 
           </span>
         )}
         <button
-          onClick={(e) => {
-            e.stopPropagation()
-            const portIds = group.items.map(i => i.port_id)
-            setOverrides(prev => {
-              const next = { ...prev }
-              portIds.forEach(id => delete next[id])
-              return next
-            })
-          }}
+          onClick={(e) => { e.stopPropagation(); onResetCategory?.(group.items.map(i => i.port_id)) }}
           className="text-[11px] text-gray-600 hover:text-gray-400 cursor-pointer transition-colors ml-auto"
         >RESET</button>
       </div>
