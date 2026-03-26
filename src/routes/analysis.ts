@@ -28,6 +28,7 @@ export function analysisRoutes() {
         FROM vehicles v
         ${VEHICLE_VERSION_JOIN}
         LEFT JOIN production_statuses ps ON ps.id = v.production_status_id
+        WHERE v.removed = 0
         ORDER BY v.name`,
       )
       .all();

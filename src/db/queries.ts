@@ -353,10 +353,17 @@ export async function getShipLoadout(db: D1Database, slug: string, versionId?: n
             WHERE qp.id = p.parent_port_id AND qp.port_type = 'quantum_drive'
           ))
         )
-        -- Exclude ports with only noise components (Display, etc.)
-        AND (d.root_id IS NOT NULL OR mount.type NOT IN ('Display', 'SeatDashboard', 'Seat', 'SeatAccess') OR mount.uuid IS NULL)
+        -- Exclude noise components (Display, etc.) and empty child ports
+        AND (
+          d.root_id IS NOT NULL
+          OR (mount.type IS NOT NULL AND mount.type NOT IN ('Display', 'SeatDashboard', 'Seat', 'SeatAccess'))
+          OR (p.equipped_item_uuid IS NULL AND p.parent_port_id IS NULL)
+          OR (p.equipped_item_uuid IS NOT NULL AND mount.uuid IS NULL)
+        )
         -- Exclude individual missile slots (keep the rack)
         AND p.name NOT LIKE 'missile_%_attach'
+        -- Exclude access/hatch mechanism ports
+        AND p.name NOT LIKE '%_access'
       ORDER BY
         CASE p.category_label
           WHEN 'Weapons' THEN 1 WHEN 'Turrets' THEN 2 WHEN 'Missiles' THEN 3
@@ -616,20 +623,34 @@ export async function getUserFleet(db: D1Database, userID: number): Promise<User
       `SELECT uf.id, uf.user_id, uf.vehicle_id, uf.insurance_type_id, uf.warbond, uf.is_loaner,
         uf.pledge_id, uf.pledge_name, uf.pledge_cost, uf.pledge_date, uf.custom_name,
         uf.equipped_paint_id, uf.imported_at,
-        v.name as vehicle_name, v.slug as vehicle_slug, v.image_url, v.focus, v.size_label, v.cargo,
-        v.crew_min, v.crew_max, v.pledge_price, v.speed_scm, v.classification,
-        m.name as manufacturer_name, m.code as manufacturer_code,
+        COALESCE(rv.name, v.name) as vehicle_name,
+        COALESCE(rv.slug, v.slug) as vehicle_slug,
+        COALESCE(rv.image_url, v.image_url) as image_url,
+        COALESCE(rv.focus, v.focus) as focus,
+        COALESCE(rv.size_label, v.size_label) as size_label,
+        COALESCE(rv.cargo, v.cargo) as cargo,
+        COALESCE(rv.crew_min, v.crew_min) as crew_min,
+        COALESCE(rv.crew_max, v.crew_max) as crew_max,
+        COALESCE(rv.pledge_price, v.pledge_price) as pledge_price,
+        COALESCE(rv.speed_scm, v.speed_scm) as speed_scm,
+        COALESCE(rv.classification, v.classification) as classification,
+        COALESCE(rm.name, m.name) as manufacturer_name,
+        COALESCE(rm.code, m.code) as manufacturer_code,
         it.label as insurance_label, it.duration_months, it.is_lifetime,
         p.name as paint_name,
-        ps.key as production_status
+        COALESCE(rps.key, ps.key) as production_status,
+        CASE WHEN v.replaced_by_vehicle_id IS NOT NULL THEN v.name END as original_vehicle_name
       FROM user_fleet uf
       JOIN vehicles v ON v.id = uf.vehicle_id
+      LEFT JOIN vehicles rv ON rv.id = v.replaced_by_vehicle_id
       LEFT JOIN manufacturers m ON m.id = v.manufacturer_id
+      LEFT JOIN manufacturers rm ON rm.id = rv.manufacturer_id
       LEFT JOIN insurance_types it ON it.id = uf.insurance_type_id
       LEFT JOIN paints p ON p.id = uf.equipped_paint_id
       LEFT JOIN production_statuses ps ON ps.id = v.production_status_id
+      LEFT JOIN production_statuses rps ON rps.id = rv.production_status_id
       WHERE uf.user_id = ?
-      ORDER BY v.name`,
+      ORDER BY COALESCE(rv.name, v.name)`,
     )
     .bind(userID)
     .all();
@@ -670,18 +691,30 @@ export async function getFleetForAnalysis(db: D1Database, userId: string): Promi
     .prepare(
       `SELECT uf.id, uf.vehicle_id, uf.warbond, uf.is_loaner,
         uf.pledge_id, uf.pledge_name, uf.pledge_cost, uf.pledge_date, uf.custom_name,
-        v.name as vehicle_name, v.slug as vehicle_slug, v.focus, v.size_label, v.cargo,
-        v.crew_min, v.crew_max, v.pledge_price, v.speed_scm, v.classification,
-        m.name as manufacturer_name, m.code as manufacturer_code,
+        COALESCE(rv.name, v.name) as vehicle_name,
+        COALESCE(rv.slug, v.slug) as vehicle_slug,
+        COALESCE(rv.focus, v.focus) as focus,
+        COALESCE(rv.size_label, v.size_label) as size_label,
+        COALESCE(rv.cargo, v.cargo) as cargo,
+        COALESCE(rv.crew_min, v.crew_min) as crew_min,
+        COALESCE(rv.crew_max, v.crew_max) as crew_max,
+        COALESCE(rv.pledge_price, v.pledge_price) as pledge_price,
+        COALESCE(rv.speed_scm, v.speed_scm) as speed_scm,
+        COALESCE(rv.classification, v.classification) as classification,
+        COALESCE(rm.name, m.name) as manufacturer_name,
+        COALESCE(rm.code, m.code) as manufacturer_code,
         it.label as insurance_label, it.duration_months, it.is_lifetime,
-        ps.key as production_status
+        COALESCE(rps.key, ps.key) as production_status
       FROM user_fleet uf
       JOIN vehicles v ON v.id = uf.vehicle_id
+      LEFT JOIN vehicles rv ON rv.id = v.replaced_by_vehicle_id
       LEFT JOIN manufacturers m ON m.id = v.manufacturer_id
+      LEFT JOIN manufacturers rm ON rm.id = rv.manufacturer_id
       LEFT JOIN insurance_types it ON it.id = uf.insurance_type_id
       LEFT JOIN production_statuses ps ON ps.id = v.production_status_id
+      LEFT JOIN production_statuses rps ON rps.id = rv.production_status_id
       WHERE uf.user_id = ?
-      ORDER BY v.name`,
+      ORDER BY COALESCE(rv.name, v.name)`,
     )
     .bind(userId)
     .all();

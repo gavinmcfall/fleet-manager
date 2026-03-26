@@ -547,19 +547,31 @@ export function orgRoutes() {
       .prepare(
         `SELECT uf.id, uf.user_id, uf.vehicle_id, uf.custom_name,
           uf.org_visibility, uf.available_for_ops,
-          v.name as vehicle_name, v.slug as vehicle_slug, v.focus, v.size_label, v.cargo,
-          v.crew_min, v.crew_max, v.pledge_price, v.image_url,
-          m.name as manufacturer_name, m.code as manufacturer_code,
-          ps.key as production_status,
-          u.name as owner_name
+          COALESCE(rv.name, v.name) as vehicle_name,
+          COALESCE(rv.slug, v.slug) as vehicle_slug,
+          COALESCE(rv.focus, v.focus) as focus,
+          COALESCE(rv.size_label, v.size_label) as size_label,
+          COALESCE(rv.cargo, v.cargo) as cargo,
+          COALESCE(rv.crew_min, v.crew_min) as crew_min,
+          COALESCE(rv.crew_max, v.crew_max) as crew_max,
+          COALESCE(rv.pledge_price, v.pledge_price) as pledge_price,
+          COALESCE(rv.image_url, v.image_url) as image_url,
+          COALESCE(rm.name, m.name) as manufacturer_name,
+          COALESCE(rm.code, m.code) as manufacturer_code,
+          COALESCE(rps.key, ps.key) as production_status,
+          u.name as owner_name,
+          CASE WHEN v.replaced_by_vehicle_id IS NOT NULL THEN v.name END as original_vehicle_name
         FROM user_fleet uf
         JOIN member mb ON mb.userId = uf.user_id AND mb.organizationId = ?
         JOIN vehicles v ON v.id = uf.vehicle_id
+        LEFT JOIN vehicles rv ON rv.id = v.replaced_by_vehicle_id
         JOIN user u ON u.id = uf.user_id
         LEFT JOIN manufacturers m ON m.id = v.manufacturer_id
+        LEFT JOIN manufacturers rm ON rm.id = rv.manufacturer_id
         LEFT JOIN production_statuses ps ON ps.id = v.production_status_id
+        LEFT JOIN production_statuses rps ON rps.id = rv.production_status_id
         WHERE ${visibilityClause}
-        ORDER BY v.name`,
+        ORDER BY COALESCE(rv.name, v.name)`,
       )
       .bind(org.id)
       .all();
@@ -634,19 +646,30 @@ export function orgRoutes() {
     const fleetResult = await db
       .prepare(
         `SELECT uf.id, uf.vehicle_id, uf.warbond, uf.is_loaner,
-          v.name as vehicle_name, v.slug as vehicle_slug, v.focus, v.size_label, v.cargo,
-          v.crew_min, v.crew_max, v.speed_scm, v.classification,
-          m.name as manufacturer_name, m.code as manufacturer_code,
+          COALESCE(rv.name, v.name) as vehicle_name,
+          COALESCE(rv.slug, v.slug) as vehicle_slug,
+          COALESCE(rv.focus, v.focus) as focus,
+          COALESCE(rv.size_label, v.size_label) as size_label,
+          COALESCE(rv.cargo, v.cargo) as cargo,
+          COALESCE(rv.crew_min, v.crew_min) as crew_min,
+          COALESCE(rv.crew_max, v.crew_max) as crew_max,
+          COALESCE(rv.speed_scm, v.speed_scm) as speed_scm,
+          COALESCE(rv.classification, v.classification) as classification,
+          COALESCE(rm.name, m.name) as manufacturer_name,
+          COALESCE(rm.code, m.code) as manufacturer_code,
           it.label as insurance_label, it.duration_months, it.is_lifetime,
-          ps.key as production_status
+          COALESCE(rps.key, ps.key) as production_status
         FROM user_fleet uf
         JOIN member mb ON mb.userId = uf.user_id AND mb.organizationId = ?
         JOIN vehicles v ON v.id = uf.vehicle_id
+        LEFT JOIN vehicles rv ON rv.id = v.replaced_by_vehicle_id
         LEFT JOIN manufacturers m ON m.id = v.manufacturer_id
+        LEFT JOIN manufacturers rm ON rm.id = rv.manufacturer_id
         LEFT JOIN insurance_types it ON it.id = uf.insurance_type_id
         LEFT JOIN production_statuses ps ON ps.id = v.production_status_id
+        LEFT JOIN production_statuses rps ON rps.id = rv.production_status_id
         WHERE ${visibilityClause}
-        ORDER BY v.name`,
+        ORDER BY COALESCE(rv.name, v.name)`,
       )
       .bind(org.id)
       .all();
@@ -658,6 +681,7 @@ export function orgRoutes() {
         FROM vehicles v
         ${VEHICLE_VERSION_JOIN}
         LEFT JOIN production_statuses ps ON ps.id = v.production_status_id
+        WHERE v.removed = 0
         ORDER BY v.name`,
       )
       .all();
