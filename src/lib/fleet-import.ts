@@ -2,7 +2,7 @@
  * Shared fleet import helpers — used by both HangarXplor and hangar-sync imports.
  */
 
-import { compactSlug } from "./slug";
+import { compactSlug, slugFromName } from "./slug";
 import { VEHICLE_VERSION_CAP } from "./constants";
 
 // --- Preloaded vehicle map for in-memory slug matching ---
@@ -70,6 +70,12 @@ export async function preloadVehicleMap(db: D1Database): Promise<VehicleMap> {
   return { slugToID, nameToSlug, compactToSlug };
 }
 
+/** Strip "Mk I"/"Mk II" etc. from ship names for fallback matching (4.7 renames) */
+function stripMkSuffix(name: string): string | null {
+  const stripped = name.replace(/\s+Mk\s+[IVX]+/i, "").trim();
+  return stripped !== name ? stripped : null;
+}
+
 export function findVehicleSlugLocal(
   map: VehicleMap,
   candidateSlugs: string[],
@@ -93,6 +99,21 @@ export function findVehicleSlugLocal(
     const compact = compactSlug(slug);
     const found = map.compactToSlug.get(compact);
     if (found) return found;
+  }
+
+  // Try with "Mk I"/"Mk II" stripped (4.7 renames: "Aurora Mk I SE" → "Aurora SE")
+  if (displayName) {
+    const noMk = stripMkSuffix(displayName);
+    if (noMk) {
+      const found = map.nameToSlug.get(noMk.toLowerCase());
+      if (found) return found;
+      // Also try slug form
+      const noMkSlug = slugFromName(noMk);
+      if (map.slugToID.has(noMkSlug)) return noMkSlug;
+      const noMkCompact = compactSlug(noMkSlug);
+      const compactFound = map.compactToSlug.get(noMkCompact);
+      if (compactFound) return compactFound;
+    }
   }
 
   // Try prefix match — existing slug starts with candidate
