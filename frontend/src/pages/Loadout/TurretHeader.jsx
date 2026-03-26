@@ -20,7 +20,10 @@ export default function TurretHeader({ item, children, overrides = {}, onOpenPic
         {item.weapon_count > 0 && <span className="text-gray-700 ml-1">({item.weapon_count}× weapons)</span>}
       </div>
       {children.length > 0 ? children.map(child => {
-        if (child.editable === 0 || child.editable === false) {
+        // Truly locked: editable=0 AND no mount hierarchy (e.g. door guns where mount===child)
+        const isLocked = (child.editable === 0 || child.editable === false) &&
+          (!child.mount_name || child.mount_name === child.child_name)
+        if (isLocked) {
           return <LockedPort key={child.port_id} item={child} />
         }
         const childOverride = overrides[child.port_id]
