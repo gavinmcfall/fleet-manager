@@ -1,5 +1,5 @@
-import React, { useState, useEffect, useRef } from 'react'
-import { RefreshCw, Globe, Play, AlertCircle, Ticket, Copy, Check, Trash2, FlaskConical } from 'lucide-react'
+import React, { useState, useEffect, useRef, useCallback } from 'react'
+import { RefreshCw, Globe, Play, AlertCircle, Ticket, Copy, Check, Trash2, FlaskConical, Image, ThumbsUp, X, ExternalLink } from 'lucide-react'
 import { useSyncStatus, triggerRSISync, triggerFullSync, setPreferences } from '../hooks/useAPI'
 import useTimezone from '../hooks/useTimezone'
 
@@ -279,6 +279,131 @@ function PTUPurgePanel() {
   )
 }
 
+function ImageCapturePanel() {
+  const [captures, setCaptures] = useState([])
+  const [kinds, setKinds] = useState([])
+  const [total, setTotal] = useState(0)
+  const [page, setPage] = useState(1)
+  const [kindFilter, setKindFilter] = useState('')
+  const [loading, setLoading] = useState(false)
+  const [preview, setPreview] = useState(null)
+
+  const fetchCaptures = useCallback(async () => {
+    setLoading(true)
+    try {
+      const params = new URLSearchParams({ page: String(page), promoted: '0' })
+      if (kindFilter) params.set('kind', kindFilter)
+      const res = await fetch(`/api/admin/image-captures?${params}`, { credentials: 'same-origin' })
+      const data = await res.json()
+      setCaptures(data.captures || [])
+      setTotal(data.total || 0)
+      setKinds(data.kinds || [])
+    } catch { /* ignore */ }
+    setLoading(false)
+  }, [page, kindFilter])
+
+  useEffect(() => { fetchCaptures() }, [fetchCaptures])
+
+  const handlePromote = async (id) => {
+    await fetch(`/api/admin/image-captures/${id}/promote`, { method: 'POST', credentials: 'same-origin' })
+    setCaptures(prev => prev.filter(c => c.id !== id))
+    setTotal(prev => prev - 1)
+  }
+
+  const handleDecline = async (id) => {
+    await fetch(`/api/admin/image-captures/${id}`, { method: 'DELETE', credentials: 'same-origin' })
+    setCaptures(prev => prev.filter(c => c.id !== id))
+    setTotal(prev => prev - 1)
+  }
+
+  const totalPages = Math.ceil(total / 50)
+
+  return (
+    <PanelSection title={`Image Captures (${total} pending)`} icon={Image}>
+      {/* Kind filter pills */}
+      <div className="px-4 pt-3 pb-2 flex items-center gap-2 flex-wrap">
+        <button
+          onClick={() => { setKindFilter(''); setPage(1) }}
+          className={`px-2.5 py-1 text-xs rounded transition-colors cursor-pointer ${!kindFilter ? 'bg-sc-accent/20 text-sc-accent border border-sc-accent/30' : 'bg-white/[0.04] text-gray-500 border border-white/[0.06] hover:text-gray-300'}`}
+        >All</button>
+        {kinds.map(k => (
+          <button
+            key={k.kind}
+            onClick={() => { setKindFilter(k.kind); setPage(1) }}
+            className={`px-2.5 py-1 text-xs rounded transition-colors cursor-pointer ${kindFilter === k.kind ? 'bg-sc-accent/20 text-sc-accent border border-sc-accent/30' : 'bg-white/[0.04] text-gray-500 border border-white/[0.06] hover:text-gray-300'}`}
+          >{k.kind || 'Unknown'} <span className="text-gray-600 ml-1">{k.cnt}</span></button>
+        ))}
+      </div>
+
+      {loading ? (
+        <div className="p-8 text-center text-gray-600 text-sm">Loading...</div>
+      ) : captures.length === 0 ? (
+        <div className="p-8 text-center text-gray-600 text-sm">No pending image captures</div>
+      ) : (
+        <div className="divide-y divide-white/[0.04]">
+          {captures.map(cap => (
+            <div key={cap.id} className="flex items-center gap-3 px-4 py-2 hover:bg-white/[0.02] transition-colors">
+              {/* Thumbnail */}
+              <button onClick={() => setPreview(cap.url)} className="flex-shrink-0 w-16 h-12 rounded overflow-hidden bg-white/[0.04] cursor-pointer hover:ring-1 hover:ring-sc-accent/50 transition-all">
+                <img src={cap.url} alt="" className="w-full h-full object-cover" onError={e => e.target.style.display = 'none'} />
+              </button>
+
+              {/* Info */}
+              <div className="flex-1 min-w-0">
+                <div className="text-sm text-gray-200 truncate">{cap.title || 'Untitled'}</div>
+                <div className="flex items-center gap-2 text-[11px] text-gray-600">
+                  {cap.kind && <span className="bg-white/[0.04] px-1.5 py-px rounded">{cap.kind}</span>}
+                  {cap.vehicle_slug && <span className="text-sc-accent">{cap.vehicle_slug}</span>}
+                  <span>seen {cap.seen_count}×</span>
+                </div>
+              </div>
+
+              {/* Current vehicle image comparison (for ships) */}
+              {cap.current_vehicle_image && (
+                <div className="flex-shrink-0 w-12 h-9 rounded overflow-hidden bg-white/[0.04] border border-white/[0.06]" title="Current CF Images">
+                  <img src={cap.current_vehicle_image} alt="" className="w-full h-full object-cover" />
+                </div>
+              )}
+
+              {/* Actions */}
+              <div className="flex items-center gap-1 flex-shrink-0">
+                <a href={cap.url} target="_blank" rel="noopener" className="p-1.5 text-gray-600 hover:text-gray-300 transition-colors" title="Open original">
+                  <ExternalLink className="w-3.5 h-3.5" />
+                </a>
+                <button onClick={() => handlePromote(cap.id)} className="p-1.5 text-gray-600 hover:text-emerald-400 transition-colors cursor-pointer" title="Promote to CDN">
+                  <ThumbsUp className="w-3.5 h-3.5" />
+                </button>
+                <button onClick={() => handleDecline(cap.id)} className="p-1.5 text-gray-600 hover:text-red-400 transition-colors cursor-pointer" title="Decline (permanent)">
+                  <X className="w-3.5 h-3.5" />
+                </button>
+              </div>
+            </div>
+          ))}
+        </div>
+      )}
+
+      {/* Pagination */}
+      {totalPages > 1 && (
+        <div className="flex items-center justify-center gap-2 px-4 py-3 border-t border-white/[0.04]">
+          <button disabled={page <= 1} onClick={() => setPage(p => p - 1)} className="px-2 py-1 text-xs bg-white/[0.04] rounded disabled:opacity-30 cursor-pointer">Prev</button>
+          <span className="text-xs text-gray-500">{page} / {totalPages}</span>
+          <button disabled={page >= totalPages} onClick={() => setPage(p => p + 1)} className="px-2 py-1 text-xs bg-white/[0.04] rounded disabled:opacity-30 cursor-pointer">Next</button>
+        </div>
+      )}
+
+      {/* Full-size preview modal */}
+      {preview && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 cursor-pointer" onClick={() => setPreview(null)}>
+          <img src={preview} alt="" className="max-w-[90vw] max-h-[90vh] rounded-lg shadow-2xl" />
+          <button className="absolute top-4 right-4 p-2 bg-black/50 rounded-full text-white hover:bg-black/80 cursor-pointer">
+            <X className="w-5 h-5" />
+          </button>
+        </div>
+      )}
+    </PanelSection>
+  )
+}
+
 export default function Admin() {
   const { timezone } = useTimezone()
   const { data: syncHistory, loading, error, refetch } = useSyncStatus()
@@ -339,6 +464,9 @@ export default function Admin() {
 
       {/* PTU Data */}
       <PTUPurgePanel />
+
+      {/* Image Captures */}
+      <ImageCapturePanel />
 
       {/* KV Cache */}
       <CachePurgePanel />

@@ -581,5 +581,64 @@ export function adminRoutes() {
     return c.json({ ok: true, code: code || version.code, build_number, channel });
   });
 
+  // ── Image captures (CDN review) ──────────────────────────────────
+
+  /**
+   * GET /api/admin/image-captures?kind=Ship&promoted=0&page=1
+   * List captured image URLs for review.
+   */
+  routes.get("/image-captures", async (c) => {
+    const db = c.env.DB;
+    const kind = c.req.query("kind");
+    const promoted = c.req.query("promoted");
+    const page = parseInt(c.req.query("page") || "1", 10) || 1;
+    const perPage = 50;
+    const offset = (page - 1) * perPage;
+
+    let where = "1=1";
+    const params: (string | number)[] = [];
+    if (kind) { where += " AND kind = ?"; params.push(kind); }
+    if (promoted !== undefined && promoted !== "") { where += " AND promoted = ?"; params.push(parseInt(promoted, 10)); }
+
+    const countRow = await db
+      .prepare(`SELECT COUNT(*) as total FROM image_captures WHERE ${where}`)
+      .bind(...params)
+      .first<{ total: number }>();
+
+    const { results } = await db
+      .prepare(`SELECT ic.*, v.image_url as current_vehicle_image FROM image_captures ic LEFT JOIN vehicles v ON v.id = ic.vehicle_id WHERE ${where} ORDER BY ic.seen_count DESC, ic.last_seen DESC LIMIT ? OFFSET ?`)
+      .bind(...params, perPage, offset)
+      .all();
+
+    // Get distinct kinds for filter
+    const { results: kinds } = await db
+      .prepare("SELECT kind, COUNT(*) as cnt FROM image_captures WHERE promoted != -1 GROUP BY kind ORDER BY cnt DESC")
+      .all();
+
+    return c.json({ captures: results, total: countRow?.total ?? 0, page, perPage, kinds });
+  });
+
+  /**
+   * POST /api/admin/image-captures/:id/promote
+   * Mark an image as promoted (uploaded to CF Images).
+   */
+  routes.post("/image-captures/:id/promote", async (c) => {
+    const id = parseInt(c.req.param("id"), 10);
+    const db = c.env.DB;
+    await db.prepare("UPDATE image_captures SET promoted = 1 WHERE id = ?").bind(id).run();
+    return c.json({ ok: true });
+  });
+
+  /**
+   * DELETE /api/admin/image-captures/:id
+   * Decline an image — set promoted = -1 (permanently hidden, never shown again).
+   */
+  routes.delete("/image-captures/:id", async (c) => {
+    const id = parseInt(c.req.param("id"), 10);
+    const db = c.env.DB;
+    await db.prepare("UPDATE image_captures SET promoted = -1 WHERE id = ?").bind(id).run();
+    return c.json({ ok: true });
+  });
+
   return routes;
 }
