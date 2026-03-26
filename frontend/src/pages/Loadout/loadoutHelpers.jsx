@@ -285,12 +285,12 @@ export function aggregateCombatStats(components) {
   let totalDps = 0, totalAlpha = 0
   let dpsPhysical = 0, dpsEnergy = 0, dpsDistortion = 0, dpsThermal = 0
   let totalShieldHp = 0, totalShieldRegen = 0
+  let totalPowerOutput = 0, totalPowerDraw = 0, totalCoolingRate = 0
 
   for (const c of components) {
     if ((c.port_type === 'weapon' || c.port_type === 'turret') && c.dps) {
       totalDps += c.dps
       totalAlpha += c.damage_per_shot || 0
-      // Per-type DPS: damage_per_type * rpm / 60
       const rpm = c.rounds_per_minute || 0
       if (rpm > 0) {
         dpsPhysical += (c.damage_physical || 0) * rpm / 60
@@ -298,7 +298,6 @@ export function aggregateCombatStats(components) {
         dpsDistortion += (c.damage_distortion || 0) * rpm / 60
         dpsThermal += (c.damage_thermal || 0) * rpm / 60
       } else {
-        // Fallback: use total dps split by primary type
         const dtype = getDamageType(c)
         if (dtype === 'physical') dpsPhysical += c.dps
         else if (dtype === 'energy') dpsEnergy += c.dps
@@ -310,11 +309,16 @@ export function aggregateCombatStats(components) {
       totalShieldHp += c.shield_hp
       totalShieldRegen += c.shield_regen || 0
     }
+    // Power aggregation
+    if (c.power_output > 0) totalPowerOutput += c.power_output
+    if (c.power_draw > 0) totalPowerDraw += c.power_draw
+    if (c.cooling_rate > 0) totalCoolingRate += c.cooling_rate
   }
 
   return {
     totalDps, totalAlpha,
     dpsPhysical, dpsEnergy, dpsDistortion, dpsThermal,
     totalShieldHp, totalShieldRegen,
+    totalPowerOutput, totalPowerDraw, totalCoolingRate,
   }
 }

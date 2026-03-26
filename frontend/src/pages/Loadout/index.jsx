@@ -9,7 +9,7 @@ import WeaponBlock from './WeaponBlock'
 import MissileBlock from './MissileBlock'
 import TurretHeader from './TurretHeader'
 import LockedPort from './LockedPort'
-import DamageBreakdown, { DamageTypeLegend } from './DamageBreakdown'
+import DamageBreakdown from './DamageBreakdown'
 import PowerPips from './PowerPips'
 import { PORT_TYPE_ICONS, PORT_CATEGORY_ORDER, getPortCategory, getPrimaryStat, aggregateCombatStats, fmtInt, fmtDec1, fmtSpeed, getDamageType, DmgShape } from './loadoutHelpers'
 
@@ -254,26 +254,27 @@ export default function Loadout() {
       {hasComponents && <div className="bg-sc-dark/80 backdrop-blur border-b border-sc-border">
         <div className="max-w-[1400px] mx-auto px-4 py-3">
           <div className="flex items-stretch gap-4">
-            {/* LEFT: DPS + Alpha + Damage breakdown */}
-            <div className="flex-1 flex flex-col gap-1.5">
+
+            {/* LEFT: Offense — DPS + Alpha + Damage breakdown */}
+            <div className="flex-shrink-0 w-[260px] flex flex-col gap-2">
               <div className="flex items-stretch gap-px">
-                <div className="flex-1 flex flex-col items-center justify-center min-h-[56px] bg-white/[0.02] rounded-l-md">
+                <div className="flex-1 flex flex-col items-center justify-center bg-white/[0.02] rounded-l-md py-2">
                   <div className="flex items-baseline gap-1">
-                    <span className="font-hud text-[36px] text-sc-accent leading-none" style={{ textShadow: '0 0 12px rgba(34,211,238,0.3)' }}>
+                    <span className="font-hud text-[32px] text-sc-accent leading-none" style={{ textShadow: '0 0 12px rgba(34,211,238,0.3)' }}>
                       {combat ? fmtInt(Math.round(combat.totalDps)) : '—'}
                     </span>
-                    <span className="text-[15px] text-gray-500 ml-1">dps</span>
+                    <span className="text-[13px] text-gray-500">dps</span>
                   </div>
-                  <div className="text-[11px] text-gray-600 uppercase tracking-wider mt-1">Sustained DPS</div>
+                  <div className="text-[10px] text-gray-600 uppercase tracking-wider mt-0.5">Sustained DPS</div>
                 </div>
-                <div className="flex-1 flex flex-col items-center justify-center min-h-[56px] bg-white/[0.02] rounded-r-md">
+                <div className="flex-1 flex flex-col items-center justify-center bg-white/[0.02] rounded-r-md py-2">
                   <div className="flex items-baseline gap-1">
-                    <span className="font-hud text-[36px] text-white leading-none">
+                    <span className="font-hud text-[32px] text-white leading-none">
                       {combat ? fmtInt(Math.round(combat.totalAlpha)) : '—'}
                     </span>
-                    <span className="text-[15px] text-gray-500 ml-1">dmg</span>
+                    <span className="text-[13px] text-gray-500">dmg</span>
                   </div>
-                  <div className="text-[11px] text-gray-600 uppercase tracking-wider mt-1">Alpha Strike</div>
+                  <div className="text-[10px] text-gray-600 uppercase tracking-wider mt-0.5">Alpha Strike</div>
                 </div>
               </div>
               {combat && (
@@ -282,26 +283,57 @@ export default function Loadout() {
                   dpsEnergy={combat.dpsEnergy}
                   dpsDistortion={combat.dpsDistortion}
                   dpsThermal={combat.dpsThermal}
-                  totalAlpha={combat.totalAlpha}
                 />
               )}
-              <DamageTypeLegend />
             </div>
 
-            {/* CENTER: Power Pips */}
-            <PowerPips weaponPoolSize={ship?.weapon_pool_size || 4} />
+            {/* Divider */}
+            <div className="w-px bg-white/[0.06] self-stretch" />
 
-            {/* RIGHT: 3×2 stat grid */}
-            <div className="flex-1">
-              <div className="grid grid-cols-3 gap-px bg-white/[0.03] rounded-md overflow-hidden h-full">
+            {/* CENTER: Power Management */}
+            <PowerPips components={stockComponents} ship={ship} combat={combat} />
+
+            {/* Divider */}
+            <div className="w-px bg-white/[0.06] self-stretch" />
+
+            {/* RIGHT: Defense + Vitals */}
+            <div className="flex-shrink-0 w-[300px] flex flex-col gap-1.5">
+              {/* Defense: Shield + Armor */}
+              <div className="flex gap-px">
                 <StatCell label="Shield HP" value={combat?.totalShieldHp} format={fmtInt} color="text-blue-400" unit="hp" />
+                <StatCell label="Regen/s" value={combat?.totalShieldRegen} format={fmtInt} color="text-blue-300" unit="hp/s" />
                 <StatCell label="Hull HP" value={ship?.armor_hp || ship?.health} format={fmtInt} color="text-amber-400" unit="hp" />
-                <StatCell label="QT Fuel" value={ship?.fuel_capacity_quantum} format={fmtDec1} color="text-purple-400" unit="SCU" />
-                <StatCell label="Shield Regen" value={combat?.totalShieldRegen} format={fmtInt} color="text-blue-300" unit="hp/s" />
-                <StatCell label="H2 Fuel" value={ship?.fuel_capacity_hydrogen} format={fmtDec1} color="text-orange-400" unit="SCU" />
-                <StatCell label="SCM Speed" value={ship?.speed_scm} format={fmtInt} color="text-gray-300" unit="m/s" />
+              </div>
+              {/* Vitals: Fuel + Speed */}
+              <div className="flex gap-px">
+                <StatCell label="H2 Fuel" value={ship?.fuel_capacity_hydrogen} format={fmtDec1} color="text-orange-400" unit="SCU" size="sm" />
+                <StatCell label="QT Fuel" value={ship?.fuel_capacity_quantum} format={fmtDec1} color="text-purple-400" unit="SCU" size="sm" />
+                <StatCell label="SCM" value={ship?.speed_scm} format={fmtInt} color="text-gray-300" unit="m/s" size="sm" />
+                <StatCell label="Max" value={ship?.speed_max} format={fmtInt} color="text-gray-400" unit="m/s" size="sm" />
+              </div>
+              {/* Signatures */}
+              <div className="flex gap-px">
+                <div className="flex-1 bg-white/[0.02] rounded-l-md px-2 py-1 text-center">
+                  <div className="flex items-center justify-center gap-1">
+                    <span className="text-[10px] text-red-400">IR</span>
+                    <span className="font-mono text-[13px] text-gray-400">{ship?.cross_section_x ? fmtInt(Math.round(ship.cross_section_x)) : '—'}</span>
+                  </div>
+                </div>
+                <div className="flex-1 bg-white/[0.02] px-2 py-1 text-center">
+                  <div className="flex items-center justify-center gap-1">
+                    <span className="text-[10px] text-yellow-400">EM</span>
+                    <span className="font-mono text-[13px] text-gray-400">{ship?.cross_section_y ? fmtInt(Math.round(ship.cross_section_y)) : '—'}</span>
+                  </div>
+                </div>
+                <div className="flex-1 bg-white/[0.02] rounded-r-md px-2 py-1 text-center">
+                  <div className="flex items-center justify-center gap-1">
+                    <span className="text-[10px] text-cyan-400">CS</span>
+                    <span className="font-mono text-[13px] text-gray-400">{ship?.cross_section_z ? fmtInt(Math.round(ship.cross_section_z)) : '—'}</span>
+                  </div>
+                </div>
               </div>
             </div>
+
           </div>
         </div>
       </div>}
@@ -385,15 +417,13 @@ export default function Loadout() {
 
 // ─── Sub-components ───────────────────────────────────────────────────────────
 
-function StatCell({ label, value, format, color, unit }) {
+function StatCell({ label, value, format, color, unit, size }) {
   const formatted = value != null && value > 0 ? (format ? format(value) : String(value)) : '—'
+  const isSmall = size === 'sm'
   return (
-    <div className="flex flex-col items-center justify-center min-h-[56px] bg-sc-dark">
-      <div className="flex items-baseline gap-1">
-        <span className={`font-hud text-[24px] leading-none whitespace-nowrap ${color}`}>{formatted}</span>
-        {unit && value > 0 && <span className="text-[13px] text-gray-500 ml-0.5">{unit}</span>}
-      </div>
-      <div className="text-[11px] text-gray-600 uppercase tracking-wider mt-1">{label}</div>
+    <div className={`flex-1 flex flex-col items-center justify-center bg-white/[0.02] first:rounded-l-md last:rounded-r-md ${isSmall ? 'px-2 py-1.5' : 'px-3 py-1.5'}`}>
+      <div className={`font-hud leading-none whitespace-nowrap ${color} ${isSmall ? 'text-[18px]' : 'text-[22px]'}`}>{formatted}</div>
+      <div className="text-[10px] text-gray-600 uppercase tracking-wider">{label}</div>
     </div>
   )
 }

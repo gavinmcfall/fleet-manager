@@ -1,122 +1,159 @@
-import React, { useState } from 'react'
-import { Shield, Zap, Navigation, Radar, Globe, Snowflake } from 'lucide-react'
+import React, { useState, useMemo } from 'react'
 
-const MODES = ['SCM', 'NAV', 'SCAN', 'RES']
+const MODES = ['SCM', 'NAV']
 
-const SUBSYSTEMS = [
-  { key: 'shield', icon: Shield, color: 'blue', label: 'Shields' },
-  { key: 'weapon', icon: Zap, color: 'amber', label: 'Weapons' },
-  { key: 'thrust', icon: Navigation, color: 'emerald', label: 'Thrusters' },
-  { key: 'cooler', icon: Snowflake, color: 'cyan', label: 'Coolers' },
-  { key: 'radar', icon: Radar, color: 'emerald', label: 'Radar' },
-  { key: 'qdrive', icon: Globe, color: 'purple', label: 'QDrive' },
-]
-
-const PIP_COLORS = {
-  blue: 'bg-blue-500/40 border-blue-500/50',
-  amber: 'bg-amber-500/40 border-amber-500/50',
-  emerald: 'bg-emerald-500/40 border-emerald-500/50',
-  cyan: 'bg-cyan-500/40 border-cyan-500/50',
-  purple: 'bg-purple-500/40 border-purple-500/50',
+// Mode restrictions: which subsystems are OFF in each mode
+const MODE_OFF = {
+  SCM: new Set(['qdrive']),
+  NAV: new Set(['shield', 'weapon']),
 }
 
-const ICON_COLORS = {
-  blue: 'text-blue-400',
-  amber: 'text-amber-400',
-  emerald: 'text-emerald-400',
-  cyan: 'text-cyan-300',
-  purple: 'text-purple-400',
-}
-
-const PIP_COUNT_COLORS = {
-  blue: 'text-blue-400',
-  amber: 'text-amber-400',
-  emerald: 'text-emerald-400',
-  cyan: 'text-cyan-300',
-  purple: 'text-purple-400',
+const SUBSYSTEM_META = {
+  shield:  { label: 'SHD', color: 'text-blue-400',   pipOn: 'bg-emerald-500 border-emerald-500/40' },
+  weapon:  { label: 'WPN', color: 'text-amber-400',  pipOn: 'bg-emerald-500 border-emerald-500/40' },
+  engine:  { label: 'ENG', color: 'text-orange-300',  pipOn: 'bg-emerald-500 border-emerald-500/40' },
+  cooler:  { label: 'CLR', color: 'text-cyan-300',    pipOn: 'bg-emerald-500 border-emerald-500/40' },
+  radar:   { label: 'RAD', color: 'text-green-400',   pipOn: 'bg-emerald-500 border-emerald-500/40' },
+  qdrive:  { label: 'QD',  color: 'text-purple-400',  pipOn: 'bg-purple-500 border-purple-500/40' },
+  lifesup: { label: 'LS',  color: 'text-gray-500',    pipOn: 'bg-gray-500 border-gray-500/40' },
 }
 
 /**
- * Vertical pip columns for power distribution.
- * Each column = a subsystem with pips stacking bottom-up.
- *
- * Props:
- *   weaponPoolSize - from ship data (FixedPowerPool poolSize)
- *   totalOutput - placeholder for total power output
- *   consumption - placeholder for consumption percentage
+ * Build subsystem columns from loadout component data.
+ * Each cooler gets its own column (like Erkul).
  */
-export default function PowerPips({ weaponPoolSize = 4, totalOutput = 30, consumption = 36 }) {
-  const [activeMode, setActiveMode] = useState('SCM')
+function buildSubsystems(components, ship) {
+  const subs = []
+  let coolerCount = 0
+  const seen = new Set()
 
-  // Placeholder pip distribution — will be driven by real data
-  const pipData = {
-    shield: { filled: 2, total: 5 },
-    weapon: { filled: Math.min(weaponPoolSize, 6), total: Math.max(weaponPoolSize, 6) },
-    thrust: { filled: 3, total: 5 },
-    cooler: { filled: 2, total: 3 },
-    radar: { filled: 2, total: 3 },
-    qdrive: { filled: activeMode === 'NAV' ? 3 : 0, total: 3 },
+  // Count components by type from loadout
+  for (const c of (components || [])) {
+    const pt = c.port_type
+    if (pt === 'shield' && !seen.has('shield'))   { seen.add('shield'); subs.push({ key: 'shield', max: ship?.shield_pool_max || 2 }) }
+    if (pt === 'weapon' && !seen.has('weapon'))    { seen.add('weapon'); subs.push({ key: 'weapon', max: ship?.weapon_pool_size || 4 }) }
   }
 
-  const maxPips = Math.max(...Object.values(pipData).map(p => p.total))
+  // Always add engine if we have any components
+  if (!seen.has('engine') && components?.length > 0) subs.push({ key: 'engine', max: 4 })
+
+  // Add one column per cooler
+  for (const c of (components || [])) {
+    if (c.port_type === 'cooler') {
+      coolerCount++
+      subs.push({ key: 'cooler', max: 3, instance: coolerCount })
+    }
+  }
+
+  // Radar
+  if (components?.some(c => c.port_type === 'sensor')) subs.push({ key: 'radar', max: 3 })
+
+  // QDrive — always 1 pip
+  if (components?.some(c => c.port_type === 'quantum_drive')) subs.push({ key: 'qdrive', max: 1 })
+
+  // Life support — always 1
+  subs.push({ key: 'lifesup', max: 1 })
+
+  return subs
+}
+
+/**
+ * Power management panel with pip columns per subsystem.
+ * Pips stack bottom-up. Mode selector affects which subsystems are active.
+ */
+export default function PowerPips({ components, ship, combat }) {
+  const [mode, setMode] = useState('SCM')
+
+  const subsystems = useMemo(() => buildSubsystems(components, ship), [components, ship])
+
+  const offSet = MODE_OFF[mode] || new Set()
+
+  // Default allocation: fill all pips for active subsystems
+  const allocations = useMemo(() => {
+    const alloc = {}
+    for (const sub of subsystems) {
+      const k = sub.instance ? `${sub.key}_${sub.instance}` : sub.key
+      alloc[k] = offSet.has(sub.key) ? 0 : sub.max
+    }
+    return alloc
+  }, [subsystems, mode])
+
+  const totalAllocated = Object.values(allocations).reduce((a, b) => a + b, 0)
+  const totalPool = subsystems.reduce((a, b) => a + b.max, 0)
 
   return (
-    <div className="flex-shrink-0 px-4 border-l border-r border-white/[0.06]" style={{ width: 260 }}>
-      {/* Output + Consumption */}
-      <div className="flex items-center justify-between mb-1">
-        <span className="text-[11px] text-gray-500 uppercase tracking-wider font-medium">Output</span>
-        <span className="text-[13px] font-mono">
-          <span className="text-sc-accent">0</span>
-          <span className="text-gray-600"> / {totalOutput}</span>
-        </span>
-      </div>
-      <div className="flex items-center gap-2 mb-3">
-        <span className="text-[11px] text-gray-500 uppercase tracking-wider font-medium">Consumption</span>
-        <div className="flex-1 h-2 bg-white/[0.04] rounded-full overflow-hidden">
-          <div className="h-full bg-emerald-500/60 rounded-full transition-all" style={{ width: `${consumption}%` }} />
+    <div className="flex-1 flex flex-col gap-1 min-w-0">
+      {/* Mode tabs + pool info */}
+      <div className="flex items-center justify-between">
+        <div className="flex items-center gap-1">
+          {MODES.map(m => (
+            <button
+              key={m}
+              onClick={() => setMode(m)}
+              className={`px-2.5 py-0.5 text-[10px] font-semibold rounded cursor-pointer transition-colors
+                ${mode === m
+                  ? (m === 'NAV' ? 'bg-amber-500/20 text-amber-400 border border-amber-500/30' : 'bg-sc-accent/20 text-sc-accent border border-sc-accent/30')
+                  : 'bg-white/[0.03] text-gray-600 border border-white/[0.06] hover:text-gray-400'
+                }`}
+            >
+              {m}
+            </button>
+          ))}
         </div>
-        <span className="text-[12px] font-mono text-emerald-400">{consumption}%</span>
+        <div className="flex items-center gap-3 text-[10px] font-mono">
+          <span className="text-gray-600">Pool <span className="text-gray-400">{totalAllocated}</span> / {totalPool}</span>
+          {combat?.totalPowerOutput > 0 && (
+            <span className="text-gray-600">Output <span className="text-emerald-400">{Math.round(combat.totalPowerOutput).toLocaleString()}</span> pwr</span>
+          )}
+        </div>
       </div>
 
-      {/* Vertical pip columns */}
-      <div className="flex items-end gap-1.5 justify-center" style={{ height: maxPips * 14 + 20 }}>
-        {SUBSYSTEMS.map(({ key, color }) => {
-          const { filled, total } = pipData[key]
+      {/* Pip columns */}
+      <div className="flex items-end gap-1 px-1" style={{ height: 80 }}>
+        {subsystems.map((sub, idx) => {
+          const k = sub.instance ? `${sub.key}_${sub.instance}` : sub.key
+          const meta = SUBSYSTEM_META[sub.key]
+          const isOff = offSet.has(sub.key)
+          const filled = allocations[k] || 0
+
           return (
-            <div key={key} className="flex flex-col-reverse gap-0.5 items-center">
-              <div className={`text-[9px] font-mono mt-0.5 ${PIP_COUNT_COLORS[color]}`}>{filled}</div>
-              {Array.from({ length: total }).map((_, i) => (
-                <div key={i} className={`w-5 h-2.5 rounded-sm border ${i < filled ? PIP_COLORS[color] : 'bg-white/[0.04] border-white/[0.06]'}`} />
+            <div key={`${k}_${idx}`} className="flex-1 min-w-[24px] flex flex-col-reverse gap-0.5">
+              {Array.from({ length: sub.max }).map((_, i) => (
+                <div
+                  key={i}
+                  className={`w-full h-[10px] rounded-sm border transition-colors
+                    ${isOff
+                      ? 'bg-white/[0.02] border-white/[0.04] opacity-30'
+                      : i < filled
+                        ? meta.pipOn
+                        : 'bg-white/[0.04] border-white/[0.08] cursor-pointer hover:border-white/[0.2]'
+                    }`}
+                />
               ))}
             </div>
           )
         })}
       </div>
 
-      {/* System icons */}
-      <div className="flex gap-1.5 justify-center mt-1">
-        {SUBSYSTEMS.map(({ key, icon: Icon, color, label }) => (
-          <Icon key={key} className={`w-4 h-4 ${ICON_COLORS[color]}`} title={label} />
-        ))}
+      {/* Subsystem labels + counts */}
+      <div className="flex items-center gap-1 px-1">
+        {subsystems.map((sub, idx) => {
+          const k = sub.instance ? `${sub.key}_${sub.instance}` : sub.key
+          const meta = SUBSYSTEM_META[sub.key]
+          const isOff = offSet.has(sub.key)
+          const filled = allocations[k] || 0
+          return (
+            <div key={`${k}_${idx}`} className="flex-1 min-w-[24px] text-center">
+              <div className={`text-[9px] uppercase tracking-wider ${isOff ? 'text-gray-700' : meta.color}`}>
+                {meta.label}
+              </div>
+              <div className={`font-mono text-[10px] ${isOff ? 'text-gray-700' : meta.color}`}>
+                {isOff ? 'off' : filled}
+              </div>
+            </div>
+          )
+        })}
       </div>
-
-      {/* Mode toggle */}
-      <div className="flex gap-1 mt-2">
-        {MODES.map(mode => (
-          <button
-            key={mode}
-            onClick={() => setActiveMode(mode)}
-            className={`flex-1 px-2 py-1 text-[10px] font-medium rounded cursor-pointer text-center transition-colors
-              ${activeMode === mode
-                ? 'bg-sc-accent/20 text-sc-accent border border-sc-accent/30'
-                : 'bg-white/[0.04] text-gray-500 border border-white/[0.06] hover:bg-white/[0.08]'
-              }`}
-          >
-            {mode}
-          </button>
-        ))}
-      </div>
-      <div className="text-[9px] text-gray-600 text-center mt-1.5">Mode affects power distribution &amp; stats</div>
     </div>
   )
 }
