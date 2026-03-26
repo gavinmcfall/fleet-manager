@@ -154,7 +154,7 @@ export default function Loadout() {
       {/* ============================================================ */}
       <div className="relative bg-sc-panel border-b border-sc-border">
         <div className="max-w-[1400px] mx-auto flex items-stretch">
-          <div className="w-80 h-44 flex-shrink-0 overflow-hidden relative hidden md:block">
+          <div className="w-96 h-44 flex-shrink-0 overflow-hidden relative hidden md:block">
             {(ship?.image_url_large || ship?.image_url_medium || ship?.image_url) && (
               <img
                 src={ship.image_url_large || ship.image_url_medium || ship.image_url}
@@ -171,7 +171,7 @@ export default function Loadout() {
             )}
             <div className="absolute inset-0 bg-gradient-to-r from-transparent to-sc-panel" />
           </div>
-          <div className="flex-1 px-6 py-4 flex flex-col justify-between">
+          <div className="flex-1 px-4 py-3 flex flex-col justify-between">
             <div>
               <div className="flex items-center gap-3 flex-wrap">
                 <h1 className="font-hud text-2xl text-white tracking-wide" style={{ textShadow: '0 0 20px rgba(34,211,238,0.15)' }}>
@@ -199,36 +199,34 @@ export default function Loadout() {
                 </div>
               )}
             </div>
-            {hasComponents && <div className="flex items-center gap-2 mt-3 flex-wrap">
+            {hasComponents && <div className="flex items-center gap-1.5 mt-3 flex-wrap justify-end">
               {fleetId && overrideCount > 0 && (
-                <button onClick={handleSave} className="px-3 py-1.5 text-xs bg-sc-accent/20 hover:bg-sc-accent/30 text-sc-accent border border-sc-accent/30 rounded transition-all font-medium cursor-pointer">
-                  Save Loadout
+                <button onClick={handleSave} className="px-2.5 py-1 text-xs bg-sc-accent/20 hover:bg-sc-accent/30 text-sc-accent border border-sc-accent/30 rounded transition-all font-medium cursor-pointer">
+                  Save
                 </button>
               )}
               {overrideCount > 0 && (
                 <>
-                  <button onClick={handleAddNonStockToCart} className="px-3 py-1.5 text-xs bg-emerald-500/10 hover:bg-emerald-500/20 text-emerald-400 border border-emerald-500/20 rounded transition-all flex items-center gap-1 cursor-pointer">
-                    <ShoppingCart className="w-3 h-3" /> Non-Stock to Cart
+                  <button onClick={handleAddNonStockToCart} className="px-2.5 py-1 text-xs bg-emerald-500/10 hover:bg-emerald-500/20 text-emerald-400 border border-emerald-500/20 rounded transition-all flex items-center gap-1 cursor-pointer">
+                    <ShoppingCart className="w-3 h-3" /> To Cart
                   </button>
-                  <button onClick={handleResetAll} className="px-3 py-1.5 text-xs bg-white/[0.04] hover:bg-white/[0.08] text-gray-400 border border-white/[0.06] rounded transition-all flex items-center gap-1 cursor-pointer">
+                  <button onClick={handleResetAll} className="px-2.5 py-1 text-xs bg-white/[0.04] hover:bg-white/[0.08] text-gray-400 border border-white/[0.06] rounded transition-all flex items-center gap-1 cursor-pointer">
                     <RotateCcw className="w-3 h-3" /> Reset All
                   </button>
                 </>
               )}
-              <div className="ml-auto flex items-center gap-2">
-                <button onClick={() => setShowCart(!showCart)}
-                  className="relative px-3 py-1.5 text-xs bg-white/[0.04] hover:bg-white/[0.08] text-gray-400 border border-white/[0.06] rounded transition-all flex items-center gap-1 cursor-pointer">
-                  <ShoppingCart className="w-3 h-3" /> Cart
-                  {cartCount > 0 && (
-                    <span className="absolute -top-1.5 -right-1.5 bg-sc-accent text-black text-[9px] font-bold w-4 h-4 rounded-full flex items-center justify-center" style={{ boxShadow: '0 0 6px rgba(34,211,238,0.5)' }}>
-                      {cartCount}
-                    </span>
-                  )}
-                </button>
-                <Link to={`/ships/${slug}`} className="px-3 py-1.5 text-xs text-gray-600 hover:text-gray-300 transition-colors">
-                  Ship Detail →
-                </Link>
-              </div>
+              <button onClick={() => setShowCart(!showCart)}
+                className="relative px-2.5 py-1 text-xs bg-white/[0.04] hover:bg-white/[0.08] text-gray-400 border border-white/[0.06] rounded transition-all flex items-center gap-1 cursor-pointer">
+                <ShoppingCart className="w-3 h-3" /> Cart
+                {cartCount > 0 && (
+                  <span className="absolute -top-1.5 -right-1.5 bg-sc-accent text-black text-[9px] font-bold w-4 h-4 rounded-full flex items-center justify-center" style={{ boxShadow: '0 0 6px rgba(34,211,238,0.5)' }}>
+                    {cartCount}
+                  </span>
+                )}
+              </button>
+              <Link to={`/ships/${slug}`} className="px-2.5 py-1 text-xs text-gray-600 hover:text-gray-300 transition-colors">
+                Detail →
+              </Link>
             </div>}
           </div>
         </div>
@@ -426,7 +424,18 @@ function SectionCard({ group, collapsed, setCollapsed, overrides, onOpenPicker, 
             {categoryOverrides} custom
           </span>
         )}
-        <button className="text-[11px] text-gray-600 hover:text-gray-400 cursor-pointer transition-colors ml-auto">RESET</button>
+        <button
+          onClick={(e) => {
+            e.stopPropagation()
+            const portIds = group.items.map(i => i.port_id)
+            setOverrides(prev => {
+              const next = { ...prev }
+              portIds.forEach(id => delete next[id])
+              return next
+            })
+          }}
+          className="text-[11px] text-gray-600 hover:text-gray-400 cursor-pointer transition-colors ml-auto"
+        >RESET</button>
       </div>
 
       {!isCollapsed && (
