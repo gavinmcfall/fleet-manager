@@ -526,9 +526,6 @@ export default function Admin() {
       {/* PTU Data */}
       <PTUPurgePanel />
 
-      {/* Image Captures */}
-      <ImageCapturePanel />
-
       {/* KV Cache */}
       <CachePurgePanel />
 
@@ -612,6 +609,9 @@ export default function Admin() {
           Failed to load sync history: {error}
         </div>
       )}
+
+      {/* Image Captures — at bottom, large panel */}
+      <ImageCapturePanel />
     </div>
   )
 }

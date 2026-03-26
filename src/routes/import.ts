@@ -411,7 +411,7 @@ export function importRoutes() {
           }
           // Auto-dismiss (-1): captures where the DB match already has a CF Images URL.
           // These are duplicates of images we already have — no review needed.
-          await db.prepare(
+          const dismissed = await db.prepare(
             `UPDATE image_captures SET promoted = -1 WHERE promoted = 0
             AND (
               (vehicle_id IS NOT NULL AND EXISTS (
@@ -427,30 +427,34 @@ export function importRoutes() {
             )`,
           ).run();
 
-          // Auto-promote (1): captures worth keeping as CDN candidates.
-          // - Ships/paints with no CF Images: RSI thumbnail is best we have
-          // - Everything else (FPS gear, components, decorations, credits): we have
-          //   zero CDN for these types, so every image is valuable
-          await db.prepare(
+          const promoted = await db.prepare(
             `UPDATE image_captures SET promoted = 1 WHERE promoted = 0
             AND (
-              -- Vehicle match with no CF Images
               (vehicle_id IS NOT NULL AND EXISTS (
                 SELECT 1 FROM vehicles v WHERE v.id = image_captures.vehicle_id
                 AND (v.image_url IS NULL OR v.image_url = '' OR v.image_url NOT LIKE 'https://imagedelivery%')
               ))
               OR
-              -- Paint match with no CF Images
               (kind = 'Skin' AND EXISTS (
                 SELECT 1 FROM paints p
                 WHERE p.name = REPLACE(REPLACE(image_captures.title, ' - ', ' '), ' Paint', ' Livery')
                 AND (p.image_url IS NULL OR p.image_url = '' OR p.image_url NOT LIKE 'https://imagedelivery%')
               ))
               OR
-              -- All non-ship/non-paint kinds: no CDN exists, promote everything
               (kind NOT IN ('Ship', 'Skin'))
             )`,
           ).run();
+
+          const dismissedCount = dismissed.meta?.changes ?? 0;
+          const promotedCount = promoted.meta?.changes ?? 0;
+          if (dismissedCount > 0 || promotedCount > 0) {
+            console.log(`[hangar-sync] Image auto-triage: ${promotedCount} promoted, ${dismissedCount} dismissed`);
+            logEvent("image_capture_auto_triage", {
+              promoted: promotedCount,
+              dismissed: dismissedCount,
+              user_id: userID,
+            });
+          }
         })().catch((err) => console.error("[hangar-sync] Image capture failed:", err)),
       );
     }
