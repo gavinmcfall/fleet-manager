@@ -227,15 +227,32 @@ export function importRoutes() {
 
     const insertStmts: D1PreparedStatement[] = [];
     const skippedItems: string[] = [];
-    const imageCaptures: { url: string; slug: string | null; title: string }[] = [];
+    const imageCaptures: { url: string; slug: string | null; title: string; kind: string }[] = [];
+
+    // Capture ALL image URLs from ALL items (ships, paints, FPS gear, flair, etc.)
+    for (const pledge of payload.pledges) {
+      for (const anyItem of (pledge.items ?? [])) {
+        const imgUrl = typeof anyItem.image === "string" && anyItem.image.startsWith("http") ? anyItem.image : null;
+        if (imgUrl) {
+          imageCaptures.push({ url: imgUrl, slug: null, title: anyItem.title || "", kind: anyItem.kind || "unknown" });
+        }
+      }
+    }
+    // Also capture from buyback pledges
+    for (const pledge of (payload.buyback_pledges ?? [])) {
+      for (const anyItem of (pledge.items ?? [])) {
+        const imgUrl = typeof anyItem.image === "string" && anyItem.image.startsWith("http") ? anyItem.image : null;
+        if (imgUrl) {
+          imageCaptures.push({ url: imgUrl, slug: null, title: anyItem.title || "", kind: anyItem.kind || "unknown" });
+        }
+      }
+    }
 
     for (const pledge of payload.pledges) {
       const shipItems = (pledge.items ?? []).filter((item: Record<string, unknown>) => item.kind === "Ship");
 
       for (const item of shipItems) {
         const displayName = item.title || "";
-        // Capture image URL if present
-        const imgUrl = typeof item.image === "string" && item.image.startsWith("http") ? item.image : null;
 
         // Generate slug candidates from item title and manufacturer code
         const nameSlug = slugFromName(displayName);
@@ -247,8 +264,10 @@ export function importRoutes() {
 
         const candidates = [codeSlug, nameSlug, compactCode, compactName];
         const matchedSlug = findVehicleSlugLocal(vehicleMap, candidates, displayName);
-        if (imgUrl) {
-          imageCaptures.push({ url: imgUrl, slug: matchedSlug, title: displayName });
+        // Enrich the already-captured ship image with its matched slug
+        if (item.image && matchedSlug) {
+          const existing = imageCaptures.find(ic => ic.url === item.image);
+          if (existing) existing.slug = matchedSlug;
         }
         if (!matchedSlug) {
           // No known vehicle match — skip instead of creating a stub.
@@ -327,20 +346,21 @@ export function importRoutes() {
     }
     const imported = insertStmts.length;
 
-    // --- Capture image URLs for review ---
+    // --- Capture ALL image URLs for CDN review ---
     if (imageCaptures.length > 0) {
       const capStmts = imageCaptures.map((cap) =>
         db
           .prepare(
-            `INSERT INTO image_captures (url, source, vehicle_id, vehicle_slug, title)
+            `INSERT INTO image_captures (url, source, vehicle_id, vehicle_slug, title, kind)
             VALUES (?, 'hangar_sync',
-              (SELECT id FROM vehicles WHERE slug = ? AND ${VEHICLE_VERSION_CAP} ORDER BY game_version_id DESC LIMIT 1),
-              ?, ?)
+              CASE WHEN ? IS NOT NULL THEN (SELECT id FROM vehicles WHERE slug = ? AND ${VEHICLE_VERSION_CAP} ORDER BY game_version_id DESC LIMIT 1) ELSE NULL END,
+              ?, ?, ?)
             ON CONFLICT(url) DO UPDATE SET
               last_seen = datetime('now'),
-              seen_count = seen_count + 1`,
+              seen_count = seen_count + 1,
+              vehicle_slug = COALESCE(excluded.vehicle_slug, vehicle_slug)`,
           )
-          .bind(cap.url, cap.slug, cap.slug, cap.title),
+          .bind(cap.url, cap.slug, cap.slug, cap.slug, cap.title, cap.kind),
       );
       // Fire-and-forget in background — don't block the sync response
       c.executionCtx.waitUntil(
