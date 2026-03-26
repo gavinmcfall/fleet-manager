@@ -505,15 +505,28 @@ function SectionCard({ group, collapsed, setCollapsed, overrides, onOpenPicker, 
               )
             }
 
-            // Empty/locked ports (door turrets, etc.) — show with padlock
+            // Locked/non-editable ports — show with padlock
+            if (item.editable === 0 || item.editable === false) {
+              const lockedName = item.child_name || item.component_name || item.mount_name || 'Fixed weapon'
+              return (
+                <div key={item.port_id} className="flex items-center gap-2 px-3 py-2 border-b border-white/[0.03] opacity-60">
+                  <span className="text-[11px] w-7 text-center flex-shrink-0 font-mono bg-white/[0.06] border border-white/[0.1] rounded px-1.5 py-px text-gray-500">
+                    S{item.size_max}
+                  </span>
+                  <span className="text-sm text-gray-400">{lockedName}</span>
+                  <span className="text-[11px] text-gray-600 ml-auto" title="This component cannot be changed">🔒 Fixed</span>
+                </div>
+              )
+            }
+
+            // Empty ports with no component
             if (!item.component_name && !item.child_name && !item.mount_name) {
               return (
-                <div key={item.port_id} className="flex items-center gap-2 px-3 py-2 border-b border-white/[0.03] opacity-40">
+                <div key={item.port_id} className="flex items-center gap-2 px-3 py-2 border-b border-white/[0.03] opacity-30">
                   <span className="text-[11px] w-7 text-center flex-shrink-0 font-mono bg-white/[0.06] border border-white/[0.1] rounded px-1.5 py-px text-gray-500">
                     S{item.size_max}
                   </span>
                   <span className="text-sm text-gray-600">Empty</span>
-                  <span className="text-[11px] text-gray-700 ml-auto">🔒</span>
                 </div>
               )
             }

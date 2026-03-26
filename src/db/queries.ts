@@ -277,6 +277,7 @@ export async function getShipLoadout(db: D1Database, slug: string, versionId?: n
         p.port_type,
         p.size_min,
         p.size_max,
+        p.editable,
         mount.name AS mount_name,
         COALESCE(d.name, mount.name) AS child_name,
         COALESCE(d.name, mount.name) AS component_name,
