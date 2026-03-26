@@ -172,20 +172,27 @@ export function findPaintLocal(map: PaintMap, rsiTitle: string): number | null {
 
 // --- Buyback name parsers ---
 
+/** Strip SC manufacturer prefix from a ship name */
+const MFR_PREFIX = /^(Anvil Aerospace|Aegis Dynamics|Origin Jumpworks|Drake Interplanetary|Crusader Industries|Musashi Industrial|Consolidated Outland|Argo Astronautics|Roberts Space Industries|Kruger Intergalaktik|Greycat Industrial|Anvil|Aegis|AEGIS|RSI|Origin|Drake|Crusader|CNOU|MISC|Argo|Tumbril|Greycat|Aopoa|AOPOA|Esperia|Gatac|Banu|Kruger)\s+/i;
+
+export function stripManufacturer(name: string): string {
+  return name.replace(MFR_PREFIX, "").trim();
+}
+
 /** Parse buyback ship name: "Standalone Ship - Anvil C8X Pisces Expedition - IAE 2949" → "C8X Pisces Expedition" */
 export function parseBuybackShipName(pledgeName: string): string {
   let name = pledgeName;
   // Strip prefix
   name = name.replace(/^Standalone Ships?\s*-\s*/i, "");
   name = name.replace(/^Buggies\s*-\s*/i, "");
-  // Strip trailing dash-separated suffixes: " - IAE 2949", " - Warbond", " - ILW2950", " - Presale", etc.
+  // Strip trailing dash-separated suffixes
   name = name.replace(/\s*-\s*(Warbond|IAE\s*\d+|ILW\s*\d+|LTI|\d+\s*Year|Anniversary\s*\d+|Citizencon\s*\d+|Gamescom\s*\d+|Presale).*$/i, "");
   // Strip trailing modifiers without dash
-  name = name.replace(/\s+(LTI\s+Presale|LTI|Presale)$/i, "");
-  // Strip "plus {Paint} Paint" suffix (e.g., "C1 Spirit plus Crimson Paint")
+  name = name.replace(/\s+(LTI\s+Presale|LTI|Presale|Anniversary\s*\d+|Gamescom\s*\d+)$/i, "");
+  // Strip "plus {Paint} Paint" suffix
   name = name.replace(/\s+plus\s+.+paint$/i, "");
-  // Strip manufacturer prefixes (RSI store uses "Anvil C8X Pisces", DB has "C8X Pisces")
-  name = name.replace(/^(Anvil Aerospace|Aegis Dynamics|Origin Jumpworks|Drake Interplanetary|Crusader Industries|Musashi Industrial|Consolidated Outland|Argo Astronautics|Roberts Space Industries|Kruger Intergalaktik|Greycat Industrial|Anvil|Aegis|RSI|Origin|Drake|Crusader|CNOU|MISC|Argo|Tumbril|Greycat|Aopoa|AOPOA|Esperia|Gatac|Banu|Kruger)\s+/i, "");
+  // Strip manufacturer prefix
+  name = stripManufacturer(name);
   return name.trim();
 }
 
@@ -203,14 +210,25 @@ export function parseCCUNames(pledgeName: string): [string, string] | null {
   // Strip suffixes
   name = name.replace(/\s+Upgrade$/i, "");
   name = name.replace(/\s+(Standard|Warbond)\s+Edition$/i, "");
+  // Strip trailing " - News Van" etc. (variant suffixes after dash)
+  name = name.replace(/\s*-\s*[^-]+$/i, (match) => {
+    // Only strip if the part after dash looks like a variant/edition, not a ship name
+    const suffix = match.replace(/^\s*-\s*/, "").trim();
+    if (/^(News Van|Warbond|Best In Show|BIS|Executive|Explorer|Touring)$/i.test(suffix)) return "";
+    return match; // Keep it — it's part of the ship name (e.g., "San'tok.yai")
+  });
 
   // Split on " to " — the divider between from and to ships
   const toIdx = name.toLowerCase().indexOf(" to ");
   if (toIdx < 1) return null;
 
-  const from = name.slice(0, toIdx).trim();
-  const to = name.slice(toIdx + 4).trim();
+  let from = name.slice(0, toIdx).trim();
+  let to = name.slice(toIdx + 4).trim();
   if (!from || !to) return null;
+
+  // Strip manufacturer prefixes from both sides
+  from = stripManufacturer(from);
+  to = stripManufacturer(to);
 
   return [from, to];
 }
