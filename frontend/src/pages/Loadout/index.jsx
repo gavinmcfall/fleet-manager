@@ -486,9 +486,10 @@ function SectionCard({ group, collapsed, setCollapsed, overrides, onOpenPicker, 
             if (item.port_type === 'turret' && !item.parent_port_id) {
               // Find children of this turret in the same group
               const children = group.items.filter(c => c.parent_port_id === item.port_id)
-              const turretLabel = item.mount_name || item.component_name || item.port_name
+              // Use mount_name for turret label; if no mount, fall back to humanized port_name (not child weapon name)
+              const turretLabel = item.mount_name || item.port_name?.replace('hardpoint_', '').replace(/_/g, ' ')
               // Friendly position from port name
-              const posHint = item.port_name?.replace('hardpoint_turret_', '').replace(/_/g, ' ')
+              const posHint = item.mount_name ? item.port_name?.replace('hardpoint_turret_', '').replace(/_/g, ' ') : null
               return (
                 <div key={item.port_id}>
                   <div className="px-3 py-1 text-[12px] text-gray-600 bg-white/[0.01] font-medium uppercase tracking-wider border-t border-white/[0.04] first:border-t-0">
