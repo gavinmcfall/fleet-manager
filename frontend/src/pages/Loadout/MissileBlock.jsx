@@ -29,7 +29,7 @@ export default function MissileBlock({ item, onClick, onAddToCart }) {
   const dmgType = getDamageType(item)
 
   return (
-    <div className="border-b border-white/[0.04] px-3 py-0.5">
+    <div className="border-b border-white/[0.04] px-3 py-1.5">
       {/* Row 1: Rack */}
       <div className="flex items-center gap-2 cursor-pointer rounded transition-colors hover:bg-white/[0.03] -mx-1 px-1 leading-tight"
         onClick={onClick}>

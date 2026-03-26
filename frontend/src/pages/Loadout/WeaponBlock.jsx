@@ -123,7 +123,7 @@ export default function WeaponBlock({ item, isCustomized, weaponGroups = [], onC
   if (hasMount) {
     // GIMBALLED: 2 rows — mount row, then indented child with inline stats
     return (
-      <div className={`border-b border-white/[0.04] px-3 py-0.5 ${isCustomized ? 'bg-sc-accent/[0.02]' : ''}`}>
+      <div className={`border-b border-white/[0.04] px-3 py-1.5 ${isCustomized ? 'bg-sc-accent/[0.02]' : ''}`}>
         {/* Row 1: Mount + WG 2×2 */}
         <div
           onClick={onClickMount}
@@ -169,7 +169,7 @@ export default function WeaponBlock({ item, isCustomized, weaponGroups = [], onC
 
   // FIXED: 2 rows — name row + stats row
   return (
-    <div className={`border-b border-white/[0.04] px-3 py-0.5 ${isCustomized ? 'bg-sc-accent/[0.02]' : ''}`}>
+    <div className={`border-b border-white/[0.04] px-3 py-1.5 ${isCustomized ? 'bg-sc-accent/[0.02]' : ''}`}>
       {/* Row 1: weapon name + fixed badge + WG 2×2 */}
       <div
         onClick={onClickWeapon}
