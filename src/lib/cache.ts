@@ -50,7 +50,7 @@ export async function cachedJson<T>(
 ): Promise<Response> {
   const kv = c.env.SC_BRIDGE_CACHE;
   const ttl = options?.ttl ?? DEFAULT_TTL;
-  const cacheControl = options?.cacheControl ?? "public, max-age=300";
+  const cacheControl = options?.cacheControl ?? "public, s-maxage=0, max-age=300";
 
   // Attempt cache read
   const cached = await kv.get(cacheKey);
