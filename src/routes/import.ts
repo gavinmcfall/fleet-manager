@@ -427,8 +427,10 @@ export function importRoutes() {
             )`,
           ).run();
 
-          // Auto-promote (1): captures that match a DB entry with NO CF Images URL,
-          // or item types with no CDN at all — these RSI images are worth keeping.
+          // Auto-promote (1): captures worth keeping as CDN candidates.
+          // - Ships/paints with no CF Images: RSI thumbnail is best we have
+          // - Everything else (FPS gear, components, decorations, credits): we have
+          //   zero CDN for these types, so every image is valuable
           await db.prepare(
             `UPDATE image_captures SET promoted = 1 WHERE promoted = 0
             AND (
@@ -445,18 +447,8 @@ export function importRoutes() {
                 AND (p.image_url IS NULL OR p.image_url = '' OR p.image_url NOT LIKE 'https://imagedelivery%')
               ))
               OR
-              -- FPS Equipment: match against loot_map (no CDN exists for these)
-              (kind = 'FPS Equipment' AND EXISTS (
-                SELECT 1 FROM loot_map lm WHERE LOWER(lm.name) = LOWER(image_captures.title)
-              ))
-              OR
-              -- Components: match against vehicle_components
-              (kind = 'Component' AND EXISTS (
-                SELECT 1 FROM vehicle_components vc WHERE LOWER(vc.name) = LOWER(image_captures.title)
-              ))
-              OR
-              -- Hangar decorations: no matching table, always promote
-              (kind = 'Hangar decoration')
+              -- All non-ship/non-paint kinds: no CDN exists, promote everything
+              (kind NOT IN ('Ship', 'Skin'))
             )`,
           ).run();
         })().catch((err) => console.error("[hangar-sync] Image capture failed:", err)),
