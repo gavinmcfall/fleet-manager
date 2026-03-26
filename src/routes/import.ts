@@ -409,6 +409,25 @@ export function importRoutes() {
           for (let i = 0; i < capStmts.length; i += 100) {
             await db.batch(capStmts.slice(i, i + 100));
           }
+          // Auto-promote: if a captured image matches a DB entry that has no CF Images URL,
+          // mark it as promoted=1 (the RSI image is the best we have)
+          await db.prepare(
+            `UPDATE image_captures SET promoted = 1 WHERE promoted = 0
+            AND (
+              -- Vehicle match with no CF Images
+              (vehicle_id IS NOT NULL AND EXISTS (
+                SELECT 1 FROM vehicles v WHERE v.id = image_captures.vehicle_id
+                AND (v.image_url IS NULL OR v.image_url = '' OR v.image_url NOT LIKE 'https://imagedelivery%')
+              ))
+              OR
+              -- Paint match with no CF Images (normalize title: "Ship - Paint Paint" → "Ship Paint Livery")
+              EXISTS (
+                SELECT 1 FROM paints p
+                WHERE p.name = REPLACE(REPLACE(image_captures.title, ' - ', ' '), ' Paint', ' Livery')
+                AND (p.image_url IS NULL OR p.image_url = '' OR p.image_url NOT LIKE 'https://imagedelivery%')
+              )
+            )`,
+          ).run();
         })().catch((err) => console.error("[hangar-sync] Image capture failed:", err)),
       );
     }
