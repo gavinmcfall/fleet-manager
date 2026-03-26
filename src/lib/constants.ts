@@ -71,7 +71,7 @@ export function deltaVersionJoin(
   return `INNER JOIN (
     SELECT ${identityCol}, MAX(game_version_id) as latest_gv
     FROM ${table}
-    WHERE game_version_id <= ${vq} AND removed = 0
+    WHERE game_version_id <= ${vq}
     GROUP BY ${identityCol}
   ) _dv_${alias} ON ${alias}.${identityCol} = _dv_${alias}.${identityCol}
     AND ${alias}.game_version_id = _dv_${alias}.latest_gv`;
