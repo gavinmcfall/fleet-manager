@@ -34,6 +34,11 @@ export async function preloadVehicleMap(db: D1Database): Promise<VehicleMap> {
     const r = row as { id: number; slug: string; name: string };
     slugToID.set(r.slug, r.id);
     nameToSlug.set(r.name.toLowerCase(), r.slug);
+    // Also index with manufacturer stripped (4.7 names include mfr: "RSI Aurora Mk I SE")
+    const stripped = stripManufacturer(r.name);
+    if (stripped.toLowerCase() !== r.name.toLowerCase()) {
+      nameToSlug.set(stripped.toLowerCase(), r.slug);
+    }
     compactToSlug.set(compactSlug(r.slug), r.slug);
   }
 
