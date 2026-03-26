@@ -964,6 +964,46 @@ export function gamedataRoutes<E extends HonoEnv>() {
         }
       })
 
+      // Fetch blueprint acquisition sources (mission/contract reward pools)
+      const acquisitionResult = await db.prepare(
+        `SELECT rpi.crafting_blueprint_id, rp.name as pool_name, rp.key as pool_key,
+                cbr.contract_generator_key
+         FROM crafting_blueprint_reward_pool_items rpi
+         JOIN crafting_blueprint_reward_pools rp ON rp.id = rpi.crafting_blueprint_reward_pool_id
+         LEFT JOIN contract_blueprint_reward_pools cbr
+           ON cbr.crafting_blueprint_reward_pool_id = rp.id
+           AND cbr.game_version_id = rp.game_version_id
+         WHERE rp.game_version_id <= ${versionSub(versionId)}`
+      ).all()
+
+      // Build acquisition map: blueprint_id → [{ source, detail }]
+      const acquisitionMap = new Map<number, { source: string; detail: string }[]>()
+      for (const row of acquisitionResult.results) {
+        const bpId = row.crafting_blueprint_id as number
+        if (!acquisitionMap.has(bpId)) acquisitionMap.set(bpId, [])
+        const entries = acquisitionMap.get(bpId)!
+        const contractKey = row.contract_generator_key as string | null
+        if (contractKey) {
+          const detail = contractKey.replace(/_/g, " ")
+          if (!entries.some(e => e.detail === detail)) {
+            entries.push({ source: "contract", detail })
+          }
+        } else {
+          const poolName = (row.pool_name as string) || (row.pool_key as string) || "unknown"
+          if (!entries.some(e => e.detail === poolName)) {
+            entries.push({ source: "mission_reward", detail: poolName })
+          }
+        }
+      }
+
+      // Attach to blueprints
+      for (const bp of blueprints) {
+        const sources = acquisitionMap.get(bp.id as number)
+        if (sources && sources.length > 0) {
+          (bp as Record<string, unknown>).acquisition = sources
+        }
+      }
+
       // Fetch resource location data (where each crafting resource can be mined)
       const [depositResult, qualityResult] = await Promise.all([
         db

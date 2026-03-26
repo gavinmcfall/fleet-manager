@@ -1,6 +1,6 @@
 import React, { useMemo, useState } from 'react'
 import { useParams, useNavigate, useSearchParams } from 'react-router-dom'
-import { ArrowLeft, Clock, Layers, FlaskConical, Crosshair, Zap, Target, MapPin } from 'lucide-react'
+import { ArrowLeft, Clock, Layers, FlaskConical, Crosshair, Zap, Target, MapPin, Gift, FileText } from 'lucide-react'
 import { useCrafting } from '../../hooks/useAPI'
 import LoadingState from '../../components/LoadingState'
 import ErrorState from '../../components/ErrorState'
@@ -234,6 +234,27 @@ export default function BlueprintDetail() {
 
           <CraftTimeRing seconds={blueprint.craft_time_seconds} />
         </div>
+
+        {/* Acquisition sources */}
+        {blueprint.acquisition && blueprint.acquisition.length > 0 && (
+          <div className="mt-4 pt-4 border-t border-white/[0.06]">
+            <h4 className="text-[10px] uppercase tracking-wider text-gray-500 mb-2">How to Obtain</h4>
+            <div className="flex flex-wrap gap-2">
+              {blueprint.acquisition.map((src, i) => (
+                <span key={i} className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs bg-white/[0.04] border border-white/[0.06] text-gray-400">
+                  {src.source === 'contract' ? (
+                    <FileText className="w-3 h-3 text-amber-400" />
+                  ) : (
+                    <Gift className="w-3 h-3 text-emerald-400" />
+                  )}
+                  {src.source === 'contract'
+                    ? src.detail.split(' ').map(w => w.charAt(0).toUpperCase() + w.slice(1)).join(' ')
+                    : 'Mission Reward'}
+                </span>
+              ))}
+            </div>
+          </div>
+        )}
       </div>
 
       {/* Tabs */}
