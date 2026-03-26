@@ -185,6 +185,50 @@ source ~/.secrets && npx wrangler d1 migrations apply sc-companion --remote
 source ~/.secrets && npx wrangler d1 migrations apply sc-companion-staging --remote --env staging
 ```
 
+## Testing (DO NOT SKIP)
+
+**Tests gate deployment.** CI will NOT deploy if any test fails. Pre-commit hooks run tests locally.
+Do not bypass hooks with `--no-verify`. Do not mark tests as skipped to make the suite pass.
+
+### TDD Rules (MANDATORY)
+
+1. **Write the test BEFORE the fix.** If you're fixing a bug, write a test that reproduces it first. Then fix the code. Then verify the test passes. No exceptions.
+2. **Run tests BEFORE declaring done.** Every change must be validated with `npx vitest run` (backend, from repo root) and `cd frontend && npx vitest run` (frontend). Both must pass.
+3. **Never claim "it works" without test evidence.** If a test doesn't exist for the behavior you changed, you haven't verified it. Write the test.
+4. **No data changes without validation.** Before applying SQL to any database, verify: row counts before/after, no duplicate UUIDs, no stale data overwriting newer data.
+
+### Test Infrastructure
+
+| Layer | Command | Tests | What it covers |
+|-------|---------|-------|---------------|
+| Backend (vitest) | `npx vitest run` | 181 | API endpoints, DB queries, auth, loadout golden data |
+| Frontend (vitest) | `cd frontend && npx vitest run` | 46 | Formatters, component rendering, business logic |
+| E2E (Playwright) | `npx playwright test` | 30+ | Full page rendering against staging |
+| Smoke (Playwright) | `npx playwright test --config playwright.smoke.config.ts` | 13 | Post-deploy staging health |
+| Tools (pytest) | `cd /home/gavin/scbridge/tools/scripts && python3 -m pytest tests/ -m "not p4k"` | 132 | Extraction script pure functions, PORT_CATEGORIES ordering |
+| Tools golden (pytest) | `python3 -m pytest tests/ -m p4k` | 28 | Ship port/combat stats extraction against real p4k data |
+
+### Pre-commit Hooks
+
+- **Fleet-manager:** husky runs `npm run typecheck && npx vitest run` (~18s)
+- **Tools repo:** `.githooks/pre-commit` runs `pytest tests/ -m "not p4k"` (~0.1s)
+
+### CI Pipeline (deploy.yml)
+
+```
+test job (MUST pass) → deploy job → smoke-test job (staging only)
+```
+
+Tests are NOT advisory. They block deployment. The `continue-on-error` flag was intentionally removed.
+
+### Adding New Tests
+
+When adding a new feature or fixing a bug:
+1. Backend API change → add/update test in `test/*.test.ts`
+2. Frontend component change → add/update test in `frontend/src/**/*.test.jsx`
+3. Loadout query change → verify `test/loadout.test.ts` still passes (Asgard golden data)
+4. Extraction script change → add test in `tools/scripts/tests/`, run golden tests locally before data load
+
 ## Environments
 
 ### Production
