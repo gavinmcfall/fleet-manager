@@ -1,5 +1,5 @@
 import React from 'react'
-import { Rocket, Heart, ExternalLink } from 'lucide-react'
+import { Rocket, Heart, ExternalLink, Shield, Dog, Users } from 'lucide-react'
 import PageHeader from '../components/PageHeader'
 
 const TEAM = [
@@ -23,18 +23,106 @@ const TEAM = [
   },
 ]
 
+const COMPANIONS = [
+  {
+    name: 'Nova',
+    title: 'Bridge Companion',
+    role: 'Morale Officer',
+    avatar: '/team/nova.png',
+    icon: Heart,
+    accentColor: 'text-pink-400',
+    ringColor: 'ring-pink-400/30',
+    badgeBg: 'bg-pink-400/10',
+    badgeBorder: 'border-pink-400/20',
+    badgeText: 'text-pink-400',
+    bio: 'Nova serves as SC-Bridge\u2019s unofficial morale officer. A Miniature Schnauzer of refined composure, she approaches every situation \u2014 and every visitor \u2014 with calm confidence and unconditional affection. Her primary duty is ensuring crew wellbeing through mandatory nose licks. No exceptions. No escape.',
+  },
+  {
+    name: 'Blaze',
+    title: 'Bridge Companion',
+    role: 'Chief Security Officer',
+    avatar: '/team/blaze.png',
+    icon: Shield,
+    accentColor: 'text-amber-400',
+    ringColor: 'ring-amber-400/30',
+    badgeBg: 'bg-amber-400/10',
+    badgeBorder: 'border-amber-400/20',
+    badgeText: 'text-amber-400',
+    bio: 'Blaze takes perimeter defence very seriously. As SC-Bridge\u2019s self-appointed Chief Security Officer, this Miniature Schnauzer maintains a zero-tolerance policy on suspicious noises, unexpected deliveries, unidentified debris drifting past the viewport, and quantum drive spoolups without prior authorisation. Ever vigilant. Ever loud.',
+  },
+]
+
+function TeamCard({ member, index }) {
+  return (
+    <div
+      className="panel-hover p-6 flex flex-col sm:flex-row gap-6 items-start"
+      style={{ animationDelay: `${index * 80}ms` }}
+    >
+      <div className="shrink-0">
+        <img
+          src={member.avatar}
+          alt={member.name}
+          className="w-32 h-32 rounded-lg object-cover ring-1 ring-sc-border"
+        />
+      </div>
+      <div className="flex-1 min-w-0">
+        <div className="flex flex-wrap items-center gap-3 mb-2">
+          <h4 className="font-display font-bold text-lg text-white">{member.name}</h4>
+          <span className="text-[10px] font-mono uppercase tracking-wider text-sc-accent bg-sc-accent/10 border border-sc-accent/20 px-2 py-0.5 rounded">
+            {member.role}
+          </span>
+        </div>
+        <p className="text-sm text-gray-400 leading-relaxed">{member.bio}</p>
+      </div>
+    </div>
+  )
+}
+
+function CompanionCard({ companion, index }) {
+  const Icon = companion.icon
+  return (
+    <div
+      className="panel-hover p-6 flex flex-col items-center text-center"
+      style={{ animationDelay: `${(TEAM.length + index) * 80 + 100}ms` }}
+    >
+      <div className={`relative mb-4`}>
+        <div className={`w-36 h-36 rounded-full overflow-hidden ring-2 ${companion.ringColor} bg-sc-darker`}>
+          <img
+            src={companion.avatar}
+            alt={companion.name}
+            className="w-full h-full object-cover object-top scale-110"
+          />
+        </div>
+        <div className={`absolute -bottom-1 -right-1 w-8 h-8 rounded-full bg-sc-panel border-2 border-sc-border flex items-center justify-center`}>
+          <Icon className={`w-4 h-4 ${companion.accentColor}`} />
+        </div>
+      </div>
+      <h4 className="font-display font-bold text-lg text-white mb-1">{companion.name}</h4>
+      <div className="flex flex-wrap items-center justify-center gap-2 mb-3">
+        <span className="text-[10px] font-mono uppercase tracking-wider text-gray-500">
+          {companion.title}
+        </span>
+        <span className={`text-[10px] font-mono uppercase tracking-wider ${companion.badgeText} ${companion.badgeBg} border ${companion.badgeBorder} px-2 py-0.5 rounded`}>
+          {companion.role}
+        </span>
+      </div>
+      <p className="text-sm text-gray-400 leading-relaxed max-w-sm">{companion.bio}</p>
+    </div>
+  )
+}
+
 export default function About() {
   return (
     <div className="space-y-8 animate-fade-in-up">
       <PageHeader
         title="ABOUT SC BRIDGE"
-        subtitle="Built by Star Citizen players, for Star Citizen players"
+        subtitle="Built by players. Fueled by passion. Guarded by Schnauzers."
       />
 
       {/* Mission */}
-      <div className="panel p-8 text-center bg-grid">
-        <Rocket className="w-12 h-12 mx-auto mb-4 text-sc-accent/60" />
-        <h2 className="font-display font-bold text-2xl text-white mb-3">The Mission</h2>
+      <div className="panel p-10 text-center bg-grid">
+        <Rocket className="w-14 h-14 mx-auto mb-5 text-sc-accent/50" />
+        <h2 className="font-display font-bold text-2xl text-white mb-4">The Mission</h2>
         <p className="text-gray-400 text-base max-w-2xl mx-auto leading-relaxed">
           SC Bridge exists to give Star Citizen players the fleet management and game data tools they deserve.
           Track your ships, insurance, and pledges. Explore loot, shops, missions, and mining locations.
@@ -43,37 +131,36 @@ export default function About() {
       </div>
 
       {/* Team */}
-      <div>
-        <h3 className="font-display text-sm font-semibold text-gray-400 uppercase tracking-wider mb-4 px-1">The Team</h3>
+      <section>
+        <div className="flex items-center gap-3 mb-4 px-1">
+          <Users className="w-4 h-4 text-sc-accent2/60" />
+          <h3 className="font-display text-sm font-semibold text-gray-400 uppercase tracking-wider">The Team</h3>
+        </div>
         <div className="space-y-4">
-          {TEAM.map((member) => (
-            <div key={member.name} className="panel p-6 flex flex-col sm:flex-row gap-6 items-start">
-              <div className="shrink-0">
-                <img
-                  src={member.avatar}
-                  alt={member.name}
-                  className="w-36 h-36 rounded-lg object-cover"
-                />
-              </div>
-              <div className="flex-1 min-w-0">
-                <div className="flex items-center gap-3 mb-1">
-                  <h4 className="font-display font-bold text-lg text-white">{member.name}</h4>
-                  <span className="text-[10px] font-mono uppercase tracking-wider text-sc-accent bg-sc-accent/10 border border-sc-accent/20 px-2 py-0.5 rounded">
-                    {member.role}
-                  </span>
-                </div>
-                <p className="text-sm text-gray-400 leading-relaxed">{member.bio}</p>
-              </div>
-            </div>
+          {TEAM.map((member, i) => (
+            <TeamCard key={member.name} member={member} index={i} />
           ))}
         </div>
-      </div>
+      </section>
+
+      {/* Bridge Companions */}
+      <section>
+        <div className="flex items-center gap-3 mb-4 px-1">
+          <Dog className="w-4 h-4 text-sc-accent2/60" />
+          <h3 className="font-display text-sm font-semibold text-gray-400 uppercase tracking-wider">Bridge Companions</h3>
+        </div>
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+          {COMPANIONS.map((companion, i) => (
+            <CompanionCard key={companion.name} companion={companion} index={i} />
+          ))}
+        </div>
+      </section>
 
       {/* Support */}
-      <div className="panel p-6 text-center">
-        <Heart className="w-8 h-8 mx-auto mb-3 text-sc-accent/60" />
-        <h3 className="font-display font-bold text-lg text-white mb-2">Support SC Bridge</h3>
-        <p className="text-sm text-gray-400 mb-4 max-w-md mx-auto">
+      <div className="panel p-8 text-center bg-grid">
+        <Heart className="w-10 h-10 mx-auto mb-4 text-sc-accent/50" />
+        <h3 className="font-display font-bold text-xl text-white mb-2">Support SC Bridge</h3>
+        <p className="text-sm text-gray-400 mb-5 max-w-md mx-auto leading-relaxed">
           SC Bridge is free to use and always will be. If you find it useful, consider supporting development.
         </p>
         <a
