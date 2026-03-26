@@ -14,7 +14,7 @@ import type {
   AIAnalysis,
 } from "../lib/types";
 import { extractSetName, makeSetSlug } from "../lib/loot-sets";
-import { VEHICLE_VERSION_JOIN, vehicleVersionJoin, vehicleVersionCap, versionSubquery, deltaVersionJoin } from "../lib/constants";
+import { VEHICLE_VERSION_JOIN, vehicleVersionJoin, vehicleVersionCap, versionSubquery, deltaVersionJoin, deltaVersionId } from "../lib/constants";
 
 // --- Loot JSON "has_*" column expressions ---
 // Reusable SQL fragment for SELECT clauses that compute boolean flags from JSON blob columns.
@@ -949,8 +949,9 @@ export async function getLootByUuid(db: D1Database, uuid: string, versionId?: nu
   const row = await db.prepare(sql).bind(...lv.params, uuid).first();
   if (!row) return null;
 
-  // Version subquery for child/junction table lookups — inline (no bind params needed)
-  const versionSub = versionSubquery(versionId);
+  // Delta-aware version subqueries for child/junction table lookups
+  const consumableEffectsVer = deltaVersionId("consumable_effects", versionId);
+  const shopInventoryVer = deltaVersionId("shop_inventory", versionId);
 
   // Fetch linked item details based on which FK is set
   const item = row as Record<string, unknown>;
@@ -1006,7 +1007,7 @@ export async function getLootByUuid(db: D1Database, uuid: string, versionId?: nu
       .first() as Record<string, unknown> | null;
     if (details?.uuid) {
       const effects = await db
-        .prepare(`SELECT effect_key, magnitude, duration_seconds FROM consumable_effects WHERE consumable_uuid = ? AND game_version_id = ${versionSub}`)
+        .prepare(`SELECT effect_key, magnitude, duration_seconds FROM consumable_effects WHERE consumable_uuid = ? AND game_version_id = ${consumableEffectsVer}`)
         .bind(details.uuid as string)
         .all();
       (details as Record<string, unknown>).effects = effects.results;
@@ -1027,7 +1028,7 @@ export async function getLootByUuid(db: D1Database, uuid: string, versionId?: nu
   // (medical pens exist in consumable_effects but not in the consumables table)
   if (!details?.effects && (item.type === 'FPS_Consumable' || item.category === 'Consumable')) {
     const effects = await db
-      .prepare(`SELECT effect_key, magnitude, duration_seconds FROM consumable_effects WHERE consumable_uuid = ? AND game_version_id = ${versionSub}`)
+      .prepare(`SELECT effect_key, magnitude, duration_seconds FROM consumable_effects WHERE consumable_uuid = ? AND game_version_id = ${consumableEffectsVer}`)
       .bind(uuid)
       .all();
     if (effects.results.length > 0) {
@@ -1083,7 +1084,7 @@ export async function getLootByUuid(db: D1Database, uuid: string, versionId?: nu
     FROM shop_inventory si
     JOIN shops s ON s.id = si.shop_id
     WHERE si.item_uuid = ?
-      AND si.game_version_id = ${versionSub}
+      AND si.game_version_id = ${shopInventoryVer}
       AND (si.buy_price > 0 OR si.sell_price > 0)
     ORDER BY s.location_label, s.name
   `).bind(uuid).all();
@@ -1605,10 +1606,7 @@ const LOOT_EXCLUSION_FILTER = `lm.removed = 0
  * Uses indexed loot_item_locations junction table — no JSON parsing.
  */
 export async function getLootLocationSummary(db: D1Database, versionId?: number): Promise<LootLocationSummaryResult> {
-  // Optimized: filter directly on junction table's game_version_id instead of
-  // expensive MAX(game_version_id) correlated subquery. The junction table already
-  // stores version_id per row, so we can skip the UUID-dedup pattern.
-  const versionCap = versionSubquery(versionId);
+  const lilVer = deltaVersionId("loot_item_locations", versionId);
 
   const sql = `SELECT lil.source_type, lil.location_key as key,
       COUNT(DISTINCT lil.loot_map_id) as itemCount,
@@ -1619,7 +1617,7 @@ export async function getLootLocationSummary(db: D1Database, versionId?: number)
       SUM(CASE WHEN lm.rarity = 'Legendary' THEN 1 ELSE 0 END) as r_Legendary
     FROM loot_item_locations lil
     JOIN loot_map lm ON lm.id = lil.loot_map_id
-    WHERE lil.game_version_id = ${versionCap}
+    WHERE lil.game_version_id = ${lilVer}
       AND lil.location_key != ''
       AND ${LOOT_EXCLUSION_FILTER}
     GROUP BY lil.source_type, lil.location_key`;
@@ -1690,15 +1688,14 @@ export async function getLootLocationDetail(
       ? ", lil.buy_price"
     : ", lil.probability, lil.slot";
 
-  // Optimized: filter on junction table's game_version_id directly
-  const versionCap = versionSubquery(versionId);
+  const lilVer = deltaVersionId("loot_item_locations", versionId);
 
   const sql = `SELECT DISTINCT
       lm.uuid, lm.name, lm.type, lm.sub_type, lm.rarity, lm.category
       ${extraCols}
     FROM loot_item_locations lil
     JOIN loot_map lm ON lm.id = lil.loot_map_id
-    WHERE lil.game_version_id = ${versionCap}
+    WHERE lil.game_version_id = ${lilVer}
       AND lil.source_type = ?
       AND lil.location_key = ?
       AND ${LOOT_EXCLUSION_FILTER}

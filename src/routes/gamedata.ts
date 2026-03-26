@@ -1,7 +1,7 @@
 import { Hono } from "hono"
 import type { HonoEnv } from "../lib/types"
 import { cachedJson, resolveVersionId, cacheSlug } from "../lib/cache"
-import { deltaVersionJoin } from "../lib/constants"
+import { deltaVersionJoin, deltaVersionId } from "../lib/constants"
 
 const DEFAULT_VERSION_SUBQUERY = "(SELECT id FROM game_versions WHERE is_default = 1)"
 
@@ -25,11 +25,11 @@ function buildInventoryQuery(placeholders: string, versionId: number = -1): stri
          ELSE 'other'
        END as item_category
      FROM shop_inventory si
-     LEFT JOIN loot_map fi ON fi.uuid = si.item_uuid AND fi.game_version_id = ${versionSub(versionId)}
+     LEFT JOIN loot_map fi ON fi.uuid = si.item_uuid AND fi.game_version_id = ${deltaVersionId("loot_map", versionId)}
      LEFT JOIN trade_commodities tc ON tc.uuid = si.item_uuid
      LEFT JOIN vehicles v ON v.uuid = si.item_uuid
      WHERE si.shop_id IN (${placeholders})
-       AND si.game_version_id = ${versionSub(versionId)}
+       AND si.game_version_id = ${deltaVersionId("shop_inventory", versionId)}
      ORDER BY COALESCE(fi.name, tc.name, v.name, si.item_name)`
 }
 
@@ -151,7 +151,7 @@ export function gamedataRoutes<E extends HonoEnv>() {
           `SELECT frs.reputation_scope_id, frs.is_primary, f.id as faction_id, f.name as faction_name, f.slug as faction_slug
            FROM faction_reputation_scopes frs
            JOIN factions f ON f.id = frs.faction_id
-           WHERE frs.game_version_id = ${versionSub(versionId)}
+           WHERE frs.game_version_id = ${deltaVersionId("faction_reputation_scopes", versionId)}
            ORDER BY frs.is_primary DESC, f.name`,
         )
         .all()
@@ -215,7 +215,7 @@ export function gamedataRoutes<E extends HonoEnv>() {
              FROM jurisdiction_infraction_overrides jio
              JOIN law_infractions li ON li.id = jio.infraction_id
              JOIN law_jurisdictions lj ON lj.id = jio.jurisdiction_id
-             WHERE jio.game_version_id = ${versionSub(versionId)}`,
+             WHERE jio.game_version_id = ${deltaVersionId("jurisdiction_infraction_overrides", versionId)}`,
           )
           .all(),
       ])
@@ -235,18 +235,9 @@ export function gamedataRoutes<E extends HonoEnv>() {
     const patch = c.req.query("patch")
     const versionId = await resolveVersionId(db, patch)
     return cachedJson(c, `gd:mining:${versionId}`, async () => {
-      const vs = versionSub(versionId)
       const dvjElements = deltaVersionJoin('mineable_elements', 'me', 'uuid', versionId)
       const dvjCompositions = deltaVersionJoin('rock_compositions', 'rc2', 'uuid', versionId)
       const dvjRefining = deltaVersionJoin('refining_processes', 'rp', 'uuid', versionId)
-      // 4.7-only tables (locations, equipment) may not have data for the
-      // resolved version (e.g. user on LIVE 4.6). Fall back to latest version
-      // that has mining location data so the page always shows content.
-      const mvs = `COALESCE(
-        (SELECT game_version_id FROM mining_locations WHERE game_version_id = ${vs} LIMIT 1),
-        (SELECT game_version_id FROM mining_locations ORDER BY game_version_id DESC LIMIT 1),
-        ${vs}
-      )`
       const [
         elements,
         compositions,
@@ -286,7 +277,7 @@ export function gamedataRoutes<E extends HonoEnv>() {
         db
           .prepare(
             `SELECT * FROM mining_locations
-             WHERE game_version_id = ${mvs}
+             WHERE game_version_id = ${deltaVersionId("mining_locations", versionId)}
              ORDER BY system, name`,
           )
           .all(),
@@ -297,21 +288,21 @@ export function gamedataRoutes<E extends HonoEnv>() {
              FROM mining_location_deposits d
              JOIN mining_locations ml ON ml.id = d.mining_location_id
              LEFT JOIN rock_compositions rc ON rc.uuid = d.composition_guid
-               AND rc.game_version_id = ${mvs}
-             WHERE ml.game_version_id = ${mvs}
+               AND rc.game_version_id = ${deltaVersionId("rock_compositions", versionId)}
+             WHERE ml.game_version_id = ${deltaVersionId("mining_locations", versionId)}
              ORDER BY d.mining_location_id, d.group_name`,
           )
           .all(),
         db
           .prepare(
             `SELECT * FROM mining_quality_distributions
-             WHERE game_version_id = ${mvs}`,
+             WHERE game_version_id = ${deltaVersionId("mining_quality_distributions", versionId)}`,
           )
           .all(),
         db
           .prepare(
             `SELECT * FROM mining_clustering_presets
-             WHERE game_version_id = ${mvs}
+             WHERE game_version_id = ${deltaVersionId("mining_clustering_presets", versionId)}
              ORDER BY name`,
           )
           .all(),
@@ -319,28 +310,28 @@ export function gamedataRoutes<E extends HonoEnv>() {
           .prepare(
             `SELECT mcp.* FROM mining_clustering_params mcp
              JOIN mining_clustering_presets p ON p.id = mcp.mining_clustering_preset_id
-             WHERE p.game_version_id = ${mvs}
+             WHERE p.game_version_id = ${deltaVersionId("mining_clustering_presets", versionId)}
              ORDER BY mcp.mining_clustering_preset_id, mcp.relative_probability DESC`,
           )
           .all(),
         db
           .prepare(
             `SELECT * FROM mining_lasers
-             WHERE game_version_id = ${mvs}
+             WHERE game_version_id = ${deltaVersionId("mining_lasers", versionId)}
              ORDER BY size, name`,
           )
           .all(),
         db
           .prepare(
             `SELECT * FROM mining_modules
-             WHERE game_version_id = ${mvs}
+             WHERE game_version_id = ${deltaVersionId("mining_modules", versionId)}
              ORDER BY type, size, name`,
           )
           .all(),
         db
           .prepare(
             `SELECT * FROM mining_gadgets
-             WHERE game_version_id = ${mvs}
+             WHERE game_version_id = ${deltaVersionId("mining_gadgets", versionId)}
              ORDER BY name`,
           )
           .all(),
@@ -418,7 +409,7 @@ export function gamedataRoutes<E extends HonoEnv>() {
           `SELECT si.*,
              COALESCE(fi.name, v.name, si.item_name) as resolved_name
            FROM shop_inventory si
-           LEFT JOIN loot_map fi ON fi.uuid = si.item_uuid AND fi.game_version_id = ${versionSub(versionId)}
+           LEFT JOIN loot_map fi ON fi.uuid = si.item_uuid AND fi.game_version_id = ${deltaVersionId("loot_map", versionId)}
            LEFT JOIN vehicles v ON v.uuid = si.item_uuid
            JOIN shops s ON s.id = si.shop_id
            ${dvjShops}

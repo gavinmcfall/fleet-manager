@@ -84,3 +84,16 @@ export function vehicleVersionJoin(versionId?: number): string {
 export function vehicleVersionCap(versionId?: number): string {
   return `game_version_id <= ${versionSubquery(versionId)}`;
 }
+
+/**
+ * Delta-aware version filter for inline WHERE clauses.
+ * Resolves to the MAX game_version_id for a table that is <= the target version.
+ * Use when you need `WHERE game_version_id = X` but with delta inheritance.
+ *
+ * Example: `WHERE game_version_id = ${deltaVersionId("factions", versionId)}`
+ * Finds the latest version of data in that table up to the target version.
+ */
+export function deltaVersionId(table: string, versionId?: number): string {
+  const vq = versionSubquery(versionId);
+  return `(SELECT MAX(game_version_id) FROM ${table} WHERE game_version_id <= ${vq})`;
+}
