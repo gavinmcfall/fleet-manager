@@ -239,7 +239,7 @@ export async function getShipLoadout(db: D1Database, slug: string, versionId?: n
           m.name AS manufacturer_name,
           pt.depth,
           ROW_NUMBER() OVER (PARTITION BY pt.root_id ORDER BY
-            CASE WHEN vc.type = 'WeaponGun' THEN 0
+            CASE WHEN vc.type IN ('WeaponGun', 'Missile') THEN 0
                  WHEN vc.type IN ('MissileLauncher','WeaponDefensive') THEN 1
                  WHEN vc.type IN ('Shield','PowerPlant','Cooler','QuantumDrive','Radar') THEN 0
                  WHEN vc.type = 'Turret' THEN 2
@@ -279,6 +279,7 @@ export async function getShipLoadout(db: D1Database, slug: string, versionId?: n
         p.size_max,
         p.editable,
         mount.name AS mount_name,
+        mount.type AS mount_type,
         COALESCE(d.name, mount.name) AS child_name,
         COALESCE(d.name, mount.name) AS component_name,
         COALESCE(d.type, mount.type) AS component_type,

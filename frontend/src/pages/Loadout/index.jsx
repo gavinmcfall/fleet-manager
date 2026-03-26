@@ -60,7 +60,7 @@ export default function Loadout() {
       // If this component's parent is a turret, force it into the Turrets group
       const isTurretChild = comp.parent_port_id && turretIds.has(comp.parent_port_id)
       // Missile racks on turret mounts should go in Missiles, not Turrets
-      const isMissileRack = comp.component_type === 'MissileLauncher'
+      const isMissileRack = comp.mount_type === 'MissileLauncher' || comp.component_type === 'MissileLauncher'
       // Jump drives go into the Quantum Drives group
       const isJumpDrive = comp.port_type === 'jump_drive'
       const cat = isMissileRack ? 'Missiles'
@@ -297,7 +297,7 @@ export default function Loadout() {
                 <StatCell label="Hull HP" value={ship?.armor_hp || ship?.health} format={fmtInt} color="text-amber-400" unit="hp" />
                 <StatCell label="QT Fuel" value={ship?.fuel_capacity_quantum} format={fmtDec1} color="text-purple-400" unit="SCU" />
                 <StatCell label="Shield Regen" value={combat?.totalShieldRegen} format={fmtInt} color="text-blue-300" unit="hp/s" />
-                <StatCell label="H2 Fuel" value={ship?.fuel_capacity_hydrogen} format={fmtInt} color="text-orange-400" unit="SCU" />
+                <StatCell label="H2 Fuel" value={ship?.fuel_capacity_hydrogen} format={fmtDec1} color="text-orange-400" unit="SCU" />
                 <StatCell label="SCM Speed" value={ship?.speed_scm} format={fmtInt} color="text-gray-300" unit="m/s" />
               </div>
             </div>
@@ -433,7 +433,7 @@ function SectionCard({ group, collapsed, setCollapsed, overrides, onOpenPicker, 
             const isOverridden = !!override
 
             // Missile racks — show rack name + missile count (check before turret)
-            if (item.component_type === 'MissileLauncher') {
+            if (item.mount_type === 'MissileLauncher' || item.component_type === 'MissileLauncher') {
               const rackName = item.mount_name || item.component_name || 'Missile Rack'
               const missileCount = item.missile_count || 0
               const missileName = item.child_name !== rackName ? item.child_name : null
