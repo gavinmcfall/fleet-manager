@@ -67,20 +67,12 @@ const USER_TABLES = [
   // Localization builder (0127)
   "user_localization_configs",
   "user_localization_ship_order",
-  // Companion app (0136)
+  // Companion app (0136) — companion_events + companion_status survive
   "companion_events",
   "companion_status",
-  // Companion gRPC data (0138)
-  "companion_wallet_snapshots",
-  "companion_wallet_current",
-  "companion_friends",
-  "companion_reputation_scores",
-  "companion_reputation_history",
-  "companion_blueprints",
-  "companion_entitlements",
-  "companion_missions",
-  "companion_stats",
-  "companion_sync_log",
+  // NOTE: companion_wallet_*, companion_friends, companion_reputation_*,
+  // companion_blueprints, companion_entitlements, companion_missions,
+  // companion_stats, companion_sync_log were dropped in migration 0151.
   // Player reputation (0134)
   "player_reputation",
   // Profile verification (0132)
@@ -326,95 +318,9 @@ describe("GDPR — User Deletion Cascade", () => {
         .bind(user.userId)
         .run();
 
-      // companion_wallet_snapshots (migration 0138)
-      await db
-        .prepare(
-          `INSERT INTO companion_wallet_snapshots (user_id, auec, captured_at)
-           VALUES (?, 10000, datetime('now'))`
-        )
-        .bind(user.userId)
-        .run();
-
-      // companion_wallet_current (migration 0138)
-      await db
-        .prepare(
-          `INSERT INTO companion_wallet_current (user_id, auec, captured_at)
-           VALUES (?, 10000, datetime('now'))`
-        )
-        .bind(user.userId)
-        .run();
-
-      // companion_friends (migration 0138)
-      await db
-        .prepare(
-          `INSERT INTO companion_friends (user_id, account_id, nickname)
-           VALUES (?, 'friend-acc-1', 'TestFriend')`
-        )
-        .bind(user.userId)
-        .run();
-
-      // companion_reputation_scores (migration 0138)
-      await db
-        .prepare(
-          `INSERT INTO companion_reputation_scores (user_id, entity_id, score, captured_at)
-           VALUES (?, 'faction-1', 100, datetime('now'))`
-        )
-        .bind(user.userId)
-        .run();
-
-      // companion_reputation_history (migration 0138)
-      await db
-        .prepare(
-          `INSERT INTO companion_reputation_history (user_id, entity_id, score, event_timestamp)
-           VALUES (?, 'faction-1', 100, datetime('now'))`
-        )
-        .bind(user.userId)
-        .run();
-
-      // companion_blueprints (migration 0138)
-      await db
-        .prepare(
-          `INSERT INTO companion_blueprints (user_id, blueprint_id)
-           VALUES (?, 'bp-test-1')`
-        )
-        .bind(user.userId)
-        .run();
-
-      // companion_entitlements (migration 0138)
-      await db
-        .prepare(
-          `INSERT INTO companion_entitlements (user_id, urn, name)
-           VALUES (?, 'urn:test:ship', 'Test Ship')`
-        )
-        .bind(user.userId)
-        .run();
-
-      // companion_missions (migration 0138)
-      await db
-        .prepare(
-          `INSERT INTO companion_missions (user_id, mission_id, state)
-           VALUES (?, 'mission-1', 'ACTIVE')`
-        )
-        .bind(user.userId)
-        .run();
-
-      // companion_stats (migration 0138)
-      await db
-        .prepare(
-          `INSERT INTO companion_stats (user_id, stat_def_id, value)
-           VALUES (?, 'kills_total', 42)`
-        )
-        .bind(user.userId)
-        .run();
-
-      // companion_sync_log (migration 0138)
-      await db
-        .prepare(
-          `INSERT INTO companion_sync_log (user_id, data_type, status)
-           VALUES (?, 'wallet', 'success')`
-        )
-        .bind(user.userId)
-        .run();
+      // NOTE: companion_wallet_*, companion_friends, companion_reputation_*,
+      // companion_blueprints, companion_entitlements, companion_missions,
+      // companion_stats, companion_sync_log were dropped in migration 0151.
 
       // player_reputation (migration 0134) — needs rating_categories seed data
       const ratCat = await db

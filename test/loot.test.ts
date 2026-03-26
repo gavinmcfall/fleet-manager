@@ -92,7 +92,7 @@ describe("Loot API — /api/loot", () => {
         `http://localhost/api/loot/collection/${uuid}`,
         {
           method: "POST",
-          headers: await authHeaders(sessionToken),
+          headers: { ...(await authHeaders(sessionToken)), "Content-Type": "application/json", "Content-Length": "0" },
         }
       );
       expect(addRes.status).toBe(200);
@@ -114,14 +114,14 @@ describe("Loot API — /api/loot", () => {
       // Add then remove
       await SELF.fetch(`http://localhost/api/loot/collection/${uuid}`, {
         method: "POST",
-        headers: await authHeaders(sessionToken),
+        headers: { ...(await authHeaders(sessionToken)), "Content-Type": "application/json", "Content-Length": "0" },
       });
 
       const delRes = await SELF.fetch(
         `http://localhost/api/loot/collection/${uuid}`,
         {
           method: "DELETE",
-          headers: await authHeaders(sessionToken),
+          headers: { ...(await authHeaders(sessionToken)), "Content-Type": "application/json", "Content-Length": "0" },
         }
       );
       expect(delRes.status).toBe(200);
@@ -134,7 +134,7 @@ describe("Loot API — /api/loot", () => {
       // Add first
       await SELF.fetch(`http://localhost/api/loot/collection/${uuid}`, {
         method: "POST",
-        headers: await authHeaders(sessionToken),
+        headers: { ...(await authHeaders(sessionToken)), "Content-Type": "application/json", "Content-Length": "0" },
       });
 
       // Update quantity
@@ -143,7 +143,7 @@ describe("Loot API — /api/loot", () => {
         {
           method: "PATCH",
           headers: {
-            ...(await await authHeaders(sessionToken)),
+            ...(await authHeaders(sessionToken)),
             "Content-Type": "application/json",
           },
           body: JSON.stringify({ quantity: 5 }),
@@ -158,7 +158,7 @@ describe("Loot API — /api/loot", () => {
 
       await SELF.fetch(`http://localhost/api/loot/collection/${uuid}`, {
         method: "POST",
-        headers: await authHeaders(sessionToken),
+        headers: { ...(await authHeaders(sessionToken)), "Content-Type": "application/json", "Content-Length": "0" },
       });
 
       const patchRes = await SELF.fetch(
@@ -166,7 +166,7 @@ describe("Loot API — /api/loot", () => {
         {
           method: "PATCH",
           headers: {
-            ...(await await authHeaders(sessionToken)),
+            ...(await authHeaders(sessionToken)),
             "Content-Type": "application/json",
           },
           body: JSON.stringify({ quantity: -1 }),
@@ -181,7 +181,7 @@ describe("Loot API — /api/loot", () => {
         "http://localhost/api/loot/collection/00000000-0000-0000-0000-000000000000",
         {
           method: "POST",
-          headers: await authHeaders(sessionToken),
+          headers: { ...(await authHeaders(sessionToken)), "Content-Type": "application/json", "Content-Length": "0" },
         }
       );
       expect(res.status).toBe(404);
@@ -202,7 +202,7 @@ describe("Loot API — /api/loot", () => {
         `http://localhost/api/loot/wishlist/${uuid}`,
         {
           method: "POST",
-          headers: await authHeaders(sessionToken),
+          headers: { ...(await authHeaders(sessionToken)), "Content-Type": "application/json", "Content-Length": "0" },
         }
       );
       expect(addRes.status).toBe(200);
@@ -221,14 +221,14 @@ describe("Loot API — /api/loot", () => {
 
       await SELF.fetch(`http://localhost/api/loot/wishlist/${uuid}`, {
         method: "POST",
-        headers: await authHeaders(sessionToken),
+        headers: { ...(await authHeaders(sessionToken)), "Content-Type": "application/json", "Content-Length": "0" },
       });
 
       const delRes = await SELF.fetch(
         `http://localhost/api/loot/wishlist/${uuid}`,
         {
           method: "DELETE",
-          headers: await authHeaders(sessionToken),
+          headers: { ...(await authHeaders(sessionToken)), "Content-Type": "application/json", "Content-Length": "0" },
         }
       );
       expect(delRes.status).toBe(200);
@@ -240,7 +240,7 @@ describe("Loot API — /api/loot", () => {
 
       await SELF.fetch(`http://localhost/api/loot/wishlist/${uuid}`, {
         method: "POST",
-        headers: await authHeaders(sessionToken),
+        headers: { ...(await authHeaders(sessionToken)), "Content-Type": "application/json", "Content-Length": "0" },
       });
 
       const patchRes = await SELF.fetch(
@@ -248,7 +248,7 @@ describe("Loot API — /api/loot", () => {
         {
           method: "PATCH",
           headers: {
-            ...(await await authHeaders(sessionToken)),
+            ...(await authHeaders(sessionToken)),
             "Content-Type": "application/json",
           },
           body: JSON.stringify({ quantity: 3 }),

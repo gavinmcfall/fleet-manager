@@ -100,7 +100,7 @@ describe("Org Endpoints", () => {
 
       const res = await SELF.fetch("http://localhost/api/orgs/no-delete-test", {
         method: "DELETE",
-        headers: await authHeaders(sessionToken),
+        headers: { ...(await authHeaders(sessionToken)), "Content-Type": "application/json", "Content-Length": "0" },
       });
       expect(res.status).toBe(403);
     });
@@ -215,7 +215,7 @@ describe("Org Endpoints", () => {
       // Delete
       const res = await SELF.fetch("http://localhost/api/orgs/delete-cascade-test", {
         method: "DELETE",
-        headers: await authHeaders(owner.sessionToken),
+        headers: { ...(await authHeaders(owner.sessionToken)), "Content-Type": "application/json", "Content-Length": "0" },
       });
       expect(res.status).toBe(200);
 

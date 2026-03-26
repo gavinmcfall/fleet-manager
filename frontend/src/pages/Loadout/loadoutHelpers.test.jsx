@@ -1,0 +1,242 @@
+import { describe, it, expect } from 'vitest'
+import {
+  fmtInt, fmtCompact, fmtDec1, fmtPct, fmtSpeed, fmtRange, fmtRPM,
+  getPortCategory, getDamageType, aggregateCombatStats,
+  PORT_CATEGORY_ORDER, COMPONENT_TYPE_TO_PORT_TYPE,
+} from './loadoutHelpers'
+
+
+// ─── Number formatters ──────────────────────────────────────────────────────
+
+describe('fmtInt', () => {
+  it('formats with commas', () => {
+    expect(fmtInt(1000)).toBe('1,000')
+    expect(fmtInt(9240)).toBe('9,240')
+  })
+
+  it('no decimals', () => {
+    expect(fmtInt(3.7)).toBe('4')
+  })
+})
+
+describe('fmtCompact', () => {
+  it('formats millions', () => {
+    expect(fmtCompact(1500000)).toBe('1.5M')
+    expect(fmtCompact(2112000)).toBe('2.1M')
+    expect(fmtCompact(1000000)).toBe('1M')
+  })
+
+  it('formats hundreds of thousands', () => {
+    expect(fmtCompact(100000)).toBe('100K')
+    expect(fmtCompact(456000)).toBe('456K')
+  })
+
+  it('formats normal numbers with commas', () => {
+    expect(fmtCompact(9240)).toBe('9,240')
+    expect(fmtCompact(42)).toBe('42')
+    expect(fmtCompact(999)).toBe('999')
+  })
+
+  it('handles zero', () => {
+    expect(fmtCompact(0)).toBe('0')
+  })
+
+  it('Idris shield HP does not overflow', () => {
+    // The whole point of fmtCompact — Idris has 2,112,000 shield HP
+    const result = fmtCompact(2112000)
+    expect(result.length).toBeLessThanOrEqual(5) // "2.1M" is 4 chars
+    expect(result).toBe('2.1M')
+  })
+})
+
+describe('fmtDec1', () => {
+  it('one decimal place', () => {
+    expect(fmtDec1(97.5)).toBe('97.5')
+    expect(fmtDec1(1.85)).toBe('1.9') // rounded
+  })
+})
+
+describe('fmtPct', () => {
+  it('formats as percentage', () => {
+    expect(fmtPct(0.5)).toBe('50.0%')
+    expect(fmtPct(1)).toBe('100.0%')
+  })
+})
+
+describe('fmtSpeed', () => {
+  it('converts to Mm/s', () => {
+    expect(fmtSpeed(201000000)).toBe('201 Mm/s')
+  })
+})
+
+describe('fmtRange', () => {
+  it('converts to km', () => {
+    expect(fmtRange(3006)).toBe('3 km')
+  })
+})
+
+describe('fmtRPM', () => {
+  it('formats with RPM suffix', () => {
+    expect(fmtRPM(750)).toBe('750 RPM')
+  })
+})
+
+
+// ─── Port category classification ───────────────────────────────────────────
+
+describe('getPortCategory', () => {
+  it('returns category_label when it matches a known category', () => {
+    expect(getPortCategory('weapon', 'Weapons')).toBe('Weapons')
+    expect(getPortCategory('turret', 'Turrets')).toBe('Turrets')
+  })
+
+  it('falls back to PORT_TYPE_LABELS when category_label is null', () => {
+    expect(getPortCategory('shield', null)).toBe('Shields')
+    expect(getPortCategory('power', null)).toBe('Power Plants')
+    expect(getPortCategory('cooler', null)).toBe('Coolers')
+  })
+
+  it('falls back to portType string for unknown types', () => {
+    expect(getPortCategory('unknown_type', null)).toBe('unknown_type')
+  })
+})
+
+describe('PORT_CATEGORY_ORDER', () => {
+  it('weapons come before turrets', () => {
+    const wi = PORT_CATEGORY_ORDER.indexOf('Weapons')
+    const ti = PORT_CATEGORY_ORDER.indexOf('Turrets')
+    expect(wi).toBeLessThan(ti)
+  })
+
+  it('shields come after turrets', () => {
+    const ti = PORT_CATEGORY_ORDER.indexOf('Turrets')
+    const si = PORT_CATEGORY_ORDER.indexOf('Shields')
+    expect(si).toBeGreaterThan(ti)
+  })
+
+  it('includes all major categories', () => {
+    for (const cat of ['Weapons', 'Turrets', 'Missiles', 'Shields', 'Power Plants', 'Coolers', 'Quantum Drives', 'Sensors']) {
+      expect(PORT_CATEGORY_ORDER).toContain(cat)
+    }
+  })
+})
+
+
+// ─── Damage type detection ──────────────────────────────────────────────────
+
+describe('getDamageType', () => {
+  it('detects energy from per-type damage fields', () => {
+    expect(getDamageType({ damage_energy: 65.43, damage_physical: 0, damage_distortion: 0, damage_thermal: 0 })).toBe('energy')
+  })
+
+  it('detects physical from per-type damage fields', () => {
+    expect(getDamageType({ damage_physical: 50, damage_energy: 0, damage_distortion: 0, damage_thermal: 0 })).toBe('physical')
+  })
+
+  it('detects distortion', () => {
+    expect(getDamageType({ damage_distortion: 30, damage_physical: 0, damage_energy: 0, damage_thermal: 0 })).toBe('distortion')
+  })
+
+  it('falls back to damage_type string', () => {
+    expect(getDamageType({ damage_type: 'Energy' })).toBe('energy')
+    expect(getDamageType({ damage_type: 'Ballistic' })).toBe('physical')
+    expect(getDamageType({ damage_type: 'Distortion' })).toBe('distortion')
+  })
+
+  it('returns null when no damage info', () => {
+    expect(getDamageType({})).toBeNull()
+  })
+})
+
+
+// ─── Combat stats aggregation ───────────────────────────────────────────────
+
+describe('aggregateCombatStats', () => {
+  const mockAsgardComponents = [
+    // 2x S4 Rhino weapons
+    { port_type: 'weapon', dps: 817.88, damage_per_shot: 65.43, rounds_per_minute: 750, damage_energy: 65.43, damage_physical: 0, damage_distortion: 0, damage_thermal: 0 },
+    { port_type: 'weapon', dps: 817.88, damage_per_shot: 65.43, rounds_per_minute: 750, damage_energy: 65.43, damage_physical: 0, damage_distortion: 0, damage_thermal: 0 },
+    // 4x S3 Panther weapons
+    { port_type: 'weapon', dps: 545.62, damage_per_shot: 43.65, rounds_per_minute: 750, damage_energy: 43.65, damage_physical: 0, damage_distortion: 0, damage_thermal: 0 },
+    { port_type: 'weapon', dps: 545.62, damage_per_shot: 43.65, rounds_per_minute: 750, damage_energy: 43.65, damage_physical: 0, damage_distortion: 0, damage_thermal: 0 },
+    { port_type: 'weapon', dps: 545.62, damage_per_shot: 43.65, rounds_per_minute: 750, damage_energy: 43.65, damage_physical: 0, damage_distortion: 0, damage_thermal: 0 },
+    { port_type: 'weapon', dps: 545.62, damage_per_shot: 43.65, rounds_per_minute: 750, damage_energy: 43.65, damage_physical: 0, damage_distortion: 0, damage_thermal: 0 },
+    // 4x shields
+    { port_type: 'shield', shield_hp: 9240, shield_regen: 330 },
+    { port_type: 'shield', shield_hp: 9240, shield_regen: 330 },
+    { port_type: 'shield', shield_hp: 9240, shield_regen: 330 },
+    { port_type: 'shield', shield_hp: 9240, shield_regen: 330 },
+    // 2x power plants
+    { port_type: 'power', power_output: 9375 },
+    { port_type: 'power', power_output: 9375 },
+    // 3x coolers
+    { port_type: 'cooler', cooling_rate: 5200000 },
+    { port_type: 'cooler', cooling_rate: 5200000 },
+    { port_type: 'cooler', cooling_rate: 5200000 },
+  ]
+
+  it('sums DPS from all weapon ports', () => {
+    const stats = aggregateCombatStats(mockAsgardComponents)
+    // 2*817.88 + 4*545.62 = 1635.76 + 2182.48 = 3818.24
+    expect(stats.totalDps).toBeCloseTo(3818.24, 0)
+  })
+
+  it('sums alpha from all weapon ports', () => {
+    const stats = aggregateCombatStats(mockAsgardComponents)
+    // 2*65.43 + 4*43.65 = 130.86 + 174.6 = 305.46
+    expect(stats.totalAlpha).toBeCloseTo(305.46, 0)
+  })
+
+  it('all damage is energy type', () => {
+    const stats = aggregateCombatStats(mockAsgardComponents)
+    expect(stats.dpsEnergy).toBeGreaterThan(0)
+    expect(stats.dpsPhysical).toBe(0)
+    expect(stats.dpsDistortion).toBe(0)
+    expect(stats.dpsThermal).toBe(0)
+  })
+
+  it('sums shield HP', () => {
+    const stats = aggregateCombatStats(mockAsgardComponents)
+    expect(stats.totalShieldHp).toBe(4 * 9240) // 36,960
+  })
+
+  it('sums shield regen', () => {
+    const stats = aggregateCombatStats(mockAsgardComponents)
+    expect(stats.totalShieldRegen).toBe(4 * 330) // 1,320
+  })
+
+  it('sums power output', () => {
+    const stats = aggregateCombatStats(mockAsgardComponents)
+    expect(stats.totalPowerOutput).toBe(2 * 9375) // 18,750
+  })
+
+  it('ignores non-weapon/shield/power ports for their respective stats', () => {
+    const stats = aggregateCombatStats([
+      { port_type: 'cooler', dps: 999 }, // cooler should not count as DPS
+      { port_type: 'sensor', shield_hp: 999 }, // sensor should not count as shield
+    ])
+    expect(stats.totalDps).toBe(0)
+    expect(stats.totalShieldHp).toBe(0)
+  })
+
+  it('handles empty array', () => {
+    const stats = aggregateCombatStats([])
+    expect(stats.totalDps).toBe(0)
+    expect(stats.totalShieldHp).toBe(0)
+    expect(stats.totalPowerOutput).toBe(0)
+  })
+})
+
+
+// ─── Component type mapping ─────────────────────────────────────────────────
+
+describe('COMPONENT_TYPE_TO_PORT_TYPE', () => {
+  it('maps all core types', () => {
+    expect(COMPONENT_TYPE_TO_PORT_TYPE.PowerPlant).toBe('power')
+    expect(COMPONENT_TYPE_TO_PORT_TYPE.Shield).toBe('shield')
+    expect(COMPONENT_TYPE_TO_PORT_TYPE.Cooler).toBe('cooler')
+    expect(COMPONENT_TYPE_TO_PORT_TYPE.QuantumDrive).toBe('quantum_drive')
+    expect(COMPONENT_TYPE_TO_PORT_TYPE.WeaponGun).toBe('weapon')
+    expect(COMPONENT_TYPE_TO_PORT_TYPE.Radar).toBe('sensor')
+  })
+})
