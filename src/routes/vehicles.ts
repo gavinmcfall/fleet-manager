@@ -24,11 +24,13 @@ export function vehicleRoutes<E extends { Bindings: Env }>() {
             v.image_url, v.image_url_small, v.image_url_medium, v.image_url_large,
             v.pledge_url, v.price_auec, v.acquisition_type, v.acquisition_source_name,
             m.name as manufacturer_name, m.code as manufacturer_code,
-            ps.key as production_status
+            COALESCE(ps.key, pps.key) as production_status
           FROM vehicles v
           ${vehicleVersionJoin(versionId)}
           LEFT JOIN manufacturers m ON m.id = v.manufacturer_id
           LEFT JOIN production_statuses ps ON ps.id = v.production_status_id
+          LEFT JOIN vehicles pv ON pv.id = v.parent_vehicle_id
+          LEFT JOIN production_statuses pps ON pps.id = pv.production_status_id
           WHERE v.is_paint_variant = 0 AND v.removed = 0
           ORDER BY v.name`,
         )
@@ -63,11 +65,13 @@ export function vehicleRoutes<E extends { Bindings: Env }>() {
             v.weapon_pool_size, v.shield_pool_max,
             v.cross_section_x, v.cross_section_y, v.cross_section_z,
             m.name as manufacturer_name, m.code as manufacturer_code,
-            ps.key as production_status
+            COALESCE(ps.key, pps.key) as production_status
           FROM vehicles v
           ${vehicleVersionJoin(versionId)}
           LEFT JOIN manufacturers m ON m.id = v.manufacturer_id
           LEFT JOIN production_statuses ps ON ps.id = v.production_status_id
+          LEFT JOIN vehicles pv ON pv.id = v.parent_vehicle_id
+          LEFT JOIN production_statuses pps ON pps.id = pv.production_status_id
           WHERE v.slug = ? AND v.is_paint_variant = 0`,
         )
         .bind(slug)
