@@ -29,28 +29,31 @@ function buildSubsystems(components, ship) {
   let coolerCount = 0
   const seen = new Set()
 
+  // Weapon + Shield have explicit caps from game data (FixedPowerPool / DynamicPowerPool)
+  // Everything else has maxItemCount=-1 (unlimited) — shared pool, no per-subsystem cap
   for (const c of (components || [])) {
     const pt = c.port_type
     if (pt === 'shield' && !seen.has('shield')) {
       seen.add('shield')
-      const def = ship?.shield_pool_max || 2
-      subs.push({ key: 'shield', max: Math.max(def + 2, 6), default: def })
+      const cap = ship?.shield_pool_max || 2
+      subs.push({ key: 'shield', max: cap, default: cap, capped: true })
     }
     if ((pt === 'weapon' || pt === 'turret') && !seen.has('weapon')) {
       seen.add('weapon')
-      const def = ship?.weapon_pool_size || 4
-      subs.push({ key: 'weapon', max: Math.max(def + 2, 6), default: def })
+      const cap = ship?.weapon_pool_size || 4
+      subs.push({ key: 'weapon', max: cap, default: cap, capped: true })
     }
   }
 
+  // Uncapped subsystems — max shown is a visual guide, real limit is the shared pool
   if (!seen.has('engine') && components?.length > 0) {
-    subs.push({ key: 'engine', max: 6, default: 4 })
+    subs.push({ key: 'engine', max: 8, default: 4 })
   }
 
   for (const c of (components || [])) {
     if (c.port_type === 'cooler') {
       coolerCount++
-      subs.push({ key: 'cooler', max: 4, default: 3, instance: coolerCount })
+      subs.push({ key: 'cooler', max: 5, default: 3, instance: coolerCount })
     }
   }
 
@@ -59,10 +62,10 @@ function buildSubsystems(components, ship) {
   }
 
   if (components?.some(c => c.port_type === 'quantum_drive')) {
-    subs.push({ key: 'qdrive', max: 1, default: 1 })
+    subs.push({ key: 'qdrive', max: 3, default: 1 })
   }
 
-  subs.push({ key: 'lifesup', max: 1, default: 1 })
+  subs.push({ key: 'lifesup', max: 2, default: 1 })
 
   return subs
 }
@@ -101,21 +104,22 @@ export default function PowerPips({ components, ship, combat }) {
   const totalPool = subsystems.reduce((a, b) => a + b.max, 0)
   const freePool = totalPool - totalAllocated
 
-  const handlePipClick = useCallback((subKey, pipIndex) => {
+  const handlePipClick = useCallback((subKey, pipIndex, subMax) => {
     setAllocations(prev => {
       const base = prev || { ...defaults }
       const next = { ...base }
       const currentFilled = next[subKey] || 0
-      const target = pipIndex + 1 // clicking pip 0 = set to 1
+      const target = Math.min(pipIndex + 1, subMax) // clicking pip 0 = set to 1, cap at max
 
       if (target > currentFilled) {
-        // Increase — need free pips
+        // Increase — need free pips from shared pool
         const needed = target - currentFilled
-        const available = totalPool - Object.values(next).reduce((a, b) => a + b, 0)
+        const used = Object.values(next).reduce((a, b) => a + b, 0)
+        const available = totalPool - used
         const canAdd = Math.min(needed, available)
         next[subKey] = currentFilled + canAdd
       } else {
-        // Decrease — free up pips
+        // Decrease — click at current level toggles down by 1, otherwise set to target
         next[subKey] = target === currentFilled ? Math.max(0, target - 1) : target
       }
       return next
@@ -170,7 +174,7 @@ export default function PowerPips({ components, ship, combat }) {
               {Array.from({ length: sub.max }).map((_, i) => (
                 <div
                   key={i}
-                  onClick={() => !isOff && handlePipClick(k, i)}
+                  onClick={() => !isOff && handlePipClick(k, i, sub.max)}
                   className={`w-full h-[10px] rounded-sm border transition-colors
                     ${isOff
                       ? 'bg-white/[0.02] border-white/[0.04] opacity-30'
