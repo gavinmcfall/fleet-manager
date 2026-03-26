@@ -116,15 +116,18 @@ export default function WeaponBlock({ item, isCustomized, weaponGroups = [], onC
   const weaponPrefix = weaponCount > 1 ? `${weaponCount}× ` : ''
   const weaponName = item.child_name || item.component_name
   const sz = item.component_size || item.size_max
+  const dps = item.dps
+  const alpha = item.damage_per_shot
+  const dmgType = getDamageType(item)
 
   if (hasMount) {
-    // GIMBALLED: 3 rows — compact vertical spacing
+    // GIMBALLED: 2 rows — mount row, then indented child with inline stats
     return (
-      <div className={`border-b border-white/[0.04] px-3 py-1 ${isCustomized ? 'bg-sc-accent/[0.02]' : ''}`}>
+      <div className={`border-b border-white/[0.04] px-3 py-0.5 ${isCustomized ? 'bg-sc-accent/[0.02]' : ''}`}>
         {/* Row 1: Mount + WG 2×2 */}
         <div
           onClick={onClickMount}
-          className="flex items-center gap-2 cursor-pointer rounded transition-colors hover:bg-white/[0.03] -mx-1 px-1"
+          className="flex items-center gap-2 cursor-pointer rounded transition-colors hover:bg-white/[0.03] -mx-1 px-1 leading-tight"
         >
           <span className="text-[12px] w-7 text-center flex-shrink-0 font-mono bg-white/[0.06] border border-white/[0.1] rounded px-1.5 py-px text-gray-400">
             S{item.size_max}
@@ -134,10 +137,10 @@ export default function WeaponBlock({ item, isCustomized, weaponGroups = [], onC
           <WgGrid weaponGroups={weaponGroups} onToggleGroup={onToggleGroup} />
         </div>
 
-        {/* Row 2: └ bracket + weapon name (full, not truncated) */}
+        {/* Row 2: └ weapon name + grade + mfr + stats + cart — all on one line */}
         <div
           onClick={onClickWeapon}
-          className="flex items-center gap-1.5 cursor-pointer rounded transition-colors hover:bg-white/[0.03] -mx-1 px-1"
+          className="flex items-center gap-1.5 cursor-pointer rounded transition-colors hover:bg-white/[0.03] -mx-1 px-1 leading-tight"
           style={{ marginLeft: '34px' }}
         >
           <Bracket />
@@ -148,22 +151,29 @@ export default function WeaponBlock({ item, isCustomized, weaponGroups = [], onC
             style={isCustomized ? { textShadow: '0 0 8px rgba(34,211,238,0.3)' } : undefined}>
             {weaponPrefix}{weaponName || 'Empty'}
           </span>
+          <GradeBadge grade={item.grade} />
           {isCustomized && <span className="text-[11px] text-sc-accent bg-sc-accent/10 px-1 rounded flex-shrink-0">custom</span>}
+          <div className="flex items-center gap-1.5 ml-auto flex-shrink-0">
+            {dmgType && <DmgShape type={dmgType} />}
+            {dps ? <span className={`font-mono text-[12px] ${isCustomized ? 'text-sc-accent' : 'text-gray-500'}`}>{fmtDec1(dps)} <span className="text-gray-600">dps</span></span> : null}
+            {alpha ? <span className={`font-mono text-[12px] ${isCustomized ? 'text-sc-accent' : 'text-gray-500'}`}>{fmtDec1(alpha)} <span className="text-gray-600">&#945;</span></span> : null}
+          </div>
+          <button onClick={(e) => { e.stopPropagation(); onAddToCart?.() }}
+            className="p-0.5 text-gray-700 hover:text-emerald-400 transition-colors cursor-pointer flex-shrink-0">
+            <ShoppingCart className="w-3.5 h-3.5" />
+          </button>
         </div>
-
-        {/* Row 3: stats — grade + mfr + dmg + DPS + alpha + cart */}
-        <StatsRow item={item} isCustomized={isCustomized} marginLeft="76px" onAddToCart={onAddToCart} />
       </div>
     )
   }
 
-  // FIXED: 2 rows
+  // FIXED: 2 rows — name row + stats row
   return (
-    <div className={`border-b border-white/[0.04] px-3 py-1 ${isCustomized ? 'bg-sc-accent/[0.02]' : ''}`}>
+    <div className={`border-b border-white/[0.04] px-3 py-0.5 ${isCustomized ? 'bg-sc-accent/[0.02]' : ''}`}>
       {/* Row 1: weapon name + fixed badge + WG 2×2 */}
       <div
         onClick={onClickWeapon}
-        className="flex items-center gap-2 cursor-pointer rounded transition-colors hover:bg-white/[0.03] -mx-1 px-1"
+        className="flex items-center gap-2 cursor-pointer rounded transition-colors hover:bg-white/[0.03] -mx-1 px-1 leading-tight"
       >
         <span className="text-[12px] w-7 text-center flex-shrink-0 font-mono bg-white/[0.06] border border-white/[0.1] rounded px-1.5 py-px text-gray-400">
           S{sz}

@@ -29,18 +29,18 @@ export default function MissileBlock({ item, onClick, onAddToCart }) {
   const dmgType = getDamageType(item)
 
   return (
-    <div className="border-b border-white/[0.04] px-3 py-1">
+    <div className="border-b border-white/[0.04] px-3 py-0.5">
       {/* Row 1: Rack */}
-      <div className="flex items-center gap-2 cursor-pointer rounded transition-colors hover:bg-white/[0.03] -mx-1 px-1"
+      <div className="flex items-center gap-2 cursor-pointer rounded transition-colors hover:bg-white/[0.03] -mx-1 px-1 leading-tight"
         onClick={onClick}>
         <span className="text-[12px] w-7 text-center flex-shrink-0 font-mono bg-white/[0.06] border border-white/[0.1] rounded px-1.5 py-px text-gray-400">
           S{item.size_max}
         </span>
         <span className="text-[13px] text-gray-500 flex-1 min-w-0">{rackName}</span>
       </div>
-      {/* Row 2: └ bracket + count badge + missile name */}
+      {/* Row 2: └ count badge + missile name + stats inline */}
       {missileName && (
-        <div className="flex items-center gap-1.5 cursor-pointer rounded transition-colors hover:bg-white/[0.03] -mx-1 px-1"
+        <div className="flex items-center gap-1.5 cursor-pointer rounded transition-colors hover:bg-white/[0.03] -mx-1 px-1 leading-tight"
           style={{ marginLeft: '34px' }}
           onClick={onClick}>
           <Bracket />
@@ -49,16 +49,12 @@ export default function MissileBlock({ item, onClick, onAddToCart }) {
           </span>
           <span className="text-[14px] font-medium text-gray-200">{missileName}</span>
           <span className="text-[12px] text-gray-600 flex-shrink-0">S{missileSize}</span>
-        </div>
-      )}
-      {/* Row 3: stats */}
-      {missileName && (
-        <div className="flex items-center gap-2 pb-0.5" style={{ marginLeft: '76px' }}>
-          {item.manufacturer_name && <span className="text-[12px] text-gray-600 flex-shrink-0">{item.manufacturer_name}</span>}
-          {dmgType && <DmgShape type={dmgType} />}
-          {missileDmg ? <span className="font-mono text-[13px] text-gray-500">{fmtDec1(missileDmg)} <span className="text-gray-600">&#945;</span></span> : null}
+          <div className="flex items-center gap-1.5 ml-auto flex-shrink-0">
+            {dmgType && <DmgShape type={dmgType} />}
+            {missileDmg ? <span className="font-mono text-[12px] text-gray-500">{fmtDec1(missileDmg)} <span className="text-gray-600">&#945;</span></span> : null}
+          </div>
           <button onClick={(e) => { e.stopPropagation(); onAddToCart?.() }}
-            className="p-1 text-gray-700 hover:text-emerald-400 transition-colors cursor-pointer flex-shrink-0 ml-auto">
+            className="p-0.5 text-gray-700 hover:text-emerald-400 transition-colors cursor-pointer flex-shrink-0">
             <ShoppingCart className="w-3.5 h-3.5" />
           </button>
         </div>
