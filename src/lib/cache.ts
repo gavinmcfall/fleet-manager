@@ -103,11 +103,12 @@ export async function purgeByPrefix(
   let cursor: string | undefined;
 
   do {
-    const list = await kv.list({
-      prefix: prefix ?? undefined,
-      cursor,
-      limit: 1000,
-    });
+    const opts: KVNamespaceListOptions = { limit: 1000 };
+    if (prefix) opts.prefix = prefix;
+    if (cursor) opts.cursor = cursor;
+
+    const list = await kv.list(opts);
+    console.log(`[cache] purge list: ${list.keys.length} keys found (prefix=${prefix ?? "all"}, cursor=${!!cursor})`);
 
     if (list.keys.length > 0) {
       await Promise.all(list.keys.map((key) => kv.delete(key.name)));
@@ -117,5 +118,6 @@ export async function purgeByPrefix(
     cursor = list.list_complete ? undefined : list.cursor;
   } while (cursor);
 
+  console.log(`[cache] purge complete: ${deleted} keys deleted`);
   return { deleted };
 }
