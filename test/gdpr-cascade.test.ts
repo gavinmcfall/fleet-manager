@@ -24,16 +24,6 @@ async function deleteUserFull(db: D1Database, userId: string): Promise<void> {
     db.prepare("DELETE FROM user_localization_configs WHERE user_id = ?").bind(userId),
     db.prepare("DELETE FROM companion_events WHERE user_id = ?").bind(userId),
     db.prepare("DELETE FROM companion_status WHERE user_id = ?").bind(userId),
-    db.prepare("DELETE FROM companion_wallet_snapshots WHERE user_id = ?").bind(userId),
-    db.prepare("DELETE FROM companion_wallet_current WHERE user_id = ?").bind(userId),
-    db.prepare("DELETE FROM companion_friends WHERE user_id = ?").bind(userId),
-    db.prepare("DELETE FROM companion_reputation_scores WHERE user_id = ?").bind(userId),
-    db.prepare("DELETE FROM companion_reputation_history WHERE user_id = ?").bind(userId),
-    db.prepare("DELETE FROM companion_blueprints WHERE user_id = ?").bind(userId),
-    db.prepare("DELETE FROM companion_entitlements WHERE user_id = ?").bind(userId),
-    db.prepare("DELETE FROM companion_missions WHERE user_id = ?").bind(userId),
-    db.prepare("DELETE FROM companion_stats WHERE user_id = ?").bind(userId),
-    db.prepare("DELETE FROM companion_sync_log WHERE user_id = ?").bind(userId),
     db.prepare("DELETE FROM player_reputation WHERE user_id = ?").bind(userId),
     db.prepare("DELETE FROM profile_verification_pending WHERE user_id = ?").bind(userId),
     db.prepare("DELETE FROM org_op_payouts WHERE user_id = ?").bind(userId),
@@ -113,6 +103,16 @@ const USER_TABLES_NO_CASCADE = [
   // and need migration to add user_id cleanup in account deletion.
   "user_buyback_pledges",
   "user_rsi_profiles",
+  // Companion event tables — game telemetry, not PII. Kept on account deletion.
+  "companion_sessions",
+  "companion_ship_events",
+  "companion_mission_events",
+  "companion_location_events",
+  "companion_travel_events",
+  "companion_economy_events",
+  "companion_combat_events",
+  "companion_social_events",
+  "companion_system_events",
 ] as const;
 
 describe("GDPR — User Deletion Cascade", () => {
