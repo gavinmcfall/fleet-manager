@@ -8,7 +8,7 @@ import CartPanel from './CartPanel'
 import WeaponBlock from './WeaponBlock'
 import DamageBreakdown, { DamageTypeLegend } from './DamageBreakdown'
 import PowerPips from './PowerPips'
-import { PORT_TYPE_ICONS, PORT_CATEGORY_ORDER, getPortCategory, getPrimaryStat, aggregateCombatStats, fmtInt, fmtDec1, fmtSpeed } from './loadoutHelpers'
+import { PORT_TYPE_ICONS, PORT_CATEGORY_ORDER, getPortCategory, getPrimaryStat, aggregateCombatStats, fmtInt, fmtDec1, fmtSpeed, getDamageType, DmgShape } from './loadoutHelpers'
 
 export default function Loadout() {
   const { slug } = useParams()
@@ -432,26 +432,47 @@ function SectionCard({ group, collapsed, setCollapsed, overrides, onOpenPicker, 
             const override = overrides[item.port_id]
             const isOverridden = !!override
 
-            // Missile racks — show rack name + missile count (check before turret)
+            // Missile racks — parent→child like weapons (check before turret)
             if (item.mount_type === 'MissileLauncher' || item.component_type === 'MissileLauncher') {
               const rackName = item.mount_name || item.component_name || 'Missile Rack'
               const missileCount = item.missile_count || 0
               const missileName = item.child_name !== rackName ? item.child_name : null
+              const missileDmg = item.damage_per_shot
+              const missileSize = item.component_size
+              const dmgType = getDamageType(item)
               return (
-                <div key={item.port_id} className="flex items-center gap-2 px-3 py-2.5 border-b border-white/[0.03] cursor-pointer hover:bg-white/[0.03] transition-colors"
-                  onClick={() => onOpenPicker(item.port_id, 'missile')}>
-                  <span className="text-[11px] w-7 text-center flex-shrink-0 font-mono bg-white/[0.06] border border-white/[0.1] rounded px-1.5 py-px text-gray-400">
-                    S{item.size_max}
-                  </span>
-                  <div className="flex-1 min-w-0">
-                    <div className="text-sm text-gray-200 font-medium">{rackName}</div>
-                    {missileCount > 0 && (
-                      <div className="text-[11px] text-gray-500 mt-0.5">
-                        {missileCount}× {missileName || 'missiles'}{item.component_size ? ` · S${item.component_size}` : ''}
-                      </div>
-                    )}
+                <div key={item.port_id} className="border-b border-white/[0.04] px-3 py-1">
+                  {/* Rack row */}
+                  <div className="flex items-center gap-2 py-1 cursor-pointer rounded transition-colors hover:bg-white/[0.03] -mx-1 px-1"
+                    onClick={() => onOpenPicker(item.port_id, 'missile')}>
+                    <span className="text-[11px] w-7 text-center flex-shrink-0 font-mono bg-white/[0.06] border border-white/[0.1] rounded px-1.5 py-px text-gray-400">
+                      S{item.size_max}
+                    </span>
+                    <span className="text-[13px] text-gray-500">{rackName}</span>
+                    <span className="font-mono text-[12px] text-gray-600 ml-auto flex-shrink-0">{missileCount}×</span>
                   </div>
-                  <span className="font-mono text-[13px] text-gray-400 font-semibold flex-shrink-0">{missileCount}×</span>
+                  {/* Missile child row — indented with bracket */}
+                  {missileName && (
+                    <div className="flex items-center gap-2 py-1.5 cursor-pointer rounded transition-colors hover:bg-white/[0.03] -mx-1 px-1"
+                      style={{ marginLeft: '34px' }}
+                      onClick={() => onOpenPicker(item.port_id, 'missile')}>
+                      <svg className="flex-shrink-0 w-4 h-[22px] -ml-4 mr-0" style={{ color: 'rgba(255,255,255,0.15)' }}
+                        viewBox="0 0 16 22" fill="none">
+                        <path d="M 2 0 L 2 14 Q 2 18 6 18 L 16 18" stroke="currentColor" strokeWidth="1.5" fill="none" strokeLinecap="round" />
+                      </svg>
+                      <span className="text-[11px] w-7 text-center flex-shrink-0 font-mono bg-amber-500/10 border border-amber-500/20 rounded px-1.5 py-px text-amber-400">
+                        {missileCount}×
+                      </span>
+                      <span className="text-sm font-medium truncate text-gray-200">
+                        {missileName}
+                      </span>
+                      <span className="text-[11px] text-gray-600 flex-shrink-0">S{missileSize}</span>
+                      <div className="flex items-center gap-2 ml-auto flex-shrink-0">
+                        {dmgType && <DmgShape type={dmgType} />}
+                        {missileDmg ? <span className="font-mono text-[12px] text-gray-500">{fmtDec1(missileDmg)} <span className="text-gray-600">&#945;</span></span> : null}
+                      </div>
+                    </div>
+                  )}
                 </div>
               )
             }
