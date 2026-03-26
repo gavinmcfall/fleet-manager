@@ -441,36 +441,41 @@ function SectionCard({ group, collapsed, setCollapsed, overrides, onOpenPicker, 
               const missileSize = item.component_size
               const dmgType = getDamageType(item)
               return (
-                <div key={item.port_id} className="border-b border-white/[0.04] px-3 py-1">
-                  {/* Rack row */}
+                <div key={item.port_id} className="border-b border-white/[0.04] px-3 py-1.5">
+                  {/* Row 1: Rack */}
                   <div className="flex items-center gap-2 py-1 cursor-pointer rounded transition-colors hover:bg-white/[0.03] -mx-1 px-1"
                     onClick={() => onOpenPicker(item.port_id, 'missile')}>
-                    <span className="text-[11px] w-7 text-center flex-shrink-0 font-mono bg-white/[0.06] border border-white/[0.1] rounded px-1.5 py-px text-gray-400">
+                    <span className="text-[12px] w-7 text-center flex-shrink-0 font-mono bg-white/[0.06] border border-white/[0.1] rounded px-1.5 py-px text-gray-400">
                       S{item.size_max}
                     </span>
-                    <span className="text-[13px] text-gray-500">{rackName}</span>
-                    <span className="font-mono text-[12px] text-gray-600 ml-auto flex-shrink-0">{missileCount}×</span>
+                    <span className="text-[13px] text-gray-500 flex-1 min-w-0">{rackName}</span>
                   </div>
-                  {/* Missile child row — indented with bracket */}
+                  {/* Row 2: └ bracket + count badge + missile name */}
                   {missileName && (
-                    <div className="flex items-center gap-2 py-1.5 cursor-pointer rounded transition-colors hover:bg-white/[0.03] -mx-1 px-1"
+                    <div className="flex items-center gap-2 py-1 cursor-pointer rounded transition-colors hover:bg-white/[0.03] -mx-1 px-1"
                       style={{ marginLeft: '34px' }}
                       onClick={() => onOpenPicker(item.port_id, 'missile')}>
                       <svg className="flex-shrink-0 w-4 h-[22px] -ml-4 mr-0" style={{ color: 'rgba(255,255,255,0.15)' }}
                         viewBox="0 0 16 22" fill="none">
                         <path d="M 2 0 L 2 14 Q 2 18 6 18 L 16 18" stroke="currentColor" strokeWidth="1.5" fill="none" strokeLinecap="round" />
                       </svg>
-                      <span className="text-[11px] w-7 text-center flex-shrink-0 font-mono bg-amber-500/10 border border-amber-500/20 rounded px-1.5 py-px text-amber-400">
+                      <span className="text-[12px] w-7 text-center flex-shrink-0 font-mono bg-amber-500/10 border border-amber-500/20 rounded px-1.5 py-px text-amber-400">
                         {missileCount}×
                       </span>
-                      <span className="text-sm font-medium truncate text-gray-200">
-                        {missileName}
-                      </span>
-                      <span className="text-[11px] text-gray-600 flex-shrink-0">S{missileSize}</span>
-                      <div className="flex items-center gap-2 ml-auto flex-shrink-0">
-                        {dmgType && <DmgShape type={dmgType} />}
-                        {missileDmg ? <span className="font-mono text-[12px] text-gray-500">{fmtDec1(missileDmg)} <span className="text-gray-600">&#945;</span></span> : null}
-                      </div>
+                      <span className="text-[14px] font-medium text-gray-200">{missileName}</span>
+                      <span className="text-[12px] text-gray-600 flex-shrink-0">S{missileSize}</span>
+                    </div>
+                  )}
+                  {/* Row 3: stats */}
+                  {missileName && (
+                    <div className="flex items-center gap-2 pb-1" style={{ marginLeft: '76px' }}>
+                      {item.manufacturer_name && <span className="text-[12px] text-gray-600 flex-shrink-0">{item.manufacturer_name}</span>}
+                      {dmgType && <DmgShape type={dmgType} />}
+                      {missileDmg ? <span className="font-mono text-[13px] text-gray-500">{fmtDec1(missileDmg)} <span className="text-gray-600">&#945;</span></span> : null}
+                      <button onClick={(e) => { e.stopPropagation(); /* TODO: add to cart */ }}
+                        className="p-1 text-gray-700 hover:text-emerald-400 transition-colors cursor-pointer flex-shrink-0 ml-auto">
+                        <ShoppingCart className="w-3.5 h-3.5" />
+                      </button>
                     </div>
                   )}
                 </div>

@@ -40,19 +40,27 @@ function FixedIcon({ className = '' }) {
   )
 }
 
-/** Weapon group badge (1-4) */
-function WgBadge({ num, active, onClick }) {
+/** Weapon group badges — 2×2 grid */
+function WgGrid({ weaponGroups = [], onToggleGroup }) {
   return (
-    <button
-      onClick={(e) => { e.stopPropagation(); onClick?.() }}
-      className={`w-5 h-5 rounded flex items-center justify-center text-[11px] font-semibold cursor-pointer transition-all duration-150
-        ${active
-          ? 'bg-sc-accent/20 text-sc-accent border border-sc-accent/40'
-          : 'bg-white/[0.03] text-gray-600 border border-white/[0.08] hover:bg-white/[0.06] hover:text-gray-400'
-        }`}
-    >
-      {num}
-    </button>
+    <div className="grid grid-cols-2 gap-0.5 flex-shrink-0">
+      {[1, 2, 3, 4].map(n => {
+        const active = weaponGroups.includes(n)
+        return (
+          <button
+            key={n}
+            onClick={(e) => { e.stopPropagation(); onToggleGroup?.(n) }}
+            className={`w-5 h-5 rounded flex items-center justify-center text-[11px] font-semibold cursor-pointer transition-all duration-150
+              ${active
+                ? 'bg-sc-accent/20 text-sc-accent border border-sc-accent/40'
+                : 'bg-white/[0.03] text-gray-600 border border-white/[0.08] hover:bg-white/[0.06] hover:text-gray-400'
+              }`}
+          >
+            {n}
+          </button>
+        )
+      })}
+    </div>
   )
 }
 
@@ -72,20 +80,34 @@ function GradeBadge({ grade }) {
   )
 }
 
+/** Stats row — grade, manufacturer, damage shape, DPS, alpha, cart */
+function StatsRow({ item, isCustomized, marginLeft = '76px', onAddToCart }) {
+  const dps = item.dps
+  const alpha = item.damage_per_shot
+  const dmgType = getDamageType(item)
+  const statColor = isCustomized ? 'text-sc-accent' : 'text-gray-500'
+
+  return (
+    <div className="flex items-center gap-2 pb-1" style={{ marginLeft }}>
+      <GradeBadge grade={item.grade} />
+      {item.manufacturer_name && <span className="text-[12px] text-gray-600 flex-shrink-0">{item.manufacturer_name}</span>}
+      {isCustomized && <span className="text-[11px] text-sc-accent bg-sc-accent/10 px-1 rounded flex-shrink-0">custom</span>}
+      {dmgType && <DmgShape type={dmgType} />}
+      {dps ? <span className={`font-mono text-[13px] ${statColor}`}>{fmtDec1(dps)} <span className="text-gray-600">dps</span></span> : null}
+      {alpha ? <span className={`font-mono text-[13px] ${statColor}`}>{fmtDec1(alpha)} <span className="text-gray-600">&#945;</span></span> : null}
+      <button onClick={(e) => { e.stopPropagation(); onAddToCart?.() }}
+        className="p-1 text-gray-700 hover:text-emerald-400 transition-colors cursor-pointer flex-shrink-0 ml-auto">
+        <ShoppingCart className="w-3.5 h-3.5" />
+      </button>
+    </div>
+  )
+}
+
 /**
  * WeaponBlock — renders a single weapon hardpoint.
  *
- * Gimballed: 2 rows — mount row (VariPuck) with └ bracket child row (weapon)
- * Fixed: 1 row — weapon at parent level with stats below
- *
- * Props:
- *   item - port data from API (mount_name, child_name, component_name, etc.)
- *   isCustomized - whether user has overridden this port
- *   weaponGroups - [1,2,3,4] active group assignments
- *   onClickMount - handler for clicking the mount row
- *   onClickWeapon - handler for clicking the weapon row
- *   onToggleGroup - handler for toggling weapon group
- *   onAddToCart - handler for cart button
+ * Gimballed: 3 rows — mount + WG 2×2 | └ weapon name (full) | stats line
+ * Fixed: 2 rows — weapon name + fixed badge + WG 2×2 | stats line
  */
 export default function WeaponBlock({ item, isCustomized, weaponGroups = [], onClickMount, onClickWeapon, onToggleGroup, onAddToCart }) {
   const hasMount = item.mount_name && item.child_name && item.mount_name !== item.child_name
@@ -93,98 +115,71 @@ export default function WeaponBlock({ item, isCustomized, weaponGroups = [], onC
   const weaponCount = item.weapon_count || 0
   const weaponPrefix = weaponCount > 1 ? `${weaponCount}× ` : ''
   const weaponName = item.child_name || item.component_name
-  const dps = item.dps
-  const alpha = item.damage_per_shot
-  const dmgType = getDamageType(item)
   const sz = item.component_size || item.size_max
 
-  // Weapon group badges
-  const wgBadges = (
-    <div className="flex gap-1 ml-auto flex-shrink-0">
-      {[1, 2, 3, 4].map(n => (
-        <WgBadge key={n} num={n} active={weaponGroups.includes(n)} onClick={() => onToggleGroup?.(n)} />
-      ))}
-    </div>
-  )
-
   if (hasMount) {
-    // GIMBALLED: two rows with bracket
+    // GIMBALLED: 3 rows
     return (
-      <div className={`border-b border-white/[0.04] px-3 py-1 ${isCustomized ? 'bg-sc-accent/[0.02]' : ''}`}>
-        {/* Mount row */}
+      <div className={`border-b border-white/[0.04] px-3 py-1.5 ${isCustomized ? 'bg-sc-accent/[0.02]' : ''}`}>
+        {/* Row 1: Mount + WG 2×2 */}
         <div
           onClick={onClickMount}
           className="flex items-center gap-2 py-1 cursor-pointer rounded transition-colors hover:bg-white/[0.03] -mx-1 px-1"
         >
-          <span className="badge badge-size text-[11px] w-7 text-center flex-shrink-0 font-mono bg-white/[0.06] border border-white/[0.1] rounded px-1.5 py-px text-gray-400">
+          <span className="text-[12px] w-7 text-center flex-shrink-0 font-mono bg-white/[0.06] border border-white/[0.1] rounded px-1.5 py-px text-gray-400">
             S{item.size_max}
           </span>
           {isGimbal ? <GimbalIcon /> : <FixedIcon />}
-          <span className="text-[13px] text-gray-500">{item.mount_name}</span>
-          {wgBadges}
+          <span className="text-[13px] text-gray-500 flex-1 min-w-0">{item.mount_name}</span>
+          <WgGrid weaponGroups={weaponGroups} onToggleGroup={onToggleGroup} />
         </div>
-        {/* Weapon child row — indented with bracket */}
+
+        {/* Row 2: └ bracket + weapon name (full, not truncated) */}
         <div
           onClick={onClickWeapon}
-          className="flex items-center gap-2 py-1.5 cursor-pointer rounded transition-colors hover:bg-white/[0.03] -mx-1 px-1"
+          className="flex items-center gap-2 py-1 cursor-pointer rounded transition-colors hover:bg-white/[0.03] -mx-1 px-1"
           style={{ marginLeft: '34px' }}
         >
           <Bracket />
-          <span className="badge badge-size text-[11px] w-7 text-center flex-shrink-0 font-mono bg-white/[0.06] border border-white/[0.1] rounded px-1.5 py-px text-gray-400">
+          <span className="text-[12px] w-7 text-center flex-shrink-0 font-mono bg-white/[0.06] border border-white/[0.1] rounded px-1.5 py-px text-gray-400">
             S{sz}
           </span>
-          <span className={`text-sm font-medium truncate ${isCustomized ? 'text-sc-accent' : 'text-gray-200'}`}
+          <span className={`text-[14px] font-medium ${isCustomized ? 'text-sc-accent' : 'text-gray-200'}`}
             style={isCustomized ? { textShadow: '0 0 8px rgba(34,211,238,0.3)' } : undefined}>
             {weaponPrefix}{weaponName || 'Empty'}
           </span>
-          <GradeBadge grade={item.grade} />
-          {item.manufacturer_name && <span className="text-[11px] text-gray-600 flex-shrink-0">{item.manufacturer_name}</span>}
           {isCustomized && <span className="text-[11px] text-sc-accent bg-sc-accent/10 px-1 rounded flex-shrink-0">custom</span>}
-          <div className="flex items-center gap-2 ml-auto flex-shrink-0">
-            {dmgType && <DmgShape type={dmgType} />}
-            {dps ? <span className={`font-mono text-[12px] ${isCustomized ? 'text-sc-accent' : 'text-gray-500'}`}>{fmtDec1(dps)} <span className="text-gray-600">dps</span></span> : null}
-            {alpha ? <span className={`font-mono text-[12px] ${isCustomized ? 'text-sc-accent' : 'text-gray-500'}`}>{fmtDec1(alpha)} <span className="text-gray-600">&#945;</span></span> : null}
-          </div>
-          <button onClick={(e) => { e.stopPropagation(); onAddToCart?.() }}
-            className="p-1 text-gray-700 hover:text-emerald-400 transition-colors cursor-pointer flex-shrink-0">
-            <ShoppingCart className="w-3.5 h-3.5" />
-          </button>
         </div>
+
+        {/* Row 3: stats — grade + mfr + dmg + DPS + alpha + cart */}
+        <StatsRow item={item} isCustomized={isCustomized} marginLeft="76px" onAddToCart={onAddToCart} />
       </div>
     )
   }
 
-  // FIXED or DIRECT: single row at parent level
+  // FIXED: 2 rows — weapon name row + stats row
   return (
-    <div className={`border-b border-white/[0.04] px-3 ${isCustomized ? 'bg-sc-accent/[0.02]' : ''}`}>
+    <div className={`border-b border-white/[0.04] px-3 py-1.5 ${isCustomized ? 'bg-sc-accent/[0.02]' : ''}`}>
+      {/* Row 1: weapon name + fixed badge + WG 2×2 */}
       <div
         onClick={onClickWeapon}
-        className="flex items-center gap-2 py-1.5 cursor-pointer rounded transition-colors hover:bg-white/[0.03] -mx-1 px-1"
+        className="flex items-center gap-2 py-1 cursor-pointer rounded transition-colors hover:bg-white/[0.03] -mx-1 px-1"
       >
-        <span className="badge badge-size text-[11px] w-7 text-center flex-shrink-0 font-mono bg-white/[0.06] border border-white/[0.1] rounded px-1.5 py-px text-gray-400">
+        <span className="text-[12px] w-7 text-center flex-shrink-0 font-mono bg-white/[0.06] border border-white/[0.1] rounded px-1.5 py-px text-gray-400">
           S{sz}
         </span>
         <FixedIcon />
-        <span className={`text-sm font-medium truncate ${isCustomized ? 'text-sc-accent' : 'text-gray-200'}`}
+        <span className={`text-[14px] font-medium flex-1 min-w-0 ${isCustomized ? 'text-sc-accent' : 'text-gray-200'}`}
           style={isCustomized ? { textShadow: '0 0 8px rgba(34,211,238,0.3)' } : undefined}>
           {weaponName || 'Empty'}
         </span>
-        <GradeBadge grade={item.grade} />
-        {item.manufacturer_name && <span className="text-[11px] text-gray-600 flex-shrink-0">{item.manufacturer_name}</span>}
         <span className="text-[11px] text-amber-400 bg-amber-500/10 px-1 rounded border border-amber-500/15 flex-shrink-0">fixed</span>
         {isCustomized && <span className="text-[11px] text-sc-accent bg-sc-accent/10 px-1 rounded flex-shrink-0">custom</span>}
-        {wgBadges}
+        <WgGrid weaponGroups={weaponGroups} onToggleGroup={onToggleGroup} />
       </div>
-      {/* Stats on second line, right-aligned */}
-      <div className="flex items-center justify-end gap-2 pb-1.5">
-        {dmgType && <DmgShape type={dmgType} />}
-        {dps ? <span className={`font-mono text-[12px] ${isCustomized ? 'text-sc-accent' : 'text-gray-500'}`}>{fmtDec1(dps)} <span className="text-gray-600">dps</span></span> : null}
-        {alpha ? <span className={`font-mono text-[12px] ${isCustomized ? 'text-sc-accent' : 'text-gray-500'}`}>{fmtDec1(alpha)} <span className="text-gray-600">&#945;</span></span> : null}
-        <button onClick={(e) => { e.stopPropagation(); onAddToCart?.() }}
-          className="p-1 text-gray-700 hover:text-emerald-400 transition-colors cursor-pointer flex-shrink-0">
-          <ShoppingCart className="w-3.5 h-3.5" />
-        </button>
-      </div>
+
+      {/* Row 2: stats — grade + mfr + dmg + DPS + alpha + cart */}
+      <StatsRow item={item} isCustomized={isCustomized} marginLeft="42px" onAddToCart={onAddToCart} />
     </div>
   )
 }
