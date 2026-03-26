@@ -43,7 +43,7 @@ function FixedIcon({ className = '' }) {
 /** Weapon group badges — 2×2 grid */
 function WgGrid({ weaponGroups = [], onToggleGroup }) {
   return (
-    <div className="grid grid-cols-2 gap-0.5 flex-shrink-0">
+    <div className="flex gap-0.5 flex-shrink-0">
       {[1, 2, 3, 4].map(n => {
         const active = weaponGroups.includes(n)
         return (
