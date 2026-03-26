@@ -122,7 +122,7 @@ describe("Fleet API — /api/vehicles", () => {
       );
       expect(res.status).toBe(200);
       const body = (await res.json()) as Record<string, unknown>;
-      expect(body.success).toBe(true);
+      expect(body.ok).toBe(true);
     });
 
     it("rejects invalid visibility value", async () => {

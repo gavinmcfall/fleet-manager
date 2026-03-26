@@ -19,10 +19,35 @@ import { createTestUser, createAdminUser, seedVehicle } from "./helpers";
  */
 async function deleteUserFull(db: D1Database, userId: string): Promise<void> {
   await db.batch([
+    // Tables without ON DELETE CASCADE — must clean up manually
+    db.prepare("DELETE FROM user_localization_ship_order WHERE user_id = ?").bind(userId),
+    db.prepare("DELETE FROM user_localization_configs WHERE user_id = ?").bind(userId),
+    db.prepare("DELETE FROM companion_events WHERE user_id = ?").bind(userId),
+    db.prepare("DELETE FROM companion_status WHERE user_id = ?").bind(userId),
+    db.prepare("DELETE FROM companion_wallet_snapshots WHERE user_id = ?").bind(userId),
+    db.prepare("DELETE FROM companion_wallet_current WHERE user_id = ?").bind(userId),
+    db.prepare("DELETE FROM companion_friends WHERE user_id = ?").bind(userId),
+    db.prepare("DELETE FROM companion_reputation_scores WHERE user_id = ?").bind(userId),
+    db.prepare("DELETE FROM companion_reputation_history WHERE user_id = ?").bind(userId),
+    db.prepare("DELETE FROM companion_blueprints WHERE user_id = ?").bind(userId),
+    db.prepare("DELETE FROM companion_entitlements WHERE user_id = ?").bind(userId),
+    db.prepare("DELETE FROM companion_missions WHERE user_id = ?").bind(userId),
+    db.prepare("DELETE FROM companion_stats WHERE user_id = ?").bind(userId),
+    db.prepare("DELETE FROM companion_sync_log WHERE user_id = ?").bind(userId),
+    db.prepare("DELETE FROM player_reputation WHERE user_id = ?").bind(userId),
+    db.prepare("DELETE FROM profile_verification_pending WHERE user_id = ?").bind(userId),
+    db.prepare("DELETE FROM org_op_payouts WHERE user_id = ?").bind(userId),
+    db.prepare("DELETE FROM org_op_capital WHERE user_id = ?").bind(userId),
+    db.prepare("DELETE FROM org_op_participants WHERE user_id = ?").bind(userId),
+    db.prepare("DELETE FROM user_fleet_loadout WHERE user_id = ?").bind(userId),
+    db.prepare("DELETE FROM user_loadout_cart WHERE user_id = ?").bind(userId),
+    db.prepare("DELETE FROM user_blueprints WHERE user_id = ?").bind(userId),
+    // Better Auth tables (no CASCADE)
     db.prepare('DELETE FROM "session" WHERE userId = ?').bind(userId),
     db.prepare('DELETE FROM "account" WHERE userId = ?').bind(userId),
     db.prepare('DELETE FROM "member" WHERE userId = ?').bind(userId),
     db.prepare("DELETE FROM org_verification_pending WHERE user_id = ?").bind(userId),
+    // Finally, delete the user (cascades to tables with ON DELETE CASCADE)
     db.prepare('DELETE FROM "user" WHERE id = ?').bind(userId),
   ]);
 }
@@ -74,6 +99,11 @@ const USER_TABLES = [
   "org_op_participants",
   "org_op_capital",
   "org_op_payouts",
+  // Loadout customization (0141)
+  "user_fleet_loadout",
+  "user_loadout_cart",
+  // Crafting blueprint ownership (0146)
+  "user_blueprints",
 ] as const;
 
 // Tables with user_id that DON'T cascade (known exceptions).
@@ -258,6 +288,253 @@ describe("GDPR — User Deletion Cascade", () => {
            VALUES (?, 'GDPRTEST', 'scbridge-verify-test')`
         )
         .bind(user.userId)
+        .run();
+
+      // user_localization_configs (migration 0127)
+      await db
+        .prepare(
+          `INSERT INTO user_localization_configs (user_id, asop_enabled)
+           VALUES (?, 1)`
+        )
+        .bind(user.userId)
+        .run();
+
+      // user_localization_ship_order (migration 0127)
+      await db
+        .prepare(
+          `INSERT INTO user_localization_ship_order (user_id, vehicle_id, sort_position)
+           VALUES (?, ?, 1)`
+        )
+        .bind(user.userId, vehicleId)
+        .run();
+
+      // companion_events (migration 0136)
+      await db
+        .prepare(
+          `INSERT INTO companion_events (user_id, type, source, event_timestamp)
+           VALUES (?, 'test', 'log', datetime('now'))`
+        )
+        .bind(user.userId)
+        .run();
+
+      // companion_status (migration 0136)
+      await db
+        .prepare(
+          `INSERT INTO companion_status (user_id, player_handle, event_count)
+           VALUES (?, 'TestPlayer', 1)`
+        )
+        .bind(user.userId)
+        .run();
+
+      // companion_wallet_snapshots (migration 0138)
+      await db
+        .prepare(
+          `INSERT INTO companion_wallet_snapshots (user_id, auec, captured_at)
+           VALUES (?, 10000, datetime('now'))`
+        )
+        .bind(user.userId)
+        .run();
+
+      // companion_wallet_current (migration 0138)
+      await db
+        .prepare(
+          `INSERT INTO companion_wallet_current (user_id, auec, captured_at)
+           VALUES (?, 10000, datetime('now'))`
+        )
+        .bind(user.userId)
+        .run();
+
+      // companion_friends (migration 0138)
+      await db
+        .prepare(
+          `INSERT INTO companion_friends (user_id, account_id, nickname)
+           VALUES (?, 'friend-acc-1', 'TestFriend')`
+        )
+        .bind(user.userId)
+        .run();
+
+      // companion_reputation_scores (migration 0138)
+      await db
+        .prepare(
+          `INSERT INTO companion_reputation_scores (user_id, entity_id, score, captured_at)
+           VALUES (?, 'faction-1', 100, datetime('now'))`
+        )
+        .bind(user.userId)
+        .run();
+
+      // companion_reputation_history (migration 0138)
+      await db
+        .prepare(
+          `INSERT INTO companion_reputation_history (user_id, entity_id, score, event_timestamp)
+           VALUES (?, 'faction-1', 100, datetime('now'))`
+        )
+        .bind(user.userId)
+        .run();
+
+      // companion_blueprints (migration 0138)
+      await db
+        .prepare(
+          `INSERT INTO companion_blueprints (user_id, blueprint_id)
+           VALUES (?, 'bp-test-1')`
+        )
+        .bind(user.userId)
+        .run();
+
+      // companion_entitlements (migration 0138)
+      await db
+        .prepare(
+          `INSERT INTO companion_entitlements (user_id, urn, name)
+           VALUES (?, 'urn:test:ship', 'Test Ship')`
+        )
+        .bind(user.userId)
+        .run();
+
+      // companion_missions (migration 0138)
+      await db
+        .prepare(
+          `INSERT INTO companion_missions (user_id, mission_id, state)
+           VALUES (?, 'mission-1', 'ACTIVE')`
+        )
+        .bind(user.userId)
+        .run();
+
+      // companion_stats (migration 0138)
+      await db
+        .prepare(
+          `INSERT INTO companion_stats (user_id, stat_def_id, value)
+           VALUES (?, 'kills_total', 42)`
+        )
+        .bind(user.userId)
+        .run();
+
+      // companion_sync_log (migration 0138)
+      await db
+        .prepare(
+          `INSERT INTO companion_sync_log (user_id, data_type, status)
+           VALUES (?, 'wallet', 'success')`
+        )
+        .bind(user.userId)
+        .run();
+
+      // player_reputation (migration 0134) — needs rating_categories seed data
+      const ratCat = await db
+        .prepare("SELECT id FROM rating_categories LIMIT 1")
+        .first<{ id: number }>();
+      await db
+        .prepare(
+          `INSERT INTO player_reputation (user_id, rating_category_id, median_score, rating_count)
+           VALUES (?, ?, 4.0, 3)`
+        )
+        .bind(user.userId, ratCat!.id)
+        .run();
+
+      // profile_verification_pending (migration 0132)
+      await db
+        .prepare(
+          `INSERT INTO profile_verification_pending (user_id, handle, verification_key)
+           VALUES (?, 'GdprTestHandle', 'scbridge-verify-gdpr')`
+        )
+        .bind(user.userId)
+        .run();
+
+      // org_op_participants, org_op_capital, org_op_payouts (migration 0133) — need an org_ops row
+      const opType = await db
+        .prepare("SELECT id FROM op_types LIMIT 1")
+        .first<{ id: number }>();
+      await db
+        .prepare(
+          `INSERT INTO org_ops (org_id, name, op_type_id, created_by)
+           VALUES ('gdpr-org', 'GDPR Test Op', ?, ?)`
+        )
+        .bind(opType!.id, user.userId)
+        .run();
+      const opRow = await db
+        .prepare("SELECT id FROM org_ops WHERE org_id = 'gdpr-org' ORDER BY id DESC LIMIT 1")
+        .first<{ id: number }>();
+
+      await db
+        .prepare(
+          `INSERT INTO org_op_participants (org_op_id, user_id, role)
+           VALUES (?, ?, 'member')`
+        )
+        .bind(opRow!.id, user.userId)
+        .run();
+
+      await db
+        .prepare(
+          `INSERT INTO org_op_capital (org_op_id, user_id, amount)
+           VALUES (?, ?, 5000)`
+        )
+        .bind(opRow!.id, user.userId)
+        .run();
+
+      await db
+        .prepare(
+          `INSERT INTO org_op_payouts (org_op_id, user_id, amount)
+           VALUES (?, ?, 2500)`
+        )
+        .bind(opRow!.id, user.userId)
+        .run();
+
+      // user_fleet_loadout (migration 0141) — need vehicle_ports and vehicle_components
+      await db
+        .prepare(
+          `INSERT INTO vehicle_components (uuid, name, type, game_version_id)
+           VALUES ('gdpr-comp-1', 'Test Component', 'PowerPlant',
+             (SELECT id FROM game_versions WHERE is_default = 1))`
+        )
+        .run();
+      const compRow = await db
+        .prepare("SELECT id FROM vehicle_components WHERE uuid = 'gdpr-comp-1'")
+        .first<{ id: number }>();
+      await db
+        .prepare(
+          `INSERT INTO vehicle_ports (uuid, vehicle_id, name, game_version_id)
+           VALUES ('gdpr-port-1', ?, 'power_plant', (SELECT id FROM game_versions WHERE is_default = 1))`
+        )
+        .bind(vehicleId)
+        .run();
+      const portRow = await db
+        .prepare("SELECT id FROM vehicle_ports WHERE uuid = 'gdpr-port-1'")
+        .first<{ id: number }>();
+      const fleetRow = await db
+        .prepare("SELECT id FROM user_fleet WHERE user_id = ? LIMIT 1")
+        .bind(user.userId)
+        .first<{ id: number }>();
+      await db
+        .prepare(
+          `INSERT INTO user_fleet_loadout (user_id, user_fleet_id, port_id, component_id)
+           VALUES (?, ?, ?, ?)`
+        )
+        .bind(user.userId, fleetRow!.id, portRow!.id, compRow!.id)
+        .run();
+
+      // user_loadout_cart (migration 0141)
+      await db
+        .prepare(
+          `INSERT INTO user_loadout_cart (user_id, component_id, quantity)
+           VALUES (?, ?, 1)`
+        )
+        .bind(user.userId, compRow!.id)
+        .run();
+
+      // user_blueprints (migration 0146) — need a crafting_blueprints row
+      await db
+        .prepare(
+          `INSERT INTO crafting_blueprints (uuid, tag, name, type, sub_type, game_version_id)
+           VALUES ('gdpr-bp-1', 'test.bp', 'Test Blueprint', 'Crafting', 'Assembly',
+             (SELECT id FROM game_versions WHERE is_default = 1))`
+        )
+        .run();
+      const bpRow = await db
+        .prepare("SELECT id FROM crafting_blueprints WHERE uuid = 'gdpr-bp-1'")
+        .first<{ id: number }>();
+      await db
+        .prepare(
+          `INSERT INTO user_blueprints (user_id, crafting_blueprint_id, source)
+           VALUES (?, ?, 'test')`
+        )
+        .bind(user.userId, bpRow!.id)
         .run();
 
       // ── Verify all tables have data ──

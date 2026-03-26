@@ -90,6 +90,12 @@ describe("Import API — /api/import/hangarxplor", () => {
         pledge_name: "Old Entry",
       });
 
+      // Backdate imported_at so rate limiter doesn't trigger
+      await env.DB
+        .prepare("UPDATE user_fleet SET imported_at = datetime('now', '-60 seconds') WHERE user_id = ?")
+        .bind(userId)
+        .run();
+
       // Verify old entry exists
       const beforeRes = await SELF.fetch("http://localhost/api/vehicles", {
         headers: await authHeaders(sessionToken),
@@ -160,7 +166,7 @@ describe("Import API — /api/import/hangarxplor", () => {
       expect(body.total).toBe(0);
     });
 
-    it("creates stub vehicles for unknown ships", async () => {
+    it("skips unknown ships that cannot be matched", async () => {
       const { sessionToken } = await createTestUser(env.DB);
 
       const entries = [
@@ -189,7 +195,8 @@ describe("Import API — /api/import/hangarxplor", () => {
       });
       expect(res.status).toBe(200);
       const body = (await res.json()) as Record<string, unknown>;
-      expect(body.imported).toBe(1);
+      expect(body.imported).toBe(0);
+      expect(body.skipped).toBe(1);
     });
 
     it("detects custom ship names", async () => {
