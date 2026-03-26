@@ -1,6 +1,6 @@
 import React, { useState, useEffect, Suspense, lazy } from 'react'
 import { Routes, Route, NavLink, Navigate, useLocation, useNavigate } from 'react-router-dom'
-import { Rocket, BarChart3, Shield, Upload, RefreshCw, Database, Settings as SettingsIcon, ChevronDown, ChevronRight, ChevronLeft, History, Menu, X, LogOut, LogIn, User, Wrench, Users, Building2, FileText, Search, MapPin, Palette, ShoppingCart, Hammer, Briefcase, Star, Scale, Crosshair, BookOpen, Layers, TrendingUp, Languages, Heart, FlaskConical, SlidersHorizontal, Sparkles, EyeOff, Eye } from 'lucide-react'
+import { Rocket, BarChart3, Shield, Upload, RefreshCw, Database, Settings as SettingsIcon, ChevronDown, ChevronRight, ChevronLeft, History, Menu, X, LogOut, LogIn, User, Wrench, Users, Building2, FileText, Search, MapPin, Palette, ShoppingCart, Hammer, Briefcase, Star, Scale, Crosshair, BookOpen, Layers, TrendingUp, Languages, Heart, FlaskConical, SlidersHorizontal, Bookmark, Sparkles, EyeOff, Eye } from 'lucide-react'
 import LoadingState from './components/LoadingState'
 import ErrorBoundary from './components/ErrorBoundary'
 import RequireAuth from './components/RequireAuth'
@@ -58,6 +58,7 @@ const MiningEquipmentDetail = lazy(() => import('./pages/Mining/EquipmentDetail'
 const Crafting = lazy(() => import('./pages/Crafting'))
 const BlueprintDetail = lazy(() => import('./pages/Crafting/BlueprintDetail'))
 const QualitySimPage = lazy(() => import('./pages/Crafting/QualitySimPage'))
+const SavedBlueprints = lazy(() => import('./pages/Crafting/SavedBlueprints'))
 const Careers = lazy(() => import('./pages/Careers'))
 const Reputation = lazy(() => import('./pages/Reputation'))
 const LawSystem = lazy(() => import('./pages/LawSystem'))
@@ -86,6 +87,7 @@ const gameDataGroup = {
       submenu: [
         { to: '/crafting', icon: FlaskConical, label: 'Blueprints' },
         { to: '/crafting/sim', icon: SlidersHorizontal, label: 'Quality Sim' },
+        { to: '/crafting/saved', icon: Bookmark, label: 'My Blueprints', auth: true },
       ],
     },
     { to: '/npc-loadouts', icon: Users, label: 'NPC Loadouts' },
@@ -161,21 +163,33 @@ function meetsMinVersion(minVersion, activeCode) {
   return true
 }
 
-function filterByVersion(items, activeCode) {
+function filterNavItem(item, activeCode, isLoggedIn) {
+  if (!meetsMinVersion(item.minVersion, activeCode)) return null
+  if (item.auth && !isLoggedIn) return null
+  if (item.submenu) {
+    const filteredSub = item.submenu.filter(sub => !sub.auth || isLoggedIn)
+    return { ...item, submenu: filteredSub.length > 0 ? filteredSub : undefined }
+  }
+  return item
+}
+
+function filterNav(items, activeCode, isLoggedIn) {
   return items
     .map(item => {
       if (item.items) {
-        const filtered = item.items.filter(sub => meetsMinVersion(sub.minVersion, activeCode))
+        const filtered = item.items
+          .map(child => filterNavItem(child, activeCode, isLoggedIn))
+          .filter(Boolean)
         return filtered.length > 0 ? { ...item, items: filtered } : null
       }
-      return meetsMinVersion(item.minVersion, activeCode) ? item : null
+      return filterNavItem(item, activeCode, isLoggedIn)
     })
     .filter(Boolean)
 }
 
 function getNavItems(role, isLoggedIn, activeCode) {
-  if (!isLoggedIn) return filterByVersion([...publicNavItems], activeCode)
-  const items = filterByVersion([...authNavItems], activeCode)
+  if (!isLoggedIn) return filterNav([...publicNavItems], activeCode, false)
+  const items = filterNav([...authNavItems], activeCode, true)
   if (role === 'admin' || role === 'super_admin') {
     items.push(...adminNavItems)
   }
@@ -737,6 +751,7 @@ export default function App() {
                       <Route path="/mining/:type/:id" element={<MiningEquipmentDetail />} />
                       <Route path="/crafting" element={<Suspense fallback={<LoadingState fullScreen />}><Crafting /></Suspense>} />
                       <Route path="/crafting/sim" element={<Suspense fallback={<LoadingState fullScreen />}><QualitySimPage /></Suspense>} />
+                      <Route path="/crafting/saved" element={<RequireAuth><Suspense fallback={<LoadingState fullScreen />}><SavedBlueprints /></Suspense></RequireAuth>} />
                       <Route path="/crafting/:id" element={<Suspense fallback={<LoadingState fullScreen />}><BlueprintDetail /></Suspense>} />
                       <Route path="/careers" element={<Careers />} />
                       <Route path="/reputation" element={<Reputation />} />

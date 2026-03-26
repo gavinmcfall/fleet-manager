@@ -410,3 +410,21 @@ export async function emptyLoadoutCart() {
 export async function optimizeLoadoutCart() {
   return postJSON('/loadout/cart/optimize', {})
 }
+
+// --- User Blueprints (Crafting Tracker) ---
+
+export function useUserBlueprints() {
+  return useAPI('/blueprints')
+}
+
+export async function saveUserBlueprint({ craftingBlueprintId, nickname, qualityConfig }) {
+  return postJSON('/blueprints', { craftingBlueprintId, nickname, qualityConfig })
+}
+
+export async function updateUserBlueprint(id, { nickname, craftedQuantity, qualityConfig }) {
+  return patchJSON(`/blueprints/${id}`, { nickname, craftedQuantity, qualityConfig })
+}
+
+export async function deleteUserBlueprint(id) {
+  return apiFetch('DELETE', `/blueprints/${id}`)
+}

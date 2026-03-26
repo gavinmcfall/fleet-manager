@@ -26,6 +26,7 @@ import { reputationRoutes } from "./routes/reputation";
 import { companionRoutes } from "./routes/companion";
 import { companionAuthRoutes } from "./routes/companion-auth";
 import { loadoutRoutes } from "./routes/loadout";
+import { blueprintRoutes } from "./routes/blueprints";
 import { validateEncryptionKey } from "./lib/crypto";
 import { logEvent } from "./lib/logger";
 import { VEHICLE_VERSION_JOIN, isTrustedExtension } from "./lib/constants";
@@ -277,6 +278,8 @@ app.use("/api/vehicles/*", requireAuth);
 app.use("/api/import/*", requireAuth);
 app.use("/api/settings/*", requireAuth);
 app.use("/api/localization/*", requireAuth);
+app.use("/api/blueprints/*", requireAuth);
+app.use("/api/blueprints", requireAuth);
 app.use("/api/analysis", requireAuth);
 app.use("/api/llm/*", async (c, next) => {
   // /api/llm/models is public (lists available providers); all other LLM endpoints require auth
@@ -412,6 +415,7 @@ app.route("/api/ops", publicOpsRoutes());
 app.route("/api/users", reputationRoutes());
 app.route("/api/companion", companionRoutes());
 app.route("/api/loadout", loadoutRoutes());
+app.route("/api/blueprints", blueprintRoutes());
 
 // Companion app auth flow — HTML pages outside /api/* (no CORS, no JSON middleware)
 app.route("/companion", companionAuthRoutes());

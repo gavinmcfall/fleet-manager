@@ -1,6 +1,6 @@
 import React, { useState, useMemo } from 'react'
-import { Gem } from 'lucide-react'
-import { HelpCircle } from 'lucide-react'
+import { Gem, HelpCircle, Bookmark, Check } from 'lucide-react'
+import { saveUserBlueprint } from '../../hooks/useAPI'
 import {
   interpolateModifier, multiplierToImprovement, formatImprovementWithWord,
   getStatLabel, getStatDescription,
@@ -268,13 +268,44 @@ export default function QualitySim({ blueprint }) {
   if (baseStats?.damage_type) infoRows.push({ label: 'Damage Type', value: baseStats.damage_type })
   if (baseStats?.fire_modes) infoRows.push({ label: 'Fire Modes', value: baseStats.fire_modes })
 
+  const [saveState, setSaveState] = useState('idle') // idle | saving | saved
+
+  const handleSave = async () => {
+    if (!blueprint.id) return
+    setSaveState('saving')
+    try {
+      await saveUserBlueprint({
+        craftingBlueprintId: blueprint.id,
+        qualityConfig: qualities,
+      })
+      setSaveState('saved')
+      setTimeout(() => setSaveState('idle'), 2000)
+    } catch {
+      setSaveState('idle')
+    }
+  }
+
   return (
     <div className="space-y-5">
       {/* Quality sliders — full width */}
       <div>
-        <div className="flex items-baseline justify-between mb-2">
+        <div className="flex items-center justify-between mb-2">
           <h4 className="text-xs uppercase tracking-wider text-gray-500">Material Quality</h4>
-          <span className="text-[10px] text-gray-600">Drag sliders to preview crafting effects</span>
+          <div className="flex items-center gap-3">
+            <span className="text-[10px] text-gray-600">Drag sliders to preview crafting effects</span>
+            <button
+              onClick={handleSave}
+              disabled={saveState !== 'idle'}
+              className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded text-[10px] font-medium transition-all ${
+                saveState === 'saved'
+                  ? 'bg-emerald-500/10 text-emerald-400 border border-emerald-500/20'
+                  : 'bg-white/[0.04] text-gray-400 border border-white/[0.06] hover:text-sc-accent hover:border-sc-accent/20 cursor-pointer'
+              }`}
+            >
+              {saveState === 'saved' ? <Check className="w-3 h-3" /> : <Bookmark className="w-3 h-3" />}
+              {saveState === 'saved' ? 'Saved' : saveState === 'saving' ? 'Saving...' : 'Save Config'}
+            </button>
+          </div>
         </div>
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-2">
           {slots.map((slot, i) => (
