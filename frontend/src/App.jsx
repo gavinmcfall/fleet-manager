@@ -77,6 +77,7 @@ const gameDataGroup = {
     { to: '/shops', icon: ShoppingCart, label: 'Shops' },
     { to: '/trade', icon: TrendingUp, label: 'Trade' },
     { to: '/mining', icon: Hammer, label: 'Mining Guide' },
+    { to: '/crafting', icon: FlaskConical, label: 'Crafting', minVersion: '4.7' },
     { to: '/npc-loadouts', icon: Users, label: 'NPC Loadouts' },
   ],
 }
@@ -102,7 +103,6 @@ const publicNavItems = [
 const authNavItems = [
   { to: '/', icon: BarChart3, label: 'Dashboard' },
   gameDataGroup,
-  { to: '/crafting', icon: FlaskConical, label: 'Crafting', minVersion: '4.7' },
   {
     group: 'My Fleet',
     icon: Rocket,
@@ -151,9 +151,21 @@ function meetsMinVersion(minVersion, activeCode) {
   return true
 }
 
+function filterByVersion(items, activeCode) {
+  return items
+    .map(item => {
+      if (item.items) {
+        const filtered = item.items.filter(sub => meetsMinVersion(sub.minVersion, activeCode))
+        return filtered.length > 0 ? { ...item, items: filtered } : null
+      }
+      return meetsMinVersion(item.minVersion, activeCode) ? item : null
+    })
+    .filter(Boolean)
+}
+
 function getNavItems(role, isLoggedIn, activeCode) {
-  if (!isLoggedIn) return [...publicNavItems]
-  const items = [...authNavItems].filter(item => meetsMinVersion(item.minVersion, activeCode))
+  if (!isLoggedIn) return filterByVersion([...publicNavItems], activeCode)
+  const items = filterByVersion([...authNavItems], activeCode)
   if (role === 'admin' || role === 'super_admin') {
     items.push(...adminNavItems)
   }
