@@ -62,13 +62,22 @@ const DIFF_COLORS = {
   Super: 'text-purple-400',
 }
 const DIFF_BAR_COLORS = {
-  Intro: 'bg-gray-500/40',
-  VeryEasy: 'bg-emerald-500/40',
-  Easy: 'bg-green-500/40',
-  Medium: 'bg-amber-500/40',
-  Hard: 'bg-orange-500/40',
-  VeryHard: 'bg-red-500/40',
-  Super: 'bg-purple-500/40',
+  Intro: 'bg-gray-500/50',
+  VeryEasy: 'bg-emerald-500/60',
+  Easy: 'bg-green-500/60',
+  Medium: 'bg-amber-500/60',
+  Hard: 'bg-orange-500/60',
+  VeryHard: 'bg-red-500/60',
+  Super: 'bg-purple-500/60',
+}
+const DIFF_BAR_GLOW = {
+  Intro: '',
+  VeryEasy: 'shadow-[inset_0_0_8px_rgba(16,185,129,0.3)]',
+  Easy: 'shadow-[inset_0_0_8px_rgba(34,197,94,0.3)]',
+  Medium: 'shadow-[inset_0_0_8px_rgba(245,158,11,0.3)]',
+  Hard: 'shadow-[inset_0_0_8px_rgba(249,115,22,0.3)]',
+  VeryHard: 'shadow-[inset_0_0_8px_rgba(239,68,68,0.3)]',
+  Super: 'shadow-[inset_0_0_8px_rgba(168,85,247,0.3)]',
 }
 const DIFF_LABELS = { VeryEasy: 'Very Easy', VeryHard: 'Very Hard' }
 
@@ -85,30 +94,44 @@ function formatRep(n) {
 }
 
 function RepProgressionBar({ tiers }) {
-  // 7 segments (ranks 0-6), each tier fills from its min_rank
   return (
     <div>
-      {/* Bar */}
-      <div className="flex h-3 rounded-full overflow-hidden bg-white/[0.04] border border-white/[0.06]">
+      {/* Rep thresholds above */}
+      <div className="flex mb-1">
+        {RANKS.map((r, i) => (
+          <div key={i} className="flex-1 text-center">
+            <span className="text-[10px] font-mono text-gray-500">{formatRep(r.min_rep)}</span>
+          </div>
+        ))}
+      </div>
+
+      {/* Bar — taller, with glow on active segments */}
+      <div className="flex h-5 rounded-lg overflow-hidden bg-white/[0.03] border border-white/[0.06]">
         {RANKS.map((r, i) => {
           const tier = tiers.find(t => t.min_rank === i)
           const barColor = tier ? (DIFF_BAR_COLORS[tier.difficulty] || 'bg-gray-500/30') : 'bg-white/[0.02]'
+          const glow = tier ? (DIFF_BAR_GLOW[tier.difficulty] || '') : ''
           return (
             <div
               key={i}
-              className={`flex-1 ${barColor} ${i > 0 ? 'border-l border-white/[0.08]' : ''} transition-colors`}
+              className={`flex-1 ${barColor} ${glow} ${i > 0 ? 'border-l border-white/[0.08]' : ''} flex items-center justify-center transition-all`}
               title={tier ? `${DIFF_LABELS[tier.difficulty] || tier.difficulty} — ${r.name}` : r.name}
-            />
+            >
+              {tier && (
+                <span className={`text-[8px] font-bold uppercase tracking-wider ${DIFF_COLORS[tier.difficulty] || 'text-gray-500'} drop-shadow-sm`}>
+                  {(DIFF_LABELS[tier.difficulty] || tier.difficulty).slice(0, 6)}
+                </span>
+              )}
+            </div>
           )
         })}
       </div>
 
-      {/* Labels: rank name on top, rep threshold on bottom */}
+      {/* Rank names below */}
       <div className="flex mt-1">
         {RANKS.map((r, i) => (
           <div key={i} className="flex-1 text-center">
-            <div className="text-[9px] text-gray-400 leading-tight">{r.name}</div>
-            <div className="text-[9px] text-gray-600 font-mono">{formatRep(r.min_rep)}</div>
+            <span className="text-[9px] text-gray-400 leading-tight">{r.name}</span>
           </div>
         ))}
       </div>
@@ -158,9 +181,9 @@ export default function MissionDetail() {
         <div className="absolute bottom-0 right-0 w-4 h-4 border-b border-r border-sc-accent/20 rounded-br-2xl" />
 
         <div className="flex items-start gap-6">
-          {/* Logo — large and prominent */}
+          {/* Logo — large and prominent, matches card height */}
           {logo && (
-            <img src={logo} alt={generator.display_name} className="w-24 h-24 rounded-xl border border-white/[0.08] object-cover shrink-0 shadow-lg shadow-black/20" />
+            <img src={logo} alt={generator.display_name} className="w-36 h-36 rounded-xl border border-white/[0.08] object-cover shrink-0 shadow-lg shadow-black/30 bg-white/[0.02]" />
           )}
 
           <div className="flex-1 min-w-0">
