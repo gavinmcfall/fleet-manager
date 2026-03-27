@@ -116,11 +116,19 @@ describe('PORT_CATEGORY_ORDER', () => {
     expect(pi).toBeGreaterThan(mi)
   })
 
-  it('point defense comes after missiles and before shields', () => {
+  it('torpedoes come after missiles and before point defense', () => {
     const mi = PORT_CATEGORY_ORDER.indexOf('Missiles')
+    const toi = PORT_CATEGORY_ORDER.indexOf('Torpedoes')
+    const pi = PORT_CATEGORY_ORDER.indexOf('Point Defense')
+    expect(toi).toBeGreaterThan(mi)
+    expect(pi).toBeGreaterThan(toi)
+  })
+
+  it('point defense comes after torpedoes and before shields', () => {
+    const toi = PORT_CATEGORY_ORDER.indexOf('Torpedoes')
     const pi = PORT_CATEGORY_ORDER.indexOf('Point Defense')
     const si = PORT_CATEGORY_ORDER.indexOf('Shields')
-    expect(pi).toBeGreaterThan(mi)
+    expect(pi).toBeGreaterThan(toi)
     expect(si).toBeGreaterThan(pi)
   })
 
@@ -234,6 +242,36 @@ describe('aggregateCombatStats', () => {
     expect(stats.totalDps).toBe(0)
     expect(stats.totalShieldHp).toBe(0)
     expect(stats.totalPowerOutput).toBe(0)
+  })
+})
+
+
+// ─── Weapon-turret detection ────────────────────────────────────────────────
+
+describe('isWeaponTurret', () => {
+  it('returns true for top-level weapon port with weapon_count > 1', () => {
+    // Terrapin Medic nose: port_type=weapon, weapon_count=2, no parent
+    const port = { port_type: 'weapon', parent_port_id: null, weapon_count: 2 }
+    const result = port.port_type === 'weapon' && !port.parent_port_id && port.weapon_count > 1
+    expect(result).toBe(true)
+  })
+
+  it('returns false for a normal top-level weapon with weapon_count 0 or 1', () => {
+    const single = { port_type: 'weapon', parent_port_id: null, weapon_count: 1 }
+    expect(single.port_type === 'weapon' && !single.parent_port_id && single.weapon_count > 1).toBe(false)
+
+    const zero = { port_type: 'weapon', parent_port_id: null, weapon_count: 0 }
+    expect(zero.port_type === 'weapon' && !zero.parent_port_id && zero.weapon_count > 1).toBe(false)
+  })
+
+  it('returns false for a child weapon port even with weapon_count > 1', () => {
+    const child = { port_type: 'weapon', parent_port_id: 42, weapon_count: 3 }
+    expect(child.port_type === 'weapon' && !child.parent_port_id && child.weapon_count > 1).toBe(false)
+  })
+
+  it('returns false for an actual turret port', () => {
+    const turret = { port_type: 'turret', parent_port_id: null, weapon_count: 2 }
+    expect(turret.port_type === 'weapon' && !turret.parent_port_id && turret.weapon_count > 1).toBe(false)
   })
 })
 

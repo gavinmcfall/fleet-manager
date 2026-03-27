@@ -362,6 +362,8 @@ export async function getShipLoadout(db: D1Database, slug: string, versionId?: n
         )
         -- Exclude individual missile slots (keep the rack)
         AND p.name NOT LIKE 'missile_%_attach'
+        -- Exclude individual torpedo storage slots (keep the rack)
+        AND p.name NOT LIKE 'hardpoint_torpedo_storage_%'
         -- Exclude access/hatch mechanism ports
         AND p.name NOT LIKE '%_access'
       ORDER BY

@@ -70,6 +70,7 @@ export const PORT_CATEGORY_ORDER = [
   'Weapons',
   'Turrets',
   'Missiles',
+  'Torpedoes',
   'Point Defense',
   'Shields',
   'Power Plants',

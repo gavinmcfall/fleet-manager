@@ -42,10 +42,14 @@ export default function Loadout() {
   const grouped = useMemo(() => {
     if (!stockComponents) return []
 
-    // Build set of turret port_ids so we can re-parent their children
+    // Build set of turret port_ids so we can re-parent their children.
+    // Includes weapon ports with weapon_count > 1 (e.g. Terrapin nose turret housing)
     const turretIds = new Set(
       stockComponents
-        .filter(c => c.port_type === 'turret' && !c.parent_port_id)
+        .filter(c => !c.parent_port_id && (
+          c.port_type === 'turret' ||
+          (c.port_type === 'weapon' && c.weapon_count > 1)
+        ))
         .map(c => c.port_id)
     )
 
@@ -62,18 +66,23 @@ export default function Loadout() {
     for (const comp of filtered) {
       // If this component's parent is a turret, force it into the Turrets group
       const isTurretChild = comp.parent_port_id && turretIds.has(comp.parent_port_id)
+      // Weapon ports that house multiple children are turrets (e.g. Terrapin nose)
+      const isWeaponTurret = comp.port_type === 'weapon' && !comp.parent_port_id && comp.weapon_count > 1
       // Missile racks on turret mounts should go in Missiles, not Turrets
       const isMissileRack = comp.mount_type === 'MissileLauncher' || comp.component_type === 'MissileLauncher'
       // Jump drives go into the Quantum Drives group
       const isJumpDrive = comp.port_type === 'jump_drive'
+      // Torpedo racks get their own section
+      const isTorpedo = (comp.port_name || '').toLowerCase().includes('torpedo')
       // PDC ports get their own section
       const isPDC = (comp.port_name || '').toLowerCase().includes('pdc')
-      const cat = isMissileRack ? 'Missiles'
+      const cat = isTorpedo && isMissileRack ? 'Torpedoes'
+        : isMissileRack ? 'Missiles'
         : isJumpDrive ? 'Quantum Drives'
         : isPDC ? 'Point Defense'
-        : isTurretChild ? 'Turrets'
+        : (isTurretChild || isWeaponTurret) ? 'Turrets'
         : getPortCategory(comp.port_type, comp.category_label)
-      if (!groups[cat]) groups[cat] = { label: cat, portType: isPDC ? 'turret' : isTurretChild ? 'turret' : comp.port_type, items: [] }
+      if (!groups[cat]) groups[cat] = { label: cat, portType: isPDC ? 'turret' : (isTurretChild || isWeaponTurret) ? 'turret' : comp.port_type, items: [] }
       groups[cat].items.push(comp)
     }
     return PORT_CATEGORY_ORDER.filter(cat => groups[cat]).map(cat => groups[cat])
@@ -94,7 +103,7 @@ export default function Loadout() {
   }, [grouped])
 
   // Split groups into left (weapons/turrets/missiles/pdc) and right (systems)
-  const leftCategories = ['Weapons', 'Turrets', 'Missiles', 'Point Defense']
+  const leftCategories = ['Weapons', 'Turrets', 'Missiles', 'Torpedoes', 'Point Defense']
   const leftGroups = grouped.filter(g => leftCategories.includes(g.label))
   const rightGroups = grouped.filter(g => !leftCategories.includes(g.label) && g.label !== 'Modules')
   const moduleGroup = grouped.find(g => g.label === 'Modules')
@@ -486,13 +495,20 @@ function SectionCard({ group, collapsed, setCollapsed, overrides, onResetCategor
             }
 
             // Turret housing — section header with weapon children
-            if (item.port_type === 'turret' && !item.parent_port_id) {
+            // Includes weapon ports with weapon_count > 1 (e.g. Terrapin nose)
+            const isTurretHousing = !item.parent_port_id && (
+              item.port_type === 'turret' ||
+              (item.port_type === 'weapon' && item.weapon_count > 1)
+            )
+            if (isTurretHousing) {
               const children = group.items.filter(c => c.parent_port_id === item.port_id)
               return <TurretHeader key={item.port_id} item={item} children={children} overrides={overrides} onOpenPicker={onOpenPicker} onAddToCart={onAddToCart} />
             }
 
             // Skip turret children — rendered inside their parent TurretHeader
-            if (item.parent_port_id && group.items.some(p => p.port_id === item.parent_port_id && p.port_type === 'turret')) {
+            if (item.parent_port_id && group.items.some(p => p.port_id === item.parent_port_id && (
+              p.port_type === 'turret' || (p.port_type === 'weapon' && p.weapon_count > 1)
+            ))) {
               return null
             }
 

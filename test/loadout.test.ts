@@ -562,6 +562,17 @@ describe("Loadout API — Asgard golden data", () => {
       uuid: "display-radar-uuid", name: "Radar_Display_Valkyrie", type: "Display",
       size: 1, grade: "A", manufacturer_id: MFR.anvil,
     });
+
+    // Torpedo storage slots (like Perseus hardpoint_torpedo_storage_*) — should be excluded
+    for (let i = 1; i <= 5; i++) {
+      const num = String(i).padStart(2, "0");
+      await seedPort(env.DB, {
+        uuid: `port-torpedo-storage-${num}`, vehicle_id: vid,
+        name: `hardpoint_torpedo_storage_${num}`,
+        category_label: "Missiles", size_min: 9, size_max: 9, port_type: "missile",
+        equipped_item_uuid: UUID.arresterMissile,
+      });
+    }
   });
 
   // =========================================================================
@@ -854,6 +865,16 @@ describe("Loadout API — Asgard golden data", () => {
     );
     // Exactly 2: hardpoint_weapon_left and hardpoint_weapon_right (children of bottom turret)
     expect(rhinos).toHaveLength(2);
+  });
+
+  it("excludes hardpoint_torpedo_storage_* slots from results", async () => {
+    const res = await SELF.fetch("http://localhost/api/loadout/asgard/components");
+    const data = (await res.json()) as Record<string, unknown>[];
+
+    const torpedoStorageSlots = data.filter((p) =>
+      (p.port_name as string).startsWith("hardpoint_torpedo_storage_")
+    );
+    expect(torpedoStorageSlots).toHaveLength(0);
   });
 
   it("COALESCE resolves mount vs deepest correctly — mount stays as mount_name", async () => {
