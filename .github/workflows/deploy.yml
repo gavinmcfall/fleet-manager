@@ -110,6 +110,7 @@ jobs:
         run: npx playwright test --config playwright.smoke.config.ts
         env:
           BASE_URL: https://staging.scbridge.app
+          SMOKE_BYPASS_KEY: ${{ secrets.SMOKE_TEST_BYPASS_KEY }}
 
       - name: Upload screenshots on failure
         if: failure()

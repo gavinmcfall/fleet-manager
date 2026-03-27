@@ -15,6 +15,9 @@ export default defineConfig({
   retries: 1,
   use: {
     baseURL: process.env.BASE_URL || "https://staging.scbridge.app",
+    extraHTTPHeaders: process.env.SMOKE_BYPASS_KEY
+      ? { "x-smoke-test-key": process.env.SMOKE_BYPASS_KEY }
+      : {},
     screenshot: "only-on-failure",
     trace: "on-first-retry",
   },
