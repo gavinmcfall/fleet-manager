@@ -172,32 +172,32 @@ function EquipmentPanel({ equipTab, setEquipTab }) {
 function Paperdoll() {
   return (
     <div className="relative w-full h-full">
-      {/* Right column — armor/clothing slots, hugging right separator */}
-      <PaperdollSlot icon="icon_common_helmet.svg" style={{ top: '7%', right: '3%' }} />
-      <PaperdollSlot icon="icon_common_glasses.svg" style={{ top: '18%', right: '3%' }} />
-      <PaperdollSlot icon="PIT_Looting_Core_Icon.svg" style={{ top: '33%', right: '3%' }} />
-      <PaperdollSlot icon="icon_common_arms.svg" style={{ top: '48%', right: '3%' }} />
-      <PaperdollSlot icon="PIT_Looting_Legs_Icon.svg" style={{ top: '63%', right: '3%' }} />
-      <PaperdollSlot icon="icon_common_shoe.svg" style={{ top: '78%', right: '3%' }} />
+      {/* Right column — armor/clothing slots, tight to right separator */}
+      <PaperdollSlot icon="icon_common_helmet.svg" style={{ top: '7%', right: '0' }} />
+      <PaperdollSlot icon="icon_common_glasses.svg" style={{ top: '18%', right: '0' }} />
+      <PaperdollSlot icon="PIT_Looting_Core_Icon.svg" style={{ top: '33%', right: '0' }} />
+      <PaperdollSlot icon="icon_common_arms.svg" style={{ top: '48%', right: '0' }} />
+      <PaperdollSlot icon="PIT_Looting_Legs_Icon.svg" style={{ top: '63%', right: '0' }} />
+      <PaperdollSlot icon="icon_common_shoe.svg" style={{ top: '78%', right: '0' }} />
 
-      {/* Left — Throwables row, hugging left separator */}
-      <div className="absolute flex gap-[0.3vw]" style={{ top: '12%', left: '2%' }}>
+      {/* Left — Throwables row, tight to left separator */}
+      <div className="absolute flex gap-[0.3vw]" style={{ top: '12%', left: '0' }}>
         {[0,1,2,3].map(i => <PaperdollSlot key={i} icon="icon_common_grenade.svg" small />)}
       </div>
 
       {/* Left — Backpack */}
-      <PaperdollSlot icon="PIT_Looting_Backpack_Icon.svg" style={{ top: '24%', left: '2%' }} />
+      <PaperdollSlot icon="PIT_Looting_Backpack_Icon.svg" style={{ top: '24%', left: '0' }} />
 
       {/* Left — Magazines (2 rows of 4) */}
-      <div className="absolute flex gap-[0.3vw]" style={{ top: '44%', left: '2%' }}>
+      <div className="absolute flex gap-[0.3vw]" style={{ top: '44%', left: '0' }}>
         {[0,1,2,3].map(i => <PaperdollSlot key={i} icon="icon_common_magazine.svg" small />)}
       </div>
-      <div className="absolute flex gap-[0.3vw]" style={{ top: '50%', left: '2%' }}>
+      <div className="absolute flex gap-[0.3vw]" style={{ top: '50%', left: '0' }}>
         {[0,1,2,3].map(i => <PaperdollSlot key={i} icon="icon_common_magazine.svg" small />)}
       </div>
 
       {/* Left — Consumables (1 row of 4) */}
-      <div className="absolute flex gap-[0.3vw]" style={{ top: '66%', left: '2%' }}>
+      <div className="absolute flex gap-[0.3vw]" style={{ top: '66%', left: '0' }}>
         {[0,1,2,3].map(i => <PaperdollSlot key={i} icon="icon_common_consumable.svg" small />)}
       </div>
 
