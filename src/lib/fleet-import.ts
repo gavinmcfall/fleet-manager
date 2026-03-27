@@ -81,6 +81,13 @@ function stripMkSuffix(name: string): string | null {
   return stripped !== name ? stripped : null;
 }
 
+/** Normalize arabic Mk numerals to roman: "Mk 1" → "Mk I", "Mk 2" → "Mk II" */
+const ARABIC_TO_ROMAN: Record<string, string> = { "1": "I", "2": "II", "3": "III", "4": "IV", "5": "V" };
+function normalizeMkNumeral(name: string): string | null {
+  const replaced = name.replace(/\bMk\s+(\d)\b/i, (_, d) => `Mk ${ARABIC_TO_ROMAN[d] || d}`);
+  return replaced !== name ? replaced : null;
+}
+
 export function findVehicleSlugLocal(
   map: VehicleMap,
   candidateSlugs: string[],
@@ -117,6 +124,46 @@ export function findVehicleSlugLocal(
       if (map.slugToID.has(noMkSlug)) return noMkSlug;
       const noMkCompact = compactSlug(noMkSlug);
       const compactFound = map.compactToSlug.get(noMkCompact);
+      if (compactFound) return compactFound;
+    }
+  }
+
+  // Try arabic→roman Mk normalization: "F7A Hornet Mk 1" → "F7A Hornet Mk I"
+  if (displayName) {
+    const normalized = normalizeMkNumeral(displayName);
+    if (normalized) {
+      const found = map.nameToSlug.get(normalized.toLowerCase());
+      if (found) return found;
+      const normSlug = slugFromName(normalized);
+      if (map.slugToID.has(normSlug)) return normSlug;
+    }
+  }
+
+  // Try dropping first word — handles manufacturer/race prefixes
+  // e.g. "Vanduul Blade" → "Blade", "Crusader Hercules" → "Hercules"
+  if (displayName) {
+    const words = displayName.split(/\s+/);
+    if (words.length >= 2) {
+      const stripped = words.slice(1).join(" ");
+      const found = map.nameToSlug.get(stripped.toLowerCase());
+      if (found) return found;
+      const strippedSlug = slugFromName(stripped);
+      if (map.slugToID.has(strippedSlug)) return strippedSlug;
+    }
+  }
+
+  // Try moving last word to front — handles model-prefix reordering
+  // e.g. "Hercules Starlifter M2" → "M2 Hercules Starlifter"
+  if (displayName) {
+    const words = displayName.split(/\s+/);
+    if (words.length >= 2) {
+      const reordered = [words[words.length - 1], ...words.slice(0, -1)].join(" ");
+      const found = map.nameToSlug.get(reordered.toLowerCase());
+      if (found) return found;
+      const reorderedSlug = slugFromName(reordered);
+      if (map.slugToID.has(reorderedSlug)) return reorderedSlug;
+      const reorderedCompact = compactSlug(reorderedSlug);
+      const compactFound = map.compactToSlug.get(reorderedCompact);
       if (compactFound) return compactFound;
     }
   }
