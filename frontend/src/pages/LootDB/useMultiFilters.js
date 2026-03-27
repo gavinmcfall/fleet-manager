@@ -2,20 +2,7 @@ import { useMemo, useCallback } from 'react'
 import { useSearchParams } from 'react-router-dom'
 import { FILTER_DIMENSIONS } from './filterDimensions'
 
-/**
- * Custom hook for multi-dimensional filters with include/exclude semantics.
- *
- * URL params: f_{dimKey}=val1,val2 (include), fx_{dimKey}=val1 (exclude)
- *
- * Returns:
- *   dimensions — array of dimension configs for the active category
- *   includes — { [dimKey]: Set<string> }
- *   excludes — { [dimKey]: Set<string> }
- *   toggle(dimKey, value, event) — handles click/shift/ctrl semantics
- *   clearDimension(dimKey) — clear all filters for one dimension
- *   clearAll() — clear all f_*/fx_* params
- *   hasAny — whether any dimension filter is active
- */
+/** Multi-dimensional filters with include/exclude semantics via URL params. */
 export default function useMultiFilters(category) {
   const [searchParams, setSearchParams] = useSearchParams()
 
