@@ -1362,7 +1362,7 @@ export function gamedataRoutes<E extends HonoEnv>() {
             WHEN cl.slot IN ('Boots','boots','Shoes') THEN 'boots'
             WHEN cl.slot IN ('Glasses','glasses','Visor') THEN 'glasses'
             ELSE 'clothing' END as slot, 'fps_clothing' as source_table,
-          cl.id, cl.uuid, cl.name, cl.class_name, cl.sub_type, cl.size,
+          cl.id, cl.uuid, cl.name, cl.class_name, cl.slot as sub_type, cl.size,
           m.name as manufacturer_name, lm.rarity, lm.category, cl.grade,
           cl.slot as slot_name
           FROM fps_clothing cl ${dvj("fps_clothing", "cl")}
