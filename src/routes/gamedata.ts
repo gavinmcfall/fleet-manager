@@ -1240,6 +1240,13 @@ export function gamedataRoutes<E extends HonoEnv>() {
         }
       }
 
+      // Compute summary: unique systems and rep range
+      const systems = [...new Set(careers.results.map(c => c.system as string).filter(Boolean))]
+      const allStandings = contracts.results.flatMap(c => [c.min_standing as string, c.max_standing as string]).filter(Boolean)
+      const repRange = allStandings.length > 0
+        ? { min: allStandings.sort()[0], max: allStandings.sort().pop()! }
+        : null
+
       return {
         generator: {
           key: gen.generator_key,
@@ -1247,12 +1254,13 @@ export function gamedataRoutes<E extends HonoEnv>() {
           faction_name: gen.faction_name,
           guild: gen.guild,
           mission_type: gen.mission_type,
+          description: gen.description || null,
+          focus: gen.focus || null,
+          headquarters: gen.headquarters || null,
+          leadership: gen.leadership || null,
         },
-        careers: careers.results.map(career => ({
-          debug_name: career.debug_name,
-          system: career.system,
-          contracts: contractsByCareer.get(career.id as number) || [],
-        })),
+        systems,
+        rep_range: repRange,
         all_blueprints: [...allBlueprints.values()],
       }
     })

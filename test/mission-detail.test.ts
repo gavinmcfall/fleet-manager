@@ -141,7 +141,7 @@ describe("Mission Detail API", () => {
   });
 
   describe("GET /api/gamedata/mission/:key", () => {
-    it("returns generator with careers and blueprint pools", async () => {
+    it("returns generator with systems and blueprint rewards", async () => {
       const res = await SELF.fetch(
         "http://localhost/api/gamedata/mission/test_recoveritem"
       );
@@ -153,20 +153,11 @@ describe("Mission Detail API", () => {
           faction_name: string;
           guild: string;
           mission_type: string;
+          description: string | null;
+          focus: string | null;
         };
-        careers: {
-          debug_name: string;
-          system: string;
-          contracts: {
-            debug_name: string;
-            difficulty: string;
-            template: string;
-            blueprint_pools: {
-              pool_key: string;
-              blueprints: { id: number; name: string; type: string }[];
-            }[];
-          }[];
-        }[];
+        systems: string[];
+        rep_range: { min: string; max: string } | null;
         all_blueprints: { id: number; name: string; type: string }[];
       };
 
@@ -176,24 +167,12 @@ describe("Mission Detail API", () => {
       expect(body.generator.guild).toBe("mercenary_guild");
       expect(body.generator.mission_type).toBe("Recovery");
 
-      // Careers
-      expect(body.careers).toHaveLength(1);
-      expect(body.careers[0].system).toBe("Stanton");
-      expect(body.careers[0].contracts).toHaveLength(2);
+      // Systems
+      expect(body.systems).toContain("Stanton");
 
-      // Contracts have difficulty tiers
-      const difficulties = body.careers[0].contracts.map(
-        (c: { difficulty: string }) => c.difficulty
-      );
-      expect(difficulties).toContain("Easy");
-      expect(difficulties).toContain("Hard");
-
-      // Blueprint pools are attached to contracts
-      const easyContract = body.careers[0].contracts.find(
-        (c: { difficulty: string }) => c.difficulty === "Easy"
-      )!;
-      expect(easyContract.blueprint_pools).toHaveLength(1);
-      expect(easyContract.blueprint_pools[0].blueprints).toHaveLength(2);
+      // Rep range
+      expect(body.rep_range).toBeTruthy();
+      expect(body.rep_range!.min).toBe("rank1");
 
       // All blueprints aggregated
       expect(body.all_blueprints).toHaveLength(2);
