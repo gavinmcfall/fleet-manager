@@ -192,7 +192,7 @@ export async function getShipLoadout(db: D1Database, slug: string, versionId?: n
       `WITH ship_ports AS (
         SELECT vp.* FROM vehicle_ports vp
         ${deltaVersionJoin('vehicle_ports', 'vp', 'uuid', versionId)}
-        WHERE vp.vehicle_id = (SELECT v.id FROM vehicles v ${vehicleVersionJoin(versionId)} WHERE v.slug = ?)
+        WHERE vp.vehicle_id IN (SELECT v.id FROM vehicles v WHERE v.slug = ?)
       ),
       -- Walk from each returned port down to its deepest child with a real component.
       -- Starts from top-level ports AND turret children (which are also returned in results).
