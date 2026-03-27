@@ -279,31 +279,27 @@ export function loadoutRoutes() {
       .bind(...componentTypes, ...(resolvedSizeMin === 0 && resolvedSizeMax === 0 ? [] : [resolvedSizeMin, resolvedSizeMax]))
       .all();
 
-    // Fetch shop availability for all compatible components
+    // Fetch shop availability via loot_map → loot_item_locations (source_type='shop')
+    const classNames = components.results.map((c: any) => c.class_name).filter(Boolean);
     const componentUuids = components.results.map((c: any) => c.uuid).filter(Boolean);
-    let shopMap: Record<string, Array<{ shop_id: number; shop_name: string; shop_slug: string; location_label: string; buy_price: number | null }>> = {};
+    let shopMap: Record<string, Array<{ location_key: string; buy_price: number | null }>> = {};
 
-    if (componentUuids.length > 0) {
+    if (classNames.length > 0) {
       const shopRows = await batchInQuery<any>(
         db,
-        componentUuids,
+        classNames,
         (ph) =>
-          `SELECT si.item_uuid, si.buy_price, s.id AS shop_id, s.name AS shop_name,
-                  s.slug AS shop_slug, s.location_label
-           FROM shop_inventory si
-           JOIN shops s ON s.id = si.shop_id
-           ${deltaVersionJoin('shops', 's', 'uuid', versionId)}
-           WHERE si.item_uuid IN (${ph})
-             AND si.game_version_id <= ${vq}`,
+          `SELECT lm.class_name, lil.location_key, lil.buy_price
+           FROM loot_item_locations lil
+           JOIN loot_map lm ON lm.id = lil.loot_map_id
+           WHERE lil.source_type = 'shop' AND lil.buy_price > 0
+             AND lm.class_name IN (${ph})`,
       );
 
       for (const row of shopRows) {
-        if (!shopMap[row.item_uuid]) shopMap[row.item_uuid] = [];
-        shopMap[row.item_uuid].push({
-          shop_id: row.shop_id,
-          shop_name: row.shop_name,
-          shop_slug: row.shop_slug,
-          location_label: row.location_label,
+        if (!shopMap[row.class_name]) shopMap[row.class_name] = [];
+        shopMap[row.class_name].push({
+          location_key: row.location_key,
           buy_price: row.buy_price,
         });
       }
@@ -391,7 +387,7 @@ export function loadoutRoutes() {
     const enriched = components.results.map((comp: any) => ({
       ...comp,
       is_stock: comp.uuid === stockUuid,
-      shops: shopMap[comp.uuid] || [],
+      shops: shopMap[comp.class_name] || [],
       in_collection: collectionSet.has(comp.class_name),
       on_ships: fleetMap[comp.uuid] || [],
     }));
@@ -515,26 +511,22 @@ export function loadoutRoutes() {
     const rows = await c.env.DB
       .prepare(
         `SELECT ulc.id, ulc.component_id, ulc.shop_id, ulc.quantity, ulc.source_fleet_id,
-                vc.name AS component_name, vc.uuid AS component_uuid, vc.type, vc.size, vc.grade,
+                vc.name AS component_name, vc.uuid AS component_uuid, vc.class_name, vc.type, vc.size, vc.grade,
                 m.name AS manufacturer_name,
-                COALESCE(s.name, cheapest.shop_name) AS shop_name,
-                COALESCE(s.slug, cheapest.shop_slug) AS shop_slug,
-                COALESCE(s.location_label, cheapest.location_label) AS location_label,
-                COALESCE(si.buy_price, cheapest.buy_price) AS buy_price,
+                cheapest.location_key AS shop_name,
+                cheapest.buy_price,
                 uf.custom_name AS fleet_custom_name,
                 v.name AS fleet_ship_name
          FROM user_loadout_cart ulc
          JOIN vehicle_components vc ON vc.id = ulc.component_id
          LEFT JOIN manufacturers m ON m.id = vc.manufacturer_id
-         LEFT JOIN shops s ON s.id = ulc.shop_id
-         LEFT JOIN shop_inventory si ON si.shop_id = s.id AND si.item_uuid = vc.uuid
          LEFT JOIN (
-           SELECT si2.item_uuid, si2.buy_price, sh.name AS shop_name, sh.slug AS shop_slug, sh.location_label,
-                  ROW_NUMBER() OVER (PARTITION BY si2.item_uuid ORDER BY si2.buy_price ASC) AS rn
-           FROM shop_inventory si2
-           JOIN shops sh ON sh.id = si2.shop_id
-           WHERE si2.buy_price IS NOT NULL AND si2.buy_price > 0
-         ) cheapest ON cheapest.item_uuid = vc.uuid AND cheapest.rn = 1
+           SELECT lm.class_name, lil.location_key, lil.buy_price,
+                  ROW_NUMBER() OVER (PARTITION BY lm.class_name ORDER BY lil.buy_price ASC) AS rn
+           FROM loot_item_locations lil
+           JOIN loot_map lm ON lm.id = lil.loot_map_id
+           WHERE lil.source_type = 'shop' AND lil.buy_price > 0
+         ) cheapest ON cheapest.class_name = vc.class_name AND cheapest.rn = 1
          LEFT JOIN user_fleet uf ON uf.id = ulc.source_fleet_id
          LEFT JOIN vehicles v ON v.id = uf.vehicle_id
          WHERE ulc.user_id = ?

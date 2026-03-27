@@ -442,8 +442,7 @@ export default function Loadout() {
           currentOverride={overrides[pickerPortId]}
           onSelect={(comp) => handleSelectComponent(pickerPortId, comp)}
           onAddToCart={async (comp) => {
-            const cheapestShop = comp.shops?.length ? comp.shops.reduce((a, b) => (a.buy_price || Infinity) < (b.buy_price || Infinity) ? a : b) : null
-            await addToLoadoutCart([{ component_id: comp.id, shop_id: cheapestShop?.shop_id || undefined, source_fleet_id: fleetId || undefined }])
+            await addToLoadoutCart([{ component_id: comp.id, source_fleet_id: fleetId || undefined }])
             refetchCart()
           }}
           onClose={() => setPickerPortId(null)}
