@@ -66,11 +66,14 @@ export default function Loadout() {
       const isMissileRack = comp.mount_type === 'MissileLauncher' || comp.component_type === 'MissileLauncher'
       // Jump drives go into the Quantum Drives group
       const isJumpDrive = comp.port_type === 'jump_drive'
+      // PDC ports get their own section
+      const isPDC = (comp.port_name || '').toLowerCase().includes('pdc')
       const cat = isMissileRack ? 'Missiles'
         : isJumpDrive ? 'Quantum Drives'
+        : isPDC ? 'Point Defense'
         : isTurretChild ? 'Turrets'
         : getPortCategory(comp.port_type, comp.category_label)
-      if (!groups[cat]) groups[cat] = { label: cat, portType: isTurretChild ? 'turret' : comp.port_type, items: [] }
+      if (!groups[cat]) groups[cat] = { label: cat, portType: isPDC ? 'turret' : isTurretChild ? 'turret' : comp.port_type, items: [] }
       groups[cat].items.push(comp)
     }
     return PORT_CATEGORY_ORDER.filter(cat => groups[cat]).map(cat => groups[cat])
@@ -82,8 +85,16 @@ export default function Loadout() {
     return aggregateCombatStats(stockComponents)
   }, [stockComponents])
 
-  // Split groups into left (weapons/turrets/missiles) and right (systems)
-  const leftCategories = ['Weapons', 'Turrets', 'Missiles']
+  // Auto-collapse Point Defense section when >6 items
+  useEffect(() => {
+    const pdcGroup = grouped.find(g => g.label === 'Point Defense')
+    if (pdcGroup && pdcGroup.items.length > 6) {
+      setCollapsed(prev => ({ ...prev, 'Point Defense': prev['Point Defense'] ?? true }))
+    }
+  }, [grouped])
+
+  // Split groups into left (weapons/turrets/missiles/pdc) and right (systems)
+  const leftCategories = ['Weapons', 'Turrets', 'Missiles', 'Point Defense']
   const leftGroups = grouped.filter(g => leftCategories.includes(g.label))
   const rightGroups = grouped.filter(g => !leftCategories.includes(g.label) && g.label !== 'Modules')
   const moduleGroup = grouped.find(g => g.label === 'Modules')

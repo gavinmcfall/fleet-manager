@@ -108,14 +108,24 @@ describe('PORT_CATEGORY_ORDER', () => {
     expect(wi).toBeLessThan(ti)
   })
 
-  it('shields come after turrets', () => {
+  it('missiles come after turrets and before point defense', () => {
     const ti = PORT_CATEGORY_ORDER.indexOf('Turrets')
+    const mi = PORT_CATEGORY_ORDER.indexOf('Missiles')
+    const pi = PORT_CATEGORY_ORDER.indexOf('Point Defense')
+    expect(mi).toBeGreaterThan(ti)
+    expect(pi).toBeGreaterThan(mi)
+  })
+
+  it('point defense comes after missiles and before shields', () => {
+    const mi = PORT_CATEGORY_ORDER.indexOf('Missiles')
+    const pi = PORT_CATEGORY_ORDER.indexOf('Point Defense')
     const si = PORT_CATEGORY_ORDER.indexOf('Shields')
-    expect(si).toBeGreaterThan(ti)
+    expect(pi).toBeGreaterThan(mi)
+    expect(si).toBeGreaterThan(pi)
   })
 
   it('includes all major categories', () => {
-    for (const cat of ['Weapons', 'Turrets', 'Missiles', 'Shields', 'Power Plants', 'Coolers', 'Quantum Drives', 'Sensors']) {
+    for (const cat of ['Weapons', 'Turrets', 'Missiles', 'Point Defense', 'Shields', 'Power Plants', 'Coolers', 'Quantum Drives', 'Sensors']) {
       expect(PORT_CATEGORY_ORDER).toContain(cat)
     }
   })
