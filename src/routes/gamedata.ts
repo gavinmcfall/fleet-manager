@@ -1321,155 +1321,77 @@ export function gamedataRoutes<E extends HonoEnv>() {
   app.get("/fps-gear", async (c) => {
     const db = c.env.DB
     const patch = c.req.query("patch")
-    const search = c.req.query("search")
-    const type = c.req.query("type")
-    const subType = c.req.query("sub_type")
     const versionId = await resolveVersionId(db, patch)
 
-    // Each table contributes a UNION branch with normalized columns.
-    // The `slot` column maps items to paperdoll positions.
     const dvj = (table: string, alias: string, identityCol: string = "uuid") =>
       deltaVersionJoin(table, alias, identityCol, versionId)
 
-    const unionQuery = `
-      SELECT 'weapon' as slot, 'fps_weapons' as source_table,
-        w.id, w.uuid, w.name, w.class_name, w.sub_type, w.size,
-        m.name as manufacturer_name,
-        lm.rarity, lm.category,
-        w.damage, w.dps, w.rounds_per_minute, w.ammo_capacity,
-        w.effective_range, w.damage_type, w.fire_modes,
-        NULL as resist_physical, NULL as resist_energy,
-        NULL as resist_distortion, NULL as resist_thermal,
-        NULL as resist_biochemical, NULL as resist_stun,
-        NULL as grade, NULL as slot_name
-      FROM fps_weapons w
-      ${dvj("fps_weapons", "w")}
-      LEFT JOIN manufacturers m ON m.id = w.manufacturer_id
-      LEFT JOIN loot_map lm ON lm.fps_weapon_id = w.id
-
-      UNION ALL
-
-      SELECT CASE
-          WHEN a.sub_type IN ('Arms', 'arms') THEN 'arms'
-          WHEN a.sub_type IN ('Legs', 'legs') THEN 'legs'
-          ELSE 'core'
-        END as slot, 'fps_armour' as source_table,
-        a.id, a.uuid, a.name, a.class_name, a.sub_type, a.size,
-        m.name as manufacturer_name,
-        lm.rarity, lm.category,
-        NULL, NULL, NULL, NULL, NULL, NULL, NULL,
-        a.resist_physical, a.resist_energy,
-        a.resist_distortion, a.resist_thermal,
-        a.resist_biochemical, a.resist_stun,
-        a.grade, NULL
-      FROM fps_armour a
-      ${dvj("fps_armour", "a")}
-      LEFT JOIN manufacturers m ON m.id = a.manufacturer_id
-      LEFT JOIN loot_map lm ON lm.fps_armour_id = a.id
-
-      UNION ALL
-
-      SELECT 'helmet' as slot, 'fps_helmets' as source_table,
-        h.id, h.uuid, h.name, h.class_name, h.sub_type, CAST(h.size AS INTEGER),
-        m.name as manufacturer_name,
-        lm.rarity, lm.category,
-        NULL, NULL, NULL, NULL, NULL, NULL, NULL,
-        h.resist_physical, h.resist_energy,
-        h.resist_distortion, h.resist_thermal,
-        h.resist_biochemical, h.resist_stun,
-        h.grade, NULL
-      FROM fps_helmets h
-      ${dvj("fps_helmets", "h")}
-      LEFT JOIN manufacturers m ON m.id = h.manufacturer_id
-      LEFT JOIN loot_map lm ON lm.fps_helmet_id = h.id
-
-      UNION ALL
-
-      SELECT CASE
-          WHEN cl.slot IN ('Backpack', 'backpack') THEN 'backpack'
-          WHEN cl.slot IN ('Undersuit', 'undersuit') THEN 'undersuit'
-          WHEN cl.slot IN ('Boots', 'boots', 'Shoes') THEN 'boots'
-          WHEN cl.slot IN ('Glasses', 'glasses', 'Visor') THEN 'glasses'
-          ELSE 'clothing'
-        END as slot, 'fps_clothing' as source_table,
-        cl.id, cl.uuid, cl.name, cl.class_name, cl.sub_type, CAST(cl.size AS INTEGER),
-        m.name as manufacturer_name,
-        lm.rarity, lm.category,
-        NULL, NULL, NULL, NULL, NULL, NULL, NULL,
-        NULL, NULL, NULL, NULL, NULL, NULL,
-        cl.grade, cl.slot as slot_name
-      FROM fps_clothing cl
-      ${dvj("fps_clothing", "cl")}
-      LEFT JOIN manufacturers m ON m.id = cl.manufacturer_id
-      LEFT JOIN loot_map lm ON lm.fps_clothing_id = cl.id
-
-      UNION ALL
-
-      SELECT 'attachment' as slot, 'fps_attachments' as source_table,
-        at.id, at.uuid, at.name, at.class_name, at.sub_type, at.size,
-        m.name as manufacturer_name,
-        lm.rarity, lm.category,
-        NULL, NULL, NULL, NULL, NULL, NULL, NULL,
-        NULL, NULL, NULL, NULL, NULL, NULL,
-        NULL, NULL
-      FROM fps_attachments at
-      ${dvj("fps_attachments", "at")}
-      LEFT JOIN manufacturers m ON m.id = at.manufacturer_id
-      LEFT JOIN loot_map lm ON lm.fps_attachment_id = at.id
-
-      UNION ALL
-
-      SELECT 'gadget' as slot, 'fps_utilities' as source_table,
-        u.id, u.uuid, u.name, u.class_name, u.sub_type, NULL,
-        m.name as manufacturer_name,
-        lm.rarity, lm.category,
-        NULL, NULL, NULL, NULL, NULL, NULL, NULL,
-        NULL, NULL, NULL, NULL, NULL, NULL,
-        NULL, NULL
-      FROM fps_utilities u
-      ${dvj("fps_utilities", "u")}
-      LEFT JOIN manufacturers m ON m.id = u.manufacturer_id
-      LEFT JOIN loot_map lm ON lm.fps_utility_id = u.id
-
-      UNION ALL
-
-      SELECT 'melee' as slot, 'fps_melee' as source_table,
-        me.id, me.uuid, me.name, me.class_name, me.sub_type, me.size,
-        m.name as manufacturer_name,
-        NULL as rarity, NULL as category,
-        me.damage, NULL, NULL, NULL, me.range, me.damage_type, NULL,
-        NULL, NULL, NULL, NULL, NULL, NULL,
-        NULL, NULL
-      FROM fps_melee me
-      ${dvj("fps_melee", "me")}
-      LEFT JOIN manufacturers m ON m.id = me.manufacturer_id
-
-      ORDER BY name
-    `
-
     return cachedJson(c, `gd:fps-gear:${versionId}`, async () => {
-      const { results } = await db.prepare(unionQuery).all()
+      // Run queries in parallel — avoids D1 query size limit from a 7-table UNION
+      const [weapons, armour, helmets, clothing, attachments, utilities, melee] = await Promise.all([
+        db.prepare(`SELECT 'weapon' as slot, 'fps_weapons' as source_table,
+          w.id, w.uuid, w.name, w.class_name, w.sub_type, w.size,
+          m.name as manufacturer_name, lm.rarity, lm.category,
+          w.damage, w.dps, w.rounds_per_minute, w.ammo_capacity,
+          w.effective_range, w.damage_type, w.fire_modes, w.grade
+          FROM fps_weapons w ${dvj("fps_weapons", "w")}
+          LEFT JOIN manufacturers m ON m.id = w.manufacturer_id
+          LEFT JOIN loot_map lm ON lm.fps_weapon_id = w.id`).all(),
+        db.prepare(`SELECT CASE
+            WHEN a.sub_type IN ('Arms','arms') THEN 'arms'
+            WHEN a.sub_type IN ('Legs','legs') THEN 'legs'
+            ELSE 'core' END as slot, 'fps_armour' as source_table,
+          a.id, a.uuid, a.name, a.class_name, a.sub_type, a.size,
+          m.name as manufacturer_name, lm.rarity, lm.category, a.grade,
+          a.resist_physical, a.resist_energy, a.resist_distortion,
+          a.resist_thermal, a.resist_biochemical, a.resist_stun
+          FROM fps_armour a ${dvj("fps_armour", "a")}
+          LEFT JOIN manufacturers m ON m.id = a.manufacturer_id
+          LEFT JOIN loot_map lm ON lm.fps_armour_id = a.id`).all(),
+        db.prepare(`SELECT 'helmet' as slot, 'fps_helmets' as source_table,
+          h.id, h.uuid, h.name, h.class_name, h.sub_type, h.size,
+          m.name as manufacturer_name, lm.rarity, lm.category, h.grade,
+          h.resist_physical, h.resist_energy, h.resist_distortion,
+          h.resist_thermal, h.resist_biochemical, h.resist_stun
+          FROM fps_helmets h ${dvj("fps_helmets", "h")}
+          LEFT JOIN manufacturers m ON m.id = h.manufacturer_id
+          LEFT JOIN loot_map lm ON lm.fps_helmet_id = h.id`).all(),
+        db.prepare(`SELECT CASE
+            WHEN cl.slot IN ('Backpack','backpack') THEN 'backpack'
+            WHEN cl.slot IN ('Undersuit','undersuit') THEN 'undersuit'
+            WHEN cl.slot IN ('Boots','boots','Shoes') THEN 'boots'
+            WHEN cl.slot IN ('Glasses','glasses','Visor') THEN 'glasses'
+            ELSE 'clothing' END as slot, 'fps_clothing' as source_table,
+          cl.id, cl.uuid, cl.name, cl.class_name, cl.sub_type, cl.size,
+          m.name as manufacturer_name, lm.rarity, lm.category, cl.grade,
+          cl.slot as slot_name
+          FROM fps_clothing cl ${dvj("fps_clothing", "cl")}
+          LEFT JOIN manufacturers m ON m.id = cl.manufacturer_id
+          LEFT JOIN loot_map lm ON lm.fps_clothing_id = cl.id`).all(),
+        db.prepare(`SELECT 'attachment' as slot, 'fps_attachments' as source_table,
+          at.id, at.uuid, at.name, at.class_name, at.sub_type, at.size,
+          m.name as manufacturer_name, lm.rarity, lm.category
+          FROM fps_attachments at ${dvj("fps_attachments", "at")}
+          LEFT JOIN manufacturers m ON m.id = at.manufacturer_id
+          LEFT JOIN loot_map lm ON lm.fps_attachment_id = at.id`).all(),
+        db.prepare(`SELECT 'gadget' as slot, 'fps_utilities' as source_table,
+          u.id, u.uuid, u.name, u.class_name, u.sub_type,
+          m.name as manufacturer_name, lm.rarity, lm.category
+          FROM fps_utilities u ${dvj("fps_utilities", "u")}
+          LEFT JOIN manufacturers m ON m.id = u.manufacturer_id
+          LEFT JOIN loot_map lm ON lm.fps_utility_id = u.id`).all(),
+        db.prepare(`SELECT 'melee' as slot, 'fps_melee' as source_table,
+          me.id, me.uuid, me.name, me.class_name, me.sub_type, me.size,
+          m.name as manufacturer_name, me.damage, me.damage_type
+          FROM fps_melee me ${dvj("fps_melee", "me")}
+          LEFT JOIN manufacturers m ON m.id = me.manufacturer_id`).all(),
+      ])
 
-      let items = results
-
-      // Server-side filtering
-      if (type) {
-        items = items.filter((r) => r.source_table === `fps_${type}` || r.slot === type)
-      }
-      if (subType) {
-        items = items.filter(
-          (r) => (r.sub_type as string)?.toLowerCase() === subType.toLowerCase(),
-        )
-      }
-      if (search) {
-        const tokens = search.toLowerCase().split(/\s+/).filter(Boolean)
-        items = items.filter((r) => {
-          const name = (r.name as string).toLowerCase()
-          const mfr = ((r.manufacturer_name as string) ?? "").toLowerCase()
-          const haystack = `${name} ${mfr}`
-          return tokens.every((t) => haystack.includes(t))
-        })
-      }
+      const items = [
+        ...weapons.results, ...armour.results, ...helmets.results,
+        ...clothing.results, ...attachments.results, ...utilities.results,
+        ...melee.results,
+      ].sort((a, b) => ((a.name as string) ?? "").localeCompare((b.name as string) ?? ""))
 
       return { items, total: items.length }
     })
