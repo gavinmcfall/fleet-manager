@@ -197,12 +197,12 @@ function Paperdoll() {
       </div>
 
       {/* Left — Consumables (1 row of 4) */}
-      <div className="absolute flex gap-[0.3vw]" style={{ top: '66%', left: '6%' }}>
+      <div className="absolute flex gap-[0.3vw]" style={{ top: '60%', left: '6%' }}>
         {[0,1,2,3].map(i => <PaperdollSlot key={i} icon="icon_common_consumable.svg" small />)}
       </div>
 
-      {/* Center label */}
-      <div className="absolute left-1/2 top-[3%] -translate-x-1/2 text-[10px] tracking-[0.2em] uppercase" style={{ color: 'rgba(192,246,254,0.3)' }}>
+      {/* Center label — pinned to center of paperdoll area */}
+      <div className="absolute left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 text-[30px] tracking-[0.3em] uppercase pointer-events-none" style={{ color: 'rgba(192,246,254,0.12)' }}>
         LOADOUT
       </div>
     </div>
@@ -266,7 +266,6 @@ export default function FpsLoadout() {
       className="relative w-full overflow-hidden"
       style={{
         height: 'calc(100vh - 3rem)',
-        background: '#000306',
         color: '#c0f6fe',
         fontFamily: 'sans-serif',
       }}
