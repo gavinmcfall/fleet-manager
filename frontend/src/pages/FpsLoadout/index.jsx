@@ -274,42 +274,22 @@ export default function FpsLoadout() {
       <div className="absolute inset-0 flex items-center justify-center">
         <div className="relative w-full h-full" style={{ perspective: '2200px' }}>
 
-          {/* Panel frame backgrounds — pinned to edges, cover full side */}
+          {/* Panel frame backgrounds — flush to edges */}
           <div
             className="absolute top-0 left-0 h-full pointer-events-none"
             style={{
-              width: '50%',
-              transformStyle: 'preserve-3d',
-              transformOrigin: '0% 50%',
-              transform: 'rotateY(5deg)',
+              width: '33%',
+              background: `url(${ICON('inventory_panel_composite.png')}) left top / cover no-repeat`,
             }}
-          >
-            <div
-              className="absolute left-0 top-0 h-full"
-              style={{
-                width: '65%',
-                background: `url(${ICON('inventory_panel_composite.png')}) left top / cover no-repeat`,
-              }}
-            />
-          </div>
+          />
           <div
             className="absolute top-0 right-0 h-full pointer-events-none"
             style={{
-              width: '50%',
-              transformStyle: 'preserve-3d',
-              transformOrigin: '100% 50%',
-              transform: 'rotateY(-5deg)',
+              width: '33%',
+              background: `url(${ICON('inventory_panel_composite.png')}) left top / cover no-repeat`,
+              transform: 'scaleX(-1)',
             }}
-          >
-            <div
-              className="absolute right-0 top-0 h-full"
-              style={{
-                width: '65%',
-                background: `url(${ICON('inventory_panel_composite.png')}) right top / cover no-repeat`,
-                transform: 'scaleX(-1)',
-              }}
-            />
-          </div>
+          />
 
           {/* Separators */}
           <div
