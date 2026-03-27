@@ -292,12 +292,16 @@ const SYSTEM_PILL_COLORS = {
   Stanton: 'bg-sc-accent/10 text-sc-accent', Nyx: 'bg-purple-500/10 text-purple-400', Pyro: 'bg-orange-500/10 text-orange-400',
 }
 
-function FactionCard({ giver }) {
-  const logo = FACTION_LOGOS[giver.display_name] || FACTION_LOGOS[giver.faction_name]
-  const guild = GUILD_LABELS[giver.guild] || ''
+function FactionCard({ faction }) {
+  const logo = FACTION_LOGOS[faction.name] || FACTION_LOGOS[faction.faction_name]
+  const guild = GUILD_LABELS[faction.guild] || ''
+  // Link to the first generator for now — faction page will show all
+  const linkTo = faction.generators.length === 1
+    ? `/missions/${faction.generators[0].generator_key}`
+    : `/missions/faction/${encodeURIComponent(faction.name)}`
   return (
     <Link
-      to={`/missions/${giver.generator_key}`}
+      to={linkTo}
       className="bg-white/[0.02] border border-white/[0.06] rounded-xl p-4 hover:border-sc-accent/25 hover:bg-white/[0.04] transition-all group flex gap-4"
     >
       {logo ? (
@@ -308,21 +312,26 @@ function FactionCard({ giver }) {
         </div>
       )}
       <div className="flex-1 min-w-0">
-        <div className="flex items-center gap-1.5 mb-1">
+        <div className="flex items-center gap-1.5 mb-1 flex-wrap">
           {guild && <span className="text-[9px] text-gray-600 uppercase tracking-wider">{guild}</span>}
-          <span className="text-[9px] text-amber-400 bg-amber-500/10 px-1.5 py-0.5 rounded border border-amber-500/20">{giver.mission_type}</span>
+          {faction.mission_types.slice(0, 3).map(t => (
+            <span key={t} className="text-[9px] text-amber-400 bg-amber-500/10 px-1.5 py-0.5 rounded border border-amber-500/20">{t}</span>
+          ))}
+          {faction.mission_types.length > 3 && (
+            <span className="text-[9px] text-gray-600">+{faction.mission_types.length - 3} more</span>
+          )}
         </div>
-        <h3 className="text-sm font-semibold text-white group-hover:text-sc-accent transition-colors truncate">{giver.display_name}</h3>
-        {giver.focus && <p className="text-[11px] text-gray-500 mt-0.5 truncate">{giver.focus}</p>}
+        <h3 className="text-sm font-semibold text-white group-hover:text-sc-accent transition-colors truncate">{faction.name}</h3>
+        {faction.focus && <p className="text-[11px] text-gray-500 mt-0.5 truncate">{faction.focus}</p>}
         <div className="flex items-center gap-2 mt-2 flex-wrap">
-          {giver.systems.filter(Boolean).map(sys => (
+          {faction.systems.map(sys => (
             <span key={sys} className={`inline-flex items-center gap-1 text-[9px] px-1.5 py-0.5 rounded ${SYSTEM_PILL_COLORS[sys] || 'bg-gray-500/10 text-gray-400'}`}>
               <MapPin className="w-2.5 h-2.5" />{sys}
             </span>
           ))}
-          {giver.blueprint_count > 0 && (
+          {faction.blueprint_count > 0 && (
             <span className="inline-flex items-center gap-1 text-[9px] px-1.5 py-0.5 rounded bg-emerald-500/10 text-emerald-400 border border-emerald-500/20">
-              <FlaskConical className="w-2.5 h-2.5" />{giver.blueprint_count} blueprints
+              <FlaskConical className="w-2.5 h-2.5" />{faction.blueprint_count} blueprints
             </span>
           )}
         </div>
@@ -340,7 +349,7 @@ export default function Missions() {
   const [searchParams, setSearchParams] = useSearchParams()
 
   const search = searchParams.get('q') || ''
-  const view = searchParams.get('view') || ''
+  const view = searchParams.get('view') || 'all'
   const sourceFilter = searchParams.get('source') || ''
   const categoryFilter = searchParams.get('cat') || ''
   const typeFilter = searchParams.get('type') || ''
@@ -545,11 +554,11 @@ export default function Missions() {
 
       {/* View pills */}
       <div className="flex flex-wrap gap-2">
-        <Pill active={!view || view === 'factions'} onClick={() => setParam('view', '')}>
-          <span className="flex items-center gap-1.5"><Building2 className="w-3 h-3" /> Factions <span className="opacity-60">{(missionGivers || []).length}</span></span>
-        </Pill>
-        <Pill active={view === 'all'} onClick={() => setParam('view', 'all')}>
+        <Pill active={view === 'all'} onClick={() => setParam('view', '')}>
           All Missions <span className="opacity-60 ml-1">{allEntries.length}</span>
+        </Pill>
+        <Pill active={view === 'factions'} onClick={() => setParam('view', 'factions')}>
+          <span className="flex items-center gap-1.5"><Building2 className="w-3 h-3" /> Factions <span className="opacity-60">{new Set((missionGivers || []).map(g => g.display_name)).size}</span></span>
         </Pill>
         <Pill active={view === 'types'} onClick={() => setParam('view', 'types')}>
           <span className="flex items-center gap-1.5"><Crosshair className="w-3 h-3" /> Types <span className="opacity-60">{filteredTypes.length}</span></span>
@@ -621,48 +630,77 @@ export default function Missions() {
         </div>
       )}
 
-      {/* Factions view (default) */}
-      {(!view || view === 'factions') && (
-        <>
-          <SearchInput value={search} onChange={v => setParam('q', v, true)} placeholder="Search factions..." className="max-w-sm" />
-          {(() => {
-            const givers = (missionGivers || []).filter(g => {
-              if (!search.trim()) return true
-              const q = search.toLowerCase()
-              return (g.display_name || '').toLowerCase().includes(q) ||
-                (g.faction_name || '').toLowerCase().includes(q) ||
-                (g.mission_type || '').toLowerCase().includes(q) ||
-                (g.focus || '').toLowerCase().includes(q)
+      {/* Factions view */}
+      {view === 'factions' && (() => {
+        // Group generators by display_name into unique factions
+        const factionMap = new Map()
+        for (const g of (missionGivers || [])) {
+          const key = g.display_name || g.generator_key
+          if (!factionMap.has(key)) {
+            factionMap.set(key, {
+              name: g.display_name,
+              faction_name: g.faction_name,
+              guild: g.guild,
+              focus: g.focus,
+              description: g.description,
+              mission_types: [],
+              systems: new Set(),
+              blueprint_count: 0,
+              generators: [],
             })
-            const withBlueprints = givers.filter(g => g.has_blueprints)
-            const withoutBlueprints = givers.filter(g => !g.has_blueprints)
-            return (
-              <div className="space-y-6">
-                {withBlueprints.length > 0 && (
-                  <div>
-                    <h3 className="text-xs uppercase tracking-wider text-gray-500 mb-3 flex items-center gap-2">
-                      <FlaskConical className="w-3.5 h-3.5" /> With Blueprint Rewards ({withBlueprints.length})
-                    </h3>
-                    <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-                      {withBlueprints.map(g => <FactionCard key={g.generator_key} giver={g} />)}
-                    </div>
+          }
+          const f = factionMap.get(key)
+          if (g.mission_type && !f.mission_types.includes(g.mission_type)) f.mission_types.push(g.mission_type)
+          for (const sys of g.systems.filter(Boolean)) f.systems.add(sys)
+          f.blueprint_count += g.blueprint_count || 0
+          f.generators.push(g)
+        }
+        let factions = [...factionMap.values()].map(f => ({ ...f, systems: [...f.systems] }))
+
+        // Search filter
+        if (search.trim()) {
+          const q = search.toLowerCase()
+          factions = factions.filter(f =>
+            f.name.toLowerCase().includes(q) ||
+            (f.focus || '').toLowerCase().includes(q) ||
+            f.mission_types.some(t => t.toLowerCase().includes(q))
+          )
+        }
+
+        // Sort: with blueprints first, then by name
+        factions.sort((a, b) => (b.blueprint_count > 0 ? 1 : 0) - (a.blueprint_count > 0 ? 1 : 0) || a.name.localeCompare(b.name))
+
+        const withBlueprints = factions.filter(f => f.blueprint_count > 0)
+        const withoutBlueprints = factions.filter(f => f.blueprint_count === 0)
+
+        return (
+          <>
+            <SearchInput value={search} onChange={v => setParam('q', v, true)} placeholder="Search factions..." className="max-w-sm" />
+            <div className="space-y-6">
+              {withBlueprints.length > 0 && (
+                <div>
+                  <h3 className="text-xs uppercase tracking-wider text-gray-500 mb-3 flex items-center gap-2">
+                    <FlaskConical className="w-3.5 h-3.5" /> With Blueprint Rewards ({withBlueprints.length})
+                  </h3>
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                    {withBlueprints.map(f => <FactionCard key={f.name} faction={f} />)}
                   </div>
-                )}
-                {withoutBlueprints.length > 0 && (
-                  <div>
-                    <h3 className="text-xs uppercase tracking-wider text-gray-500 mb-3">
-                      Other Factions ({withoutBlueprints.length})
-                    </h3>
-                    <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-                      {withoutBlueprints.map(g => <FactionCard key={g.generator_key} giver={g} />)}
-                    </div>
+                </div>
+              )}
+              {withoutBlueprints.length > 0 && (
+                <div>
+                  <h3 className="text-xs uppercase tracking-wider text-gray-500 mb-3">
+                    Other Factions ({withoutBlueprints.length})
+                  </h3>
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                    {withoutBlueprints.map(f => <FactionCard key={f.name} faction={f} />)}
                   </div>
-                )}
-              </div>
-            )
-          })()}
-        </>
-      )}
+                </div>
+              )}
+            </div>
+          </>
+        )
+      })()}
 
       {/* All entries view */}
       {view === 'all' && (

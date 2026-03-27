@@ -1,11 +1,12 @@
 import React, { useState, useEffect, Suspense, lazy } from 'react'
 import { Routes, Route, NavLink, Navigate, useLocation, useNavigate } from 'react-router-dom'
-import { Rocket, BarChart3, Shield, Upload, RefreshCw, Database, Settings as SettingsIcon, ChevronDown, ChevronRight, ChevronLeft, History, Menu, X, LogOut, LogIn, User, Wrench, Users, Building2, FileText, Search, MapPin, Palette, ShoppingCart, Hammer, Briefcase, Star, Scale, Crosshair, BookOpen, Layers, TrendingUp, Languages, Heart, FlaskConical, SlidersHorizontal, Bookmark, Sparkles, EyeOff, Eye } from 'lucide-react'
+import { Rocket, BarChart3, Shield, Upload, RefreshCw, Database, Settings as SettingsIcon, ChevronDown, ChevronRight, ChevronLeft, History, Menu, X, LogOut, LogIn, User, Wrench, Users, Building2, FileText, Search, MapPin, Palette, ShoppingCart, Hammer, Briefcase, Star, Scale, Crosshair, BookOpen, Layers, TrendingUp, Languages, Heart, FlaskConical, SlidersHorizontal, Bookmark, Sparkles, EyeOff, Eye, Shirt } from 'lucide-react'
 import LoadingState from './components/LoadingState'
 import ErrorBoundary from './components/ErrorBoundary'
 import RequireAuth from './components/RequireAuth'
 import RequireFeature from './components/RequireFeature'
 import useFontPreference from './hooks/useFontPreference'
+import { useStatus } from './hooks/useAPI'
 import { authClient, useSession, signOut } from './lib/auth-client'
 import { TimezoneProvider } from './hooks/useTimezone'
 import { GameVersionProvider } from './hooks/useGameVersion'
@@ -60,12 +61,14 @@ const BlueprintDetail = lazy(() => import('./pages/Crafting/BlueprintDetail'))
 const QualitySimPage = lazy(() => import('./pages/Crafting/QualitySimPage'))
 const SavedBlueprints = lazy(() => import('./pages/Crafting/SavedBlueprints'))
 const MissionDetail = lazy(() => import('./pages/MissionDetail'))
+const FactionDetail = lazy(() => import('./pages/FactionDetail'))
 const Careers = lazy(() => import('./pages/Careers'))
 const Reputation = lazy(() => import('./pages/Reputation'))
 const LawSystem = lazy(() => import('./pages/LawSystem'))
 const NPCLoadouts = lazy(() => import('./pages/NPCLoadouts'))
 const LocalizationBuilder = lazy(() => import('./pages/LocalizationBuilder'))
 const Loadout = lazy(() => import('./pages/Loadout'))
+const FpsLoadout = lazy(() => import('./pages/FpsLoadout'))
 const About = lazy(() => import('./pages/About'))
 const NotFound = lazy(() => import('./pages/NotFound'))
 
@@ -132,6 +135,7 @@ const authNavItems = [
           { to: '/analysis/history', icon: History, label: 'History' },
         ],
       },
+      { to: '/fps-loadout', icon: Shirt, label: 'FPS Loadout', featureFlag: 'fpsLoadout' },
       { to: '/localization', icon: Languages, label: 'Localization' },
       { to: '/sync-import', icon: Upload, label: 'Sync & Import' },
     ],
@@ -164,9 +168,10 @@ function meetsMinVersion(minVersion, activeCode) {
   return true
 }
 
-function filterNavItem(item, activeCode, isLoggedIn) {
+function filterNavItem(item, activeCode, isLoggedIn, features) {
   if (!meetsMinVersion(item.minVersion, activeCode)) return null
   if (item.auth && !isLoggedIn) return null
+  if (item.featureFlag && !features?.[item.featureFlag]) return null
   if (item.submenu) {
     const filteredSub = item.submenu.filter(sub => !sub.auth || isLoggedIn)
     return { ...item, submenu: filteredSub.length > 0 ? filteredSub : undefined }
@@ -174,23 +179,23 @@ function filterNavItem(item, activeCode, isLoggedIn) {
   return item
 }
 
-function filterNav(items, activeCode, isLoggedIn) {
+function filterNav(items, activeCode, isLoggedIn, features) {
   return items
     .map(item => {
       if (item.items) {
         const filtered = item.items
-          .map(child => filterNavItem(child, activeCode, isLoggedIn))
+          .map(child => filterNavItem(child, activeCode, isLoggedIn, features))
           .filter(Boolean)
         return filtered.length > 0 ? { ...item, items: filtered } : null
       }
-      return filterNavItem(item, activeCode, isLoggedIn)
+      return filterNavItem(item, activeCode, isLoggedIn, features)
     })
     .filter(Boolean)
 }
 
-function getNavItems(role, isLoggedIn, activeCode) {
-  if (!isLoggedIn) return filterNav([...publicNavItems], activeCode, false)
-  const items = filterNav([...authNavItems], activeCode, true)
+function getNavItems(role, isLoggedIn, activeCode, features) {
+  if (!isLoggedIn) return filterNav([...publicNavItems], activeCode, false, features)
+  const items = filterNav([...authNavItems], activeCode, true, features)
   if (role === 'admin' || role === 'super_admin') {
     items.push(...adminNavItems)
   }
@@ -347,7 +352,8 @@ function SidebarContent({ expandedMenu, setExpandedMenu, onNavClick }) {
   const userRole = session?.user?.role || 'user'
   const { activeCode } = useGameVersion()
   const { privacyMode, togglePrivacy } = usePrivacyMode()
-  const navItems = getNavItems(userRole, isLoggedIn, activeCode)
+  const { data: status } = useStatus()
+  const navItems = getNavItems(userRole, isLoggedIn, activeCode, status?.features)
 
   // Auto-expand the group containing the current route on initial load
   const hasAutoExpanded = React.useRef(false)
@@ -534,7 +540,8 @@ function CollapsedSidebar({ onExpand }) {
   const { data: session } = useSession()
   const isLoggedIn = !!session?.user
   const userRole = session?.user?.role || 'user'
-  const navItems = getNavItems(userRole, isLoggedIn)
+  const { data: status } = useStatus()
+  const navItems = getNavItems(userRole, isLoggedIn, undefined, status?.features)
 
   return (
     <>
@@ -773,6 +780,7 @@ export default function App() {
                       <Route path="/crafting" element={<Suspense fallback={<LoadingState fullScreen />}><Crafting /></Suspense>} />
                       <Route path="/crafting/sim" element={<Suspense fallback={<LoadingState fullScreen />}><QualitySimPage /></Suspense>} />
                       <Route path="/crafting/saved" element={<RequireAuth><Suspense fallback={<LoadingState fullScreen />}><SavedBlueprints /></Suspense></RequireAuth>} />
+                      <Route path="/missions/faction/:name" element={<Suspense fallback={<LoadingState fullScreen />}><FactionDetail /></Suspense>} />
                       <Route path="/missions/:key" element={<Suspense fallback={<LoadingState fullScreen />}><MissionDetail /></Suspense>} />
                       <Route path="/crafting/:id" element={<Suspense fallback={<LoadingState fullScreen />}><BlueprintDetail /></Suspense>} />
                       <Route path="/careers" element={<Careers />} />
@@ -781,6 +789,7 @@ export default function App() {
                       <Route path="/npc-loadouts" element={<NPCLoadouts />} />
                       <Route path="/about" element={<Suspense fallback={<LoadingState fullScreen />}><About /></Suspense>} />
                       <Route path="/loadout/:slug" element={<RequireAuth><Suspense fallback={<LoadingState fullScreen />}><Loadout /></Suspense></RequireAuth>} />
+                      <Route path="/fps-loadout" element={<RequireAuth><RequireFeature flag="fpsLoadout"><Suspense fallback={<LoadingState fullScreen />}><FpsLoadout /></Suspense></RequireFeature></RequireAuth>} />
                       <Route path="/fleet" element={<RequireAuth><FleetTable /></RequireAuth>} />
                       <Route path="/insurance" element={<RequireAuth><Insurance /></RequireAuth>} />
                       <Route path="/insights" element={<RequireAuth><Insights /></RequireAuth>} />
