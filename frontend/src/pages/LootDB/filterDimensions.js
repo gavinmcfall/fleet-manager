@@ -7,9 +7,12 @@ export const FILTER_DIMENSIONS = {
   weapon: [
     {
       key: 'weapon_type',
-      field: 'sub_type',
+      field: 'weapon_class',
       label: 'Type',
-      values: { Small: 'Pistols', Medium: 'Rifles', Large: 'Heavy', Gadget: 'Gadgets' },
+      values: {
+        'Assault Rifle': 'Assault Rifle', SMG: 'SMG', LMG: 'LMG', Sniper: 'Sniper',
+        Shotgun: 'Shotgun', Pistol: 'Pistol', Launcher: 'Launcher', 'Multi-Tool': 'Multi-Tool',
+      },
     },
     {
       key: 'fire_mode',
@@ -53,6 +56,12 @@ export const FILTER_DIMENSIONS = {
       field: 'comp_grade',
       label: 'Grade',
       values: { A: 'A', B: 'B', C: 'C', D: 'D' },
+    },
+    {
+      key: 'comp_class',
+      field: 'component_class',
+      label: 'Class',
+      values: { Military: 'Military', Stealth: 'Stealth', Industrial: 'Industrial', Civilian: 'Civilian', Competition: 'Competition' },
     },
   ],
   ship_weapon: [
