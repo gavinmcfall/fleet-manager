@@ -214,7 +214,17 @@ export default function FactionDetail() {
   const [searchParams, setSearchParams] = useSearchParams()
   const typeFilter = searchParams.get('type') || ''
   const { data, loading, error, refetch } = useFactionDetail(slug)
-  const [selectedMission, setSelectedMission] = useState(null) // { data, type }
+
+  // Selected mission from URL query string — deep-linkable
+  const missionParam = searchParams.get('mission') || ''
+  const setSelectedMission = (mission) => {
+    setSearchParams(prev => {
+      const next = new URLSearchParams(prev)
+      if (mission) next.set('mission', mission.id)
+      else next.delete('mission')
+      return next
+    })
+  }
 
   // Build unified mission list
   const allMissions = useMemo(() => {
@@ -280,6 +290,12 @@ export default function FactionDetail() {
     ? allMissions.filter(m => m.category === typeFilter)
     : allMissions
 
+  // Resolve selected mission from URL param
+  const selectedMission = missionParam
+    ? allMissions.find(m => m.id === missionParam) || null
+    : null
+  const isDetailView = !!missionParam
+
   if (loading) return <LoadingState fullScreen message="Loading faction..." />
   if (error) return <ErrorState message={error} onRetry={refetch} />
   if (!data) {
@@ -344,11 +360,11 @@ export default function FactionDetail() {
       </div>
 
       {/* Slide container */}
-      <div className="relative overflow-hidden">
+      <div className="relative overflow-hidden min-h-[200px]">
         {/* Mission list */}
         <div
-          className="transition-all duration-300 ease-in-out"
-          style={{ transform: selectedMission ? 'translateX(-100%)' : 'translateX(0)', opacity: selectedMission ? 0 : 1 }}
+          className={`transition-all duration-500 ease-in-out ${isDetailView ? 'pointer-events-none' : ''}`}
+          style={{ transform: isDetailView ? 'translateX(-100%)' : 'translateX(0)', opacity: isDetailView ? 0 : 1 }}
         >
           {/* Category filter */}
           {categories.length > 1 && (
@@ -371,7 +387,7 @@ export default function FactionDetail() {
             {filtered.map(m => (
               <button
                 key={m.id}
-                onClick={() => setSelectedMission({ data: m.data, type: m.type })}
+                onClick={() => setSelectedMission(m)}
                 className="w-full flex items-center gap-3 p-3 bg-white/[0.02] border border-white/[0.06] rounded-lg hover:border-sc-accent/20 hover:bg-white/[0.04] transition-all group text-left"
               >
                 <div className="flex-1 min-w-0">
@@ -399,18 +415,18 @@ export default function FactionDetail() {
         </div>
 
         {/* Mission detail (slides in from right) */}
-        {selectedMission && (
-          <div
-            className="absolute top-0 left-0 right-0 transition-all duration-300 ease-in-out"
-            style={{ transform: 'translateX(0)' }}
-          >
+        <div
+          className={`absolute top-0 left-0 right-0 transition-all duration-500 ease-in-out ${!isDetailView ? 'pointer-events-none' : ''}`}
+          style={{ transform: isDetailView ? 'translateX(0)' : 'translateX(100%)', opacity: isDetailView ? 1 : 0 }}
+        >
+          {selectedMission && (
             <MissionDetailPanel
               mission={selectedMission.data}
               type={selectedMission.type}
               onBack={() => setSelectedMission(null)}
             />
-          </div>
-        )}
+          )}
+        </div>
       </div>
     </div>
   )
