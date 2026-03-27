@@ -1,5 +1,5 @@
 import React, { useState, useMemo } from 'react'
-import { X, ShoppingCart, Star, Diamond, Package, MapPin, Search, ArrowUpDown, ArrowUp, ArrowDown } from 'lucide-react'
+import { X, ShoppingCart, Star, Diamond, Package, Search, ArrowUpDown, ArrowUp, ArrowDown } from 'lucide-react'
 import { useCompatibleComponents } from '../../hooks/useAPI'
 import LoadingState from '../../components/LoadingState'
 import { getColumnsForPortType, getDefaultSortKey, PORT_TYPE_LABELS } from './loadoutHelpers'
@@ -8,14 +8,15 @@ import { getColumnsForPortType, getDefaultSortKey, PORT_TYPE_LABELS } from './lo
  * Full-width sortable data grid for selecting compatible components.
  * Columns are type-specific (weapons show DPS/alpha/range, shields show HP/regen/resist, etc.)
  */
-export default function ComponentPicker({ slug, portId, portType, currentOverride, stockComponent, onSelect, onAddToCart, onClose }) {
+export default function ComponentPicker({ slug, portId, portType, currentOverride, onSelect, onAddToCart, onClose }) {
   const { data, loading, error } = useCompatibleComponents(slug, portId)
   const [filter, setFilter] = useState('')
   const [sortKey, setSortKey] = useState(() => getDefaultSortKey(portType))
   const [sortDir, setSortDir] = useState('desc')
 
-  const equippedUuid = currentOverride?.component_uuid || stockComponent?.component_uuid || null
-  const stockUuid = stockComponent?.component_uuid || null
+  // The API marks is_stock on the component that matches the port's equipped_item_uuid.
+  // currentOverride comes from user customization state (has component_uuid).
+  const equippedUuid = currentOverride?.component_uuid || null
 
   // Derive the actual component type from data — mining/salvage ports have port_type='weapon'
   // but the components are WeaponMining/SalvageModifier/etc.
@@ -126,8 +127,8 @@ export default function ComponentPicker({ slug, portId, portType, currentOverrid
           {error && <div className="p-4 text-red-400 text-sm">{error}</div>}
 
           {!loading && !error && sorted.map(comp => {
-            const isEquipped = comp.uuid === equippedUuid
-            const isStock = comp.uuid === stockUuid
+            const isEquipped = equippedUuid ? comp.uuid === equippedUuid : comp.is_stock
+            const isStock = comp.is_stock && !isEquipped
             const hasBuyShop = comp.shops?.length > 0
             const cheapestShop = hasBuyShop ? comp.shops.reduce((a, b) => (a.buy_price || Infinity) < (b.buy_price || Infinity) ? a : b) : null
 
@@ -185,8 +186,8 @@ export default function ComponentPicker({ slug, portId, portType, currentOverrid
                       On {comp.on_ships[0].custom_name || comp.on_ships[0].ship_name}
                     </span>
                   ) : hasBuyShop ? (
-                    <span className="inline-flex items-center gap-1 text-[10px] text-amber-300 bg-amber-900/20 px-1.5 py-0.5 rounded truncate max-w-full" title={cheapestShop.shop_name}>
-                      <MapPin className="w-3 h-3" /> {cheapestShop.buy_price ? `${Number(cheapestShop.buy_price).toLocaleString()} aUEC` : 'Buy'}
+                    <span className="inline-flex items-center gap-1 text-[10px] text-emerald-300 bg-emerald-900/15 px-1.5 py-0.5 rounded truncate max-w-full" title={cheapestShop.shop_name}>
+                      {cheapestShop.buy_price ? `${Number(cheapestShop.buy_price).toLocaleString()} aUEC` : 'Buy'}
                     </span>
                   ) : (
                     <span className="text-[10px] text-orange-400 bg-orange-900/20 px-1.5 py-0.5 rounded">
@@ -220,7 +221,7 @@ export default function ComponentPicker({ slug, portId, portType, currentOverrid
           <div className="flex items-center gap-4">
             <span className="flex items-center gap-1"><Star className="w-3 h-3 text-sc-accent" /> Equipped</span>
             <span className="flex items-center gap-1"><Diamond className="w-3 h-3 text-amber-400" /> Default</span>
-            <span className="flex items-center gap-1"><MapPin className="w-3 h-3 text-amber-300" /> Purchasable</span>
+            <span className="flex items-center gap-1 text-emerald-300">aUEC = Purchasable</span>
             <span className="flex items-center gap-1 text-orange-400">Loot Only</span>
           </div>
         </div>

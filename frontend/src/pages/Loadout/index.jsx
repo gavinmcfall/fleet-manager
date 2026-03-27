@@ -420,7 +420,6 @@ export default function Loadout() {
         <ComponentPicker
           slug={slug} portId={pickerPortId} portType={pickerPortType}
           currentOverride={overrides[pickerPortId]}
-          stockComponent={stockComponents?.find(c => c.port_id === pickerPortId)}
           onSelect={(comp) => handleSelectComponent(pickerPortId, comp)}
           onAddToCart={async (comp) => { await addToLoadoutCart([{ component_id: comp.id, source_fleet_id: fleetId || undefined }]); refetchCart() }}
           onClose={() => setPickerPortId(null)}

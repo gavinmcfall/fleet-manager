@@ -118,7 +118,7 @@ export const fmtM = (v) => `${fmtInt(v)} m`
 export const PICKER_COLUMNS = {
   weapon: [
     { key: 'name', label: 'Name', align: 'left', width: 'flex-[2]' },
-    { key: 'manufacturer_name', label: 'Mfr', align: 'left', width: 'w-24' },
+    { key: 'manufacturer_name', label: 'Mfr', align: 'left', width: 'w-32' },
     { key: 'size', label: 'S', width: 'w-8' },
     { key: 'grade', label: 'Gr', width: 'w-8' },
     { key: 'dps', label: 'DPS', format: fmtDec1, width: 'w-16' },
@@ -130,7 +130,7 @@ export const PICKER_COLUMNS = {
   ],
   turret: [
     { key: 'name', label: 'Name', align: 'left', width: 'flex-[2]' },
-    { key: 'manufacturer_name', label: 'Mfr', align: 'left', width: 'w-24' },
+    { key: 'manufacturer_name', label: 'Mfr', align: 'left', width: 'w-32' },
     { key: 'size', label: 'S', width: 'w-8' },
     { key: 'grade', label: 'Gr', width: 'w-8' },
     { key: 'dps', label: 'DPS', format: fmtDec1, width: 'w-16' },
@@ -139,7 +139,7 @@ export const PICKER_COLUMNS = {
   ],
   shield: [
     { key: 'name', label: 'Name', align: 'left', width: 'flex-[2]' },
-    { key: 'manufacturer_name', label: 'Mfr', align: 'left', width: 'w-24' },
+    { key: 'manufacturer_name', label: 'Mfr', align: 'left', width: 'w-32' },
     { key: 'size', label: 'S', width: 'w-8' },
     { key: 'grade', label: 'Gr', width: 'w-8' },
     { key: 'shield_hp', label: 'HP', format: fmtInt, width: 'w-16' },
@@ -151,7 +151,7 @@ export const PICKER_COLUMNS = {
   ],
   cooler: [
     { key: 'name', label: 'Name', align: 'left', width: 'flex-[2]' },
-    { key: 'manufacturer_name', label: 'Mfr', align: 'left', width: 'w-24' },
+    { key: 'manufacturer_name', label: 'Mfr', align: 'left', width: 'w-32' },
     { key: 'size', label: 'S', width: 'w-8' },
     { key: 'grade', label: 'Gr', width: 'w-8' },
     { key: 'cooling_rate', label: 'Cooling', format: (v) => `${fmtInt(v)}/s`, width: 'w-18' },
@@ -159,7 +159,7 @@ export const PICKER_COLUMNS = {
   ],
   power: [
     { key: 'name', label: 'Name', align: 'left', width: 'flex-[2]' },
-    { key: 'manufacturer_name', label: 'Mfr', align: 'left', width: 'w-24' },
+    { key: 'manufacturer_name', label: 'Mfr', align: 'left', width: 'w-32' },
     { key: 'size', label: 'S', width: 'w-8' },
     { key: 'grade', label: 'Gr', width: 'w-8' },
     { key: 'power_output', label: 'Output', format: fmtInt, width: 'w-16' },
@@ -168,7 +168,7 @@ export const PICKER_COLUMNS = {
   ],
   quantum_drive: [
     { key: 'name', label: 'Name', align: 'left', width: 'flex-[2]' },
-    { key: 'manufacturer_name', label: 'Mfr', align: 'left', width: 'w-24' },
+    { key: 'manufacturer_name', label: 'Mfr', align: 'left', width: 'w-32' },
     { key: 'size', label: 'S', width: 'w-8' },
     { key: 'grade', label: 'Gr', width: 'w-8' },
     { key: 'quantum_speed', label: 'Speed', format: fmtSpeed, width: 'w-18' },
@@ -178,7 +178,7 @@ export const PICKER_COLUMNS = {
   ],
   sensor: [
     { key: 'name', label: 'Name', align: 'left', width: 'flex-[2]' },
-    { key: 'manufacturer_name', label: 'Mfr', align: 'left', width: 'w-24' },
+    { key: 'manufacturer_name', label: 'Mfr', align: 'left', width: 'w-32' },
     { key: 'size', label: 'S', width: 'w-8' },
     { key: 'grade', label: 'Gr', width: 'w-8' },
     { key: 'radar_range', label: 'Range', format: fmtRange, width: 'w-16' },
@@ -188,7 +188,7 @@ export const PICKER_COLUMNS = {
 
 PICKER_COLUMNS.missile = [
   { key: 'name', label: 'Name', align: 'left', width: 'flex-[2]' },
-  { key: 'manufacturer_name', label: 'Mfr', align: 'left', width: 'w-24' },
+  { key: 'manufacturer_name', label: 'Mfr', align: 'left', width: 'w-32' },
   { key: 'size', label: 'S', width: 'w-8' },
   { key: 'damage', label: 'Damage', format: fmtDec1, width: 'w-16' },
   { key: 'tracking_signal', label: 'Track', align: 'left', width: 'w-16' },
@@ -205,7 +205,7 @@ PICKER_COLUMNS.countermeasure = PICKER_COLUMNS.sensor
 export function getColumnsForPortType(portType) {
   return PICKER_COLUMNS[portType] || [
     { key: 'name', label: 'Name', align: 'left', width: 'flex-[2]' },
-    { key: 'manufacturer_name', label: 'Mfr', align: 'left', width: 'w-24' },
+    { key: 'manufacturer_name', label: 'Mfr', align: 'left', width: 'w-32' },
     { key: 'size', label: 'S', width: 'w-8' },
     { key: 'grade', label: 'Gr', width: 'w-8' },
   ]
