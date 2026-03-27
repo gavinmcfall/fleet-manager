@@ -118,13 +118,17 @@ export default function Loadout() {
         ...prev,
         [portId]: {
           port_id: portId, component_id: component.id,
-          component_name: component.name, component_uuid: component.uuid,
+          child_name: component.name, component_name: component.name,
+          component_uuid: component.uuid,
           type: component.type, size: component.size, grade: component.grade,
           manufacturer_name: component.manufacturer_name,
           power_output: component.power_output, cooling_rate: component.cooling_rate,
           shield_hp: component.shield_hp, shield_regen: component.shield_regen,
           dps: component.dps, damage_per_shot: component.damage_per_shot,
           damage_type: component.damage_type,
+          damage_physical: component.damage_physical, damage_energy: component.damage_energy,
+          damage_distortion: component.damage_distortion, damage_thermal: component.damage_thermal,
+          rounds_per_minute: component.rounds_per_minute,
           quantum_speed: component.quantum_speed, quantum_range: component.quantum_range,
           fuel_rate: component.fuel_rate, spool_time: component.spool_time,
           radar_range: component.radar_range, power_draw: component.power_draw,
@@ -522,6 +526,7 @@ function SectionCard({ group, collapsed, setCollapsed, overrides, onResetCategor
                   onClickMount={() => onOpenPicker(item.port_id, item.port_type)}
                   onClickWeapon={() => onOpenPicker(item.port_id, item.port_type)}
                   onAddToCart={() => onAddToCart?.(item)}
+                  onReset={isOverridden ? () => setOverrides(prev => { const next = { ...prev }; delete next[item.port_id]; return next }) : undefined}
                 />
               )
             }
@@ -580,7 +585,13 @@ function SectionCard({ group, collapsed, setCollapsed, overrides, onResetCategor
                   )}
                   {item.manufacturer_name && <span className="text-[11px] text-gray-600 flex-shrink-0">{item.manufacturer_name}</span>}
                   {primaryStat && (
-                    <span className="text-[12px] font-mono text-gray-500 flex-shrink-0 tabular-nums ml-auto">{primaryStat}</span>
+                    <span className="text-[12px] font-mono text-gray-500 flex-shrink-0 tabular-nums ml-auto" title={item.port_type === 'shield' ? 'Shield HP' : item.port_type === 'power' ? 'Power Output' : item.port_type === 'cooler' ? 'Cooling Rate' : item.port_type === 'quantum_drive' ? 'Quantum Speed' : item.port_type === 'sensor' ? 'Radar Range' : undefined}>{primaryStat}</span>
+                  )}
+                  {isOverridden && (
+                    <button onClick={(e) => { e.stopPropagation(); e.preventDefault(); setOverrides(prev => { const next = { ...prev }; delete next[item.port_id]; return next }) }}
+                      className="p-1 text-gray-600 hover:text-amber-400 transition-colors cursor-pointer flex-shrink-0" title="Reset to default">
+                      <RotateCcw className="w-3 h-3" />
+                    </button>
                   )}
                 </button>
                 {/* Jump drive child row under quantum drive */}

@@ -119,8 +119,8 @@ export const PICKER_COLUMNS = {
   weapon: [
     { key: 'name', label: 'Name', align: 'left', width: 'flex-[2]' },
     { key: 'manufacturer_name', label: 'Mfr', align: 'left', width: 'w-32' },
-    { key: 'size', label: 'S', width: 'w-8' },
-    { key: 'grade', label: 'Gr', width: 'w-8' },
+    { key: 'size', label: 'Size', width: 'w-8' },
+    { key: 'grade', label: 'Grade', width: 'w-8' },
     { key: 'dps', label: 'DPS', format: fmtDec1, width: 'w-16' },
     { key: 'damage_per_shot', label: 'Alpha', format: fmtDec1, width: 'w-14' },
     { key: 'rounds_per_minute', label: 'RPM', format: fmtInt, width: 'w-14' },
@@ -131,8 +131,8 @@ export const PICKER_COLUMNS = {
   turret: [
     { key: 'name', label: 'Name', align: 'left', width: 'flex-[2]' },
     { key: 'manufacturer_name', label: 'Mfr', align: 'left', width: 'w-32' },
-    { key: 'size', label: 'S', width: 'w-8' },
-    { key: 'grade', label: 'Gr', width: 'w-8' },
+    { key: 'size', label: 'Size', width: 'w-8' },
+    { key: 'grade', label: 'Grade', width: 'w-8' },
     { key: 'dps', label: 'DPS', format: fmtDec1, width: 'w-16' },
     { key: 'damage_per_shot', label: 'Alpha', format: fmtDec1, width: 'w-14' },
     { key: 'rotation_speed', label: 'Rot', format: (v) => `${v}°/s`, width: 'w-14' },
@@ -140,8 +140,8 @@ export const PICKER_COLUMNS = {
   shield: [
     { key: 'name', label: 'Name', align: 'left', width: 'flex-[2]' },
     { key: 'manufacturer_name', label: 'Mfr', align: 'left', width: 'w-32' },
-    { key: 'size', label: 'S', width: 'w-8' },
-    { key: 'grade', label: 'Gr', width: 'w-8' },
+    { key: 'size', label: 'Size', width: 'w-8' },
+    { key: 'grade', label: 'Grade', width: 'w-8' },
     { key: 'shield_hp', label: 'HP', format: fmtInt, width: 'w-16' },
     { key: 'shield_regen', label: 'Regen', format: fmtDec1, width: 'w-14' },
     { key: 'regen_delay', label: 'Delay', format: fmtSec, width: 'w-14' },
@@ -152,16 +152,16 @@ export const PICKER_COLUMNS = {
   cooler: [
     { key: 'name', label: 'Name', align: 'left', width: 'flex-[2]' },
     { key: 'manufacturer_name', label: 'Mfr', align: 'left', width: 'w-32' },
-    { key: 'size', label: 'S', width: 'w-8' },
-    { key: 'grade', label: 'Gr', width: 'w-8' },
+    { key: 'size', label: 'Size', width: 'w-8' },
+    { key: 'grade', label: 'Grade', width: 'w-8' },
     { key: 'cooling_rate', label: 'Cooling', format: (v) => `${fmtInt(v)}/s`, width: 'w-18' },
     { key: 'max_temperature', label: 'Max T', format: fmtInt, width: 'w-14' },
   ],
   power: [
     { key: 'name', label: 'Name', align: 'left', width: 'flex-[2]' },
     { key: 'manufacturer_name', label: 'Mfr', align: 'left', width: 'w-32' },
-    { key: 'size', label: 'S', width: 'w-8' },
-    { key: 'grade', label: 'Gr', width: 'w-8' },
+    { key: 'size', label: 'Size', width: 'w-8' },
+    { key: 'grade', label: 'Grade', width: 'w-8' },
     { key: 'power_output', label: 'Output', format: fmtInt, width: 'w-16' },
     { key: 'overpower_performance', label: 'OvrPwr', format: fmtDec1, width: 'w-14' },
     { key: 'overclock_performance', label: 'OvrClk', format: fmtDec1, width: 'w-14' },
@@ -169,8 +169,8 @@ export const PICKER_COLUMNS = {
   quantum_drive: [
     { key: 'name', label: 'Name', align: 'left', width: 'flex-[2]' },
     { key: 'manufacturer_name', label: 'Mfr', align: 'left', width: 'w-32' },
-    { key: 'size', label: 'S', width: 'w-8' },
-    { key: 'grade', label: 'Gr', width: 'w-8' },
+    { key: 'size', label: 'Size', width: 'w-8' },
+    { key: 'grade', label: 'Grade', width: 'w-8' },
     { key: 'quantum_speed', label: 'Speed', format: fmtSpeed, width: 'w-18' },
     { key: 'quantum_range', label: 'Range', format: fmtRange, width: 'w-16' },
     { key: 'fuel_rate', label: 'Fuel', format: fmtDec1, width: 'w-12' },
@@ -179,8 +179,8 @@ export const PICKER_COLUMNS = {
   sensor: [
     { key: 'name', label: 'Name', align: 'left', width: 'flex-[2]' },
     { key: 'manufacturer_name', label: 'Mfr', align: 'left', width: 'w-32' },
-    { key: 'size', label: 'S', width: 'w-8' },
-    { key: 'grade', label: 'Gr', width: 'w-8' },
+    { key: 'size', label: 'Size', width: 'w-8' },
+    { key: 'grade', label: 'Grade', width: 'w-8' },
     { key: 'radar_range', label: 'Range', format: fmtRange, width: 'w-16' },
     { key: 'radar_angle', label: 'Angle', format: (v) => `${v}°`, width: 'w-12' },
   ],
@@ -189,7 +189,7 @@ export const PICKER_COLUMNS = {
 PICKER_COLUMNS.missile = [
   { key: 'name', label: 'Name', align: 'left', width: 'flex-[2]' },
   { key: 'manufacturer_name', label: 'Mfr', align: 'left', width: 'w-32' },
-  { key: 'size', label: 'S', width: 'w-8' },
+  { key: 'size', label: 'Size', width: 'w-8' },
   { key: 'damage', label: 'Damage', format: fmtDec1, width: 'w-16' },
   { key: 'tracking_signal', label: 'Track', align: 'left', width: 'w-16' },
   { key: 'lock_time', label: 'Lock', format: fmtSec, width: 'w-14' },
@@ -206,8 +206,8 @@ export function getColumnsForPortType(portType) {
   return PICKER_COLUMNS[portType] || [
     { key: 'name', label: 'Name', align: 'left', width: 'flex-[2]' },
     { key: 'manufacturer_name', label: 'Mfr', align: 'left', width: 'w-32' },
-    { key: 'size', label: 'S', width: 'w-8' },
-    { key: 'grade', label: 'Gr', width: 'w-8' },
+    { key: 'size', label: 'Size', width: 'w-8' },
+    { key: 'grade', label: 'Grade', width: 'w-8' },
   ]
 }
 

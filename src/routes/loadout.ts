@@ -261,6 +261,7 @@ export function loadoutRoutes() {
                 vc.cooldown_time, vc.stage1_accel, vc.stage2_accel,
                 vc.rounds_per_minute, vc.ammo_container_size, vc.damage_per_shot,
                 vc.damage_type, vc.projectile_speed, vc.effective_range, vc.dps,
+                vc.damage_physical, vc.damage_energy, vc.damage_distortion, vc.damage_thermal,
                 vc.heat_per_shot, vc.power_draw, vc.fire_modes,
                 vc.radar_range, vc.radar_angle,
                 vc.qed_range, vc.qed_strength,

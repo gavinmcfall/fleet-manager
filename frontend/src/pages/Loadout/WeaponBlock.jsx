@@ -1,5 +1,5 @@
 import React from 'react'
-import { ShoppingCart } from 'lucide-react'
+import { ShoppingCart, RotateCcw } from 'lucide-react'
 import { DmgShape, getDamageType, fmtDec1 } from './loadoutHelpers'
 
 /** SVG └ bracket connector for parent→child */
@@ -93,12 +93,20 @@ function StatsRow({ item, isCustomized, marginLeft = '76px', onAddToCart }) {
       {item.manufacturer_name && <span className="text-[12px] text-gray-600 flex-shrink-0">{item.manufacturer_name}</span>}
       {isCustomized && <span className="text-[11px] text-sc-accent bg-sc-accent/10 px-1 rounded flex-shrink-0">custom</span>}
       {dmgType && <DmgShape type={dmgType} />}
-      {dps ? <span className={`font-mono text-[13px] ${statColor}`}>{fmtDec1(dps)} <span className="text-gray-600">dps</span></span> : null}
-      {alpha ? <span className={`font-mono text-[13px] ${statColor}`}>{fmtDec1(alpha)} <span className="text-gray-600">&#945;</span></span> : null}
-      <button onClick={(e) => { e.stopPropagation(); onAddToCart?.() }}
-        className="p-1 text-gray-700 hover:text-emerald-400 transition-colors cursor-pointer flex-shrink-0 ml-auto">
-        <ShoppingCart className="w-3.5 h-3.5" />
-      </button>
+      {dps ? <span className={`font-mono text-[13px] ${statColor}`} title="DPS (Damage Per Second)">{fmtDec1(dps)} <span className="text-gray-600">dps</span></span> : null}
+      {alpha ? <span className={`font-mono text-[13px] ${statColor}`} title="Alpha Damage (Damage Per Shot)">{fmtDec1(alpha)} <span className="text-gray-600">&#945;</span></span> : null}
+      <div className="flex items-center gap-0.5 ml-auto flex-shrink-0">
+        {isCustomized && onReset && (
+          <button onClick={(e) => { e.stopPropagation(); onReset() }}
+            className="p-1 text-gray-600 hover:text-amber-400 transition-colors cursor-pointer" title="Reset to default">
+            <RotateCcw className="w-3 h-3" />
+          </button>
+        )}
+        <button onClick={(e) => { e.stopPropagation(); onAddToCart?.() }}
+          className="p-1 text-gray-700 hover:text-emerald-400 transition-colors cursor-pointer">
+          <ShoppingCart className="w-3.5 h-3.5" />
+        </button>
+      </div>
     </div>
   )
 }
@@ -109,7 +117,7 @@ function StatsRow({ item, isCustomized, marginLeft = '76px', onAddToCart }) {
  * Gimballed: 3 rows — mount + WG 2×2 | └ weapon name (full) | stats line
  * Fixed: 2 rows — weapon name + fixed badge + WG 2×2 | stats line
  */
-export default function WeaponBlock({ item, isCustomized, weaponGroups = [], onClickMount, onClickWeapon, onToggleGroup, onAddToCart }) {
+export default function WeaponBlock({ item, isCustomized, weaponGroups = [], onClickMount, onClickWeapon, onToggleGroup, onAddToCart, onReset }) {
   const hasMount = item.mount_name && item.child_name && item.mount_name !== item.child_name
   const isGimbal = hasMount && (item.sub_type === 'GunTurret' || item.mount_name?.includes('Gimbal') || item.mount_name?.includes('VariPuck'))
   const weaponCount = item.weapon_count || 0
@@ -155,13 +163,21 @@ export default function WeaponBlock({ item, isCustomized, weaponGroups = [], onC
           {isCustomized && <span className="text-[11px] text-sc-accent bg-sc-accent/10 px-1 rounded flex-shrink-0">custom</span>}
           <div className="flex items-center gap-1.5 ml-auto flex-shrink-0">
             {dmgType && <DmgShape type={dmgType} />}
-            {dps ? <span className={`font-mono text-[12px] ${isCustomized ? 'text-sc-accent' : 'text-gray-500'}`}>{fmtDec1(dps)} <span className="text-gray-600">dps</span></span> : null}
-            {alpha ? <span className={`font-mono text-[12px] ${isCustomized ? 'text-sc-accent' : 'text-gray-500'}`}>{fmtDec1(alpha)} <span className="text-gray-600">&#945;</span></span> : null}
+            {dps ? <span className={`font-mono text-[12px] ${isCustomized ? 'text-sc-accent' : 'text-gray-500'}`} title="DPS (Damage Per Second)">{fmtDec1(dps)} <span className="text-gray-600">dps</span></span> : null}
+            {alpha ? <span className={`font-mono text-[12px] ${isCustomized ? 'text-sc-accent' : 'text-gray-500'}`} title="Alpha Damage (Damage Per Shot)">{fmtDec1(alpha)} <span className="text-gray-600">&#945;</span></span> : null}
           </div>
-          <button onClick={(e) => { e.stopPropagation(); onAddToCart?.() }}
-            className="p-0.5 text-gray-700 hover:text-emerald-400 transition-colors cursor-pointer flex-shrink-0">
-            <ShoppingCart className="w-3.5 h-3.5" />
-          </button>
+          <div className="flex items-center gap-0.5 flex-shrink-0">
+            {isCustomized && onReset && (
+              <button onClick={(e) => { e.stopPropagation(); onReset() }}
+                className="p-0.5 text-gray-600 hover:text-amber-400 transition-colors cursor-pointer" title="Reset to default">
+                <RotateCcw className="w-3 h-3" />
+              </button>
+            )}
+            <button onClick={(e) => { e.stopPropagation(); onAddToCart?.() }}
+              className="p-0.5 text-gray-700 hover:text-emerald-400 transition-colors cursor-pointer">
+              <ShoppingCart className="w-3.5 h-3.5" />
+            </button>
+          </div>
         </div>
       </div>
     )
