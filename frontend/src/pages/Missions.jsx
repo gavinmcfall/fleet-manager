@@ -51,6 +51,16 @@ const FACTION_LOGOS = {
   "Ruto": "https://imagedelivery.net/JnUjHiDCDHvj44u4fjoYBg/cc3d3f9d-b164-465e-f783-8d2d847c1d00/thumb",
   "Tecia Pacheco": "https://imagedelivery.net/JnUjHiDCDHvj44u4fjoYBg/f860ed6b-0e2c-44d1-c71d-de1f52d57400/thumb",
   "Wallace Klim": "https://imagedelivery.net/JnUjHiDCDHvj44u4fjoYBg/66b49547-c443-4970-77ee-2900bfc9a600/thumb",
+  // Transport/resource factions (using related logos until proper extraction)
+  "FTL Courier": "https://imagedelivery.net/JnUjHiDCDHvj44u4fjoYBg/192e600f-3f01-4c30-f237-846fad451e00/thumb",
+  "Ling Family Hauling": "https://imagedelivery.net/JnUjHiDCDHvj44u4fjoYBg/192e600f-3f01-4c30-f237-846fad451e00/thumb",
+  "Red Wind Linehaul": "https://imagedelivery.net/JnUjHiDCDHvj44u4fjoYBg/192e600f-3f01-4c30-f237-846fad451e00/thumb",
+  "Adagio Holdings": "https://imagedelivery.net/JnUjHiDCDHvj44u4fjoYBg/3325e026-6f73-40be-1e6d-af1daed26d00/thumb",
+  "Klescher Rehabilitation Facilities": "https://imagedelivery.net/JnUjHiDCDHvj44u4fjoYBg/b24f29b8-0884-4f05-18b5-e0f58701b400/thumb",
+  "Wikelo": "https://imagedelivery.net/JnUjHiDCDHvj44u4fjoYBg/cc3d3f9d-b164-465e-f783-8d2d847c1d00/thumb",
+  "Wikelo Emporium": "https://imagedelivery.net/JnUjHiDCDHvj44u4fjoYBg/cc3d3f9d-b164-465e-f783-8d2d847c1d00/thumb",
+  "Highpoint Wilderness Specialists": "https://imagedelivery.net/JnUjHiDCDHvj44u4fjoYBg/996a1753-fbaf-4f89-b8a8-7170deb19200/thumb",
+  "Rayari Incorporated": "https://imagedelivery.net/JnUjHiDCDHvj44u4fjoYBg/996a1753-fbaf-4f89-b8a8-7170deb19200/thumb",
   // Career/skill rep icons
   "Courier": "https://imagedelivery.net/JnUjHiDCDHvj44u4fjoYBg/192e600f-3f01-4c30-f237-846fad451e00/thumb",
   "Bounty": "https://imagedelivery.net/JnUjHiDCDHvj44u4fjoYBg/2c470ed3-c48f-4f7d-6602-edfa4c11ef00/thumb",
@@ -61,13 +71,22 @@ const FACTION_LOGOS = {
   "Mercenary": "https://imagedelivery.net/JnUjHiDCDHvj44u4fjoYBg/5bd232e1-2143-435b-6d63-84ea08582700/thumb",
 }
 
-/** Get faction logo URL from a rep scope name like "Ruto" or "Hurston Dynamics (Security)" */
+// Build a case-insensitive lookup once
+const _logoLookup = Object.fromEntries(
+  Object.entries(FACTION_LOGOS).map(([k, v]) => [k.toLowerCase(), v])
+)
+
+/** Get faction logo URL — case-insensitive, strips parenthetical scopes */
 function getFactionLogo(scopeName) {
-  // Direct match
-  if (FACTION_LOGOS[scopeName]) return FACTION_LOGOS[scopeName]
-  // Strip parenthetical scope: "Hurston Dynamics (Security)" → "Hurston Dynamics"
-  const base = scopeName.replace(/\s*\(.*\)$/, '')
-  return FACTION_LOGOS[base] || null
+  if (!scopeName) return null
+  const lower = scopeName.toLowerCase()
+  if (_logoLookup[lower]) return _logoLookup[lower]
+  // Strip parenthetical: "Hurston Dynamics (Security)" → "Hurston Dynamics"
+  const base = lower.replace(/\s*\(.*\)$/, '')
+  if (_logoLookup[base]) return _logoLookup[base]
+  // Try first word: "Citizens For Prosperity" → "citizens"
+  const first = base.split(' ')[0]
+  return _logoLookup[first] || null
 }
 
 // ── Shared ──────────────────────────────────────────────────────────────────
@@ -675,7 +694,6 @@ export default function Missions() {
 
         return (
           <>
-            <SearchInput value={search} onChange={v => setParam('q', v, true)} placeholder="Search factions..." className="max-w-sm" />
             <div className="space-y-6">
               {withBlueprints.length > 0 && (
                 <div>
