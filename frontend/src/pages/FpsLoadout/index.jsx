@@ -213,15 +213,15 @@ function Paperdoll() {
   )
 }
 
+// Order and icons match the in-game inventory filter bar exactly
 const FILTERS = [
-  { key: 'All', icon: 'icon_common_active_group.svg', label: 'All' },
-  { key: 'Weapons', icon: 'icon_common_primary_weapon.svg', label: 'Weapons',
-    subs: ['All', 'Sidearms', 'Primary', 'Special', 'Melee', 'Attachments', 'Throwables'] },
   { key: 'Armor', icon: 'PIT_Looting_Core_Icon.svg', label: 'Armor',
     subs: ['All', 'Undersuits', 'Helmets', 'Core', 'Arms', 'Legs', 'Backpacks'] },
-  { key: 'Clothing', icon: 'icon_common_shirt.svg', label: 'Clothing',
+  { key: 'Clothing', icon: 'icon_common_coat.svg', label: 'Clothing',
     subs: ['All', 'Headwear', 'Shirts', 'Jackets', 'Gloves', 'Legwear', 'Footwear', 'Eyewear'] },
-  { key: 'Utility', icon: 'icon_common_gadgets.svg', label: 'Utility',
+  { key: 'Weapons', icon: 'icon_common_primary_weapon.svg', label: 'Weapons',
+    subs: ['All', 'Sidearms', 'Primary', 'Special', 'Melee', 'Attachments', 'Throwables'] },
+  { key: 'Utility', icon: 'icon_common_utility.svg', label: 'Utility',
     subs: ['All', 'Gadgets', 'Attachments', 'Medical', 'Cryptokeys', 'Technology'] },
   { key: 'Ammo', icon: 'icon_common_magazine.svg', label: 'Ammo' },
   { key: 'Consumables', icon: 'icon_common_consumable.svg', label: 'Consumables' },
@@ -235,7 +235,7 @@ const FILTERS = [
 function GearBrowser() {
   const { data, loading } = useFpsGear()
   const [search, setSearch] = useState('')
-  const [activeCategory, setActiveCategory] = useState('All')
+  const [activeCategory, setActiveCategory] = useState(null)
   const [activeSub, setActiveSub] = useState('All')
   const [showSubs, setShowSubs] = useState(false)
 
@@ -246,7 +246,7 @@ function GearBrowser() {
     let list = data.items
 
     // Filter by category
-    if (activeCategory !== 'All') {
+    if (activeCategory) {
       list = list.filter(item => item.category === activeCategory)
       // Sub-category filter
       if (activeSub !== 'All') {
@@ -305,27 +305,34 @@ function GearBrowser() {
               className="flex items-center justify-center cursor-pointer"
               title={f.label}
               onClick={() => {
-                if (activeCategory === f.key && f.key !== 'All') {
-                  setShowSubs(prev => !prev)
+                if (activeCategory === f.key) {
+                  // Click same category: toggle sub-filter dropdown or deselect
+                  if (f.subs) {
+                    setShowSubs(prev => !prev)
+                  } else {
+                    setActiveCategory(null)
+                    setActiveSub('All')
+                    setShowSubs(false)
+                  }
                 } else {
                   setActiveCategory(f.key)
                   setActiveSub('All')
-                  setShowSubs(f.key !== 'All' && !!f.subs)
+                  setShowSubs(!!f.subs)
                 }
               }}
               style={{
                 width: '2vw', height: '2vw',
                 border: `1px solid ${activeCategory === f.key ? '#00e8ff' : 'rgba(0,200,230,0.15)'}`,
-                background: activeCategory === f.key ? 'rgba(0,232,255,0.1)' : 'rgba(0,12,20,0.4)',
+                background: activeCategory === f.key ? 'rgba(0,232,255,0.12)' : 'rgba(0,12,20,0.4)',
               }}
             >
               <Ico src={f.icon} size="1.2vw" dim={activeCategory !== f.key} />
             </div>
           ))}
-          {(activeCategory !== 'All' || search) && (
+          {(activeCategory || search) && (
             <span
               className="ml-auto cursor-pointer"
-              onClick={() => { setActiveCategory('All'); setActiveSub('All'); setShowSubs(false); setSearch('') }}
+              onClick={() => { setActiveCategory(null); setActiveSub('All'); setShowSubs(false); setSearch('') }}
               style={{ fontSize: '0.38vw', letterSpacing: '0.05vw', textTransform: 'uppercase', color: 'rgba(192,246,254,0.4)' }}
             >CLEAR</span>
           )}
