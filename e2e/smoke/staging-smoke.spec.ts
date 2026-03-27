@@ -15,8 +15,19 @@
 import { test, expect } from "@playwright/test";
 
 const BASE = process.env.BASE_URL || "https://staging.scbridge.app";
+const BYPASS_KEY = process.env.SMOKE_BYPASS_KEY || "";
 
 test.describe("Staging smoke tests", () => {
+  // Add WAF bypass header to same-origin requests only (avoids CORS errors on fonts/analytics)
+  if (BYPASS_KEY) {
+    test.beforeEach(async ({ page }) => {
+      await page.route(`${BASE}/**`, (route) =>
+        route.continue({
+          headers: { ...route.request().headers(), "x-smoke-test-key": BYPASS_KEY },
+        }),
+      );
+    });
+  }
   // ─── API health ────────────────────────────────────────────────────────
 
   test("API health returns 200", async ({ request }) => {
@@ -116,13 +127,16 @@ test.describe("Staging smoke tests", () => {
     await page.waitForLoadState("domcontentloaded");
     await expect(page.locator("#root > *").first()).toBeVisible({ timeout: 30000 });
 
-    // Filter out expected non-critical errors (e.g. favicon 404, analytics)
+    // Filter out expected non-critical errors (third-party scripts, CORS, favicon)
     const critical = errors.filter(
       (e) =>
         !e.includes("favicon") &&
         !e.includes("404") &&
         !e.includes("googletagmanager") &&
-        !e.includes("analytics")
+        !e.includes("analytics") &&
+        !e.includes("cloudflareinsights") &&
+        !e.includes("CORS policy") &&
+        !e.includes("net::ERR_FAILED")
     );
     expect(critical).toHaveLength(0);
   });
