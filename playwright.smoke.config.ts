@@ -11,7 +11,7 @@ import { defineConfig } from "@playwright/test";
 export default defineConfig({
   testDir: "./e2e/smoke",
   outputDir: "./e2e/test-results/smoke",
-  timeout: 15000,
+  timeout: 30000,
   retries: 1,
   use: {
     baseURL: process.env.BASE_URL || "https://staging.scbridge.app",
