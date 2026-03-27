@@ -53,12 +53,7 @@ const FACTION_LOGOS = {
   "Miles Eckhart": "https://imagedelivery.net/JnUjHiDCDHvj44u4fjoYBg/faction-logo-eckhart/thumb",
   "Shubin Interstellar": "https://imagedelivery.net/JnUjHiDCDHvj44u4fjoYBg/faction-logo-shubin/thumb",
   // Stubs — DDS was placeholder (<1KB), using closest match
-  "Dead Saints": "https://imagedelivery.net/JnUjHiDCDHvj44u4fjoYBg/faction-logo-headhunters/thumb",
-  "BlacJac": "https://imagedelivery.net/JnUjHiDCDHvj44u4fjoYBg/faction-logo-headhunters/thumb",
-  "Hockrow Agency": "https://imagedelivery.net/JnUjHiDCDHvj44u4fjoYBg/faction-logo-intersec/thumb",
-  "FTL Courier": "https://imagedelivery.net/JnUjHiDCDHvj44u4fjoYBg/faction-logo-covalex/thumb",
-  "Adagio Holdings": "https://imagedelivery.net/JnUjHiDCDHvj44u4fjoYBg/3325e026-6f73-40be-1e6d-af1daed26d00/thumb",
-  "Klescher Rehabilitation Facilities": "https://imagedelivery.net/JnUjHiDCDHvj44u4fjoYBg/faction-logo-cdf/thumb",
+  // Dead Saints, BlacJac, Hockrow Agency, FTL Courier, Adagio Holdings, Klescher — no logo available, falls back to shield icon
   "Wikelo": "https://imagedelivery.net/JnUjHiDCDHvj44u4fjoYBg/faction-logo-wikelo/thumb",
   "Wikelo Emporium": "https://imagedelivery.net/JnUjHiDCDHvj44u4fjoYBg/faction-logo-wikelo/thumb",
   // Factions with SC Wiki sourced logos (no real DDS in p4k)
