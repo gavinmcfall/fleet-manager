@@ -173,13 +173,13 @@ function EquipmentPanel({ equipTab, setEquipTab }) {
 function Paperdoll() {
   return (
     <div className="relative w-full h-full">
-      {/* Right column — armor/clothing slots */}
-      <PaperdollSlot icon="icon_common_helmet.svg" style={{ top: '7%', right: '10%' }} />
-      <PaperdollSlot icon="icon_common_glasses.svg" style={{ top: '18%', right: '10%' }} />
-      <PaperdollSlot icon="PIT_Looting_Core_Icon.svg" style={{ top: '33%', right: '10%' }} />
-      <PaperdollSlot icon="icon_common_arms.svg" style={{ top: '48%', right: '10%' }} />
-      <PaperdollSlot icon="PIT_Looting_Legs_Icon.svg" style={{ top: '63%', right: '10%' }} />
-      <PaperdollSlot icon="icon_common_shoe.svg" style={{ top: '78%', right: '10%' }} />
+      {/* Right column — armor/clothing slots, evenly spaced, centered vertically */}
+      <PaperdollSlot icon="icon_common_helmet.svg" style={{ top: '15%', right: '10%' }} />
+      <PaperdollSlot icon="icon_common_glasses.svg" style={{ top: '29%', right: '10%' }} />
+      <PaperdollSlot icon="PIT_Looting_Core_Icon.svg" style={{ top: '43%', right: '10%' }} />
+      <PaperdollSlot icon="icon_common_arms.svg" style={{ top: '57%', right: '10%' }} />
+      <PaperdollSlot icon="PIT_Looting_Legs_Icon.svg" style={{ top: '71%', right: '10%' }} />
+      <PaperdollSlot icon="icon_common_shoe.svg" style={{ top: '85%', right: '10%' }} />
 
       {/* Left — Throwables row */}
       <div className="absolute flex gap-[0.3vw]" style={{ top: '12%', left: '8%' }}>
