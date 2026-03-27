@@ -75,7 +75,8 @@ function PaperdollSlot({ icon, style, small = false }) {
     <div
       className={`${cls} flex items-center justify-center cursor-pointer rounded-full`}
       style={{
-        background: `url(${ICON('inventory_paperdoll_item_bg.png')}) center / 100% 100% no-repeat`,
+        border: '1px solid rgba(0,200,230,0.25)',
+        background: 'rgba(0,18,28,0.4)',
         position: small ? 'static' : 'absolute',
         ...style,
       }}
