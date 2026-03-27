@@ -274,19 +274,19 @@ export default function FpsLoadout() {
       <div className="absolute inset-0 flex items-center justify-center">
         <div className="relative w-full h-full" style={{ perspective: '2200px' }}>
 
-          {/* Panel frame backgrounds — flush to edges */}
+          {/* Panel frame backgrounds — stretched to fill edges */}
           <div
             className="absolute top-0 left-0 h-full pointer-events-none"
             style={{
               width: '33%',
-              background: `url(${ICON('inventory_panel_composite.png')}) left top / cover no-repeat`,
+              background: `url(${ICON('inventory_panel_composite.png')}) left top / 100% 100% no-repeat`,
             }}
           />
           <div
             className="absolute top-0 right-0 h-full pointer-events-none"
             style={{
               width: '33%',
-              background: `url(${ICON('inventory_panel_composite.png')}) left top / cover no-repeat`,
+              background: `url(${ICON('inventory_panel_composite.png')}) left top / 100% 100% no-repeat`,
               transform: 'scaleX(-1)',
             }}
           />
