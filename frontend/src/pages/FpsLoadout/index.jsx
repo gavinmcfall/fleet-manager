@@ -274,36 +274,38 @@ export default function FpsLoadout() {
       <div className="absolute inset-0 flex items-center justify-center">
         <div className="relative w-full h-full" style={{ perspective: '2200px' }}>
 
-          {/* Panel frame backgrounds — fixed aspect ratio, pinned to edges */}
+          {/* Panel frame backgrounds — pinned to edges, cover full side */}
           <div
             className="absolute top-0 left-0 h-full pointer-events-none"
             style={{
-              width: 'calc(57.78vh)', /* 624/1080 = 0.5778 of viewport height */
+              width: '50%',
               transformStyle: 'preserve-3d',
               transformOrigin: '0% 50%',
               transform: 'rotateY(5deg)',
             }}
           >
             <div
-              className="absolute inset-0"
+              className="absolute left-0 top-0 h-full"
               style={{
-                background: `url(${ICON('inventory_panel_composite.png')}) left top / 100% 100% no-repeat`,
+                width: '65%',
+                background: `url(${ICON('inventory_panel_composite.png')}) left top / cover no-repeat`,
               }}
             />
           </div>
           <div
             className="absolute top-0 right-0 h-full pointer-events-none"
             style={{
-              width: 'calc(57.78vh)',
+              width: '50%',
               transformStyle: 'preserve-3d',
               transformOrigin: '100% 50%',
               transform: 'rotateY(-5deg)',
             }}
           >
             <div
-              className="absolute inset-0"
+              className="absolute right-0 top-0 h-full"
               style={{
-                background: `url(${ICON('inventory_panel_composite.png')}) left top / 100% 100% no-repeat`,
+                width: '65%',
+                background: `url(${ICON('inventory_panel_composite.png')}) right top / cover no-repeat`,
                 transform: 'scaleX(-1)',
               }}
             />
