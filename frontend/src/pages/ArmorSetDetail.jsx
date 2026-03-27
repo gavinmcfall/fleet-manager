@@ -220,7 +220,7 @@ export default function ArmorSetDetail() {
             {awardingContracts.map((c) => (
               <Link
                 key={c.id}
-                to={`/contracts?highlight=${c.id}`}
+                to={`/missions?view=all&highlight=${c.id}`}
                 className="text-sm font-mono text-sc-accent2 hover:text-sc-accent transition-colors underline underline-offset-2 decoration-sc-accent2/30 hover:decoration-sc-accent/60"
               >
                 {c.title}

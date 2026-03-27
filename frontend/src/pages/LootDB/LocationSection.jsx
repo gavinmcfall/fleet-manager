@@ -333,8 +333,8 @@ export default function LocationSection({ label, icon: Icon, data, type, npcData
             linkTo={
               row.shopKey && row.rawKey ? `/poi/shop/${encodeURIComponent(row.rawKey)}`
               : row.npcKey && row.rawKey ? `/poi/npc/${encodeURIComponent(row.rawKey)}`
-              : row.contractKey && row.contractRef ? `/contracts?guild=${encodeURIComponent(row.contractRef)}`
-              : row.contractKey ? '/contracts'
+              : row.contractKey && row.contractRef ? `/missions?view=all&guild=${encodeURIComponent(row.contractRef)}`
+              : row.contractKey ? '/missions'
               : undefined
             }
           />

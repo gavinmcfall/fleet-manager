@@ -43,7 +43,7 @@ const OrgSettings = lazy(() => import('./pages/OrgSettings'))
 const OpDetail = lazy(() => import('./pages/OrgOps/OpDetail'))
 const JoinOp = lazy(() => import('./pages/JoinOp'))
 const AcceptInvitation = lazy(() => import('./pages/AcceptInvitation'))
-const Contracts = lazy(() => import('./pages/Contracts'))
+const Missions = lazy(() => import('./pages/Missions'))
 const LootDB = lazy(() => import('./pages/LootDB'))
 const POI = lazy(() => import('./pages/POI'))
 const POIDetail = lazy(() => import('./pages/POIDetail'))
@@ -76,7 +76,7 @@ const gameDataGroup = {
   items: [
     { to: '/loot', icon: Search, label: 'Item Finder' },
     { to: '/poi', icon: MapPin, label: 'Locations' },
-    { to: '/contracts', icon: FileText, label: 'Missions' },
+    { to: '/missions', icon: FileText, label: 'Missions' },
     { to: '/shops', icon: ShoppingCart, label: 'Shops' },
     { to: '/trade', icon: TrendingUp, label: 'Trade' },
     { to: '/mining', icon: Hammer, label: 'Mining Guide' },
@@ -743,7 +743,8 @@ export default function App() {
                       <Route path="/poi" element={<POI />} />
                       <Route path="/poi/:slug" element={<POIDetail />} />
                       <Route path="/poi/:type/:slug" element={<POIDetail />} />
-                      <Route path="/contracts" element={<Contracts />} />
+                      <Route path="/missions" element={<Missions />} />
+                      <Route path="/contracts" element={<Navigate to="/missions" replace />} />
                       <Route path="/shops" element={<Shops />} />
                       <Route path="/trade" element={<TradeCommodities />} />
                       <Route path="/mining" element={<Mining />} />

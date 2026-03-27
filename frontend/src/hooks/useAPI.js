@@ -411,7 +411,11 @@ export async function optimizeLoadoutCart() {
   return postJSON('/loadout/cart/optimize', {})
 }
 
-// --- Mission Detail ---
+// --- Missions ---
+
+export function useMissionGivers() {
+  return useAPI('/gamedata/mission-givers')
+}
 
 export function useMissionDetail(key) {
   return useAPI(key ? `/gamedata/mission/${key}` : null)

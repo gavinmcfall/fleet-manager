@@ -1280,5 +1280,41 @@ export function gamedataRoutes<E extends HonoEnv>() {
     })
   })
 
+  // GET /api/gamedata/mission-givers — faction cards for the missions listing page
+  app.get("/mission-givers", async (c) => {
+    const db = c.env.DB
+    const versionId = await resolveVersionId(db, c.req.query("patch"))
+
+    return cachedJson(c, `gd:mission-givers:${versionId}`, async () => {
+      const rows = await db.prepare(
+        `SELECT cg.generator_key, cg.display_name, cg.faction_name, cg.guild,
+                cg.mission_type, cg.focus, cg.description,
+                GROUP_CONCAT(DISTINCT cgca.system) as systems_csv,
+                COUNT(DISTINCT rpi.crafting_blueprint_id) as blueprint_count
+         FROM contract_generators cg
+         LEFT JOIN contract_generator_careers cgca ON cgca.contract_generator_id = cg.id
+         LEFT JOIN contract_generator_contracts cgc ON cgc.career_id = cgca.id
+         LEFT JOIN contract_generator_blueprint_pools cgbp ON cgbp.contract_generator_contract_id = cgc.id
+         LEFT JOIN crafting_blueprint_reward_pool_items rpi ON rpi.crafting_blueprint_reward_pool_id = cgbp.crafting_blueprint_reward_pool_id
+         WHERE cg.game_version_id <= ?
+         GROUP BY cg.id
+         ORDER BY blueprint_count DESC, cg.display_name`
+      ).bind(versionId).all()
+
+      return rows.results.map(r => ({
+        generator_key: r.generator_key,
+        display_name: r.display_name,
+        faction_name: r.faction_name,
+        guild: r.guild,
+        mission_type: r.mission_type,
+        focus: r.focus || null,
+        description: r.description || null,
+        systems: (r.systems_csv as string || "").split(",").filter(Boolean),
+        blueprint_count: r.blueprint_count as number,
+        has_blueprints: (r.blueprint_count as number) > 0,
+      }))
+    })
+  })
+
   return app
 }
