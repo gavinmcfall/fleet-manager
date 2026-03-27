@@ -2189,3 +2189,271 @@ describe("Loadout API — Hermes golden data (tractor beam regression)", () => {
     }
   });
 });
+
+// ===========================================================================
+// Mining laser compatible components regression test
+//
+// Seeds a MOLE-like mining ship with a mining laser port (port_type='weapon')
+// equipped with a WeaponMining component. When the user picks "compatible
+// components" for that port, the endpoint should return ONLY WeaponMining
+// components, not WeaponGun.
+// ===========================================================================
+
+let moleVehicleId: number;
+let miningPortId: number;
+
+const MOLE_UUID = {
+  arbor: "mole-arbor-mining-laser-uuid",
+  helix: "mole-helix-mining-laser-uuid",
+  rhinoGun: "mole-rhino-weapon-gun-uuid",
+} as const;
+
+const MOLE_MFR = {
+  argo: 170,
+  greycat: 47,
+  klausWerner: 60,
+} as const;
+
+describe("Loadout API — mining laser compatible components", () => {
+  beforeAll(async () => {
+    await setupTestDatabase(env.DB);
+    gameVersionId = await seedGameVersion(env.DB);
+
+    // Seed manufacturers
+    const mfrs = [
+      { id: MOLE_MFR.argo, name: "ARGO Astronautics", code: "ARGO", slug: "argo-astronautics" },
+      { id: MOLE_MFR.greycat, name: "Greycat Industrial", code: "GRIN", slug: "greycat-ind" },
+      { id: MOLE_MFR.klausWerner, name: "Klaus & Werner", code: "KLWE", slug: "kw" },
+    ];
+    const mfrStmts = mfrs.map((m) =>
+      env.DB
+        .prepare(
+          `INSERT OR IGNORE INTO manufacturers (id, uuid, name, slug, code, game_version_id)
+           VALUES (?, ?, ?, ?, ?, ?)`
+        )
+        .bind(m.id, `mfr-uuid-${m.id}`, m.name, m.slug, m.code, gameVersionId)
+    );
+    await env.DB.batch(mfrStmts);
+
+    // Seed MOLE vehicle
+    await env.DB
+      .prepare(
+        `INSERT INTO vehicles (slug, name, focus, size_label, cargo, crew_min, crew_max,
+         speed_scm, speed_max, fuel_capacity_hydrogen, fuel_capacity_quantum,
+         classification, manufacturer_id, game_version_id, removed, updated_at)
+         VALUES ('mole', 'MOLE', 'Mining', 'medium', 0, 1, 4,
+         75, 800, 50.0, 1.0,
+         'Industrial', ${MOLE_MFR.argo}, ${gameVersionId}, 0, datetime('now'))`
+      )
+      .run();
+
+    const vRow = await env.DB
+      .prepare("SELECT id FROM vehicles WHERE slug = 'mole' AND game_version_id = ?")
+      .bind(gameVersionId)
+      .first<{ id: number }>();
+    moleVehicleId = vRow!.id;
+
+    await env.DB
+      .prepare("INSERT OR IGNORE INTO vehicle_images (vehicle_id) VALUES (?)")
+      .bind(moleVehicleId)
+      .run();
+
+    // Seed a WeaponMining component (Arbor mining laser)
+    await seedComponent(env.DB, {
+      uuid: MOLE_UUID.arbor, name: "Arbor MH1", type: "WeaponMining",
+      sub_type: "Gun", size: 1, grade: "A", manufacturer_id: MOLE_MFR.greycat,
+    });
+
+    // Seed another WeaponMining component (Helix mining laser)
+    await seedComponent(env.DB, {
+      uuid: MOLE_UUID.helix, name: "Helix II", type: "WeaponMining",
+      sub_type: "Gun", size: 1, grade: "B", manufacturer_id: MOLE_MFR.greycat,
+    });
+
+    // Seed a WeaponGun (Rhino) at same size — should NOT appear in mining laser compatibles
+    await seedComponent(env.DB, {
+      uuid: MOLE_UUID.rhinoGun, name: "CF-117 Badger Repeater", type: "WeaponGun",
+      sub_type: "Gun", size: 1, grade: "A", manufacturer_id: MOLE_MFR.klausWerner,
+      dps: 300, damage_per_shot: 24, damage_type: "Energy",
+      rounds_per_minute: 750, projectile_speed: 1800,
+    });
+
+    // Seed mining laser port — port_type='weapon' but equipped with WeaponMining
+    miningPortId = await seedPort(env.DB, {
+      uuid: "mole-port-mining-front", vehicle_id: moleVehicleId,
+      name: "hardpoint_mining_cab_front",
+      category_label: "Weapons", size_min: 1, size_max: 1, port_type: "weapon",
+      equipped_item_uuid: MOLE_UUID.arbor, editable: 1,
+    });
+  });
+
+  it("returns only WeaponMining components for a mining laser port", async () => {
+    const res = await SELF.fetch(
+      `http://localhost/api/loadout/mole/compatible?port_id=${miningPortId}`
+    );
+    expect(res.status).toBe(200);
+    const data = (await res.json()) as { components: Array<{ type: string; name: string }> };
+
+    expect(data.components.length).toBeGreaterThan(0);
+
+    // ALL returned components must be WeaponMining — no WeaponGun contamination
+    for (const comp of data.components) {
+      expect(comp.type).toBe("WeaponMining");
+    }
+  });
+
+  it("does NOT return WeaponGun components for mining laser port", async () => {
+    const res = await SELF.fetch(
+      `http://localhost/api/loadout/mole/compatible?port_id=${miningPortId}`
+    );
+    const data = (await res.json()) as { components: Array<{ type: string; name: string }> };
+
+    const weaponGuns = data.components.filter((c) => c.type === "WeaponGun");
+    expect(weaponGuns).toHaveLength(0);
+  });
+});
+
+// ===========================================================================
+// Torpedo storage exclusion regression test
+//
+// Seeds a Perseus-like ship with hardpoint_torpedo_storage_* ports.
+// These should be filtered out of the loadout response, just like
+// missile_NN_attach slots.
+// ===========================================================================
+
+let perseusVehicleId: number;
+
+const PERSEUS_UUID = {
+  torpedoRack: "perseus-torpedo-rack-uuid",
+  torpedo: "perseus-torpedo-uuid",
+} as const;
+
+const PERSEUS_MFR = {
+  rsi: 102,
+  behring: 37,
+} as const;
+
+describe("Loadout API — torpedo storage exclusion", () => {
+  beforeAll(async () => {
+    await setupTestDatabase(env.DB);
+    gameVersionId = await seedGameVersion(env.DB);
+
+    const mfrs = [
+      { id: PERSEUS_MFR.rsi, name: "RSI", code: "RSI", slug: "rsi" },
+      { id: PERSEUS_MFR.behring, name: "Behring", code: "BEHR", slug: "behring" },
+    ];
+    const mfrStmts = mfrs.map((m) =>
+      env.DB
+        .prepare(
+          `INSERT OR IGNORE INTO manufacturers (id, uuid, name, slug, code, game_version_id)
+           VALUES (?, ?, ?, ?, ?, ?)`
+        )
+        .bind(m.id, `mfr-uuid-${m.id}`, m.name, m.slug, m.code, gameVersionId)
+    );
+    await env.DB.batch(mfrStmts);
+
+    // Seed Perseus vehicle
+    await env.DB
+      .prepare(
+        `INSERT INTO vehicles (slug, name, focus, size_label, cargo, crew_min, crew_max,
+         speed_scm, speed_max, fuel_capacity_hydrogen, fuel_capacity_quantum,
+         classification, manufacturer_id, game_version_id, removed, updated_at)
+         VALUES ('perseus', 'Perseus', 'Gunship', 'large', 64, 4, 6,
+         165, 950, 90.0, 2.0,
+         'Combat', ${PERSEUS_MFR.rsi}, ${gameVersionId}, 0, datetime('now'))`
+      )
+      .run();
+
+    const vRow = await env.DB
+      .prepare("SELECT id FROM vehicles WHERE slug = 'perseus' AND game_version_id = ?")
+      .bind(gameVersionId)
+      .first<{ id: number }>();
+    perseusVehicleId = vRow!.id;
+
+    await env.DB
+      .prepare("INSERT OR IGNORE INTO vehicle_images (vehicle_id) VALUES (?)")
+      .bind(perseusVehicleId)
+      .run();
+
+    // Seed torpedo rack component
+    await seedComponent(env.DB, {
+      uuid: PERSEUS_UUID.torpedoRack, name: "Torpedo Rack S9", type: "MissileLauncher",
+      sub_type: "TorpedoRack", size: 9, grade: "A", manufacturer_id: PERSEUS_MFR.behring,
+    });
+
+    // Seed a torpedo component
+    await seedComponent(env.DB, {
+      uuid: PERSEUS_UUID.torpedo, name: "Argos IX Torpedo", type: "Missile",
+      sub_type: "Torpedo", size: 9, grade: "A", manufacturer_id: PERSEUS_MFR.behring,
+    });
+
+    // Seed the torpedo rack top-level port (should be visible)
+    const torpedoRackPortId = await seedPort(env.DB, {
+      uuid: "perseus-port-torpedo-rack-left", vehicle_id: perseusVehicleId,
+      name: "hardpoint_torpedo_left",
+      category_label: "Missiles", size_min: 9, size_max: 9, port_type: "missile",
+      equipped_item_uuid: PERSEUS_UUID.torpedoRack, editable: 1,
+    });
+
+    // Seed torpedo_storage child ports (should be EXCLUDED, like missile_attach)
+    for (let i = 1; i <= 5; i++) {
+      const num = String(i).padStart(2, "0");
+      await seedPort(env.DB, {
+        uuid: `perseus-port-torpedo-storage-left-${num}`, vehicle_id: perseusVehicleId,
+        name: `hardpoint_torpedo_storage_left_${num}`,
+        parent_port_id: torpedoRackPortId,
+        category_label: "Missiles", size_min: 9, size_max: 9, port_type: "missile",
+        equipped_item_uuid: PERSEUS_UUID.torpedo,
+      });
+    }
+
+    // Seed a shield so the response isn't empty (need at least one visible port)
+    await seedComponent(env.DB, {
+      uuid: "perseus-shield-uuid", name: "Citadel", type: "Shield",
+      sub_type: "UNDEFINED", size: 3, grade: "B", manufacturer_id: PERSEUS_MFR.behring,
+      shield_hp: 25000, shield_regen: 900,
+    });
+    await seedPort(env.DB, {
+      uuid: "perseus-port-shield", vehicle_id: perseusVehicleId,
+      name: "hardpoint_shield_generator_left",
+      category_label: "Shields", size_min: 3, size_max: 3, port_type: "shield",
+      equipped_item_uuid: "perseus-shield-uuid", editable: 1,
+    });
+  });
+
+  it("torpedo rack top-level port IS visible in loadout", async () => {
+    const res = await SELF.fetch("http://localhost/api/loadout/perseus/components");
+    const data = (await res.json()) as Record<string, unknown>[];
+
+    const torpedoRack = data.find(
+      (p) => p.port_name === "hardpoint_torpedo_left"
+    );
+    expect(torpedoRack).toBeDefined();
+    // mount_name is the rack, component_name resolves to the deepest child (torpedo)
+    expect(torpedoRack!.mount_name).toBe("Torpedo Rack S9");
+  });
+
+  it("torpedo_storage child ports are NOT in the response", async () => {
+    const res = await SELF.fetch("http://localhost/api/loadout/perseus/components");
+    const data = (await res.json()) as Record<string, unknown>[];
+
+    const torpedoStoragePorts = data.filter(
+      (p) => ((p.port_name as string) || "").includes("torpedo_storage")
+    );
+    expect(torpedoStoragePorts).toHaveLength(0);
+  });
+
+  it("torpedo_storage exclusion is analogous to missile_attach exclusion", async () => {
+    const res = await SELF.fetch("http://localhost/api/loadout/perseus/components");
+    const data = (await res.json()) as Record<string, unknown>[];
+
+    // Neither missile_attach nor torpedo_storage child ports should appear
+    const excludedChildren = data.filter(
+      (p) => {
+        const name = (p.port_name as string) || "";
+        return name.includes("torpedo_storage") || name.match(/^missile_\d+_attach$/);
+      }
+    );
+    expect(excludedChildren).toHaveLength(0);
+  });
+});

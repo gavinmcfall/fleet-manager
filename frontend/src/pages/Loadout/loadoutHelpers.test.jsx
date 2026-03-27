@@ -133,8 +133,33 @@ describe('PORT_CATEGORY_ORDER', () => {
   })
 
   it('includes all major categories', () => {
-    for (const cat of ['Weapons', 'Turrets', 'Missiles', 'Point Defense', 'Shields', 'Power Plants', 'Coolers', 'Quantum Drives', 'Sensors']) {
+    for (const cat of ['Weapons', 'Turrets', 'Missiles', 'Torpedoes', 'Point Defense', 'Shields', 'Power Plants', 'Coolers', 'Quantum Drives', 'Sensors']) {
       expect(PORT_CATEGORY_ORDER).toContain(cat)
+    }
+  })
+
+  it('full order: Weapons → Turrets → Missiles → Torpedoes → Point Defense → Shields → Power Plants → Coolers → Quantum Drives → ...', () => {
+    const expectedPrefix = [
+      'Weapons',
+      'Turrets',
+      'Missiles',
+      'Torpedoes',
+      'Point Defense',
+      'Shields',
+      'Power Plants',
+      'Coolers',
+      'Quantum Drives',
+    ]
+    // Each of these must appear at the correct relative position
+    for (let i = 0; i < expectedPrefix.length; i++) {
+      expect(PORT_CATEGORY_ORDER.indexOf(expectedPrefix[i])).toBe(
+        PORT_CATEGORY_ORDER.indexOf(expectedPrefix[i])
+      )
+      if (i > 0) {
+        expect(PORT_CATEGORY_ORDER.indexOf(expectedPrefix[i])).toBeGreaterThan(
+          PORT_CATEGORY_ORDER.indexOf(expectedPrefix[i - 1])
+        )
+      }
     }
   })
 })
