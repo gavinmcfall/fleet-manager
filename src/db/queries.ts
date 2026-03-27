@@ -14,7 +14,7 @@ import type {
   AIAnalysis,
 } from "../lib/types";
 import { extractSetName, makeSetSlug } from "../lib/loot-sets";
-import { VEHICLE_VERSION_JOIN, vehicleVersionJoin, vehicleVersionCap, versionSubquery, deltaVersionJoin, deltaVersionId } from "../lib/constants";
+import { VEHICLE_VERSION_JOIN, vehicleVersionCap, versionSubquery, deltaVersionJoin, deltaVersionId } from "../lib/constants";
 
 // --- Loot JSON "has_*" column expressions ---
 // Reusable SQL fragment for SELECT clauses that compute boolean flags from JSON blob columns.
@@ -386,7 +386,7 @@ export async function getShipModules(db: D1Database, slug: string, versionId?: n
               vm.size, vm.is_default, vm.has_loadout
        FROM vehicle_modules vm
        ${deltaVersionJoin('vehicle_modules', 'vm', 'uuid', versionId)}
-       WHERE vm.vehicle_id = (SELECT v.id FROM vehicles v ${vehicleVersionJoin(versionId)} WHERE v.slug = ?)
+       WHERE vm.vehicle_id IN (SELECT v.id FROM vehicles v WHERE v.slug = ?)
        ORDER BY vm.port_name, vm.is_default DESC, vm.display_name`
     )
     .bind(slug)
