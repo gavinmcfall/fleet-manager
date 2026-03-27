@@ -1600,7 +1600,8 @@ export function gamedataRoutes<E extends HonoEnv>() {
       // Get pu_missions for this faction (by giver_name → slug matching)
       const puMissions = await db.prepare(
         `SELECT m.id, m.title, m.description, m.reward_amount, m.reward_currency,
-                m.is_lawful, m.difficulty, m.category, m.display_name as giver_name
+                m.is_lawful, m.difficulty, m.category, m.display_name as giver_name,
+                m.reputation_reward_size as rep_summary
          FROM missions m
          WHERE m.game_version_id <= ? AND m.removed = 0
          ORDER BY m.reward_amount DESC`
@@ -1676,6 +1677,7 @@ export function gamedataRoutes<E extends HonoEnv>() {
           is_lawful: m.is_lawful,
           difficulty: m.difficulty,
           category: m.category,
+          rep_summary: m.rep_summary || null,
         })),
         contracts: npcContracts.map(c => ({
           id: c.id,

@@ -222,6 +222,16 @@ function MissionDetailPanel({ mission, type, onBack }) {
               <span className="text-xs text-gray-500">{mission.reward_currency || 'aUEC'}</span>
             </div>
           )}
+          {mission.rep_summary && (
+            <div className="text-xs font-mono">
+              <span className="text-gray-500">Rep: </span>
+              {mission.rep_summary.split(', ').map((r, i) => (
+                <span key={i} className={`${r.includes('+') ? 'text-emerald-400' : 'text-red-400'} ${i > 0 ? 'ml-1.5' : ''}`}>
+                  {r}{i < mission.rep_summary.split(', ').length - 1 ? ',' : ''}
+                </span>
+              ))}
+            </div>
+          )}
           {mission.description && (
             <p className="text-sm text-gray-400 leading-relaxed whitespace-pre-line">{cleanDesc(mission.description)}</p>
           )}
