@@ -1600,9 +1600,8 @@ export function gamedataRoutes<E extends HonoEnv>() {
       // Get pu_missions for this faction (by giver_name → slug matching)
       const puMissions = await db.prepare(
         `SELECT m.id, m.title, m.description, m.reward_amount, m.reward_currency,
-                m.is_lawful, m.difficulty, m.category, mg.name as giver_name
+                m.is_lawful, m.difficulty, m.category, m.display_name as giver_name
          FROM missions m
-         LEFT JOIN mission_givers mg ON mg.id = m.mission_giver_id
          WHERE m.game_version_id <= ? AND m.removed = 0
          ORDER BY m.reward_amount DESC`
       ).bind(versionId).all()

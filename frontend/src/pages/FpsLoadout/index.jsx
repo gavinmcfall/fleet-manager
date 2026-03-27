@@ -169,6 +169,46 @@ function EquipmentPanel({ equipTab, setEquipTab }) {
   )
 }
 
+function Paperdoll() {
+  return (
+    <div className="relative w-full h-full">
+      {/* Right column — armor/clothing slots */}
+      <PaperdollSlot icon="icon_common_helmet.svg" style={{ top: '7%', right: '10%' }} />
+      <PaperdollSlot icon="icon_common_glasses.svg" style={{ top: '18%', right: '10%' }} />
+      <PaperdollSlot icon="PIT_Looting_Core_Icon.svg" style={{ top: '33%', right: '10%' }} />
+      <PaperdollSlot icon="icon_common_arms.svg" style={{ top: '48%', right: '10%' }} />
+      <PaperdollSlot icon="PIT_Looting_Legs_Icon.svg" style={{ top: '63%', right: '10%' }} />
+      <PaperdollSlot icon="icon_common_shoe.svg" style={{ top: '78%', right: '10%' }} />
+
+      {/* Left — Throwables row */}
+      <div className="absolute flex gap-[0.3vw]" style={{ top: '12%', left: '8%' }}>
+        {[0,1,2,3].map(i => <PaperdollSlot key={i} icon="icon_common_grenade.svg" small />)}
+      </div>
+
+      {/* Left — Backpack */}
+      <PaperdollSlot icon="PIT_Looting_Backpack_Icon.svg" style={{ top: '24%', left: '8%' }} />
+
+      {/* Left — Magazines (2 rows of 4) */}
+      <div className="absolute flex gap-[0.3vw]" style={{ top: '44%', left: '6%' }}>
+        {[0,1,2,3].map(i => <PaperdollSlot key={i} icon="icon_common_magazine.svg" small />)}
+      </div>
+      <div className="absolute flex gap-[0.3vw]" style={{ top: '50%', left: '6%' }}>
+        {[0,1,2,3].map(i => <PaperdollSlot key={i} icon="icon_common_magazine.svg" small />)}
+      </div>
+
+      {/* Left — Consumables (1 row of 4) */}
+      <div className="absolute flex gap-[0.3vw]" style={{ top: '60%', left: '6%' }}>
+        {[0,1,2,3].map(i => <PaperdollSlot key={i} icon="icon_common_consumable.svg" small />)}
+      </div>
+
+      {/* Center label */}
+      <div className="absolute left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 text-[30px] tracking-[0.3em] uppercase pointer-events-none" style={{ color: 'rgba(192,246,254,0.12)' }}>
+        LOADOUT
+      </div>
+    </div>
+  )
+}
+
 function GearBrowser() {
   return (
     <div className="flex flex-col h-full" style={{ padding: '0.93vh 0.73vw' }}>
@@ -218,122 +258,81 @@ function GearBrowser() {
   )
 }
 
-/*
- * Layout: two independent groups pinned to edges, dynamic center gap.
- *
- * Pixel positions from the original 1920x1080 HTML mockup:
- *   Left panel: 0–510px, frame bg: 0–624px
- *   Paperdoll left items: 564–742px (throwables, backpack, magazines, consumables)
- *   Paperdoll right items: 1320px from left = 600px from right edge
- *   Right panel: 1410–1920px, frame bg: 1296–1920px
- *
- * Each group is 640px fixed. Items inside use px positions
- * matching the mockup. Paperdoll items overflow into the center gap.
- */
 export default function FpsLoadout() {
   const [equipTab, setEquipTab] = useState('weapons')
 
   return (
     <div
-      className="flex w-full overflow-hidden"
+      className="relative w-full overflow-hidden"
       style={{
         height: 'calc(100vh - 3rem)',
         color: '#c0f6fe',
         fontFamily: 'sans-serif',
       }}
     >
-      {/* ═══ LEFT GROUP — pins to left edge ═══ */}
-      <div className="relative flex-shrink-0 overflow-visible" style={{ width: 640 }}>
-        {/* Frame background */}
-        <div
-          className="absolute top-0 left-0 h-full pointer-events-none"
-          style={{
-            width: 624,
-            background: `url(${ICON('inventory_panel_composite.png')}) left top / 100% 100% no-repeat`,
-          }}
-        />
-        {/* Separator */}
-        <div
-          className="absolute pointer-events-none"
-          style={{
-            left: 508, top: '50%', transform: 'translateY(-50%)',
-            width: 48, height: '68.5%',
-            background: `url(${ICON('inventory_bg_separator.png')}) center / 100% 100% no-repeat`,
-          }}
-        />
-        {/* Equipment panel content */}
-        <div
-          className="absolute left-0 flex flex-col z-10"
-          style={{ top: '6.25%', width: 510, height: '87.5%' }}
-        >
-          <EquipmentPanel equipTab={equipTab} setEquipTab={setEquipTab} />
-        </div>
+      <div className="absolute inset-0">
+        <div className="relative w-full h-full">
 
-        {/* Paperdoll left items — positioned in px from mockup, overflow into center */}
-        {/* Throwables: 4 small slots */}
-        <div className="absolute flex gap-[0.3vw] z-[5]" style={{ top: '12%', left: 572 }}>
-          {[0,1,2,3].map(i => <PaperdollSlot key={i} icon="icon_common_grenade.svg" small />)}
-        </div>
-        {/* Backpack */}
-        <PaperdollSlot icon="PIT_Looting_Backpack_Icon.svg" style={{ top: '24%', left: 572, zIndex: 5 }} />
-        {/* Magazines: 2 rows of 4 */}
-        <div className="absolute flex gap-[0.3vw] z-[5]" style={{ top: '44%', left: 554 }}>
-          {[0,1,2,3].map(i => <PaperdollSlot key={i} icon="icon_common_magazine.svg" small />)}
-        </div>
-        <div className="absolute flex gap-[0.3vw] z-[5]" style={{ top: '50%', left: 554 }}>
-          {[0,1,2,3].map(i => <PaperdollSlot key={i} icon="icon_common_magazine.svg" small />)}
-        </div>
-        {/* Consumables: 1 row of 4 */}
-        <div className="absolute flex gap-[0.3vw] z-[5]" style={{ top: '60%', left: 554 }}>
-          {[0,1,2,3].map(i => <PaperdollSlot key={i} icon="icon_common_consumable.svg" small />)}
-        </div>
-      </div>
+          {/* Panel frame backgrounds — each covers its half, edge to edge */}
+          <div
+            className="absolute top-0 left-0 h-full pointer-events-none"
+            style={{
+              width: '50%',
+              background: `url(${ICON('inventory_panel_composite.png')}) left top / 100% 100% no-repeat`,
+            }}
+          />
+          <div
+            className="absolute top-0 right-0 h-full pointer-events-none"
+            style={{
+              width: '50%',
+              background: `url(${ICON('inventory_panel_composite.png')}) left top / 100% 100% no-repeat`,
+              transform: 'scaleX(-1)',
+            }}
+          />
 
-      {/* ═══ CENTER — dynamic gap with watermark ═══ */}
-      <div className="flex-1 relative min-w-0">
-        <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
-          <span className="text-[30px] tracking-[0.3em] uppercase" style={{ color: 'rgba(192,246,254,0.12)' }}>
-            LOADOUT
-          </span>
-        </div>
-      </div>
+          {/* Separators */}
+          <div
+            className="absolute pointer-events-none"
+            style={{
+              left: '26.46%', top: '50%', transform: 'translateY(-50%)',
+              width: '3.333%', height: '68.519%',
+              background: `url(${ICON('inventory_bg_separator.png')}) center / 100% 100% no-repeat`,
+            }}
+          />
+          <div
+            className="absolute pointer-events-none"
+            style={{
+              right: '26.46%', top: '50%', transform: 'translateY(-50%) scaleX(-1)',
+              width: '3.333%', height: '68.519%',
+              background: `url(${ICON('inventory_bg_separator.png')}) center / 100% 100% no-repeat`,
+            }}
+          />
 
-      {/* ═══ RIGHT GROUP — pins to right edge ═══ */}
-      <div className="relative flex-shrink-0 overflow-visible" style={{ width: 640 }}>
-        {/* Frame background (mirrored) */}
-        <div
-          className="absolute top-0 right-0 h-full pointer-events-none"
-          style={{
-            width: 624,
-            background: `url(${ICON('inventory_panel_composite.png')}) left top / 100% 100% no-repeat`,
-            transform: 'scaleX(-1)',
-          }}
-        />
-        {/* Separator */}
-        <div
-          className="absolute pointer-events-none"
-          style={{
-            right: 508, top: '50%', transform: 'translateY(-50%) scaleX(-1)',
-            width: 48, height: '68.5%',
-            background: `url(${ICON('inventory_bg_separator.png')}) center / 100% 100% no-repeat`,
-          }}
-        />
-        {/* Gear browser content */}
-        <div
-          className="absolute right-0 flex flex-col z-10"
-          style={{ top: '6.25%', width: 510, height: '87.5%' }}
-        >
-          <GearBrowser />
-        </div>
+          {/* Left panel — Equipment */}
+          <div
+            className="absolute left-0 flex flex-col z-10"
+            style={{ top: '6.25%', width: '26.5625%', height: '87.5%' }}
+          >
+            <EquipmentPanel equipTab={equipTab} setEquipTab={setEquipTab} />
+          </div>
 
-        {/* Paperdoll right items — armor slots */}
-        {/* 600px from right edge of this group = left: 40px */}
-        <PaperdollSlot icon="icon_common_helmet.svg" style={{ top: '7%', left: 40, zIndex: 5 }} />
-        <PaperdollSlot icon="icon_common_glasses.svg" style={{ top: '18%', left: 40, zIndex: 5 }} />
-        <PaperdollSlot icon="PIT_Looting_Core_Icon.svg" style={{ top: '33%', left: 40, zIndex: 5 }} />
-        <PaperdollSlot icon="icon_common_arms.svg" style={{ top: '48%', left: 40, zIndex: 5 }} />
-        <PaperdollSlot icon="PIT_Looting_Legs_Icon.svg" style={{ top: '63%', left: 40, zIndex: 5 }} />
-        <PaperdollSlot icon="icon_common_shoe.svg" style={{ top: '78%', left: 40, zIndex: 5 }} />
+          {/* Center — Paperdoll */}
+          <div
+            className="absolute z-[5]"
+            style={{ left: '26.5625%', right: '26.5625%', top: 0, height: '100%' }}
+          >
+            <Paperdoll />
+          </div>
+
+          {/* Right panel — Gear Browser */}
+          <div
+            className="absolute right-0 flex flex-col z-10"
+            style={{ top: '6.25%', width: '26.5625%', height: '87.5%' }}
+          >
+            <GearBrowser />
+          </div>
+
+        </div>
       </div>
     </div>
   )
