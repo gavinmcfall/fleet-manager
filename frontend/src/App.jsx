@@ -349,6 +349,25 @@ function SidebarContent({ expandedMenu, setExpandedMenu, onNavClick }) {
   const { privacyMode, togglePrivacy } = usePrivacyMode()
   const navItems = getNavItems(userRole, isLoggedIn, activeCode)
 
+  // Auto-expand the group containing the current route on initial load
+  const hasAutoExpanded = React.useRef(false)
+  useEffect(() => {
+    if (hasAutoExpanded.current) return
+    for (const item of navItems) {
+      if (!item.group) continue
+      const active = item.items.some(child =>
+        child.submenu
+          ? child.submenu.some(s => location.pathname === s.to || location.pathname.startsWith(s.to + '/'))
+          : location.pathname === child.to || location.pathname.startsWith(child.to + '/')
+      )
+      if (active) {
+        setExpandedMenu(item.group)
+        hasAutoExpanded.current = true
+        return
+      }
+    }
+  }, [navItems, location.pathname, setExpandedMenu])
+
   const handleSignOut = async () => {
     await signOut()
     navigate('/')
@@ -619,7 +638,7 @@ function ImpersonationBanner() {
 
 export default function App() {
   useFontPreference()
-  const [expandedMenu, setExpandedMenu] = useState('My Fleet')
+  const [expandedMenu, setExpandedMenu] = useState(null)
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false)
   const [sidebarCollapsed, setSidebarCollapsed] = useState(() => {
     try { return localStorage.getItem('sidebar-collapsed') === '1' } catch { return false }

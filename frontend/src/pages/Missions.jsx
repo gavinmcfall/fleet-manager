@@ -681,41 +681,102 @@ export default function Missions() {
       )}
 
       {/* Reputation view */}
-      {view === 'reputation' && (
-        <>
-          <p className="text-xs font-mono text-gray-600">{repScopes.length} reputation tracks — click to see missions</p>
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">
-            {repScopes.map(scope => {
-              const logo = getFactionLogo(scope.name)
-              const initials = scope.name.split(/[\s()]+/).filter(Boolean).map(w => w[0]).join('').slice(0, 3).toUpperCase()
-              return (
-                <button
-                  key={scope.name}
-                  onClick={() => setParams({ view: '', rep: scope.name, cat: '', type: '', giver: '', source: '' })}
-                  className="panel overflow-hidden text-left w-full hover:border-sc-accent/30 transition-colors group flex"
-                >
-                  <div className="flex-1 p-4">
-                    <div className="flex items-center gap-2 mb-2">
-                      <Star className="w-4 h-4 text-emerald-400 shrink-0" />
-                      <h3 className="font-display font-semibold text-white text-sm group-hover:text-sc-accent transition-colors">{scope.name}</h3>
-                    </div>
-                    <span className="text-[10px] font-mono px-2 py-0.5 rounded bg-sc-accent/10 text-sc-accent border border-sc-accent/20">
-                      {scope.missions.length} missions
-                    </span>
-                  </div>
-                  <div className="w-24 shrink-0 flex items-center justify-center p-2">
-                    {logo ? (
-                      <img src={logo} alt={scope.name} className="w-16 h-16 object-contain opacity-60 group-hover:opacity-100 transition-opacity" />
-                    ) : (
-                      <span className="text-xl font-display font-bold text-gray-700 group-hover:text-gray-500 transition-colors">{initials}</span>
-                    )}
-                  </div>
-                </button>
-              )
-            })}
-          </div>
-        </>
-      )}
+      {view === 'reputation' && (() => {
+        // Merge contract generator factions into rep scopes
+        const factionReps = (missionGivers || [])
+          .filter(g => g.faction_name && g.description)
+          .reduce((acc, g) => {
+            // Deduplicate by faction name
+            if (!acc.some(a => a.name === g.display_name)) {
+              acc.push({
+                name: g.display_name,
+                focus: g.focus,
+                generator_key: g.generator_key,
+                isFaction: true,
+              })
+            }
+            return acc
+          }, [])
+
+        return (
+          <>
+            {/* Faction rep tracks (from contract generators) */}
+            {factionReps.length > 0 && (
+              <div>
+                <h3 className="text-xs uppercase tracking-wider text-gray-500 mb-3 flex items-center gap-2">
+                  <Shield className="w-3.5 h-3.5" /> Faction Reputation ({factionReps.length})
+                </h3>
+                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">
+                  {factionReps.map(scope => {
+                    const logo = getFactionLogo(scope.name)
+                    return (
+                      <Link
+                        key={scope.name}
+                        to={`/missions/${scope.generator_key}`}
+                        className="panel overflow-hidden text-left w-full hover:border-sc-accent/30 transition-colors group flex"
+                      >
+                        <div className="flex-1 p-4">
+                          <div className="flex items-center gap-2 mb-1">
+                            <Star className="w-4 h-4 text-emerald-400 shrink-0" />
+                            <h3 className="font-display font-semibold text-white text-sm group-hover:text-sc-accent transition-colors">{scope.name}</h3>
+                          </div>
+                          {scope.focus && <p className="text-[10px] text-gray-500">{scope.focus}</p>}
+                        </div>
+                        <div className="w-24 shrink-0 flex items-center justify-center p-2">
+                          {logo ? (
+                            <img src={logo} alt={scope.name} className="w-16 h-16 object-contain opacity-60 group-hover:opacity-100 transition-opacity" />
+                          ) : (
+                            <span className="text-xl font-display font-bold text-gray-700 group-hover:text-gray-500 transition-colors">
+                              {scope.name.split(/[\s()]+/).filter(Boolean).map(w => w[0]).join('').slice(0, 3).toUpperCase()}
+                            </span>
+                          )}
+                        </div>
+                      </Link>
+                    )
+                  })}
+                </div>
+              </div>
+            )}
+
+            {/* Mission board rep tracks (existing) */}
+            <div>
+              <h3 className="text-xs uppercase tracking-wider text-gray-500 mb-3 flex items-center gap-2">
+                <Crosshair className="w-3.5 h-3.5" /> Career Reputation ({repScopes.length})
+              </h3>
+              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">
+                {repScopes.map(scope => {
+                  const logo = getFactionLogo(scope.name)
+                  const initials = scope.name.split(/[\s()]+/).filter(Boolean).map(w => w[0]).join('').slice(0, 3).toUpperCase()
+                  return (
+                    <button
+                      key={scope.name}
+                      onClick={() => setParams({ view: 'all', rep: scope.name, cat: '', type: '', giver: '', source: '' })}
+                      className="panel overflow-hidden text-left w-full hover:border-sc-accent/30 transition-colors group flex"
+                    >
+                      <div className="flex-1 p-4">
+                        <div className="flex items-center gap-2 mb-2">
+                          <Star className="w-4 h-4 text-emerald-400 shrink-0" />
+                          <h3 className="font-display font-semibold text-white text-sm group-hover:text-sc-accent transition-colors">{scope.name}</h3>
+                        </div>
+                        <span className="text-[10px] font-mono px-2 py-0.5 rounded bg-sc-accent/10 text-sc-accent border border-sc-accent/20">
+                          {scope.missions.length} missions
+                        </span>
+                      </div>
+                      <div className="w-24 shrink-0 flex items-center justify-center p-2">
+                        {logo ? (
+                          <img src={logo} alt={scope.name} className="w-16 h-16 object-contain opacity-60 group-hover:opacity-100 transition-opacity" />
+                        ) : (
+                          <span className="text-xl font-display font-bold text-gray-700 group-hover:text-gray-500 transition-colors">{initials}</span>
+                        )}
+                      </div>
+                    </button>
+                  )
+                })}
+              </div>
+            </div>
+          </>
+        )
+      })()}
     </div>
   )
 }
