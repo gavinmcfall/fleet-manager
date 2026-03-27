@@ -209,7 +209,7 @@ export default function FleetTable() {
                   <th
                     key={key}
                     scope="col"
-                    className={`table-header cursor-pointer hover:text-gray-300 select-none whitespace-nowrap${key === 'size' ? ' pl-8' : ''}`}
+                    className="table-header cursor-pointer hover:text-gray-300 select-none whitespace-nowrap"
                     onClick={() => toggleSort(key)}
                     aria-sort={sortKey === key ? (sortDir === 'asc' ? 'ascending' : 'descending') : undefined}
                   >
@@ -280,15 +280,17 @@ export default function FleetTable() {
                     </td>
                     <td className="table-cell">
                       <div className="flex items-center gap-2">
-                        {v.production_status === 'flight_ready' && (
-                          <button
-                            onClick={(e) => { e.stopPropagation(); navigate(`/loadout/${v.vehicle_slug}?fleet_id=${v.id}`) }}
-                            className="p-1 text-zinc-600 hover:text-sky-400 transition-colors"
-                            title="Customize loadout"
-                          >
-                            <Wrench className="w-3.5 h-3.5" />
-                          </button>
-                        )}
+                        <span className="w-6 flex-shrink-0 flex justify-center">
+                          {v.production_status === 'flight_ready' && (
+                            <button
+                              onClick={(e) => { e.stopPropagation(); navigate(`/loadout/${v.vehicle_slug}?fleet_id=${v.id}`) }}
+                              className="p-1 text-zinc-600 hover:text-sky-400 transition-colors"
+                              title="Customize loadout"
+                            >
+                              <Wrench className="w-3.5 h-3.5" />
+                            </button>
+                          )}
+                        </span>
                         <span className="badge badge-size inline-block w-16 text-center">{v.size_label || '?'}</span>
                       </div>
                     </td>
