@@ -169,7 +169,30 @@ export function loadoutRoutes() {
       });
     }
 
-    const componentTypes = PORT_TYPE_TO_COMPONENT_TYPE[resolvedPortType] || [resolvedPortType || "UNKNOWN"];
+    // If the port has an equipped component, use its actual type to narrow compatible options.
+    // This handles mining lasers (port_type='weapon' but component_type='WeaponMining') and
+    // salvage heads (port_type='weapon' but component_type='SalvageModifier').
+    let componentTypes = PORT_TYPE_TO_COMPONENT_TYPE[resolvedPortType] || [resolvedPortType || "UNKNOWN"];
+    if (port.equipped_item_uuid) {
+      const equipped = await db
+        .prepare(`SELECT type FROM vehicle_components WHERE uuid = ? AND game_version_id = (SELECT MAX(game_version_id) FROM vehicle_components WHERE uuid = ? AND game_version_id <= ${vq})`)
+        .bind(port.equipped_item_uuid, port.equipped_item_uuid)
+        .first<{ type: string }>();
+      if (equipped?.type) {
+        // Map specific component types to their compatible set
+        const COMPONENT_TYPE_OVERRIDES: Record<string, string[]> = {
+          WeaponMining: ["WeaponMining"],
+          SalvageHead: ["SalvageHead"],
+          SalvageModifier: ["SalvageModifier"],
+          MiningModifier: ["MiningModifier"],
+          TractorBeam: ["TractorBeam"],
+          ToolArm: ["TractorBeam", "ToolArm"],
+        };
+        if (COMPONENT_TYPE_OVERRIDES[equipped.type]) {
+          componentTypes = COMPONENT_TYPE_OVERRIDES[equipped.type];
+        }
+      }
+    }
     const typePlaceholders = componentTypes.map(() => "?").join(",");
 
     // Find best sort key from the mapped types
