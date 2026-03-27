@@ -11,36 +11,54 @@ import StatCard from '../components/StatCard'
 // ── Faction logos from game data (CF Images) ────────────────────────────────
 
 const FACTION_LOGOS = {
+  // Corporations
   "ArcCorp": "https://imagedelivery.net/JnUjHiDCDHvj44u4fjoYBg/27c262c6-92ee-4a28-da94-4f89a346ea00/thumb",
-  "BitZeros": "https://imagedelivery.net/JnUjHiDCDHvj44u4fjoYBg/7aefb7ea-382e-47f6-a764-c3a1ed6a4100/thumb",
-  "BlacJac": "https://imagedelivery.net/JnUjHiDCDHvj44u4fjoYBg/b87b8b32-4d6d-470c-28fd-65d8dc4deb00/thumb",
-  "Bounty Hunters Guild": "https://imagedelivery.net/JnUjHiDCDHvj44u4fjoYBg/2c470ed3-c48f-4f7d-6602-edfa4c11ef00/thumb",
-  "CDF": "https://imagedelivery.net/JnUjHiDCDHvj44u4fjoYBg/b24f29b8-0884-4f05-18b5-e0f58701b400/thumb",
-  "CFP": "https://imagedelivery.net/JnUjHiDCDHvj44u4fjoYBg/7b5eddef-f623-42e0-3fcb-e89cab339f00/thumb",
-  "Clovus Darneely": "https://imagedelivery.net/JnUjHiDCDHvj44u4fjoYBg/7c33c780-9165-4555-2a8e-9c6bb10e9800/thumb",
-  "Constantine Hurston": "https://imagedelivery.net/JnUjHiDCDHvj44u4fjoYBg/548b0c5e-0cda-45e5-5106-11f21e82c400/thumb",
-  "Covalex": "https://imagedelivery.net/JnUjHiDCDHvj44u4fjoYBg/cc4c870b-cc07-47a3-d92c-f68b4704de00/thumb",
   "Crusader Industries": "https://imagedelivery.net/JnUjHiDCDHvj44u4fjoYBg/996a1753-fbaf-4f89-b8a8-7170deb19200/thumb",
   "Crusader Security": "https://imagedelivery.net/JnUjHiDCDHvj44u4fjoYBg/3f935ae0-34db-4cc3-a366-de4525096900/thumb",
-  "Headhunters": "https://imagedelivery.net/JnUjHiDCDHvj44u4fjoYBg/92c123e0-7cfd-49a8-7773-8e50bc5a8a00/thumb",
   "Hurston Dynamics": "https://imagedelivery.net/JnUjHiDCDHvj44u4fjoYBg/27339355-f4d7-410f-ae7f-8c9a50e1e800/thumb",
+  "Constantine Hurston": "https://imagedelivery.net/JnUjHiDCDHvj44u4fjoYBg/548b0c5e-0cda-45e5-5106-11f21e82c400/thumb",
+  "microTech": "https://imagedelivery.net/JnUjHiDCDHvj44u4fjoYBg/5174f2e7-4cd2-416c-da33-60c4f6703800/thumb",
+  "Shubin Interstellar": "https://imagedelivery.net/JnUjHiDCDHvj44u4fjoYBg/996a1753-fbaf-4f89-b8a8-7170deb19200/thumb",
+  "Covalex": "https://imagedelivery.net/JnUjHiDCDHvj44u4fjoYBg/cc4c870b-cc07-47a3-d92c-f68b4704de00/thumb",
+  "Covalex Independent Contractors": "https://imagedelivery.net/JnUjHiDCDHvj44u4fjoYBg/cc4c870b-cc07-47a3-d92c-f68b4704de00/thumb",
+  // Factions (contract generator display names)
+  "Bit Zeros": "https://imagedelivery.net/JnUjHiDCDHvj44u4fjoYBg/7aefb7ea-382e-47f6-a764-c3a1ed6a4100/thumb",
+  "BitZeros": "https://imagedelivery.net/JnUjHiDCDHvj44u4fjoYBg/7aefb7ea-382e-47f6-a764-c3a1ed6a4100/thumb",
+  "Dead Saints": "https://imagedelivery.net/JnUjHiDCDHvj44u4fjoYBg/b87b8b32-4d6d-470c-28fd-65d8dc4deb00/thumb",
+  "BlacJac": "https://imagedelivery.net/JnUjHiDCDHvj44u4fjoYBg/b87b8b32-4d6d-470c-28fd-65d8dc4deb00/thumb",
+  "Bounty Hunters Guild": "https://imagedelivery.net/JnUjHiDCDHvj44u4fjoYBg/2c470ed3-c48f-4f7d-6602-edfa4c11ef00/thumb",
+  "Citizens for Prosperity": "https://imagedelivery.net/JnUjHiDCDHvj44u4fjoYBg/7b5eddef-f623-42e0-3fcb-e89cab339f00/thumb",
+  "CDF": "https://imagedelivery.net/JnUjHiDCDHvj44u4fjoYBg/b24f29b8-0884-4f05-18b5-e0f58701b400/thumb",
+  "Civilian Defense Force": "https://imagedelivery.net/JnUjHiDCDHvj44u4fjoYBg/b24f29b8-0884-4f05-18b5-e0f58701b400/thumb",
+  "CFP": "https://imagedelivery.net/JnUjHiDCDHvj44u4fjoYBg/7b5eddef-f623-42e0-3fcb-e89cab339f00/thumb",
+  "Eckhart Security": "https://imagedelivery.net/JnUjHiDCDHvj44u4fjoYBg/f25e6101-0e33-4791-f610-dcae7e779c00/thumb",
   "Miles Eckhart": "https://imagedelivery.net/JnUjHiDCDHvj44u4fjoYBg/f25e6101-0e33-4791-f610-dcae7e779c00/thumb",
+  "Foxwell Enforcement": "https://imagedelivery.net/JnUjHiDCDHvj44u4fjoYBg/3f935ae0-34db-4cc3-a366-de4525096900/thumb",
+  "Headhunters": "https://imagedelivery.net/JnUjHiDCDHvj44u4fjoYBg/92c123e0-7cfd-49a8-7773-8e50bc5a8a00/thumb",
+  "Hockrow Agency": "https://imagedelivery.net/JnUjHiDCDHvj44u4fjoYBg/5bd232e1-2143-435b-6d63-84ea08582700/thumb",
+  "InterSec Defense Solutions": "https://imagedelivery.net/JnUjHiDCDHvj44u4fjoYBg/5bd232e1-2143-435b-6d63-84ea08582700/thumb",
   "Nine Tails": "https://imagedelivery.net/JnUjHiDCDHvj44u4fjoYBg/d1b3c772-6ad1-4f28-9442-4f8eae83fd00/thumb",
+  "Northrock Service Group": "https://imagedelivery.net/JnUjHiDCDHvj44u4fjoYBg/0a4117c0-bc8b-4767-9f2d-28c62e3bb900/thumb",
   "NorthRock": "https://imagedelivery.net/JnUjHiDCDHvj44u4fjoYBg/0a4117c0-bc8b-4767-9f2d-28c62e3bb900/thumb",
+  "Tar Pits": "https://imagedelivery.net/JnUjHiDCDHvj44u4fjoYBg/925577fc-724c-4b5e-d32a-528603b56700/thumb",
+  "Tarpits": "https://imagedelivery.net/JnUjHiDCDHvj44u4fjoYBg/925577fc-724c-4b5e-d32a-528603b56700/thumb",
+  "Vaughn": "https://imagedelivery.net/JnUjHiDCDHvj44u4fjoYBg/f3a02e36-4094-40b4-7072-2f178d791d00/thumb",
+  "XenoThreat": "https://imagedelivery.net/JnUjHiDCDHvj44u4fjoYBg/37dfdeb3-7678-424f-83b9-6b5323616900/thumb",
+  // NPCs
+  "Clovus Darneely": "https://imagedelivery.net/JnUjHiDCDHvj44u4fjoYBg/7c33c780-9165-4555-2a8e-9c6bb10e9800/thumb",
   "Recco Battaglia": "https://imagedelivery.net/JnUjHiDCDHvj44u4fjoYBg/32e468f1-f6eb-4e3f-89ab-34dfbb29fe00/thumb",
   "Rough & Ready": "https://imagedelivery.net/JnUjHiDCDHvj44u4fjoYBg/3325e026-6f73-40be-1e6d-af1daed26d00/thumb",
   "Ruto": "https://imagedelivery.net/JnUjHiDCDHvj44u4fjoYBg/cc3d3f9d-b164-465e-f783-8d2d847c1d00/thumb",
-  "Tarpits": "https://imagedelivery.net/JnUjHiDCDHvj44u4fjoYBg/925577fc-724c-4b5e-d32a-528603b56700/thumb",
   "Tecia Pacheco": "https://imagedelivery.net/JnUjHiDCDHvj44u4fjoYBg/f860ed6b-0e2c-44d1-c71d-de1f52d57400/thumb",
-  "Vaughn": "https://imagedelivery.net/JnUjHiDCDHvj44u4fjoYBg/f3a02e36-4094-40b4-7072-2f178d791d00/thumb",
   "Wallace Klim": "https://imagedelivery.net/JnUjHiDCDHvj44u4fjoYBg/66b49547-c443-4970-77ee-2900bfc9a600/thumb",
-  "XenoThreat": "https://imagedelivery.net/JnUjHiDCDHvj44u4fjoYBg/37dfdeb3-7678-424f-83b9-6b5323616900/thumb",
-  "microTech": "https://imagedelivery.net/JnUjHiDCDHvj44u4fjoYBg/5174f2e7-4cd2-416c-da33-60c4f6703800/thumb",
+  // Career/skill rep icons
   "Courier": "https://imagedelivery.net/JnUjHiDCDHvj44u4fjoYBg/192e600f-3f01-4c30-f237-846fad451e00/thumb",
   "Bounty": "https://imagedelivery.net/JnUjHiDCDHvj44u4fjoYBg/2c470ed3-c48f-4f7d-6602-edfa4c11ef00/thumb",
   "Hired Muscle": "https://imagedelivery.net/JnUjHiDCDHvj44u4fjoYBg/5bd232e1-2143-435b-6d63-84ea08582700/thumb",
   "Assassination": "https://imagedelivery.net/JnUjHiDCDHvj44u4fjoYBg/5bd232e1-2143-435b-6d63-84ea08582700/thumb",
   "Security": "https://imagedelivery.net/JnUjHiDCDHvj44u4fjoYBg/5bd232e1-2143-435b-6d63-84ea08582700/thumb",
+  "Bounty Hunting": "https://imagedelivery.net/JnUjHiDCDHvj44u4fjoYBg/2c470ed3-c48f-4f7d-6602-edfa4c11ef00/thumb",
+  "Mercenary": "https://imagedelivery.net/JnUjHiDCDHvj44u4fjoYBg/5bd232e1-2143-435b-6d63-84ea08582700/thumb",
 }
 
 /** Get faction logo URL from a rep scope name like "Ruto" or "Hurston Dynamics (Security)" */
@@ -322,7 +340,7 @@ export default function Missions() {
   const [searchParams, setSearchParams] = useSearchParams()
 
   const search = searchParams.get('q') || ''
-  const view = searchParams.get('view') || 'all'
+  const view = searchParams.get('view') || ''
   const sourceFilter = searchParams.get('source') || ''
   const categoryFilter = searchParams.get('cat') || ''
   const typeFilter = searchParams.get('type') || ''
