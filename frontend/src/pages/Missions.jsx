@@ -59,8 +59,8 @@ const FACTION_LOGOS = {
   "FTL Courier": "https://imagedelivery.net/JnUjHiDCDHvj44u4fjoYBg/faction-logo-covalex/thumb",
   "Adagio Holdings": "https://imagedelivery.net/JnUjHiDCDHvj44u4fjoYBg/3325e026-6f73-40be-1e6d-af1daed26d00/thumb",
   "Klescher Rehabilitation Facilities": "https://imagedelivery.net/JnUjHiDCDHvj44u4fjoYBg/faction-logo-cdf/thumb",
-  "Wikelo": "https://imagedelivery.net/JnUjHiDCDHvj44u4fjoYBg/faction-logo-ruto/thumb",
-  "Wikelo Emporium": "https://imagedelivery.net/JnUjHiDCDHvj44u4fjoYBg/faction-logo-ruto/thumb",
+  "Wikelo": "https://imagedelivery.net/JnUjHiDCDHvj44u4fjoYBg/faction-logo-wikelo/thumb",
+  "Wikelo Emporium": "https://imagedelivery.net/JnUjHiDCDHvj44u4fjoYBg/faction-logo-wikelo/thumb",
   // Factions with SC Wiki sourced logos (no real DDS in p4k)
   "Rayari Incorporated": "https://imagedelivery.net/JnUjHiDCDHvj44u4fjoYBg/faction-logo-rayari/thumb",
   "Wildstar Racing": "https://imagedelivery.net/JnUjHiDCDHvj44u4fjoYBg/faction-logo-wildstar/thumb",
