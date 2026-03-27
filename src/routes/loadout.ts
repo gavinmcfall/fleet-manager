@@ -517,8 +517,10 @@ export function loadoutRoutes() {
         `SELECT ulc.id, ulc.component_id, ulc.shop_id, ulc.quantity, ulc.source_fleet_id,
                 vc.name AS component_name, vc.uuid AS component_uuid, vc.type, vc.size, vc.grade,
                 m.name AS manufacturer_name,
-                s.name AS shop_name, s.slug AS shop_slug, s.location_label,
-                si.buy_price,
+                COALESCE(s.name, cheapest.shop_name) AS shop_name,
+                COALESCE(s.slug, cheapest.shop_slug) AS shop_slug,
+                COALESCE(s.location_label, cheapest.location_label) AS location_label,
+                COALESCE(si.buy_price, cheapest.buy_price) AS buy_price,
                 uf.custom_name AS fleet_custom_name,
                 v.name AS fleet_ship_name
          FROM user_loadout_cart ulc
@@ -526,6 +528,13 @@ export function loadoutRoutes() {
          LEFT JOIN manufacturers m ON m.id = vc.manufacturer_id
          LEFT JOIN shops s ON s.id = ulc.shop_id
          LEFT JOIN shop_inventory si ON si.shop_id = s.id AND si.item_uuid = vc.uuid
+         LEFT JOIN (
+           SELECT si2.item_uuid, si2.buy_price, sh.name AS shop_name, sh.slug AS shop_slug, sh.location_label,
+                  ROW_NUMBER() OVER (PARTITION BY si2.item_uuid ORDER BY si2.buy_price ASC) AS rn
+           FROM shop_inventory si2
+           JOIN shops sh ON sh.id = si2.shop_id
+           WHERE si2.buy_price IS NOT NULL AND si2.buy_price > 0
+         ) cheapest ON cheapest.item_uuid = vc.uuid AND cheapest.rn = 1
          LEFT JOIN user_fleet uf ON uf.id = ulc.source_fleet_id
          LEFT JOIN vehicles v ON v.id = uf.vehicle_id
          WHERE ulc.user_id = ?

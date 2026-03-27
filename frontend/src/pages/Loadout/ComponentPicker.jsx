@@ -294,7 +294,7 @@ export default function ComponentPicker({ slug, portId, portType, currentOverrid
                           </span>
                         ) : hasBuyShop && cheapestShop?.buy_price ? (
                           <span className="text-xs font-medium text-emerald-400 tabular-nums">
-                            {Number(cheapestShop.buy_price).toLocaleString()} aUEC
+                            {Math.round(Number(cheapestShop.buy_price)).toLocaleString()} aUEC
                           </span>
                         ) : hasBuyShop ? (
                           <span className="text-xs text-emerald-400">Buy</span>
