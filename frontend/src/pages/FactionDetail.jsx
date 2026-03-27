@@ -233,20 +233,22 @@ export default function FactionDetail() {
 
     // Generators → one entry per mission type
     for (const gen of (data.generators || [])) {
+      const hasBP = gen.blueprint_pools?.some(p => p.blueprints?.length > 0)
       missions.push({
         id: `gen-${gen.key}`,
         type: 'generator',
         title: gen.mission_type || 'Mission',
         category: gen.mission_type,
-        source: 'blueprint',
+        source: hasBP ? 'blueprint' : 'dynamic',
         data: gen,
-        hasBP: gen.blueprint_pools?.length > 0,
+        hasBP,
         reward: null,
       })
     }
 
-    // pu_missions
+    // pu_missions — skip completely empty stubs
     for (const m of (data.pu_missions || [])) {
+      if (!m.description && !(m.reward_amount > 0)) continue
       missions.push({
         id: `pu-${m.id}`,
         type: 'pu_mission',
