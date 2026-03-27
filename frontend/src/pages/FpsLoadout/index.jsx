@@ -213,22 +213,22 @@ function Paperdoll() {
   )
 }
 
-// Order and icons match the in-game inventory filter bar exactly
+// Order and icons from actual game data: Inv_filter_Icons_*.svg
 const FILTERS = [
-  { key: 'Armor', icon: 'PIT_Looting_Core_Icon.svg', label: 'Armor',
+  { key: 'Armor', icon: 'Inv_filter_Icons_armor.svg', label: 'Armor',
     subs: ['All', 'Undersuits', 'Helmets', 'Core', 'Arms', 'Legs', 'Backpacks'] },
-  { key: 'Clothing', icon: 'icon_common_coat.svg', label: 'Clothing',
+  { key: 'Clothing', icon: 'Inv_filter_Icons_clothing.svg', label: 'Clothing',
     subs: ['All', 'Headwear', 'Shirts', 'Jackets', 'Gloves', 'Legwear', 'Footwear', 'Eyewear'] },
-  { key: 'Weapons', icon: 'icon_common_primary_weapon.svg', label: 'Weapons',
+  { key: 'Weapons', icon: 'Inv_filter_Icons_weapons.svg', label: 'Weapons',
     subs: ['All', 'Sidearms', 'Primary', 'Special', 'Melee', 'Attachments', 'Throwables'] },
-  { key: 'Utility', icon: 'icon_common_utility.svg', label: 'Utility',
+  { key: 'Utility', icon: 'Inv_filter_Icons_utilities.svg', label: 'Utility',
     subs: ['All', 'Gadgets', 'Attachments', 'Medical', 'Cryptokeys', 'Technology'] },
-  { key: 'Ammo', icon: 'icon_common_magazine.svg', label: 'Ammo' },
-  { key: 'Consumables', icon: 'icon_common_consumable.svg', label: 'Consumables' },
-  { key: 'Sustenance', icon: 'icon_common_multitool_canister.svg', label: 'Sustenance' },
-  { key: 'Container', icon: 'icon_common_3D_cargo_boxes.svg', label: 'Container',
+  { key: 'Ammo', icon: 'Inv_filter_Icons_ammo.svg', label: 'Ammo' },
+  { key: 'Consumables', icon: 'Inv_filter_Icons_commodities.svg', label: 'Consumables' },
+  { key: 'Sustenance', icon: 'Inv_filter_Icons_sustenance.svg', label: 'Sustenance' },
+  { key: 'Container', icon: 'Inv_filter_Icons_container.svg', label: 'Container',
     subs: ['All', 'Commodity Cargo', 'Loot Crate'] },
-  { key: 'Other', icon: 'icon_common_four_square_drag.svg', label: 'Other' },
+  { key: 'Other', icon: 'Inv_filter_Icons_other.svg', label: 'Other' },
   { key: 'Missions', icon: 'icon_destination.svg', label: 'Missions' },
 ]
 
