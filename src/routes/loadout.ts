@@ -41,6 +41,7 @@ const LoadoutBody = z.object({
 const CartAddBody = z.object({
   items: z.array(z.object({
     component_id: z.number().int().positive(),
+    shop_id: z.number().int().positive().optional(),
     source_fleet_id: z.number().int().positive().optional(),
     quantity: z.number().int().min(1).default(1),
   })),
@@ -547,12 +548,13 @@ export function loadoutRoutes() {
       const stmts = items.map((item) =>
         db
           .prepare(
-            `INSERT INTO user_loadout_cart (user_id, component_id, source_fleet_id, quantity)
-             VALUES (?, ?, ?, ?)
+            `INSERT INTO user_loadout_cart (user_id, component_id, shop_id, source_fleet_id, quantity)
+             VALUES (?, ?, ?, ?, ?)
              ON CONFLICT (user_id, component_id, source_fleet_id)
-             DO UPDATE SET quantity = user_loadout_cart.quantity + excluded.quantity`,
+             DO UPDATE SET quantity = user_loadout_cart.quantity + excluded.quantity,
+                           shop_id = COALESCE(excluded.shop_id, user_loadout_cart.shop_id)`,
           )
-          .bind(user.id, item.component_id, item.source_fleet_id ?? null, item.quantity),
+          .bind(user.id, item.component_id, item.shop_id ?? null, item.source_fleet_id ?? null, item.quantity),
       );
 
       if (stmts.length > 0) {

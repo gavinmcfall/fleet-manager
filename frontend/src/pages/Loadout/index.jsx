@@ -391,6 +391,7 @@ export default function Loadout() {
                 setCollapsed={setCollapsed}
                 overrides={overrides}
                 onResetCategory={(portIds) => setOverrides(prev => { const next = { ...prev }; portIds.forEach(id => delete next[id]); return next })}
+                onResetComponent={(portId) => setOverrides(prev => { const next = { ...prev }; delete next[portId]; return next })}
                 onOpenPicker={(portId, portType) => { setPickerPortId(portId); setPickerPortType(portType) }}
                 onAddToCart={async (comp) => { await addToLoadoutCart([{ component_id: comp.component_id || comp.id }]); refetchCart() }}
                 isWeaponSection
@@ -408,6 +409,7 @@ export default function Loadout() {
                 setCollapsed={setCollapsed}
                 overrides={overrides}
                 onResetCategory={(portIds) => setOverrides(prev => { const next = { ...prev }; portIds.forEach(id => delete next[id]); return next })}
+                onResetComponent={(portId) => setOverrides(prev => { const next = { ...prev }; delete next[portId]; return next })}
                 onOpenPicker={(portId, portType) => { setPickerPortId(portId); setPickerPortType(portType) }}
                 onAddToCart={async (comp) => { await addToLoadoutCart([{ component_id: comp.component_id || comp.id }]); refetchCart() }}
               />
@@ -424,6 +426,7 @@ export default function Loadout() {
               setCollapsed={setCollapsed}
               overrides={overrides}
               onResetCategory={(portIds) => setOverrides(prev => { const next = { ...prev }; portIds.forEach(id => delete next[id]); return next })}
+                onResetComponent={(portId) => setOverrides(prev => { const next = { ...prev }; delete next[portId]; return next })}
               onOpenPicker={(portId, portType) => { setPickerPortId(portId); setPickerPortType(portType) }}
               modules={modules}
             />
@@ -438,7 +441,11 @@ export default function Loadout() {
           slug={slug} portId={pickerPortId} portType={pickerPortType}
           currentOverride={overrides[pickerPortId]}
           onSelect={(comp) => handleSelectComponent(pickerPortId, comp)}
-          onAddToCart={async (comp) => { await addToLoadoutCart([{ component_id: comp.id, source_fleet_id: fleetId || undefined }]); refetchCart() }}
+          onAddToCart={async (comp) => {
+            const cheapestShop = comp.shops?.length ? comp.shops.reduce((a, b) => (a.buy_price || Infinity) < (b.buy_price || Infinity) ? a : b) : null
+            await addToLoadoutCart([{ component_id: comp.id, shop_id: cheapestShop?.shop_id || undefined, source_fleet_id: fleetId || undefined }])
+            refetchCart()
+          }}
           onClose={() => setPickerPortId(null)}
         />
       )}
@@ -464,7 +471,7 @@ function StatCell({ label, value, format, color, unit, size }) {
   )
 }
 
-function SectionCard({ group, collapsed, setCollapsed, overrides, onResetCategory, onOpenPicker, onAddToCart, modules, isWeaponSection }) {
+function SectionCard({ group, collapsed, setCollapsed, overrides, onResetCategory, onResetComponent, onOpenPicker, onAddToCart, modules, isWeaponSection }) {
   const isCollapsed = collapsed[group.label]
   const Icon = PORT_TYPE_ICONS[group.portType]
   const categoryOverrides = group.items.filter(i => overrides[i.port_id]).length
@@ -539,7 +546,7 @@ function SectionCard({ group, collapsed, setCollapsed, overrides, onResetCategor
                   onClickMount={() => onOpenPicker(item.port_id, item.port_type)}
                   onClickWeapon={() => onOpenPicker(item.port_id, item.port_type)}
                   onAddToCart={() => onAddToCart?.(item)}
-                  onReset={isOverridden ? () => setOverrides(prev => { const next = { ...prev }; delete next[item.port_id]; return next }) : undefined}
+                  onReset={isOverridden ? () => onResetComponent(item.port_id) : undefined}
                 />
               )
             }
@@ -601,7 +608,7 @@ function SectionCard({ group, collapsed, setCollapsed, overrides, onResetCategor
                     <span className="text-[12px] font-mono text-gray-500 flex-shrink-0 tabular-nums ml-auto" title={item.port_type === 'shield' ? 'Shield HP' : item.port_type === 'power' ? 'Power Output' : item.port_type === 'cooler' ? 'Cooling Rate' : item.port_type === 'quantum_drive' ? 'Quantum Speed' : item.port_type === 'sensor' ? 'Radar Range' : undefined}>{primaryStat}</span>
                   )}
                   {isOverridden && (
-                    <button onClick={(e) => { e.stopPropagation(); e.preventDefault(); setOverrides(prev => { const next = { ...prev }; delete next[item.port_id]; return next }) }}
+                    <button onClick={(e) => { e.stopPropagation(); e.preventDefault(); onResetComponent(item.port_id) }}
                       className="p-1 text-gray-600 hover:text-amber-400 transition-colors cursor-pointer flex-shrink-0" title="Reset to default">
                       <RotateCcw className="w-3 h-3" />
                     </button>
