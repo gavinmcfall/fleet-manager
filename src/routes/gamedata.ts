@@ -1182,11 +1182,14 @@ export function gamedataRoutes<E extends HonoEnv>() {
             `SELECT cgbp.contract_generator_contract_id, cgbp.chance,
                     rp.key as pool_key, rp.name as pool_name,
                     rpi.crafting_blueprint_id, cb.name as blueprint_name,
+                    COALESCE(fw.name, fa.name) as item_name,
                     cb.type as blueprint_type, cb.sub_type as blueprint_sub_type
              FROM contract_generator_blueprint_pools cgbp
              JOIN crafting_blueprint_reward_pools rp ON rp.id = cgbp.crafting_blueprint_reward_pool_id
              JOIN crafting_blueprint_reward_pool_items rpi ON rpi.crafting_blueprint_reward_pool_id = rp.id
              JOIN crafting_blueprints cb ON cb.id = rpi.crafting_blueprint_id
+             LEFT JOIN fps_weapons fw ON fw.class_name = REPLACE(cb.tag, 'BP_CRAFT_', '') AND fw.game_version_id = cb.game_version_id
+             LEFT JOIN fps_armour fa ON fa.class_name = REPLACE(cb.tag, 'BP_CRAFT_', '') AND fa.game_version_id = cb.game_version_id
              WHERE cgbp.contract_generator_contract_id IN (${contractIds.join(",")})
                AND cgbp.game_version_id <= ?`
           ).bind(versionId).all()
@@ -1233,19 +1236,30 @@ export function gamedataRoutes<E extends HonoEnv>() {
         if (!allBlueprints.has(id)) {
           allBlueprints.set(id, {
             id,
-            name: row.blueprint_name as string,
+            name: (row.item_name as string) || (row.blueprint_name as string),
             type: row.blueprint_type as string,
             sub_type: row.blueprint_sub_type as string,
           })
         }
       }
 
-      // Compute summary: unique systems and rep range
+      // Compute summary
       const systems = [...new Set(careers.results.map(c => c.system as string).filter(Boolean))]
-      const allStandings = contracts.results.flatMap(c => [c.min_standing as string, c.max_standing as string]).filter(Boolean)
-      const repRange = allStandings.length > 0
-        ? { min: allStandings.sort()[0], max: allStandings.sort().pop()! }
-        : null
+
+      // Build difficulty tier table (deduplicated across careers)
+      const DIFF_ORDER = ["Intro", "VeryEasy", "Easy", "Medium", "Hard", "VeryHard", "Super"]
+      const tierMap = new Map<string, { difficulty: string; min_rank: number; rep_reward: number | null }>()
+      for (const c of contracts.results) {
+        const diff = c.difficulty as string
+        if (!diff || tierMap.has(diff)) continue
+        const minMatch = ((c.min_standing as string) || "").match(/rank(\d+)/)
+        tierMap.set(diff, {
+          difficulty: diff,
+          min_rank: minMatch ? parseInt(minMatch[1]) : 0,
+          rep_reward: (c.rep_reward as number) || null,
+        })
+      }
+      const tiers = DIFF_ORDER.filter(d => tierMap.has(d)).map(d => tierMap.get(d)!)
 
       return {
         generator: {
@@ -1260,7 +1274,7 @@ export function gamedataRoutes<E extends HonoEnv>() {
           leadership: gen.leadership || null,
         },
         systems,
-        rep_range: repRange,
+        tiers,
         all_blueprints: [...allBlueprints.values()],
       }
     })

@@ -170,9 +170,13 @@ describe("Mission Detail API", () => {
       // Systems
       expect(body.systems).toContain("Stanton");
 
-      // Rep range
-      expect(body.rep_range).toBeTruthy();
-      expect(body.rep_range!.min).toBe("rank1");
+      // Difficulty tiers
+      expect((body as Record<string, unknown>).tiers).toBeTruthy();
+      const tiers = (body as Record<string, unknown>).tiers as { difficulty: string; min_rank: number }[];
+      expect(tiers.length).toBeGreaterThanOrEqual(1);
+      const easy = tiers.find((t: { difficulty: string }) => t.difficulty === "Easy");
+      expect(easy).toBeTruthy();
+      expect(easy!.min_rank).toBe(1);
 
       // All blueprints aggregated
       expect(body.all_blueprints).toHaveLength(2);
