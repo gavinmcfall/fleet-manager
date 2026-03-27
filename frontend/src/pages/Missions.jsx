@@ -49,9 +49,9 @@ const FACTION_LOGOS = {
   "Nine Tails": "https://imagedelivery.net/JnUjHiDCDHvj44u4fjoYBg/d1b3c772-6ad1-4f28-9442-4f8eae83fd00/thumb",
   "Recco Battaglia": "https://imagedelivery.net/JnUjHiDCDHvj44u4fjoYBg/32e468f1-f6eb-4e3f-89ab-34dfbb29fe00/thumb",
   "Rough & Ready": "https://imagedelivery.net/JnUjHiDCDHvj44u4fjoYBg/3325e026-6f73-40be-1e6d-af1daed26d00/thumb",
-  "Eckhart Security": "https://imagedelivery.net/JnUjHiDCDHvj44u4fjoYBg/f25e6101-0e33-4791-f610-dcae7e779c00/thumb",
-  "Miles Eckhart": "https://imagedelivery.net/JnUjHiDCDHvj44u4fjoYBg/f25e6101-0e33-4791-f610-dcae7e779c00/thumb",
-  "Shubin Interstellar": "https://imagedelivery.net/JnUjHiDCDHvj44u4fjoYBg/996a1753-fbaf-4f89-b8a8-7170deb19200/thumb",
+  "Eckhart Security": "https://imagedelivery.net/JnUjHiDCDHvj44u4fjoYBg/faction-logo-eckhart/thumb",
+  "Miles Eckhart": "https://imagedelivery.net/JnUjHiDCDHvj44u4fjoYBg/faction-logo-eckhart/thumb",
+  "Shubin Interstellar": "https://imagedelivery.net/JnUjHiDCDHvj44u4fjoYBg/faction-logo-shubin/thumb",
   // Stubs — DDS was placeholder (<1KB), using closest match
   "Dead Saints": "https://imagedelivery.net/JnUjHiDCDHvj44u4fjoYBg/faction-logo-headhunters/thumb",
   "BlacJac": "https://imagedelivery.net/JnUjHiDCDHvj44u4fjoYBg/faction-logo-headhunters/thumb",
@@ -61,6 +61,10 @@ const FACTION_LOGOS = {
   "Klescher Rehabilitation Facilities": "https://imagedelivery.net/JnUjHiDCDHvj44u4fjoYBg/faction-logo-cdf/thumb",
   "Wikelo": "https://imagedelivery.net/JnUjHiDCDHvj44u4fjoYBg/faction-logo-ruto/thumb",
   "Wikelo Emporium": "https://imagedelivery.net/JnUjHiDCDHvj44u4fjoYBg/faction-logo-ruto/thumb",
+  // Factions with SC Wiki sourced logos (no real DDS in p4k)
+  "Rayari Incorporated": "https://imagedelivery.net/JnUjHiDCDHvj44u4fjoYBg/faction-logo-rayari/thumb",
+  "Wildstar Racing": "https://imagedelivery.net/JnUjHiDCDHvj44u4fjoYBg/faction-logo-wildstar/thumb",
+  "Highpoint Wilderness Specialists": "https://imagedelivery.net/JnUjHiDCDHvj44u4fjoYBg/faction-logo-rayari/thumb",
   // Career rep icons
   "Courier": "https://imagedelivery.net/JnUjHiDCDHvj44u4fjoYBg/192e600f-3f01-4c30-f237-846fad451e00/thumb",
   "Bounty": "https://imagedelivery.net/JnUjHiDCDHvj44u4fjoYBg/faction-logo-bountyhuntersguild/thumb",
