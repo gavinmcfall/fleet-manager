@@ -156,7 +156,20 @@ function MissionDetailPanel({ mission, type, onBack }) {
                           {DIFF_LABELS[t.difficulty] || t.difficulty}
                         </td>
                         <td className="px-3 py-1.5 text-xs text-gray-400">{RANKS[t.min_rank]?.name || `Rank ${t.min_rank}`}</td>
-                        <td className="px-3 py-1.5 text-xs text-emerald-400 font-mono">{t.rep_reward ? `+${t.rep_reward}` : '—'}</td>
+                        <td className="px-3 py-1.5 text-xs font-mono">
+                          {t.rep_rewards?.length > 0 ? (
+                            <div className="flex flex-wrap gap-x-2 gap-y-0.5">
+                              {t.rep_rewards.map((r, ri) => (
+                                <span key={ri} className={r.amount > 0 ? 'text-emerald-400' : 'text-red-400'}>
+                                  {r.amount > 0 ? '+' : ''}{r.amount.toLocaleString()}
+                                  <span className="text-gray-600 ml-0.5 text-[9px] font-normal">{r.faction_slug}</span>
+                                </span>
+                              ))}
+                            </div>
+                          ) : t.rep_reward ? (
+                            <span className="text-emerald-400">+{t.rep_reward}</span>
+                          ) : '—'}
+                        </td>
                         <td className="px-3 py-1.5 text-[10px] text-gray-600 italic">Dynamic</td>
                       </tr>
                     ))}

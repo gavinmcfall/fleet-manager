@@ -1556,15 +1556,21 @@ export function gamedataRoutes<E extends HonoEnv>() {
           const genBpPools = bpPools.results.filter(p => genContractIds.has(p.contract_generator_contract_id as number))
 
           // Tiers
-          const tierMap = new Map<string, { difficulty: string; min_rank: number; rep_reward: number | null }>()
+          const tierMap = new Map<string, { difficulty: string; min_rank: number; rep_reward: number | null; rep_rewards: { faction_slug: string; amount: number }[] }>()
           for (const c of genContracts) {
             const diff = c.difficulty as string
             if (!diff || tierMap.has(diff)) continue
             const minMatch = ((c.min_standing as string) || "").match(/rank(\d+)/)
+            let repRewards: { faction_slug: string; amount: number }[] = []
+            try {
+              const raw = c.rep_rewards_json as string
+              if (raw) repRewards = JSON.parse(raw)
+            } catch { /* ignore */ }
             tierMap.set(diff, {
               difficulty: diff,
               min_rank: minMatch ? parseInt(minMatch[1]) : 0,
               rep_reward: (c.rep_reward as number) || null,
+              rep_rewards: repRewards,
             })
           }
 
