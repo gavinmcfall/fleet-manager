@@ -4,7 +4,9 @@ import { useFpsGear } from '../../hooks/useAPI'
 const ICON = (name) => `/inventory-assets/${name}`
 
 // CSS filter to tint dark SVG icons → cyan (matches in-game)
-const ICO_FILTER = 'invert(0.85) sepia(1) saturate(4) hue-rotate(155deg) brightness(1.05)'
+// Bright cyan tint for game SVG icons
+const ICO_FILTER = 'invert(0.85) sepia(1) saturate(5) hue-rotate(155deg) brightness(1.2)'
+const ICO_FILTER_DIM = 'invert(0.85) sepia(1) saturate(3) hue-rotate(155deg) brightness(0.8)'
 
 function Ico({ src, size = '1.2vw', dim = false, className = '' }) {
   return (
@@ -14,8 +16,8 @@ function Ico({ src, size = '1.2vw', dim = false, className = '' }) {
       className={className}
       style={{
         width: size, height: size,
-        filter: ICO_FILTER,
-        opacity: dim ? 0.4 : 0.7,
+        filter: dim ? ICO_FILTER_DIM : ICO_FILTER,
+        opacity: dim ? 0.35 : 1,
       }}
     />
   )
@@ -212,18 +214,18 @@ function Paperdoll() {
 }
 
 const FILTERS = [
-  { key: 'All', icon: 'PIT_Looting_All_Icon.svg', label: 'All' },
-  { key: 'Weapons', icon: 'icon_common_Weapons.svg', label: 'Weapons',
+  { key: 'All', icon: 'icon_common_active_group.svg', label: 'All' },
+  { key: 'Weapons', icon: 'icon_common_primary_weapon.svg', label: 'Weapons',
     subs: ['All', 'Sidearms', 'Primary', 'Special', 'Melee', 'Attachments', 'Throwables'] },
   { key: 'Armor', icon: 'PIT_Looting_Core_Icon.svg', label: 'Armor',
     subs: ['All', 'Undersuits', 'Helmets', 'Core', 'Arms', 'Legs', 'Backpacks'] },
   { key: 'Clothing', icon: 'icon_common_shirt.svg', label: 'Clothing',
     subs: ['All', 'Headwear', 'Shirts', 'Jackets', 'Gloves', 'Legwear', 'Footwear', 'Eyewear'] },
-  { key: 'Utility', icon: 'icon_common_utility.svg', label: 'Utility',
+  { key: 'Utility', icon: 'icon_common_gadgets.svg', label: 'Utility',
     subs: ['All', 'Gadgets', 'Attachments', 'Medical', 'Cryptokeys', 'Technology'] },
   { key: 'Ammo', icon: 'icon_common_magazine.svg', label: 'Ammo' },
   { key: 'Consumables', icon: 'icon_common_consumable.svg', label: 'Consumables' },
-  { key: 'Sustenance', icon: 'icon_common_consumable.svg', label: 'Sustenance' },
+  { key: 'Sustenance', icon: 'icon_common_multitool_canister.svg', label: 'Sustenance' },
   { key: 'Container', icon: 'icon_common_3D_cargo_boxes.svg', label: 'Container',
     subs: ['All', 'Commodity Cargo', 'Loot Crate'] },
   { key: 'Other', icon: 'icon_common_four_square_drag.svg', label: 'Other' },
@@ -312,12 +314,12 @@ function GearBrowser() {
                 }
               }}
               style={{
-                width: '1.46vw', height: '2.4vh',
-                border: `1px solid ${activeCategory === f.key ? '#00e8ff' : 'transparent'}`,
-                background: activeCategory === f.key ? 'rgba(0,232,255,0.07)' : 'transparent',
+                width: '2vw', height: '2vw',
+                border: `1px solid ${activeCategory === f.key ? '#00e8ff' : 'rgba(0,200,230,0.15)'}`,
+                background: activeCategory === f.key ? 'rgba(0,232,255,0.1)' : 'rgba(0,12,20,0.4)',
               }}
             >
-              <Ico src={f.icon} size="0.9vw" dim={activeCategory !== f.key} />
+              <Ico src={f.icon} size="1.2vw" dim={activeCategory !== f.key} />
             </div>
           ))}
           {(activeCategory !== 'All' || search) && (
