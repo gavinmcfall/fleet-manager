@@ -172,32 +172,32 @@ function EquipmentPanel({ equipTab, setEquipTab }) {
 function Paperdoll() {
   return (
     <div className="relative w-full h-full">
-      {/* Right column — armor/clothing slots, tight to right separator */}
-      <PaperdollSlot icon="icon_common_helmet.svg" style={{ top: '7%', right: '0' }} />
-      <PaperdollSlot icon="icon_common_glasses.svg" style={{ top: '18%', right: '0' }} />
-      <PaperdollSlot icon="PIT_Looting_Core_Icon.svg" style={{ top: '33%', right: '0' }} />
-      <PaperdollSlot icon="icon_common_arms.svg" style={{ top: '48%', right: '0' }} />
-      <PaperdollSlot icon="PIT_Looting_Legs_Icon.svg" style={{ top: '63%', right: '0' }} />
-      <PaperdollSlot icon="icon_common_shoe.svg" style={{ top: '78%', right: '0' }} />
+      {/* Right column — armor/clothing slots */}
+      <PaperdollSlot icon="icon_common_helmet.svg" style={{ top: '7%', right: '10%' }} />
+      <PaperdollSlot icon="icon_common_glasses.svg" style={{ top: '18%', right: '10%' }} />
+      <PaperdollSlot icon="PIT_Looting_Core_Icon.svg" style={{ top: '33%', right: '10%' }} />
+      <PaperdollSlot icon="icon_common_arms.svg" style={{ top: '48%', right: '10%' }} />
+      <PaperdollSlot icon="PIT_Looting_Legs_Icon.svg" style={{ top: '63%', right: '10%' }} />
+      <PaperdollSlot icon="icon_common_shoe.svg" style={{ top: '78%', right: '10%' }} />
 
-      {/* Left — Throwables row, tight to left separator */}
-      <div className="absolute flex gap-[0.3vw]" style={{ top: '12%', left: '0' }}>
+      {/* Left — Throwables row */}
+      <div className="absolute flex gap-[0.3vw]" style={{ top: '12%', left: '8%' }}>
         {[0,1,2,3].map(i => <PaperdollSlot key={i} icon="icon_common_grenade.svg" small />)}
       </div>
 
       {/* Left — Backpack */}
-      <PaperdollSlot icon="PIT_Looting_Backpack_Icon.svg" style={{ top: '24%', left: '0' }} />
+      <PaperdollSlot icon="PIT_Looting_Backpack_Icon.svg" style={{ top: '24%', left: '8%' }} />
 
       {/* Left — Magazines (2 rows of 4) */}
-      <div className="absolute flex gap-[0.3vw]" style={{ top: '44%', left: '0' }}>
+      <div className="absolute flex gap-[0.3vw]" style={{ top: '44%', left: '6%' }}>
         {[0,1,2,3].map(i => <PaperdollSlot key={i} icon="icon_common_magazine.svg" small />)}
       </div>
-      <div className="absolute flex gap-[0.3vw]" style={{ top: '50%', left: '0' }}>
+      <div className="absolute flex gap-[0.3vw]" style={{ top: '50%', left: '6%' }}>
         {[0,1,2,3].map(i => <PaperdollSlot key={i} icon="icon_common_magazine.svg" small />)}
       </div>
 
       {/* Left — Consumables (1 row of 4) */}
-      <div className="absolute flex gap-[0.3vw]" style={{ top: '66%', left: '0' }}>
+      <div className="absolute flex gap-[0.3vw]" style={{ top: '66%', left: '6%' }}>
         {[0,1,2,3].map(i => <PaperdollSlot key={i} icon="icon_common_consumable.svg" small />)}
       </div>
 
@@ -266,13 +266,14 @@ export default function FpsLoadout() {
       className="relative w-full overflow-hidden"
       style={{
         height: 'calc(100vh - 3rem)',
+        background: '#000306',
         color: '#c0f6fe',
         fontFamily: 'sans-serif',
       }}
     >
       {/* Inner wrapper with perspective for 3D panel effect */}
       <div className="absolute inset-0 flex items-center justify-center">
-        <div className="relative w-full h-full" style={{ perspective: '2200px' }}>
+        <div className="relative" style={{ width: '95%', height: '95%', perspective: '2200px' }}>
 
           {/* Panel frame backgrounds */}
           <div
