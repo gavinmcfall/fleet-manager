@@ -131,18 +131,23 @@ export default function ComponentPicker({ slug, portId, portType, currentOverrid
                       </span>
                     </th>
                   ))}
-                  <th className="px-3 py-2.5 text-xs font-semibold uppercase tracking-wider text-gray-500 text-center w-24">Status</th>
+                  <th className="px-3 py-2.5 text-xs font-semibold uppercase tracking-wider text-gray-500 text-center" style={{ minWidth: 160 }}>Status</th>
                   <th className="px-3 py-2.5 text-xs font-semibold uppercase tracking-wider text-gray-500 text-right" style={{ minWidth: 140 }}>Price</th>
                   <th className="w-10" /> {/* cart */}
                 </tr>
               </thead>
               <tbody>
                 {sorted.map((comp, idx) => {
-                  const isEquipped = equippedUuid ? comp.uuid === equippedUuid : comp.is_stock
-                  const isStock = comp.is_stock && !isEquipped
+                  // isDefault: this is the factory/stock component for this port (always from API)
+                  const isDefault = !!comp.is_stock
+                  // isEquipped: what the user currently has selected
+                  // - with override: matches the override UUID
+                  // - without override: the default IS the equipped
+                  const isEquipped = equippedUuid ? comp.uuid === equippedUuid : isDefault
                   const hasBuyShop = comp.shops?.length > 0
                   const cheapestShop = hasBuyShop ? comp.shops.reduce((a, b) => (a.buy_price || Infinity) < (b.buy_price || Infinity) ? a : b) : null
                   const stripe = idx % 2 === 1
+                  const highlighted = isEquipped || isDefault
 
                   return (
                     <tr
@@ -151,7 +156,7 @@ export default function ComponentPicker({ slug, portId, portType, currentOverrid
                       className={`cursor-pointer transition-colors duration-150 group border-l-2
                         ${isEquipped
                           ? 'bg-sc-accent/[0.12] border-l-sc-accent hover:bg-sc-accent/[0.18]'
-                          : isStock
+                          : isDefault
                             ? 'bg-amber-500/[0.06] border-l-amber-500/60 hover:bg-amber-500/[0.10]'
                             : `border-l-transparent ${stripe ? 'bg-white/[0.02]' : 'bg-transparent'} hover:bg-white/[0.06]`
                         }`}
@@ -159,7 +164,7 @@ export default function ComponentPicker({ slug, portId, portType, currentOverrid
                       {/* Row indicator */}
                       <td className="px-2 py-0 text-center">
                         {isEquipped && <Check className="w-4 h-4 text-sc-accent mx-auto" />}
-                        {isStock && !isEquipped && <Diamond className="w-3.5 h-3.5 text-amber-400 mx-auto" />}
+                        {isDefault && !isEquipped && <Diamond className="w-3.5 h-3.5 text-amber-400 mx-auto" />}
                       </td>
 
                       {/* Data columns */}
@@ -174,7 +179,7 @@ export default function ComponentPicker({ slug, portId, portType, currentOverrid
                             className={`px-3 py-2.5 whitespace-nowrap
                               ${col.align === 'left' ? 'text-left' : 'text-right'}
                               ${isName
-                                ? `text-sm font-medium ${isEquipped ? 'text-sc-accent' : 'text-gray-100'}`
+                                ? `text-sm font-medium ${isEquipped ? 'text-sc-accent' : isDefault ? 'text-amber-300' : 'text-gray-100'}`
                                 : isMfr
                                   ? 'text-sm text-gray-400'
                                   : 'text-sm tabular-nums text-gray-300'
@@ -191,18 +196,20 @@ export default function ComponentPicker({ slug, portId, portType, currentOverrid
                         )
                       })}
 
-                      {/* Status badge */}
+                      {/* Status badges — shown independently, a component can be both */}
                       <td className="px-3 py-2.5 text-center">
-                        {isEquipped && (
-                          <span className="text-[11px] font-semibold text-sc-accent bg-sc-accent/15 px-2 py-0.5 rounded-full">
-                            Equipped
-                          </span>
-                        )}
-                        {isStock && !isEquipped && (
-                          <span className="text-[11px] font-semibold text-amber-400 bg-amber-500/15 px-2 py-0.5 rounded-full">
-                            Default
-                          </span>
-                        )}
+                        <div className="flex items-center justify-center gap-1">
+                          {isEquipped && (
+                            <span className="text-[11px] font-semibold text-sc-accent bg-sc-accent/15 px-2 py-0.5 rounded-full">
+                              Equipped
+                            </span>
+                          )}
+                          {isDefault && (
+                            <span className="text-[11px] font-semibold text-amber-400 bg-amber-500/15 px-2 py-0.5 rounded-full">
+                              Default
+                            </span>
+                          )}
+                        </div>
                       </td>
 
                       {/* Price / availability */}
