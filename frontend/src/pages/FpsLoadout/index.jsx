@@ -272,7 +272,7 @@ export default function FpsLoadout() {
     >
       {/* Inner wrapper with perspective for 3D panel effect */}
       <div className="absolute inset-0 flex items-center justify-center">
-        <div className="relative" style={{ width: '95%', height: '95%', perspective: '2200px' }}>
+        <div className="relative w-full h-full" style={{ perspective: '2200px' }}>
 
           {/* Panel frame backgrounds */}
           <div
