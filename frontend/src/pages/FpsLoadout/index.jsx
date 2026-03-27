@@ -127,43 +127,43 @@ function EquipmentPanel({ equipTab, setEquipTab }) {
           </button>
         </div>
 
-        {/* Slot grids */}
+        {/* Slot grids — fixed height so switching tabs doesn't jump */}
         <div className="flex-1 flex flex-col">
           <HazardSep label="EQUIPMENT" />
 
-          {equipTab === 'weapons' ? (
-            <>
-              <EquipSlot icon="icon_inventory_handheld.svg" />
-              <HazardSep />
-              {/* Primary weapon + attachments */}
-              <div className="flex gap-[0.16vw] my-[0.19vh]" style={{ height: '5.93vh' }}>
-                <div className="flex-[2]"><EquipSlot icon="icon_common_primary_weapon.svg" badge="1" /></div>
-                <div className="flex-1"><EquipSlot icon="icon_common_weapon_attachment_scope.svg" size="1.8vw" /></div>
-                <div className="flex-1"><EquipSlot icon="icon_common_weapon_attachment_barrel.svg" size="1.8vw" /></div>
-                <div className="flex-1"><EquipSlot icon="icon_common_weapon_attachment_underbarrel.svg" size="1.8vw" /></div>
-              </div>
-              <HazardSep thin />
-              {/* Secondary weapon + attachments */}
-              <div className="flex gap-[0.16vw] my-[0.19vh]" style={{ height: '5.93vh' }}>
-                <div className="flex-[2]"><EquipSlot icon="icon_common_secondary_weapon.svg" badge="2" /></div>
-                <div className="flex-1"><EquipSlot icon="icon_common_weapon_attachment_scope.svg" size="1.8vw" /></div>
-                <div className="flex-1"><EquipSlot icon="icon_common_weapon_attachment_barrel.svg" size="1.8vw" /></div>
-                <div className="flex-1"><EquipSlot icon="icon_common_weapon_attachment_underbarrel.svg" size="1.8vw" /></div>
-              </div>
-              <HazardSep thin />
-              <EquipSlot icon="icon_common_sidearm.svg" badge="3" />
-            </>
-          ) : (
-            <>
-              <EquipSlot icon="icon_inventory_handheld.svg" />
-              <HazardSep />
-              <EquipSlot icon="icon_common_gadgets.svg" badge="4" />
-              <HazardSep thin />
-              <EquipSlot icon="icon_common_knife.svg" />
-              <HazardSep thin />
-              <EquipSlot icon="icon_common_miningGadget.svg" />
-            </>
-          )}
+          <div className="flex-1 flex flex-col justify-between">
+            {equipTab === 'weapons' ? (
+              <>
+                <EquipSlot icon="icon_inventory_handheld.svg" />
+                <HazardSep />
+                <div className="flex gap-[0.16vw]" style={{ height: '5.93vh' }}>
+                  <div className="flex-[2]"><EquipSlot icon="icon_common_primary_weapon.svg" badge="1" /></div>
+                  <div className="flex-1"><EquipSlot icon="icon_common_weapon_attachment_scope.svg" size="1.8vw" /></div>
+                  <div className="flex-1"><EquipSlot icon="icon_common_weapon_attachment_barrel.svg" size="1.8vw" /></div>
+                  <div className="flex-1"><EquipSlot icon="icon_common_weapon_attachment_underbarrel.svg" size="1.8vw" /></div>
+                </div>
+                <HazardSep thin />
+                <div className="flex gap-[0.16vw]" style={{ height: '5.93vh' }}>
+                  <div className="flex-[2]"><EquipSlot icon="icon_common_secondary_weapon.svg" badge="2" /></div>
+                  <div className="flex-1"><EquipSlot icon="icon_common_weapon_attachment_scope.svg" size="1.8vw" /></div>
+                  <div className="flex-1"><EquipSlot icon="icon_common_weapon_attachment_barrel.svg" size="1.8vw" /></div>
+                  <div className="flex-1"><EquipSlot icon="icon_common_weapon_attachment_underbarrel.svg" size="1.8vw" /></div>
+                </div>
+                <HazardSep thin />
+                <EquipSlot icon="icon_common_sidearm.svg" badge="3" />
+              </>
+            ) : (
+              <>
+                <EquipSlot icon="icon_inventory_handheld.svg" />
+                <HazardSep />
+                <EquipSlot icon="icon_common_gadgets.svg" badge="4" />
+                <HazardSep thin />
+                <EquipSlot icon="icon_common_knife.svg" />
+                <HazardSep thin />
+                <EquipSlot icon="icon_common_miningGadget.svg" />
+              </>
+            )}
+          </div>
         </div>
       </div>
     </div>
