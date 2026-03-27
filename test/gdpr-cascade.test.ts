@@ -858,32 +858,24 @@ describe("GDPR — User Deletion Cascade", () => {
   });
 
   describe("Schema completeness — all user tables are tracked", () => {
-    it("USER_TABLES list matches all tables with user_id column", { timeout: 15000 }, async () => {
+    it("USER_TABLES list matches all tables with user_id column", async () => {
       const db = env.DB;
 
-      // Get all tables that have a user_id column
-      const tables = await db
+      // Single query: join sqlite_master with pragma_table_info to find all tables with user_id
+      const result = await db
         .prepare(
-          `SELECT m.name as table_name
-           FROM sqlite_master m
+          `SELECT DISTINCT m.name as table_name
+           FROM sqlite_master m, pragma_table_info(m.name) p
            WHERE m.type = 'table'
              AND m.name NOT LIKE 'sqlite_%'
              AND m.name NOT LIKE 'd1_%'
              AND m.name NOT LIKE '_cf_%'
+             AND p.name = 'user_id'
            ORDER BY m.name`
         )
         .all<{ table_name: string }>();
 
-      const tablesWithUserId: string[] = [];
-      for (const { table_name } of tables.results) {
-        const cols = await db
-          .prepare(`PRAGMA table_info("${table_name}")`)
-          .all<{ name: string }>();
-        const hasUserId = cols.results.some((c) => c.name === "user_id");
-        if (hasUserId) {
-          tablesWithUserId.push(table_name);
-        }
-      }
+      const tablesWithUserId = result.results.map((r) => r.table_name);
 
       // Every table with a user_id column must be in USER_TABLES or USER_TABLES_NO_CASCADE
       const tracked = new Set<string>([...USER_TABLES, ...USER_TABLES_NO_CASCADE]);
