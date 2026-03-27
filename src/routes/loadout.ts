@@ -172,25 +172,62 @@ export function loadoutRoutes() {
     // If the port has an equipped component, use its actual type to narrow compatible options.
     // This handles mining lasers (port_type='weapon' but component_type='WeaponMining') and
     // salvage heads (port_type='weapon' but component_type='SalvageModifier').
+    // NOTE: We check the RESOLVED component (deepest child via loadout CTE), not the raw
+    // equipped_item_uuid, because turret ports reference the housing, not the actual tool.
     let componentTypes = PORT_TYPE_TO_COMPONENT_TYPE[resolvedPortType] || [resolvedPortType || "UNKNOWN"];
+
+    // Check both the direct equipped item AND the resolved deepest component
+    const COMPONENT_TYPE_OVERRIDES: Record<string, string[]> = {
+      WeaponMining: ["WeaponMining"],
+      SalvageHead: ["SalvageHead"],
+      SalvageModifier: ["SalvageModifier"],
+      MiningModifier: ["MiningModifier"],
+      TractorBeam: ["TractorBeam"],
+      ToolArm: ["TractorBeam", "ToolArm"],
+      UtilityTurret: [], // check children instead
+    };
+
+    // First try the port's own equipped item
+    let resolvedComponentType: string | null = null;
     if (port.equipped_item_uuid) {
       const equipped = await db
         .prepare(`SELECT type FROM vehicle_components WHERE uuid = ? AND game_version_id = (SELECT MAX(game_version_id) FROM vehicle_components WHERE uuid = ? AND game_version_id <= ${vq})`)
         .bind(port.equipped_item_uuid, port.equipped_item_uuid)
         .first<{ type: string }>();
-      if (equipped?.type) {
-        // Map specific component types to their compatible set
-        const COMPONENT_TYPE_OVERRIDES: Record<string, string[]> = {
-          WeaponMining: ["WeaponMining"],
-          SalvageHead: ["SalvageHead"],
-          SalvageModifier: ["SalvageModifier"],
-          MiningModifier: ["MiningModifier"],
-          TractorBeam: ["TractorBeam"],
-          ToolArm: ["TractorBeam", "ToolArm"],
-        };
-        if (COMPONENT_TYPE_OVERRIDES[equipped.type]) {
-          componentTypes = COMPONENT_TYPE_OVERRIDES[equipped.type];
-        }
+      resolvedComponentType = equipped?.type || null;
+    }
+
+    // If the direct item is a turret/housing, check the loadout's resolved component_type
+    // (the deepest child weapon, which is what the user sees and wants to swap)
+    if (!resolvedComponentType || resolvedComponentType === "UtilityTurret" || resolvedComponentType === "TurretBase" || resolvedComponentType === "Turret") {
+      const loadoutRow = await db
+        .prepare(`SELECT component_type FROM (${
+          // Use a simplified version of the loadout CTE result for this port
+          `SELECT COALESCE(d.type, mount.type) as component_type
+           FROM vehicle_ports p
+           LEFT JOIN vehicle_components mount ON mount.uuid = p.equipped_item_uuid
+             AND mount.game_version_id = (SELECT MAX(game_version_id) FROM vehicle_components WHERE uuid = p.equipped_item_uuid AND game_version_id <= ${vq})
+           LEFT JOIN vehicle_ports child ON child.parent_port_id = p.id AND child.game_version_id = p.game_version_id
+           LEFT JOIN vehicle_components childcomp ON childcomp.uuid = child.equipped_item_uuid
+             AND childcomp.game_version_id = (SELECT MAX(game_version_id) FROM vehicle_components WHERE uuid = child.equipped_item_uuid AND game_version_id <= ${vq})
+           LEFT JOIN vehicle_ports grandchild ON grandchild.parent_port_id = child.id AND grandchild.game_version_id = child.game_version_id
+           LEFT JOIN vehicle_components gccomp ON gccomp.uuid = grandchild.equipped_item_uuid
+             AND gccomp.game_version_id = (SELECT MAX(game_version_id) FROM vehicle_components WHERE uuid = grandchild.equipped_item_uuid AND game_version_id <= ${vq})
+           WHERE p.id = ?
+           ORDER BY CASE WHEN gccomp.type IS NOT NULL THEN 0 WHEN childcomp.type IS NOT NULL THEN 1 ELSE 2 END
+           LIMIT 1`
+        }) sub`)
+        .bind(portId)
+        .first<{ component_type: string }>();
+      if (loadoutRow?.component_type) {
+        resolvedComponentType = loadoutRow.component_type;
+      }
+    }
+
+    if (resolvedComponentType && COMPONENT_TYPE_OVERRIDES[resolvedComponentType]) {
+      const override = COMPONENT_TYPE_OVERRIDES[resolvedComponentType];
+      if (override.length > 0) {
+        componentTypes = override;
       }
     }
     const typePlaceholders = componentTypes.map(() => "?").join(",");
