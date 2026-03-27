@@ -1333,7 +1333,7 @@ export function gamedataRoutes<E extends HonoEnv>() {
           w.id, w.uuid, w.name, w.class_name, w.sub_type, w.size,
           m.name as manufacturer_name, lm.rarity, lm.category,
           w.damage, w.dps, w.rounds_per_minute, w.ammo_capacity,
-          w.effective_range, w.damage_type, w.fire_modes, w.grade
+          w.effective_range, w.damage_type, w.fire_modes
           FROM fps_weapons w ${dvj("fps_weapons", "w")}
           LEFT JOIN manufacturers m ON m.id = w.manufacturer_id
           LEFT JOIN loot_map lm ON lm.fps_weapon_id = w.id`).all(),
