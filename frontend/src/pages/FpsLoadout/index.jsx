@@ -4,9 +4,9 @@ import { useFpsGear } from '../../hooks/useAPI'
 const ICON = (name) => `/inventory-assets/${name}`
 
 // CSS filter to tint dark SVG icons → cyan (matches in-game)
-// Bright cyan tint for game SVG icons
-const ICO_FILTER = 'invert(0.85) sepia(1) saturate(5) hue-rotate(155deg) brightness(1.2)'
-const ICO_FILTER_DIM = 'invert(0.85) sepia(1) saturate(3) hue-rotate(155deg) brightness(0.8)'
+// Normalize any SVG fill to bright cyan: first flatten to white, then tint
+const ICO_FILTER = 'brightness(0) saturate(100%) invert(85%) sepia(30%) saturate(1000%) hue-rotate(155deg) brightness(1.1)'
+const ICO_FILTER_DIM = 'brightness(0) saturate(100%) invert(60%) sepia(20%) saturate(500%) hue-rotate(155deg) brightness(0.7)'
 
 function Ico({ src, size = '1.2vw', dim = false, className = '' }) {
   return (
