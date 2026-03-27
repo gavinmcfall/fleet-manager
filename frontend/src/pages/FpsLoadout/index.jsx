@@ -5,10 +5,14 @@ const ICON = (name) => `/inventory-assets/${name}`
 
 // CSS filter to tint dark SVG icons → cyan (matches in-game)
 // Normalize any SVG fill to bright cyan: first flatten to white, then tint
-const ICO_FILTER = 'brightness(0) saturate(100%) invert(85%) sepia(30%) saturate(1000%) hue-rotate(155deg) brightness(1.1)'
+const ICO_FILTER_BRIGHT = 'brightness(0) saturate(100%) invert(85%) sepia(30%) saturate(1000%) hue-rotate(155deg) brightness(1.1)'
+const ICO_FILTER_ACTIVE = 'brightness(0) saturate(100%) invert(85%) sepia(30%) saturate(1000%) hue-rotate(155deg) brightness(1.1) drop-shadow(0 0 3px rgba(0,232,255,0.6))'
+const ICO_FILTER_DEFAULT = 'brightness(0) saturate(100%) invert(70%) sepia(20%) saturate(600%) hue-rotate(155deg) brightness(0.9)'
 const ICO_FILTER_DIM = 'brightness(0) saturate(100%) invert(60%) sepia(20%) saturate(500%) hue-rotate(155deg) brightness(0.7)'
 
-function Ico({ src, size = '1.2vw', dim = false, className = '' }) {
+function Ico({ src, size = '1.2vw', dim = false, active = false, muted = false, className = '' }) {
+  const filter = active ? ICO_FILTER_ACTIVE : dim ? ICO_FILTER_DIM : muted ? ICO_FILTER_DEFAULT : ICO_FILTER_BRIGHT
+  const opacity = dim ? 0.35 : muted ? 0.6 : 1
   return (
     <img
       src={ICON(src)}
@@ -16,8 +20,8 @@ function Ico({ src, size = '1.2vw', dim = false, className = '' }) {
       className={className}
       style={{
         width: size, height: size,
-        filter: dim ? ICO_FILTER_DIM : ICO_FILTER,
-        opacity: dim ? 0.35 : 1,
+        filter,
+        opacity,
       }}
     />
   )
@@ -267,8 +271,8 @@ function GearBrowser() {
   }, [data, search, activeCategory, activeSub])
 
   return (
-    <div className="flex flex-col h-full" style={{ padding: '0.93vh 0.73vw' }}>
-      <div className="text-[0.72vw] tracking-[0.16vw] uppercase mb-1">
+    <div className="flex flex-col h-full" style={{ padding: '1.4vh 1.1vw' }}>
+      <div className="text-[0.72vw] tracking-[0.16vw] uppercase mb-1.5">
         GEAR<span className="mx-1" style={{ color: 'rgba(192,246,254,0.3)' }}>/</span><span style={{ color: '#00e8ff' }}>BROWSE</span>
         {data?.items && <span className="ml-2" style={{ color: 'rgba(192,246,254,0.3)', fontSize: '0.5vw' }}>{items.length}</span>}
       </div>
@@ -322,11 +326,11 @@ function GearBrowser() {
               }}
               style={{
                 width: '2vw', height: '2vw',
-                border: `1px solid ${activeCategory === f.key ? '#00e8ff' : 'rgba(0,200,230,0.15)'}`,
+                border: `1px solid ${activeCategory === f.key ? '#00e8ff' : 'rgba(0,200,230,0.25)'}`,
                 background: activeCategory === f.key ? 'rgba(0,232,255,0.12)' : 'rgba(0,12,20,0.4)',
               }}
             >
-              <Ico src={f.icon} size="1.2vw" dim={activeCategory !== f.key} />
+              <Ico src={f.icon} size="1.2vw" active={activeCategory === f.key} muted={activeCategory !== null && activeCategory !== f.key} />
             </div>
           ))}
           {(activeCategory || search) && (

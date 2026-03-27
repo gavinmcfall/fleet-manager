@@ -32,6 +32,8 @@ import SourceIcons from './SourceIcons'
 import CollectionStepper from './CollectionStepper'
 import ItemCard from './ItemCard'
 import DetailPanel from './DetailPanel'
+import SubFilterStrip from './SubFilterStrip'
+import { SUB_FILTER_CONFIG } from './SubFilterStrip'
 import WishlistRow from './WishlistRow'
 
 // ── Sort options ────────────────────────────────────────────────────────────
@@ -161,6 +163,7 @@ export default function LootDB() {
   const sortBy = searchParams.get('sort') || 'name'
   const page = parseInt(searchParams.get('page') || '1', 10)
   const show = searchParams.get('show') || 'all'
+  const sub = searchParams.get('sub') || null
 
   const setSearch = useCallback((value) => {
     setSearchParams(prev => {
@@ -175,6 +178,15 @@ export default function LootDB() {
       if (value && value !== 'all') prev.set('cat', value); else prev.delete('cat')
       prev.delete('brand')
       prev.delete('set')
+      prev.delete('sub')
+      prev.delete('page')
+      return prev
+    }, { replace: true })
+  }, [setSearchParams])
+
+  const setSub = useCallback((value) => {
+    setSearchParams(prev => {
+      if (value) prev.set('sub', value); else prev.delete('sub')
       prev.delete('page')
       return prev
     }, { replace: true })
@@ -316,6 +328,14 @@ export default function LootDB() {
       })
     }
 
+    // Sub-type filter
+    if (sub && category !== 'all') {
+      const config = SUB_FILTER_CONFIG[category]
+      if (config) {
+        items = items.filter((i) => i[config.field] === sub)
+      }
+    }
+
     // Show filter (collection/wishlist overlay)
     if (show === 'collected') {
       items = items.filter((i) => collected.has(i.id))
@@ -363,7 +383,7 @@ export default function LootDB() {
     }
 
     return items
-  }, [allItems, category, brand, setName, rarities, sources, search, sortBy, show, collected, wishlistIds])
+  }, [allItems, category, brand, setName, rarities, sources, search, sortBy, show, sub, collected, wishlistIds])
 
   const pageSize = viewMode === 'grid' ? PAGE_SIZE_GRID : PAGE_SIZE_LIST
   const totalPages = Math.ceil(filtered.length / pageSize)
@@ -451,6 +471,7 @@ export default function LootDB() {
       prev.delete('set')
       prev.delete('rarities')
       prev.delete('sources')
+      prev.delete('sub')
       prev.delete('show')
       prev.delete('q')
       prev.delete('page')
@@ -466,7 +487,7 @@ export default function LootDB() {
   const detailItemId = detailItemMeta?.id ?? null
 
   // Active filter tag checks
-  const hasActiveFilters = category !== 'all' || brand || setName || rarities.size > 0 || sources.size > 0 || show !== 'all'
+  const hasActiveFilters = category !== 'all' || brand || setName || sub || rarities.size > 0 || sources.size > 0 || show !== 'all'
 
   // Current sort options based on selected category
   const sortOptions = getSortOptions(category)
@@ -716,6 +737,16 @@ export default function LootDB() {
             )}
           </div>
 
+          {/* Sub-type filters */}
+          {category !== 'all' && (
+            <SubFilterStrip
+              category={category}
+              items={allItems?.filter(i => effectiveCategory(i) === category) || []}
+              active={sub}
+              onSelect={setSub}
+            />
+          )}
+
           {/* Active filter tags */}
           {hasActiveFilters && (
             <div className="flex flex-wrap items-center gap-2">
@@ -753,6 +784,12 @@ export default function LootDB() {
                   </span>
                 )
               })}
+              {sub && (
+                <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded text-xs bg-violet-500/10 text-violet-300 border border-violet-500/20">
+                  {SUB_FILTER_CONFIG[category]?.labels?.[sub] || sub}
+                  <button onClick={() => setSub(null)} className="hover:text-white ml-1"><X className="w-2.5 h-2.5" /></button>
+                </span>
+              )}
               {show !== 'all' && (
                 <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded text-xs bg-amber-500/10 text-amber-400 border border-amber-500/20">
                   {SHOW_OPTIONS.find(o => o.value === show)?.label || show}

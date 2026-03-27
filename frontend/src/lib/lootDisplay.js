@@ -20,7 +20,6 @@ export const CATEGORY_LABELS = {
   weapon:         'Weapon',
   melee:          'Melee',
   armour:         'Armour',
-  helmet:         'Helmet',
   clothing:       'Clothing',
   attachment:     'Attachment',
   consumable:     'Consumable',
@@ -38,7 +37,6 @@ export const CATEGORY_BADGE_STYLES = {
   weapon:         'bg-red-900/40 text-red-300',
   melee:          'bg-red-800/40 text-red-200',
   armour:         'bg-blue-900/40 text-blue-300',
-  helmet:         'bg-sky-900/40 text-sky-300',
   clothing:       'bg-indigo-900/40 text-indigo-300',
   attachment:     'bg-orange-900/40 text-orange-300',
   consumable:     'bg-green-900/40 text-green-300',
@@ -53,7 +51,7 @@ export const CATEGORY_BADGE_STYLES = {
 }
 
 export const CATEGORY_ORDER = [
-  'weapon', 'melee', 'armour', 'helmet', 'clothing', 'attachment',
+  'weapon', 'melee', 'armour', 'clothing', 'attachment',
   'consumable', 'harvestable', 'carryable', 'prop', 'utility',
   'ship_weapon', 'ship_component', 'missile', 'unknown',
 ]
@@ -61,9 +59,11 @@ export const CATEGORY_ORDER = [
 /**
  * Derive effective display category for a loot item.
  * Splits 'ship_component' WeaponGun items into 'ship_weapon'.
+ * Merges 'helmet' into 'armour' — helmets are just another armour piece to users.
  */
 export function effectiveCategory(item) {
   if (item.category === 'ship_component' && item.type === 'WeaponGun') return 'ship_weapon'
+  if (item.category === 'helmet') return 'armour'
   return item.category
 }
 

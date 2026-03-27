@@ -143,6 +143,7 @@ in this repo** — create them in the tools repo instead.
 ## Key Design Decisions
 - **Game version management**: `lootBaseWhere(patchCode?)` replaces the old `LOOT_BASE_WHERE` constant. All loot endpoints accept `?patch=` query param. `GameVersionProvider` context provides `activeCode` to all loot hooks. Admins can set `adminPreviewPatch` in user settings to preview unreleased data (amber badge in sidebar). Public default version is managed via `PUT /api/admin/versions/default`.
 - **Insert-then-swap import**: All import tables (fleet, pledges, pledge_items, pledge_upgrades, buybacks) use insert-then-swap: record MAX(id), insert new rows, delete old rows by id <= max. Prevents data loss on transient D1 failures.
+- **Helmets merged into Armour (UX)**: The DB `loot_map.category` stays `'helmet'` but `effectiveCategory()` in `lootDisplay.js` maps it to `'armour'`. Helmets are just another armour piece to users (Core, Arms, Legs, Helmet, Backpack, Undersuit). The `fps_helmets` table stays separate in the DB (has `atmosphere_capacity` unique to helmets), but the frontend treats them as armour. Sub-filters let users drill into specific pieces.
 - **No UNIQUE on user_fleet**: users can own multiples of the same ship (two PTVs, etc.).
 - **RSI sync**: ship image sync is guarded by CF Images check (no-op for all ships). Paint image sync has no CF Images guard — fix before uploading paint CF Images.
 - **Paints are many-to-many**: `paint_vehicles` junction table links paints to all compatible vehicles.

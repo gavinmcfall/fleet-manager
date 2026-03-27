@@ -31,12 +31,6 @@ export const CATEGORY_STAT_CONFIGS = {
     sortOptions: ['name', 'resist_physical', 'rarity'],
   },
 
-  helmet: {
-    resistanceBars: true,
-    resistanceKeys: ['resist_physical', 'resist_energy', 'resist_distortion'],
-    sortOptions: ['name', 'resist_physical', 'rarity'],
-  },
-
   ship_component: {
     badges: ['comp_size', 'comp_grade'],
     subTypeConfigs: {
