@@ -351,7 +351,7 @@ export default function Import() {
                 </summary>
                 <div className="px-3 pb-3 pt-2 space-y-2">
                   <a
-                    href="https://github.com/SC-Bridge/sc-bridge-sync/releases/latest/download/sc-bridge-sync-0.3.1-chrome.zip"
+                    href="https://github.com/SC-Bridge/sc-bridge-sync/releases/latest/download/sc-bridge-sync-chrome.zip"
                     className="btn-secondary inline-flex items-center gap-2 text-xs"
                   >
                     <Download className="w-3.5 h-3.5" /> Download Chrome ZIP
@@ -375,7 +375,7 @@ export default function Import() {
                 </summary>
                 <div className="px-3 pb-3 pt-2 space-y-2">
                   <a
-                    href="https://github.com/SC-Bridge/sc-bridge-sync/releases/latest/download/sc-bridge-sync-0.3.1-firefox.zip"
+                    href="https://github.com/SC-Bridge/sc-bridge-sync/releases/latest/download/sc-bridge-sync-firefox.zip"
                     className="btn-secondary inline-flex items-center gap-2 text-xs"
                   >
                     <Download className="w-3.5 h-3.5" /> Download Firefox ZIP
@@ -399,7 +399,7 @@ export default function Import() {
                 </summary>
                 <div className="px-3 pb-3 pt-2 space-y-2">
                   <a
-                    href="https://github.com/SC-Bridge/sc-bridge-sync/releases/latest/download/sc-bridge-sync-0.3.1-edge.zip"
+                    href="https://github.com/SC-Bridge/sc-bridge-sync/releases/latest/download/sc-bridge-sync-edge.zip"
                     className="btn-secondary inline-flex items-center gap-2 text-xs"
                   >
                     <Download className="w-3.5 h-3.5" /> Download Edge ZIP
@@ -423,7 +423,7 @@ export default function Import() {
                 </summary>
                 <div className="px-3 pb-3 pt-2 space-y-2">
                   <a
-                    href="https://github.com/SC-Bridge/sc-bridge-sync/releases/latest/download/sc-bridge-sync-0.3.1-opera.zip"
+                    href="https://github.com/SC-Bridge/sc-bridge-sync/releases/latest/download/sc-bridge-sync-opera.zip"
                     className="btn-secondary inline-flex items-center gap-2 text-xs"
                   >
                     <Download className="w-3.5 h-3.5" /> Download Opera ZIP
