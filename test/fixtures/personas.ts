@@ -85,6 +85,14 @@ export const PERSONAS: Record<string, Persona> = {
     fleetFile: "./fleet-org-leader",
     orgName: "Test Squadron",
   },
+  "space-whale": {
+    key: "space-whale",
+    email: "spacewhale@test.scbridge.app",
+    password: "E2ESpaceWhale123!",
+    displayName: "Space Whale",
+    role: "user",
+    fleetFile: "./fleet-space-whale",
+  },
 };
 
 /** Insurance string values matching HangarXplor format */
