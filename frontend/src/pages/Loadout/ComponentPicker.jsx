@@ -1,12 +1,12 @@
 import React, { useState, useMemo } from 'react'
-import { X, ShoppingCart, Star, Diamond, Package, Search, ArrowUpDown, ArrowUp, ArrowDown } from 'lucide-react'
+import { X, ShoppingCart, Star, Diamond, Package, Search, ArrowUpDown, ArrowUp, ArrowDown, Check } from 'lucide-react'
 import { useCompatibleComponents } from '../../hooks/useAPI'
 import LoadingState from '../../components/LoadingState'
 import { getColumnsForPortType, getDefaultSortKey, PORT_TYPE_LABELS } from './loadoutHelpers'
 
 /**
- * Full-width sortable data grid for selecting compatible components.
- * Columns are type-specific (weapons show DPS/alpha/range, shields show HP/regen/resist, etc.)
+ * Full-screen sortable data grid for selecting compatible components.
+ * Uses a real HTML table for proper column alignment and auto-sizing.
  */
 export default function ComponentPicker({ slug, portId, portType, currentOverride, onSelect, onAddToCart, onClose }) {
   const { data, loading, error } = useCompatibleComponents(slug, portId)
@@ -14,12 +14,8 @@ export default function ComponentPicker({ slug, portId, portType, currentOverrid
   const [sortKey, setSortKey] = useState(() => getDefaultSortKey(portType))
   const [sortDir, setSortDir] = useState('desc')
 
-  // The API marks is_stock on the component that matches the port's equipped_item_uuid.
-  // currentOverride comes from user customization state (has component_uuid).
   const equippedUuid = currentOverride?.component_uuid || null
 
-  // Derive the actual component type from data — mining/salvage ports have port_type='weapon'
-  // but the components are WeaponMining/SalvageModifier/etc.
   const actualType = useMemo(() => {
     if (!data?.components?.length) return portType
     const firstType = data.components[0]?.type
@@ -68,161 +64,199 @@ export default function ComponentPicker({ slug, portId, portType, currentOverrid
   const totalCount = data?.components?.length || 0
 
   return (
-    <div className="fixed inset-0 z-50 flex items-start justify-center pt-6 pb-6 px-4 bg-black/60 backdrop-blur-md" onClick={onClose}>
-      <div className="bg-gray-950 border border-white/[0.08] rounded-lg shadow-2xl w-full max-w-7xl max-h-[88vh] flex flex-col" onClick={e => e.stopPropagation()}>
+    <div className="fixed inset-0 z-50 flex items-start justify-center pt-[3vh] pb-[3vh] px-[3vw] bg-black/70 backdrop-blur-sm" onClick={onClose}>
+      <div
+        className="bg-[#0c1018] border border-white/10 rounded-xl shadow-2xl shadow-black/50 w-full max-w-[92vw] max-h-[94vh] flex flex-col"
+        onClick={e => e.stopPropagation()}
+      >
         {/* Header */}
-        <div className="flex items-center justify-between px-5 py-3 border-b border-white/[0.06] flex-shrink-0">
+        <div className="flex items-center justify-between px-6 py-4 border-b border-white/10 flex-shrink-0">
           <div>
-            <h3 className="text-sm font-semibold text-white">
+            <h3 className="text-base font-semibold text-white tracking-wide">
               Select {PORT_TYPE_LABELS[actualType] || PORT_TYPE_LABELS[portType] || portType}
             </h3>
-            <p className="text-xs text-gray-500 mt-0.5">
+            <p className="text-sm text-gray-400 mt-0.5">
               Size {data?.size_min === data?.size_max ? data?.size_min : `${data?.size_min}–${data?.size_max}`}
-              {' · '}{totalCount} compatible
+              {' · '}<span className="text-gray-300">{totalCount}</span> compatible
             </p>
           </div>
-          <div className="flex items-center gap-3">
+          <div className="flex items-center gap-4">
+            {/* Legend */}
+            <div className="hidden lg:flex items-center gap-3 text-xs text-gray-500 mr-2">
+              <span className="flex items-center gap-1"><Star className="w-3 h-3 text-sc-accent" /> Equipped</span>
+              <span className="flex items-center gap-1"><Diamond className="w-3 h-3 text-amber-400" /> Default</span>
+            </div>
             <div className="relative">
-              <Search className="absolute left-2.5 top-2 w-3.5 h-3.5 text-gray-500" />
+              <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-500" />
               <input
                 type="text"
-                placeholder="Filter..."
+                placeholder="Filter by name or manufacturer..."
                 value={filter}
                 onChange={e => setFilter(e.target.value)}
-                className="pl-8 pr-3 py-1.5 text-sm bg-white/[0.04] border border-white/[0.08] rounded text-gray-300 placeholder-zinc-500 focus:outline-none focus:border-sc-accent/50 w-48"
+                className="pl-9 pr-4 py-2 text-sm bg-white/[0.05] border border-white/10 rounded-lg text-gray-200 placeholder-gray-600 focus:outline-none focus:border-sc-accent/40 focus:bg-white/[0.07] w-64 transition-colors"
                 autoFocus
               />
             </div>
-            <button onClick={onClose} className="p-1.5 text-gray-400 hover:text-gray-300 rounded transition-colors">
-              <X className="w-4 h-4" />
+            <button onClick={onClose} className="p-2 text-gray-500 hover:text-gray-300 hover:bg-white/[0.05] rounded-lg transition-colors" aria-label="Close">
+              <X className="w-5 h-5" />
             </button>
           </div>
         </div>
 
-        {/* Table header */}
-        <div className="flex items-center gap-0 px-5 py-1.5 border-b border-white/[0.08] bg-white/[0.02] text-[11px] font-medium text-gray-500 uppercase tracking-wider flex-shrink-0">
-          <div className="w-4 flex-shrink-0" /> {/* row indicator */}
-          {columns.map(col => (
-            <button
-              key={col.key}
-              onClick={() => handleSort(col.key)}
-              className={`${col.width || 'w-16'} flex-shrink-0 flex items-center gap-0.5 cursor-pointer hover:text-zinc-300 transition-colors ${col.align === 'left' ? '' : 'justify-end'}`}
-            >
-              {col.label}
-              {sortKey === col.key ? (
-                sortDir === 'desc' ? <ArrowDown className="w-3 h-3 text-sc-accent" /> : <ArrowUp className="w-3 h-3 text-sc-accent" />
-              ) : (
-                <ArrowUpDown className="w-3 h-3 opacity-30" />
-              )}
-            </button>
-          ))}
-          <div className="w-20 flex-shrink-0" /> {/* equipped/default badge */}
-          <div className="w-36 flex-shrink-0 text-right">Availability</div>
-          <div className="w-8 flex-shrink-0" /> {/* cart */}
-        </div>
+        {/* Table */}
+        <div className="flex-1 overflow-auto min-h-0">
+          {loading && <div className="p-12"><LoadingState /></div>}
+          {error && <div className="p-6 text-red-400 text-sm">{error}</div>}
 
-        {/* Table body */}
-        <div className="flex-1 overflow-y-auto overflow-x-auto">
-          {loading && <div className="p-8"><LoadingState /></div>}
-          {error && <div className="p-4 text-red-400 text-sm">{error}</div>}
-
-          {!loading && !error && sorted.map(comp => {
-            const isEquipped = equippedUuid ? comp.uuid === equippedUuid : comp.is_stock
-            const isStock = comp.is_stock && !isEquipped
-            const hasBuyShop = comp.shops?.length > 0
-            const cheapestShop = hasBuyShop ? comp.shops.reduce((a, b) => (a.buy_price || Infinity) < (b.buy_price || Infinity) ? a : b) : null
-
-            return (
-              <div
-                key={comp.id}
-                onClick={() => onSelect(comp)}
-                className={`flex items-center gap-0 px-5 py-2.5 cursor-pointer transition-colors group border-b border-white/[0.03]
-                  ${isEquipped ? 'bg-sc-accent/[0.08] border-l-2 border-l-sc-accent' : isStock ? 'bg-amber-500/[0.04] border-l-2 border-l-amber-500/50' : 'hover:bg-white/[0.03] border-l-2 border-l-transparent'}`}
-              >
-                {/* Row indicator */}
-                <div className="w-4 flex-shrink-0 flex items-center">
-                  {isEquipped && <Star className="w-3 h-3 text-sc-accent" />}
-                  {isStock && !isEquipped && <Diamond className="w-3 h-3 text-amber-400" />}
-                </div>
-
-                {/* Data columns */}
-                {columns.map(col => {
-                  const raw = comp[col.key]
-                  const display = raw != null ? (col.format ? col.format(raw) : String(raw)) : '—'
-                  return (
-                    <div
+          {!loading && !error && (
+            <table className="w-full border-collapse">
+              <thead className="sticky top-0 z-10">
+                <tr className="bg-[#111827] border-b border-white/10">
+                  <th className="w-10 px-2" /> {/* indicator */}
+                  {columns.map(col => (
+                    <th
                       key={col.key}
-                      className={`${col.width || 'w-16'} flex-shrink-0 text-xs font-mono truncate
-                        ${col.align === 'left' ? 'text-left' : 'text-right'}
-                        ${col.key === 'name' ? (isEquipped ? 'text-sc-accent font-medium font-sans' : 'text-gray-300 font-sans') : 'text-gray-400'}`}
+                      onClick={() => handleSort(col.key)}
+                      className={`px-3 py-2.5 text-xs font-semibold uppercase tracking-wider cursor-pointer select-none transition-colors hover:text-gray-200
+                        ${sortKey === col.key ? 'text-sc-accent' : 'text-gray-500'}
+                        ${col.align === 'left' ? 'text-left' : 'text-right'}`}
                     >
-                      {display}
-                    </div>
+                      <span className="inline-flex items-center gap-1">
+                        {col.label}
+                        {sortKey === col.key ? (
+                          sortDir === 'desc' ? <ArrowDown className="w-3 h-3" /> : <ArrowUp className="w-3 h-3" />
+                        ) : (
+                          <ArrowUpDown className="w-3 h-3 opacity-25" />
+                        )}
+                      </span>
+                    </th>
+                  ))}
+                  <th className="px-3 py-2.5 text-xs font-semibold uppercase tracking-wider text-gray-500 text-center w-24">Status</th>
+                  <th className="px-3 py-2.5 text-xs font-semibold uppercase tracking-wider text-gray-500 text-right" style={{ minWidth: 140 }}>Price</th>
+                  <th className="w-10" /> {/* cart */}
+                </tr>
+              </thead>
+              <tbody>
+                {sorted.map((comp, idx) => {
+                  const isEquipped = equippedUuid ? comp.uuid === equippedUuid : comp.is_stock
+                  const isStock = comp.is_stock && !isEquipped
+                  const hasBuyShop = comp.shops?.length > 0
+                  const cheapestShop = hasBuyShop ? comp.shops.reduce((a, b) => (a.buy_price || Infinity) < (b.buy_price || Infinity) ? a : b) : null
+                  const stripe = idx % 2 === 1
+
+                  return (
+                    <tr
+                      key={comp.id}
+                      onClick={() => onSelect(comp)}
+                      className={`cursor-pointer transition-colors duration-150 group border-l-2
+                        ${isEquipped
+                          ? 'bg-sc-accent/[0.12] border-l-sc-accent hover:bg-sc-accent/[0.18]'
+                          : isStock
+                            ? 'bg-amber-500/[0.06] border-l-amber-500/60 hover:bg-amber-500/[0.10]'
+                            : `border-l-transparent ${stripe ? 'bg-white/[0.02]' : 'bg-transparent'} hover:bg-white/[0.06]`
+                        }`}
+                    >
+                      {/* Row indicator */}
+                      <td className="px-2 py-0 text-center">
+                        {isEquipped && <Check className="w-4 h-4 text-sc-accent mx-auto" />}
+                        {isStock && !isEquipped && <Diamond className="w-3.5 h-3.5 text-amber-400 mx-auto" />}
+                      </td>
+
+                      {/* Data columns */}
+                      {columns.map(col => {
+                        const raw = comp[col.key]
+                        const display = raw != null ? (col.format ? col.format(raw) : String(raw)) : '—'
+                        const isName = col.key === 'name'
+                        const isMfr = col.key === 'manufacturer_name'
+                        return (
+                          <td
+                            key={col.key}
+                            className={`px-3 py-2.5 whitespace-nowrap
+                              ${col.align === 'left' ? 'text-left' : 'text-right'}
+                              ${isName
+                                ? `text-sm font-medium ${isEquipped ? 'text-sc-accent' : 'text-gray-100'}`
+                                : isMfr
+                                  ? 'text-sm text-gray-400'
+                                  : 'text-sm tabular-nums text-gray-300'
+                              }`}
+                          >
+                            {isName ? (
+                              <span className="truncate block max-w-[280px]" title={display}>{display}</span>
+                            ) : isMfr ? (
+                              <span className="truncate block max-w-[180px]" title={display}>{display}</span>
+                            ) : (
+                              display === '—' ? <span className="text-gray-600">—</span> : display
+                            )}
+                          </td>
+                        )
+                      })}
+
+                      {/* Status badge */}
+                      <td className="px-3 py-2.5 text-center">
+                        {isEquipped && (
+                          <span className="text-[11px] font-semibold text-sc-accent bg-sc-accent/15 px-2 py-0.5 rounded-full">
+                            Equipped
+                          </span>
+                        )}
+                        {isStock && !isEquipped && (
+                          <span className="text-[11px] font-semibold text-amber-400 bg-amber-500/15 px-2 py-0.5 rounded-full">
+                            Default
+                          </span>
+                        )}
+                      </td>
+
+                      {/* Price / availability */}
+                      <td className="px-3 py-2.5 text-right whitespace-nowrap">
+                        {comp.in_collection ? (
+                          <span className="inline-flex items-center gap-1 text-xs text-emerald-400">
+                            <Package className="w-3.5 h-3.5" /> Collected
+                          </span>
+                        ) : comp.on_ships?.length > 0 ? (
+                          <span className="text-xs text-sc-accent truncate block max-w-[160px]" title={`On ${comp.on_ships[0].custom_name || comp.on_ships[0].ship_name}`}>
+                            On {comp.on_ships[0].custom_name || comp.on_ships[0].ship_name}
+                          </span>
+                        ) : hasBuyShop && cheapestShop?.buy_price ? (
+                          <span className="text-xs font-medium text-emerald-400 tabular-nums">
+                            {Number(cheapestShop.buy_price).toLocaleString()} aUEC
+                          </span>
+                        ) : hasBuyShop ? (
+                          <span className="text-xs text-emerald-400">Buy</span>
+                        ) : (
+                          <span className="text-xs text-orange-400/80">Loot Only</span>
+                        )}
+                      </td>
+
+                      {/* Cart */}
+                      <td className="px-2 py-0 text-center">
+                        <button
+                          onClick={(e) => { e.stopPropagation(); onAddToCart(comp) }}
+                          className="p-1.5 text-gray-700 hover:text-emerald-400 opacity-0 group-hover:opacity-100 transition-all rounded hover:bg-white/[0.05]"
+                          title="Add to cart"
+                          aria-label={`Add ${comp.name} to cart`}
+                        >
+                          <ShoppingCart className="w-4 h-4" />
+                        </button>
+                      </td>
+                    </tr>
                   )
                 })}
-
-                {/* Badges: equipped / stock (default) */}
-                <div className="w-20 flex-shrink-0 flex items-center justify-end gap-1">
-                  {isEquipped && (
-                    <span className="text-[10px] font-medium text-sc-accent bg-sc-accent/10 px-1.5 py-0.5 rounded">
-                      Equipped
-                    </span>
-                  )}
-                  {isStock && !isEquipped && (
-                    <span className="text-[10px] font-medium text-amber-400 bg-amber-500/10 px-1.5 py-0.5 rounded">
-                      Default
-                    </span>
-                  )}
-                </div>
-
-                {/* Availability / purchasable status */}
-                <div className="w-36 flex-shrink-0 text-right">
-                  {comp.in_collection ? (
-                    <span className="inline-flex items-center gap-1 text-[10px] text-emerald-400 bg-emerald-900/20 px-1.5 py-0.5 rounded">
-                      <Package className="w-3 h-3" /> Collected
-                    </span>
-                  ) : comp.on_ships?.length > 0 ? (
-                    <span className="inline-flex items-center gap-1 text-[10px] text-sc-accent bg-sky-900/20 px-1.5 py-0.5 rounded truncate max-w-full" title={`On ${comp.on_ships[0].custom_name || comp.on_ships[0].ship_name}`}>
-                      On {comp.on_ships[0].custom_name || comp.on_ships[0].ship_name}
-                    </span>
-                  ) : hasBuyShop ? (
-                    <span className="inline-flex items-center gap-1 text-[10px] text-emerald-300 bg-emerald-900/15 px-1.5 py-0.5 rounded truncate max-w-full" title={cheapestShop.shop_name}>
-                      {cheapestShop.buy_price ? `${Number(cheapestShop.buy_price).toLocaleString()} aUEC` : 'Buy'}
-                    </span>
-                  ) : (
-                    <span className="text-[10px] text-orange-400 bg-orange-900/20 px-1.5 py-0.5 rounded">
-                      Loot Only
-                    </span>
-                  )}
-                </div>
-
-                {/* Cart button */}
-                <div className="w-8 flex-shrink-0 flex justify-center">
-                  <button
-                    onClick={(e) => { e.stopPropagation(); onAddToCart(comp) }}
-                    className="p-1 text-gray-600 hover:text-emerald-400 opacity-0 group-hover:opacity-100 transition-all"
-                    title="Add to cart"
-                  >
-                    <ShoppingCart className="w-3.5 h-3.5" />
-                  </button>
-                </div>
-              </div>
-            )
-          })}
+              </tbody>
+            </table>
+          )}
 
           {!loading && !error && sorted.length === 0 && (
-            <div className="p-8 text-center text-gray-500 text-sm">No compatible components found.</div>
+            <div className="p-12 text-center text-gray-500 text-sm">No compatible components found.</div>
           )}
         </div>
 
         {/* Footer */}
-        <div className="px-5 py-2 border-t border-white/[0.04] text-[11px] text-gray-600 flex items-center justify-between flex-shrink-0">
+        <div className="px-6 py-2.5 border-t border-white/10 text-xs text-gray-500 flex items-center justify-between flex-shrink-0 bg-[#0c1018]">
           <span>{sorted.length} of {totalCount} shown</span>
           <div className="flex items-center gap-4">
-            <span className="flex items-center gap-1"><Star className="w-3 h-3 text-sc-accent" /> Equipped</span>
-            <span className="flex items-center gap-1"><Diamond className="w-3 h-3 text-amber-400" /> Default</span>
-            <span className="flex items-center gap-1 text-emerald-300">aUEC = Purchasable</span>
-            <span className="flex items-center gap-1 text-orange-400">Loot Only</span>
+            <span className="flex items-center gap-1.5"><Check className="w-3.5 h-3.5 text-sc-accent" /> Equipped</span>
+            <span className="flex items-center gap-1.5"><Diamond className="w-3.5 h-3.5 text-amber-400" /> Default</span>
+            <span className="text-emerald-400">aUEC = Purchasable</span>
+            <span className="text-orange-400/80">Loot Only</span>
           </div>
         </div>
       </div>
