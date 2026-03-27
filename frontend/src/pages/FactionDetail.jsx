@@ -30,6 +30,8 @@ const FACTION_LOGOS = {
   "wikelo": "https://imagedelivery.net/JnUjHiDCDHvj44u4fjoYBg/faction-logo-wikelo/thumb",
   "rayariinc": "https://imagedelivery.net/JnUjHiDCDHvj44u4fjoYBg/faction-logo-rayari/thumb",
   "wildstarracing": "https://imagedelivery.net/JnUjHiDCDHvj44u4fjoYBg/faction-logo-wildstar/thumb",
+  "klescher": "https://imagedelivery.net/JnUjHiDCDHvj44u4fjoYBg/faction-logo-klescher/thumb",
+  "ftlcourier": "https://imagedelivery.net/JnUjHiDCDHvj44u4fjoYBg/faction-logo-ftlcourier/thumb",
 }
 
 // Human-friendly descriptions for mission types from contract generators
