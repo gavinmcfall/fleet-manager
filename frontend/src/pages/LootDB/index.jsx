@@ -32,8 +32,8 @@ import SourceIcons from './SourceIcons'
 import CollectionStepper from './CollectionStepper'
 import ItemCard from './ItemCard'
 import DetailPanel from './DetailPanel'
-import SubFilterStrip from './SubFilterStrip'
-import { SUB_FILTER_CONFIG } from './SubFilterStrip'
+import MultiFilterStrip from './MultiFilterStrip'
+import useMultiFilters from './useMultiFilters'
 import WishlistRow from './WishlistRow'
 
 // ── Sort options ────────────────────────────────────────────────────────────
@@ -163,7 +163,6 @@ export default function LootDB() {
   const sortBy = searchParams.get('sort') || 'name'
   const page = parseInt(searchParams.get('page') || '1', 10)
   const show = searchParams.get('show') || 'all'
-  const sub = searchParams.get('sub') || null
 
   const setSearch = useCallback((value) => {
     setSearchParams(prev => {
@@ -179,14 +178,6 @@ export default function LootDB() {
       prev.delete('brand')
       prev.delete('set')
       prev.delete('sub')
-      prev.delete('page')
-      return prev
-    }, { replace: true })
-  }, [setSearchParams])
-
-  const setSub = useCallback((value) => {
-    setSearchParams(prev => {
-      if (value) prev.set('sub', value); else prev.delete('sub')
       prev.delete('page')
       return prev
     }, { replace: true })
@@ -244,6 +235,9 @@ export default function LootDB() {
 
   const [detailUuid, setDetailUuid] = useState(routeUuid || null)
   const [showShoppingList, setShowShoppingList] = useState(false)
+
+  // Multi-dimensional sub-filters (per-category)
+  const { dimensions: filterDimensions, includes: filterIncludes, excludes: filterExcludes, toggle: toggleFilter, clearAll: clearAllDimFilters, hasAny: hasAnyDimFilters } = useMultiFilters(category)
 
   // Auto-open detail panel when arriving via /loot/:uuid route
   useEffect(() => {
@@ -328,11 +322,23 @@ export default function LootDB() {
       })
     }
 
-    // Sub-type filter
-    if (sub && category !== 'all') {
-      const config = SUB_FILTER_CONFIG[category]
-      if (config) {
-        items = items.filter((i) => i[config.field] === sub)
+    // Multi-dimensional sub-filters
+    if (category !== 'all' && filterDimensions.length > 0) {
+      for (const dim of filterDimensions) {
+        const inc = filterIncludes[dim.key]
+        const exc = filterExcludes[dim.key]
+        if (!inc?.size && !exc?.size) continue
+
+        items = items.filter((item) => {
+          const raw = item[dim.field]
+          const vals = dim.multiValue && typeof raw === 'string'
+            ? raw.split(',').map(s => s.trim())
+            : raw != null ? [String(raw)] : []
+
+          if (exc?.size && vals.some(v => exc.has(v))) return false
+          if (inc?.size && !vals.some(v => inc.has(v))) return false
+          return true
+        })
       }
     }
 
@@ -383,7 +389,7 @@ export default function LootDB() {
     }
 
     return items
-  }, [allItems, category, brand, setName, rarities, sources, search, sortBy, show, sub, collected, wishlistIds])
+  }, [allItems, category, brand, setName, rarities, sources, search, sortBy, show, filterDimensions, filterIncludes, filterExcludes, collected, wishlistIds])
 
   const pageSize = viewMode === 'grid' ? PAGE_SIZE_GRID : PAGE_SIZE_LIST
   const totalPages = Math.ceil(filtered.length / pageSize)
@@ -471,13 +477,17 @@ export default function LootDB() {
       prev.delete('set')
       prev.delete('rarities')
       prev.delete('sources')
-      prev.delete('sub')
       prev.delete('show')
       prev.delete('q')
       prev.delete('page')
+      // Clear all f_*/fx_* dimension filters
+      for (const key of [...prev.keys()]) {
+        if (key.startsWith('f_') || key.startsWith('fx_')) prev.delete(key)
+      }
       return prev
     }, { replace: true })
-  }, [setSearchParams])
+    clearAllDimFilters()
+  }, [setSearchParams, clearAllDimFilters])
 
   if (loading) return <LoadingState message="Loading items..." />
   if (error) return <ErrorState message={error} onRetry={refetch} />
@@ -487,7 +497,7 @@ export default function LootDB() {
   const detailItemId = detailItemMeta?.id ?? null
 
   // Active filter tag checks
-  const hasActiveFilters = category !== 'all' || brand || setName || sub || rarities.size > 0 || sources.size > 0 || show !== 'all'
+  const hasActiveFilters = category !== 'all' || brand || setName || hasAnyDimFilters || rarities.size > 0 || sources.size > 0 || show !== 'all'
 
   // Current sort options based on selected category
   const sortOptions = getSortOptions(category)
@@ -737,13 +747,14 @@ export default function LootDB() {
             )}
           </div>
 
-          {/* Sub-type filters */}
-          {category !== 'all' && (
-            <SubFilterStrip
-              category={category}
+          {/* Multi-dimensional sub-filters */}
+          {category !== 'all' && filterDimensions.length > 0 && (
+            <MultiFilterStrip
+              dimensions={filterDimensions}
               items={allItems?.filter(i => effectiveCategory(i) === category) || []}
-              active={sub}
-              onSelect={setSub}
+              includes={filterIncludes}
+              excludes={filterExcludes}
+              onToggle={toggleFilter}
             />
           )}
 
@@ -784,12 +795,26 @@ export default function LootDB() {
                   </span>
                 )
               })}
-              {sub && (
-                <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded text-xs bg-violet-500/10 text-violet-300 border border-violet-500/20">
-                  {SUB_FILTER_CONFIG[category]?.labels?.[sub] || sub}
-                  <button onClick={() => setSub(null)} className="hover:text-white ml-1"><X className="w-2.5 h-2.5" /></button>
-                </span>
-              )}
+              {filterDimensions.map(dim => {
+                const inc = filterIncludes[dim.key]
+                const exc = filterExcludes[dim.key]
+                if (!inc?.size && !exc?.size) return null
+                const labels = dim.values || {}
+                return [
+                  ...(inc ? [...inc].map(v => (
+                    <span key={`inc-${dim.key}-${v}`} className="inline-flex items-center gap-1 px-2 py-0.5 rounded text-xs bg-sc-accent/10 text-sc-accent border border-sc-accent/20">
+                      {labels[v] || v}
+                      <button onClick={(e) => toggleFilter(dim.key, v, { shiftKey: true })} className="hover:text-white ml-1"><X className="w-2.5 h-2.5" /></button>
+                    </span>
+                  )) : []),
+                  ...(exc ? [...exc].map(v => (
+                    <span key={`exc-${dim.key}-${v}`} className="inline-flex items-center gap-1 px-2 py-0.5 rounded text-xs bg-red-500/10 text-red-400 border border-red-500/20 line-through">
+                      {labels[v] || v}
+                      <button onClick={(e) => toggleFilter(dim.key, v, { ctrlKey: true })} className="hover:text-white ml-1"><X className="w-2.5 h-2.5" /></button>
+                    </span>
+                  )) : []),
+                ]
+              })}
               {show !== 'all' && (
                 <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded text-xs bg-amber-500/10 text-amber-400 border border-amber-500/20">
                   {SHOW_OPTIONS.find(o => o.value === show)?.label || show}

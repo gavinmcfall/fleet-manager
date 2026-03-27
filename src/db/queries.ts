@@ -46,6 +46,9 @@ const LOOT_SUMMARY_COLS = `
         _fat.zoom_scale, _fat.damage_multiplier, _fat.sound_radius_multiplier,
         _fu.heal_amount, _fu.blast_radius as utility_blast_radius, _fu.device_type,
         _fw.rounds_per_minute, _fw.effective_range, _fw.ammo_capacity,
+        _fw.fire_modes as weapon_fire_modes,
+        COALESCE(_fa.sub_type, _fh.sub_type) as armour_weight,
+        _vc.sub_type as comp_class,
         _fm.damage as melee_damage, _fm.heavy_damage as melee_heavy_damage,
         _fca.mass as carryable_mass, _fca.interaction_type as carryable_interaction`;
 
