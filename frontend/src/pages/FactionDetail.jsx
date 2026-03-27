@@ -145,7 +145,8 @@ function MissionDetailPanel({ mission, type, onBack }) {
                     <tr className="border-b border-white/[0.08] bg-white/[0.02]">
                       <th className="text-left text-[10px] uppercase tracking-wider text-gray-500 font-medium px-3 py-2">Difficulty</th>
                       <th className="text-left text-[10px] uppercase tracking-wider text-gray-500 font-medium px-3 py-2">Min Rank</th>
-                      <th className="text-left text-[10px] uppercase tracking-wider text-gray-500 font-medium px-3 py-2">Rep</th>
+                      <th className="text-left text-[10px] uppercase tracking-wider text-gray-500 font-medium px-3 py-2">Rep Reward</th>
+                      <th className="text-left text-[10px] uppercase tracking-wider text-gray-500 font-medium px-3 py-2">aUEC</th>
                     </tr>
                   </thead>
                   <tbody>
@@ -156,6 +157,7 @@ function MissionDetailPanel({ mission, type, onBack }) {
                         </td>
                         <td className="px-3 py-1.5 text-xs text-gray-400">{RANKS[t.min_rank]?.name || `Rank ${t.min_rank}`}</td>
                         <td className="px-3 py-1.5 text-xs text-emerald-400 font-mono">{t.rep_reward ? `+${t.rep_reward}` : '—'}</td>
+                        <td className="px-3 py-1.5 text-[10px] text-gray-600 italic">Dynamic</td>
                       </tr>
                     ))}
                   </tbody>
