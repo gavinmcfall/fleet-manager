@@ -14,6 +14,17 @@ export const CATEGORY_STAT_CONFIGS = {
     sortOptions: ['name', 'dps', 'rarity'],
   },
 
+  melee: {
+    cardStats: [
+      { key: 'melee_damage', label: 'Damage', color: 'text-red-400', format: 'number' },
+      { key: 'damage_type', label: null, format: 'badge' },
+    ],
+    secondaryStats: [
+      { key: 'melee_heavy_damage', label: 'Heavy', showWhenNonNull: true },
+    ],
+    sortOptions: ['name', 'melee_damage', 'rarity'],
+  },
+
   armour: {
     resistanceBars: true,
     resistanceKeys: ['resist_physical', 'resist_energy', 'resist_distortion'],
@@ -86,6 +97,14 @@ export const CATEGORY_STAT_CONFIGS = {
   clothing: {
     cardStats: [
       { key: 'storage_capacity', label: 'Storage', color: 'text-blue-400', format: 'number', showWhenNonNull: true },
+    ],
+    sortOptions: ['name', 'rarity'],
+  },
+
+  carryable: {
+    cardStats: [
+      { key: 'carryable_mass', label: 'Mass', color: 'text-amber-400', format: 'number', suffix: ' kg', showWhenNonNull: true },
+      { key: 'carryable_interaction', label: null, format: 'badge', showWhenNonNull: true },
     ],
     sortOptions: ['name', 'rarity'],
   },

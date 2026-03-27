@@ -21,17 +21,19 @@ import { VEHICLE_VERSION_JOIN, vehicleVersionCap, versionSubquery, deltaVersionJ
 // Each loot_map row has at most ONE FK set, so only one JOIN produces data per row.
 const LOOT_SUMMARY_JOINS = `
         LEFT JOIN fps_weapons _fw ON _fw.id = lm.fps_weapon_id
+        LEFT JOIN fps_melee _fm ON _fm.id = lm.fps_melee_id
         LEFT JOIN fps_armour _fa ON _fa.id = lm.fps_armour_id
         LEFT JOIN fps_helmets _fh ON _fh.id = lm.fps_helmet_id
         LEFT JOIN fps_clothing _fcl ON _fcl.id = lm.fps_clothing_id
         LEFT JOIN fps_attachments _fat ON _fat.id = lm.fps_attachment_id
         LEFT JOIN fps_utilities _fu ON _fu.id = lm.fps_utility_id
+        LEFT JOIN fps_carryables _fca ON _fca.id = lm.fps_carryable_id
         LEFT JOIN vehicle_components _vc ON _vc.id = lm.vehicle_component_id
         LEFT JOIN ship_missiles _sm ON _sm.id = lm.ship_missile_id`;
 
 const LOOT_SUMMARY_COLS = `
         COALESCE(_fw.dps, _vc.dps) as dps,
-        COALESCE(_fw.damage_type, _vc.damage_type) as damage_type,
+        COALESCE(_fw.damage_type, _fm.damage_type, _vc.damage_type) as damage_type,
         COALESCE(_fa.resist_physical, _fh.resist_physical, _fcl.resist_physical) as resist_physical,
         COALESCE(_fa.resist_energy, _fh.resist_energy, _fcl.resist_energy) as resist_energy,
         COALESCE(_fa.resist_distortion, _fh.resist_distortion, _fcl.resist_distortion) as resist_distortion,
@@ -43,7 +45,9 @@ const LOOT_SUMMARY_COLS = `
         _fcl.storage_capacity, _fcl.temperature_range_min, _fcl.temperature_range_max,
         _fat.zoom_scale, _fat.damage_multiplier, _fat.sound_radius_multiplier,
         _fu.heal_amount, _fu.blast_radius as utility_blast_radius, _fu.device_type,
-        _fw.rounds_per_minute, _fw.effective_range, _fw.ammo_capacity`;
+        _fw.rounds_per_minute, _fw.effective_range, _fw.ammo_capacity,
+        _fm.damage as melee_damage, _fm.heavy_damage as melee_heavy_damage,
+        _fca.mass as carryable_mass, _fca.interaction_type as carryable_interaction`;
 
 // --- Loot JSON "has_*" column expressions ---
 // Reusable SQL fragment for SELECT clauses that compute boolean flags from JSON blob columns.
@@ -1008,6 +1012,11 @@ export async function getLootByUuid(db: D1Database, uuid: string, versionId?: nu
         WHERE fw.id = ?`)
       .bind(item.fps_weapon_id)
       .first() as Record<string, unknown> | null;
+  } else if (item.fps_melee_id) {
+    details = await db
+      .prepare("SELECT name, sub_type as type, size, description, damage, heavy_damage, damage_type, attack_types, can_block, can_takedown FROM fps_melee WHERE id = ?")
+      .bind(item.fps_melee_id)
+      .first() as Record<string, unknown> | null;
   } else if (item.fps_armour_id) {
     details = await db
       .prepare("SELECT name, sub_type as type, size, grade, description, resist_physical, resist_energy, resist_distortion, resist_thermal, resist_biochemical, resist_stun, ir_emission, em_emission, item_port_count FROM fps_armour WHERE id = ?")
@@ -1030,8 +1039,13 @@ export async function getLootByUuid(db: D1Database, uuid: string, versionId?: nu
       .first() as Record<string, unknown> | null;
   } else if (item.fps_clothing_id) {
     details = await db
-      .prepare("SELECT name, slot, size, grade, description, resist_physical, resist_energy, resist_distortion, resist_thermal, resist_biochemical, resist_stun, ir_emission, em_emission, storage_capacity, temperature_range_min, temperature_range_max FROM fps_clothing WHERE id = ?")
+      .prepare("SELECT name, slot, sub_type, size, grade, description, resist_physical, resist_energy, resist_distortion, resist_thermal, resist_biochemical, resist_stun, ir_emission, em_emission, storage_capacity, temperature_range_min, temperature_range_max FROM fps_clothing WHERE id = ?")
       .bind(item.fps_clothing_id)
+      .first() as Record<string, unknown> | null;
+  } else if (item.fps_carryable_id) {
+    details = await db
+      .prepare("SELECT name, sub_type as type, description, mass, interaction_type, value FROM fps_carryables WHERE id = ?")
+      .bind(item.fps_carryable_id)
       .first() as Record<string, unknown> | null;
   } else if (item.consumable_id) {
     details = await db

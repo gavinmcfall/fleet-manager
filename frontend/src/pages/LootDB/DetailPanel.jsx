@@ -66,6 +66,15 @@ const STAT_LABELS = {
   second_zoom_scale:     'Alt Zoom',
   damage_multiplier:     'Damage Modifier',
   sound_radius_multiplier:'Sound Radius',
+  // Melee weapons
+  heavy_damage:          'Heavy Damage',
+  attack_types:          'Attack Types',
+  can_block:             'Can Block',
+  can_takedown:          'Can Takedown',
+  // Carryables
+  mass:                  'Mass',
+  interaction_type:      'Interaction',
+  value:                 'Value',
   // Utilities / consumables
   heal_amount:           'Heal Amount',
   effect_duration:       'Duration',
@@ -122,6 +131,8 @@ const STAT_LABELS = {
 /** Display order for stat columns. Unknown fields sort alphabetically after. */
 const STAT_ORDER = [
   'item_port_count', 'ammo_capacity', 'rounds_per_minute', 'fire_modes', 'damage', 'damage_type',
+  'heavy_damage', 'attack_types', 'can_block', 'can_takedown',
+  'mass', 'interaction_type', 'value',
   'damage_per_shot', 'dps', 'projectile_speed', 'effective_range', 'heat_per_shot', 'power_draw',
   'zoom_factor', 'zoom_scale', 'second_zoom_scale', 'damage_multiplier', 'sound_radius_multiplier',
   'resist_physical', 'resist_energy', 'resist_distortion',
@@ -143,7 +154,41 @@ const STAT_HIDDEN = new Set([
   'name', 'type', 'sub_type', 'slot', 'size', 'grade', 'description', 'id',
   'burst_count',  // merged into fire_modes display
   'magazine_name', 'magazine_size', 'magazine_loot_uuid',  // rendered in Magazine section
+  'power_draw', 'thermal_output',  // internal stats, not player-useful
 ])
+
+/** Primary stat to highlight per effective category */
+const PRIMARY_STAT = {
+  weapon:         { key: 'dps', label: 'DPS', color: 'text-red-400' },
+  ship_weapon:    { key: 'dps', label: 'DPS', color: 'text-red-400' },
+  armour:         null,  // uses resistance bars
+  helmet:         null,
+  ship_component: null,  // determined by sub-type below
+  missile:        { key: 'damage', label: 'Damage', color: 'text-red-400' },
+  consumable:     { key: 'heal_amount', label: 'Heal', color: 'text-green-400' },
+  utility:        null,
+}
+
+const SHIP_COMPONENT_PRIMARY = {
+  PowerPlant:   { key: 'power_output', label: 'Power Output', color: 'text-yellow-400' },
+  Cooler:       { key: 'cooling_rate', label: 'Cooling Rate', color: 'text-blue-400' },
+  Shield:       { key: 'shield_hp', label: 'Shield HP', color: 'text-cyan-400' },
+  QuantumDrive: { key: 'quantum_speed', label: 'QT Speed', color: 'text-purple-400', suffix: ' m/s' },
+}
+
+/** Stat grouping for structured display */
+const STAT_GROUPS = {
+  combat: { label: 'Combat', keys: new Set(['dps', 'damage', 'damage_per_shot', 'damage_type', 'rounds_per_minute', 'fire_modes', 'projectile_speed', 'effective_range', 'ammo_capacity', 'ammo_container_size', 'heat_per_shot', 'power_draw', 'item_port_count', 'charge_time', 'recoil_strength']) },
+  defense: { label: 'Defenses', keys: new Set(['shield_hp', 'shield_regen', 'regen_delay', 'downed_regen_delay', 'resist_physical', 'resist_energy', 'resist_distortion', 'resist_thermal', 'resist_biochemical', 'resist_stun', 'atmosphere_capacity', 'ir_emission', 'em_emission']) },
+  performance: { label: 'Performance', keys: new Set(['power_output', 'overpower_performance', 'overclock_performance', 'overclock_threshold_min', 'overclock_threshold_max', 'cooling_rate', 'max_temperature', 'overheat_temperature', 'thermal_output', 'quantum_speed', 'quantum_range', 'fuel_rate', 'spool_time', 'cooldown_time', 'calibration_rate', 'engage_speed', 'stage1_accel', 'stage2_accel']) },
+  turret: { label: 'Turret', keys: new Set(['rotation_speed', 'gimbal_type', 'min_pitch', 'max_pitch', 'min_yaw', 'max_yaw']) },
+  optics: { label: 'Optics', keys: new Set(['zoom_scale', 'second_zoom_scale', 'zoom_factor', 'damage_multiplier', 'sound_radius_multiplier']) },
+  missile_stats: { label: 'Missile', keys: new Set(['missile_type', 'tracking_signal', 'lock_time', 'lock_range', 'speed', 'blast_radius', 'ammo_count']) },
+  clothing_stats: { label: 'Properties', keys: new Set(['storage_capacity', 'temperature_range_min', 'temperature_range_max']) },
+  utility_stats: { label: 'Properties', keys: new Set(['heal_amount', 'effect_duration', 'consumable_type', 'blast_radius', 'fuse_time', 'device_type', 'detonation_type']) },
+  melee_stats: { label: 'Combat', keys: new Set(['heavy_damage', 'attack_types', 'can_block', 'can_takedown']) },
+  carryable_stats: { label: 'Properties', keys: new Set(['mass', 'interaction_type', 'value']) },
+}
 
 /** Keys where the stored value is a multiplier (1.0 = base); display as % of base. */
 const MULTIPLIER_STATS = new Set(['damage_multiplier', 'sound_radius_multiplier'])
@@ -331,20 +376,40 @@ export default function DetailPanel({ uuid, manufacturerName, collectionQty, onS
             {item.item_details && (() => {
               const det = item.item_details
               const hasDescription = !!det.description
-              const hasType = det.type && det.type !== item.type
-              const hasSubType = !!det.sub_type && det.sub_type !== 'UNDEFINED' && det.sub_type !== det.type
-              const hasSlot = !!det.slot
+
+              // Primary stat — big highlighted number
+              const primaryDef = eCat === 'ship_component' ? SHIP_COMPONENT_PRIMARY[det.type] : PRIMARY_STAT[eCat]
+              const primaryVal = primaryDef && det[primaryDef.key] != null ? det[primaryDef.key] : null
+
+              // Size + Grade as badges
               const hasSize = det.size != null
               const hasGrade = det.grade != null
-              // Build stats from direct columns on det (no more JSON parsing)
-              // Include "always show" stats for this category even when null (displayed as N/A)
+
+              // Build all stats, filter hidden, sort by order
               const alwaysShow = new Set(ALWAYS_SHOW_STATS[eCat] || [])
               const detWithDefaults = { ...det }
               for (const key of alwaysShow) {
                 if (!(key in detWithDefaults)) detWithDefaults[key] = null
               }
-              const statsEntries = Object.entries(detWithDefaults)
+
+              // Format a stat value for display
+              const formatStat = (k, v) => {
+                if (v == null) return 'N/A'
+                if (k === 'fire_modes') return formatFireModes(typeof v === 'string' ? v.split(',').map(s => s.trim()) : v, det.burst_count)
+                if (Array.isArray(v)) return v.join(', ')
+                if (RESISTANCE_STATS.has(k)) return null  // rendered as bars
+                if (MULTIPLIER_STATS.has(k) && typeof v === 'number') return `${Math.round(v * 100)}% of base`
+                if ((k === 'zoom_scale' || k === 'second_zoom_scale' || k === 'zoom_factor') && typeof v === 'number') return `${v}x`
+                if (k === 'atmosphere_capacity' && typeof v === 'number') return v > 0 ? 'Yes' : 'No'
+                if (k === 'blast_radius' && typeof v === 'number') return `${v}m`
+                if (k === 'can_block' || k === 'can_takedown') return v ? 'Yes' : 'No'
+                return String(v)
+              }
+
+              const allStats = Object.entries(detWithDefaults)
                 .filter(([k, v]) => !STAT_HIDDEN.has(k) && (v != null || alwaysShow.has(k)) && STAT_LABELS[k] !== null && STAT_LABELS[k] !== undefined)
+                .filter(([k]) => !k.startsWith('resist_'))  // resists rendered as bars
+                .filter(([k]) => !(primaryDef && k === primaryDef.key))  // primary shown above
                 .sort(([a], [b]) => {
                   const ai = STAT_ORDER.indexOf(a)
                   const bi = STAT_ORDER.indexOf(b)
@@ -353,113 +418,118 @@ export default function DetailPanel({ uuid, manufacturerName, collectionQty, onS
                   if (bi === -1) return -1
                   return ai - bi
                 })
-                .map(([k, v]) => {
-                  const label = STAT_LABELS[k] ?? k.replace(/_/g, ' ').replace(/\b\w/g, c => c.toUpperCase())
-                  let display
-                  if (v == null) {
-                    display = 'N/A'
-                  } else if (k === 'fire_modes') {
-                    display = formatFireModes(typeof v === 'string' ? v.split(',').map(s => s.trim()) : v, det.burst_count)
-                  } else if (Array.isArray(v)) {
-                    display = v.join(', ')
-                  } else if (RESISTANCE_STATS.has(k) && typeof v === 'number') {
-                    display = `${Math.round((1 - v) * 100)}% reduction`
-                  } else if (MULTIPLIER_STATS.has(k) && typeof v === 'number') {
-                    display = `${Math.round(v * 100)}% of base`
-                  } else if ((k === 'zoom_scale' || k === 'second_zoom_scale' || k === 'zoom_factor') && typeof v === 'number') {
-                    display = `${v}x`
-                  } else if (k === 'atmosphere_capacity' && typeof v === 'number') {
-                    display = v > 0 ? 'Yes' : 'No'
-                  } else if (k === 'blast_radius' && typeof v === 'number') {
-                    display = `${v}m`
-                  } else {
-                    display = String(v)
-                  }
-                  return { k, label, display }
-                })
+                .map(([k, v]) => ({
+                  k, label: STAT_LABELS[k] ?? k.replace(/_/g, ' ').replace(/\b\w/g, c => c.toUpperCase()),
+                  display: formatStat(k, v),
+                }))
                 .filter(({ display }) => display)
 
+              // Resistance keys present in data
+              const resistKeys = RESISTANCE_KEYS.filter(k => det[k] != null)
+
+              // Group stats into sections
+              const grouped = {}
+              for (const entry of allStats) {
+                let placed = false
+                for (const [gk, group] of Object.entries(STAT_GROUPS)) {
+                  if (group.keys.has(entry.k)) {
+                    if (!grouped[gk]) grouped[gk] = { label: group.label, entries: [] }
+                    grouped[gk].entries.push(entry)
+                    placed = true
+                    break
+                  }
+                }
+                if (!placed) {
+                  if (!grouped._other) grouped._other = { label: 'Other', entries: [] }
+                  grouped._other.entries.push(entry)
+                }
+              }
+
               const effects = Array.isArray(det.effects) ? det.effects : []
-              const hasEffects = effects.length > 0
-              const hasStats = statsEntries.length > 0
-              if (!hasDescription && !hasType && !hasSubType && !hasSlot && !hasSize && !hasGrade && !hasStats && !hasEffects) return null
 
               return (
-                <div>
-                  <p className="text-[10px] font-display uppercase tracking-wider text-gray-500 mb-2">Item Details</p>
-                  <div className="space-y-1 text-xs font-mono">
-                    {hasType && (
-                      <div className="flex gap-2">
-                        <span className="text-gray-500 w-32 shrink-0">Type</span>
-                        <span className="text-gray-300">{det.type}</span>
-                      </div>
-                    )}
-                    {hasSubType && (
-                      <div className="flex gap-2">
-                        <span className="text-gray-500 w-32 shrink-0">Sub Type</span>
-                        <span className="text-gray-300">{det.sub_type}</span>
-                      </div>
-                    )}
-                    {hasSlot && (
-                      <div className="flex gap-2">
-                        <span className="text-gray-500 w-32 shrink-0">Slot</span>
-                        <span className="text-gray-300">{det.slot}</span>
-                      </div>
-                    )}
-                    {hasSize && (
-                      <div className="flex gap-2">
-                        <span className="text-gray-500 w-32 shrink-0">Size</span>
-                        <span className="text-gray-300">S{det.size}</span>
-                      </div>
-                    )}
-                    {hasGrade && (
-                      <div className="flex gap-2">
-                        <span className="text-gray-500 w-32 shrink-0">Grade</span>
-                        <span className="text-gray-300">{det.grade}</span>
-                      </div>
-                    )}
-                    {/* Resistance bars (visual) — separate from other stats */}
-                    {(() => {
-                      const resistKeys = statsEntries.filter(({ k }) => k.startsWith('resist_'))
-                      if (resistKeys.length === 0) return null
-                      return (
-                        <div className="space-y-1.5 py-1">
-                          <span className="text-[10px] text-gray-600 uppercase tracking-wider">Resistances</span>
-                          {resistKeys.map(({ k }) => (
-                            <ResistanceBar key={k} statKey={k} value={det[k]} />
-                          ))}
-                        </div>
-                      )
-                    })()}
-                    {/* Other stat fields */}
-                    {statsEntries.filter(({ k }) => !k.startsWith('resist_')).map(({ k, label, display }) => (
-                      <div key={k} className="flex gap-2">
-                        <span className="text-gray-500 w-32 shrink-0">{label}</span>
-                        <span className="text-gray-300">{display}</span>
-                      </div>
-                    ))}
-                    {det.magazine_name && (
-                      <div className="flex gap-2">
-                        <span className="text-gray-500 w-32 shrink-0">Magazine</span>
-                        <span className="text-gray-300">
-                          {det.magazine_loot_uuid ? (
-                            <Link to={`/loot/${det.magazine_loot_uuid}`} className="text-sc-accent hover:text-sc-accent/80 transition-colors">
-                              {det.magazine_name}
-                            </Link>
-                          ) : det.magazine_name}
-                          {det.magazine_size != null && ` (${det.magazine_size} rds)`}
+                <div className="space-y-4">
+                  {/* Size + Grade badges */}
+                  {(hasSize || hasGrade) && (
+                    <div className="flex items-center gap-2">
+                      {hasSize && (
+                        <span className="text-[10px] font-mono px-2 py-1 rounded border border-sc-accent2/30 bg-sc-accent2/10 text-sc-accent2">
+                          Size {det.size}
                         </span>
+                      )}
+                      {hasGrade && (
+                        <span className="text-[10px] font-mono px-2 py-1 rounded border border-amber-500/30 bg-amber-500/10 text-amber-400">
+                          Grade {det.grade}
+                        </span>
+                      )}
+                      {det.slot && (
+                        <span className="text-[10px] font-mono px-2 py-1 rounded border border-white/[0.08] bg-white/[0.03] text-gray-400">
+                          {det.slot}
+                        </span>
+                      )}
+                    </div>
+                  )}
+
+                  {/* Primary stat — big highlighted number */}
+                  {primaryVal != null && (
+                    <div className="panel p-3 flex items-center justify-between">
+                      <span className="text-xs font-display uppercase tracking-wide text-gray-400">{primaryDef.label}</span>
+                      <span className={`text-2xl font-display font-bold ${primaryDef.color}`}>
+                        {typeof primaryVal === 'number' ? (primaryVal >= 1000 ? primaryVal.toLocaleString(undefined, { maximumFractionDigits: 0 }) : primaryVal % 1 === 0 ? primaryVal : primaryVal.toFixed(1)) : primaryVal}
+                        {primaryDef.suffix || ''}
+                      </span>
+                    </div>
+                  )}
+
+                  {/* Resistance bars */}
+                  {resistKeys.length > 0 && (
+                    <div className="panel p-3 space-y-2">
+                      <p className="text-[10px] font-display uppercase tracking-wider text-gray-500">Resistances</p>
+                      {resistKeys.map(k => <ResistanceBar key={k} statKey={k} value={det[k]} />)}
+                    </div>
+                  )}
+
+                  {/* Grouped stat sections */}
+                  {Object.entries(grouped).map(([gk, group]) => (
+                    <div key={gk} className="space-y-1.5">
+                      <p className="text-[10px] font-display uppercase tracking-wider text-gray-500">{group.label}</p>
+                      <div className="text-xs font-mono space-y-1">
+                        {group.entries.map(({ k, label, display }) => (
+                          <div key={k} className="flex justify-between gap-2">
+                            <span className="text-gray-500">{label}</span>
+                            <span className="text-gray-200 text-right">{display}</span>
+                          </div>
+                        ))}
                       </div>
-                    )}
-                    {hasEffects && (
-                      <>
-                        <p className="text-[10px] font-display uppercase tracking-wider text-gray-500 mt-3 mb-1">Effects</p>
+                    </div>
+                  ))}
+
+                  {/* Magazine link */}
+                  {det.magazine_name && (
+                    <div className="text-xs font-mono flex justify-between gap-2">
+                      <span className="text-gray-500">Magazine</span>
+                      <span className="text-gray-200">
+                        {det.magazine_loot_uuid ? (
+                          <Link to={`/loot/${det.magazine_loot_uuid}`} className="text-sc-accent hover:text-sc-accent/80 transition-colors">
+                            {det.magazine_name}
+                          </Link>
+                        ) : det.magazine_name}
+                        {det.magazine_size != null && ` (${det.magazine_size} rds)`}
+                      </span>
+                    </div>
+                  )}
+
+                  {/* Effects */}
+                  {effects.length > 0 && (
+                    <div className="space-y-1.5">
+                      <p className="text-[10px] font-display uppercase tracking-wider text-gray-500">Effects</p>
+                      <div className="text-xs font-mono space-y-1">
                         {effects.map((eff) => (
                           <div key={eff.effect_key} className="flex justify-between gap-2">
                             <span className="text-gray-500 truncate">
                               {EFFECT_LABELS[eff.effect_key] || eff.effect_key.replace(/([A-Z])/g, ' $1').trim()}
                             </span>
-                            <span className="text-gray-300 shrink-0 text-right">
+                            <span className="text-gray-200 shrink-0 text-right">
                               {eff.magnitude != null ? eff.magnitude : ''}
                               {eff.magnitude != null && eff.duration_seconds != null ? ' · ' : ''}
                               {eff.duration_seconds != null ? `${eff.duration_seconds}s` : ''}
@@ -467,14 +537,16 @@ export default function DetailPanel({ uuid, manufacturerName, collectionQty, onS
                             </span>
                           </div>
                         ))}
-                      </>
-                    )}
-                    {hasDescription && (
-                      <p className="text-gray-400 text-[11px] leading-relaxed whitespace-pre-wrap pt-1">
-                        {decodeMojibake(det.description.replace(/\\n/g, '\n'))}
-                      </p>
-                    )}
-                  </div>
+                      </div>
+                    </div>
+                  )}
+
+                  {/* Description */}
+                  {hasDescription && (
+                    <p className="text-gray-400 text-[11px] leading-relaxed whitespace-pre-wrap border-t border-sc-border/50 pt-3">
+                      {decodeMojibake(det.description.replace(/\\n/g, '\n'))}
+                    </p>
+                  )}
                 </div>
               )
             })()}

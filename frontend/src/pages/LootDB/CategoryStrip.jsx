@@ -1,16 +1,18 @@
 import {
-  Crosshair, Shield, HardHat, Shirt, Puzzle, Pill, Gem, Box,
-  Wrench, Rocket, Cpu, Bomb, HelpCircle, Layers,
+  Crosshair, Swords, Shield, HardHat, Shirt, Puzzle, Pill, Gem, Box,
+  Wrench, Package, Rocket, Cpu, Bomb, HelpCircle, Layers,
 } from 'lucide-react'
 
 const CATEGORY_ICONS = {
   weapon: Crosshair,
+  melee: Swords,
   armour: Shield,
   helmet: HardHat,
   clothing: Shirt,
   attachment: Puzzle,
   consumable: Pill,
   harvestable: Gem,
+  carryable: Package,
   prop: Box,
   utility: Wrench,
   ship_weapon: Rocket,
@@ -21,12 +23,14 @@ const CATEGORY_ICONS = {
 
 const CATEGORY_LABELS = {
   weapon: 'Weapons',
+  melee: 'Melee',
   armour: 'Armour',
   helmet: 'Helmets',
   clothing: 'Clothing',
   attachment: 'Attachments',
   consumable: 'Consumables',
   harvestable: 'Harvestables',
+  carryable: 'Carryables',
   prop: 'Props',
   utility: 'Utility',
   ship_weapon: 'Ship Weapons',

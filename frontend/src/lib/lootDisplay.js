@@ -18,12 +18,14 @@ export function rarityStyle(rarity) {
 // ── Category display ─────────────────────────────────────────────────────────
 export const CATEGORY_LABELS = {
   weapon:         'Weapon',
+  melee:          'Melee',
   armour:         'Armour',
   helmet:         'Helmet',
   clothing:       'Clothing',
   attachment:     'Attachment',
   consumable:     'Consumable',
   harvestable:    'Harvestable',
+  carryable:      'Carryable',
   prop:           'Prop',
   utility:        'Utility',
   ship_weapon:    'Ship Weapon',
@@ -34,12 +36,14 @@ export const CATEGORY_LABELS = {
 
 export const CATEGORY_BADGE_STYLES = {
   weapon:         'bg-red-900/40 text-red-300',
+  melee:          'bg-red-800/40 text-red-200',
   armour:         'bg-blue-900/40 text-blue-300',
   helmet:         'bg-sky-900/40 text-sky-300',
   clothing:       'bg-indigo-900/40 text-indigo-300',
   attachment:     'bg-orange-900/40 text-orange-300',
   consumable:     'bg-green-900/40 text-green-300',
   harvestable:    'bg-teal-900/40 text-teal-300',
+  carryable:      'bg-amber-900/40 text-amber-300',
   prop:           'bg-gray-700/60 text-gray-300',
   utility:        'bg-yellow-900/40 text-yellow-300',
   ship_weapon:    'bg-red-900/40 text-red-200',
@@ -49,8 +53,8 @@ export const CATEGORY_BADGE_STYLES = {
 }
 
 export const CATEGORY_ORDER = [
-  'weapon', 'armour', 'helmet', 'clothing', 'attachment',
-  'consumable', 'harvestable', 'prop', 'utility',
+  'weapon', 'melee', 'armour', 'helmet', 'clothing', 'attachment',
+  'consumable', 'harvestable', 'carryable', 'prop', 'utility',
   'ship_weapon', 'ship_component', 'missile', 'unknown',
 ]
 
