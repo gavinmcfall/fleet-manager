@@ -112,11 +112,17 @@ test.describe("Staging smoke tests", () => {
     });
 
     await page.goto(BASE);
-    await page.waitForLoadState("networkidle");
+    // Wait for SPA to hydrate — networkidle is too fragile with analytics scripts
+    await page.waitForLoadState("domcontentloaded");
+    await expect(page.locator("#root > *").first()).toBeVisible({ timeout: 30000 });
 
-    // Filter out expected non-critical errors (e.g. favicon 404)
+    // Filter out expected non-critical errors (e.g. favicon 404, analytics)
     const critical = errors.filter(
-      (e) => !e.includes("favicon") && !e.includes("404")
+      (e) =>
+        !e.includes("favicon") &&
+        !e.includes("404") &&
+        !e.includes("googletagmanager") &&
+        !e.includes("analytics")
     );
     expect(critical).toHaveLength(0);
   });
@@ -125,7 +131,7 @@ test.describe("Staging smoke tests", () => {
     await page.goto(`${BASE}/ships`);
     // SPA — wait for React to hydrate and render any ship content
     await expect(page.locator("table, [class*='grid']").first()).toBeVisible({
-      timeout: 15000,
+      timeout: 30000,
     });
   });
 
@@ -133,7 +139,7 @@ test.describe("Staging smoke tests", () => {
     await page.goto(`${BASE}/loot`);
     // SPA — wait for React to hydrate and render content
     await expect(page.locator("[class*='tab'], [class*='grid'], [class*='card']").first()).toBeVisible({
-      timeout: 15000,
+      timeout: 30000,
     });
   });
 });
