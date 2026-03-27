@@ -197,13 +197,23 @@ export function loadoutRoutes() {
       resolvedComponentType = equipped?.type || null;
     }
 
-    // If the direct item is a turret/housing, check the loadout's resolved component_type
-    // (the deepest child weapon, which is what the user sees and wants to swap)
+    // If the direct item is a turret/housing, walk the port tree to find the deepest
+    // child's component_type AND size range. The user is swapping the child, not the housing.
+    let resolvedSizeMin = port.size_min;
+    let resolvedSizeMax = port.size_max;
     if (!resolvedComponentType || resolvedComponentType === "UtilityTurret" || resolvedComponentType === "TurretBase" || resolvedComponentType === "Turret") {
       const loadoutRow = await db
-        .prepare(`SELECT component_type FROM (${
-          // Use a simplified version of the loadout CTE result for this port
-          `SELECT COALESCE(d.type, mount.type) as component_type
+        .prepare(`SELECT component_type, child_size_min, child_size_max FROM (${
+          `SELECT
+             CASE WHEN gccomp.type IS NOT NULL THEN gccomp.type
+                  WHEN childcomp.type IS NOT NULL THEN childcomp.type
+                  ELSE mount.type END as component_type,
+             CASE WHEN grandchild.id IS NOT NULL THEN grandchild.size_min
+                  WHEN child.id IS NOT NULL THEN child.size_min
+                  ELSE p.size_min END as child_size_min,
+             CASE WHEN grandchild.id IS NOT NULL THEN grandchild.size_max
+                  WHEN child.id IS NOT NULL THEN child.size_max
+                  ELSE p.size_max END as child_size_max
            FROM vehicle_ports p
            LEFT JOIN vehicle_components mount ON mount.uuid = p.equipped_item_uuid
              AND mount.game_version_id = (SELECT MAX(game_version_id) FROM vehicle_components WHERE uuid = p.equipped_item_uuid AND game_version_id <= ${vq})
@@ -218,9 +228,12 @@ export function loadoutRoutes() {
            LIMIT 1`
         }) sub`)
         .bind(portId)
-        .first<{ component_type: string }>();
+        .first<{ component_type: string; child_size_min: number; child_size_max: number }>();
       if (loadoutRow?.component_type) {
         resolvedComponentType = loadoutRow.component_type;
+        // Use the child port's size range instead of the turret housing size
+        if (loadoutRow.child_size_min != null) resolvedSizeMin = loadoutRow.child_size_min;
+        if (loadoutRow.child_size_max != null) resolvedSizeMax = loadoutRow.child_size_max;
       }
     }
 
@@ -258,10 +271,10 @@ export function loadoutRoutes() {
          ${deltaVersionJoin('vehicle_components', 'vc', 'uuid', versionId)}
          LEFT JOIN manufacturers m ON m.id = vc.manufacturer_id
          WHERE vc.type IN (${typePlaceholders})
-           ${port.size_min === 0 && port.size_max === 0 ? "" : "AND vc.size BETWEEN ? AND ?"}
+           ${resolvedSizeMin === 0 && resolvedSizeMax === 0 ? "" : "AND vc.size BETWEEN ? AND ?"}
          ORDER BY ${sortKey} DESC NULLS LAST, vc.name`,
       )
-      .bind(...componentTypes, ...(port.size_min === 0 && port.size_max === 0 ? [] : [port.size_min, port.size_max]))
+      .bind(...componentTypes, ...(resolvedSizeMin === 0 && resolvedSizeMax === 0 ? [] : [resolvedSizeMin, resolvedSizeMax]))
       .all();
 
     // Fetch shop availability for all compatible components
@@ -363,8 +376,8 @@ export function loadoutRoutes() {
     return c.json({
       port_id: portId,
       port_type: port.port_type,
-      size_min: port.size_min,
-      size_max: port.size_max,
+      size_min: resolvedSizeMin,
+      size_max: resolvedSizeMax,
       stock_uuid: port.equipped_item_uuid,
       components: enriched,
     });

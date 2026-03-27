@@ -1328,10 +1328,16 @@ export function gamedataRoutes<E extends HonoEnv>() {
 
     return cachedJson(c, `gd:fps-gear:${versionId}`, async () => {
       // Run queries in parallel — avoids D1 query size limit from a 7-table UNION
-      const [weapons, armour, helmets, clothing, attachments, utilities, melee] = await Promise.all([
+      // Each query adds category + sub_category matching the in-game filter system
+      const [weapons, armour, helmets, clothing, attachments, utilities, melee, carryables] = await Promise.all([
         db.prepare(`SELECT 'weapon' as slot, 'fps_weapons' as source_table,
+          'Weapons' as category,
+          CASE WHEN w.sub_type = 'Small' THEN 'Sidearms'
+               WHEN w.sub_type IN ('Medium','Large') THEN 'Primary'
+               WHEN w.sub_type = 'Gadget' THEN 'Special'
+               ELSE 'Primary' END as sub_category,
           w.id, w.uuid, w.name, w.class_name, w.sub_type, w.size,
-          m.name as manufacturer_name, lm.rarity, lm.category,
+          m.name as manufacturer_name, lm.rarity,
           w.damage, w.dps, w.rounds_per_minute, w.ammo_capacity,
           w.effective_range, w.damage_type, w.fire_modes
           FROM fps_weapons w ${dvj("fps_weapons", "w")}
@@ -1341,56 +1347,109 @@ export function gamedataRoutes<E extends HonoEnv>() {
             WHEN a.sub_type IN ('Arms','arms') THEN 'arms'
             WHEN a.sub_type IN ('Legs','legs') THEN 'legs'
             ELSE 'core' END as slot, 'fps_armour' as source_table,
+          'Armor' as category,
+          CASE WHEN a.sub_type IN ('Arms','arms') THEN 'Arms'
+               WHEN a.sub_type IN ('Legs','legs') THEN 'Legs'
+               ELSE 'Core' END as sub_category,
           a.id, a.uuid, a.name, a.class_name, a.sub_type, a.size,
-          m.name as manufacturer_name, lm.rarity, lm.category, a.grade,
+          m.name as manufacturer_name, lm.rarity, a.grade,
           a.resist_physical, a.resist_energy, a.resist_distortion,
           a.resist_thermal, a.resist_biochemical, a.resist_stun
           FROM fps_armour a ${dvj("fps_armour", "a")}
           LEFT JOIN manufacturers m ON m.id = a.manufacturer_id
           LEFT JOIN loot_map lm ON lm.fps_armour_id = a.id`).all(),
         db.prepare(`SELECT 'helmet' as slot, 'fps_helmets' as source_table,
+          'Armor' as category, 'Helmets' as sub_category,
           h.id, h.uuid, h.name, h.class_name, h.sub_type, h.size,
-          m.name as manufacturer_name, lm.rarity, lm.category, h.grade,
+          m.name as manufacturer_name, lm.rarity, h.grade,
           h.resist_physical, h.resist_energy, h.resist_distortion,
           h.resist_thermal, h.resist_biochemical, h.resist_stun
           FROM fps_helmets h ${dvj("fps_helmets", "h")}
           LEFT JOIN manufacturers m ON m.id = h.manufacturer_id
           LEFT JOIN loot_map lm ON lm.fps_helmet_id = h.id`).all(),
         db.prepare(`SELECT CASE
-            WHEN cl.slot IN ('Backpack','backpack') THEN 'backpack'
-            WHEN cl.slot IN ('Undersuit','undersuit') THEN 'undersuit'
-            WHEN cl.slot IN ('Boots','boots','Shoes') THEN 'boots'
-            WHEN cl.slot IN ('Glasses','glasses','Visor') THEN 'glasses'
+            WHEN cl.slot = 'Backpack' THEN 'backpack'
+            WHEN cl.slot = 'Eyes' THEN 'glasses'
             ELSE 'clothing' END as slot, 'fps_clothing' as source_table,
+          CASE WHEN cl.slot = 'Backpack' THEN 'Armor'
+               WHEN cl.class_name LIKE '%undersuit%' OR cl.class_name LIKE '%Undersuit%' THEN 'Armor'
+               ELSE 'Clothing' END as category,
+          CASE WHEN cl.slot = 'Backpack' THEN 'Backpacks'
+               WHEN cl.class_name LIKE '%undersuit%' OR cl.class_name LIKE '%Undersuit%' THEN 'Undersuits'
+               WHEN cl.slot = 'Hat' THEN 'Headwear'
+               WHEN cl.slot = 'Torso_0' THEN 'Shirts'
+               WHEN cl.slot = 'Torso_1' THEN 'Jackets'
+               WHEN cl.slot = 'Hands' THEN 'Gloves'
+               WHEN cl.slot = 'Legs' THEN 'Legwear'
+               WHEN cl.slot = 'Feet' THEN 'Footwear'
+               WHEN cl.slot = 'Eyes' THEN 'Eyewear'
+               ELSE 'Shirts' END as sub_category,
           cl.id, cl.uuid, cl.name, cl.class_name, cl.slot as sub_type, cl.size,
-          m.name as manufacturer_name, lm.rarity, lm.category, cl.grade,
+          m.name as manufacturer_name, lm.rarity, cl.grade,
           cl.slot as slot_name
           FROM fps_clothing cl ${dvj("fps_clothing", "cl")}
           LEFT JOIN manufacturers m ON m.id = cl.manufacturer_id
           LEFT JOIN loot_map lm ON lm.fps_clothing_id = cl.id`).all(),
         db.prepare(`SELECT 'attachment' as slot, 'fps_attachments' as source_table,
+          'Utility' as category, 'Attachments' as sub_category,
           at.id, at.uuid, at.name, at.class_name, at.sub_type, at.size,
-          m.name as manufacturer_name, lm.rarity, lm.category
+          m.name as manufacturer_name, lm.rarity
           FROM fps_attachments at ${dvj("fps_attachments", "at")}
           LEFT JOIN manufacturers m ON m.id = at.manufacturer_id
           LEFT JOIN loot_map lm ON lm.fps_attachment_id = at.id`).all(),
         db.prepare(`SELECT 'gadget' as slot, 'fps_utilities' as source_table,
+          'Utility' as category,
+          CASE WHEN u.sub_type IN ('Medical','MedPack') THEN 'Medical'
+               WHEN u.sub_type = 'Hacking' THEN 'Cryptokeys'
+               WHEN u.sub_type = 'OxygenCap' THEN 'Technology'
+               WHEN u.sub_type = 'Grenade' THEN 'Throwables'
+               ELSE 'Gadgets' END as sub_category,
           u.id, u.uuid, u.name, u.class_name, u.sub_type,
-          m.name as manufacturer_name, lm.rarity, lm.category
+          m.name as manufacturer_name, lm.rarity
           FROM fps_utilities u ${dvj("fps_utilities", "u")}
           LEFT JOIN manufacturers m ON m.id = u.manufacturer_id
           LEFT JOIN loot_map lm ON lm.fps_utility_id = u.id`).all(),
         db.prepare(`SELECT 'melee' as slot, 'fps_melee' as source_table,
+          'Weapons' as category, 'Melee' as sub_category,
           me.id, me.uuid, me.name, me.class_name, me.sub_type, me.size,
           m.name as manufacturer_name, me.damage, me.damage_type
           FROM fps_melee me ${dvj("fps_melee", "me")}
           LEFT JOIN manufacturers m ON m.id = me.manufacturer_id`).all(),
+        db.prepare(`SELECT 'carryable' as slot, 'fps_carryables' as source_table,
+          CASE WHEN ca.sub_type IN ('Drink','Bar','Bottle','Glass','Can','Sachet') THEN 'Sustenance'
+               WHEN ca.sub_type IN ('Consumable','Small','Tin') THEN 'Consumables'
+               WHEN ca.sub_type IN ('Cargo','Box') THEN 'Container'
+               WHEN ca.sub_type = 'Mission' THEN 'Missions'
+               WHEN ca.sub_type = 'Grenade' THEN 'Weapons'
+               WHEN ca.sub_type = 'Hacking' THEN 'Utility'
+               WHEN ca.sub_type = 'Utility' THEN 'Utility'
+               ELSE 'Other' END as category,
+          CASE WHEN ca.sub_type IN ('Drink','Bar','Bottle','Glass','Can','Sachet') THEN 'All'
+               WHEN ca.sub_type IN ('Consumable','Small','Tin') THEN 'All'
+               WHEN ca.sub_type = 'Cargo' THEN 'Commodity Cargo'
+               WHEN ca.sub_type = 'Box' THEN 'Loot Crate'
+               WHEN ca.sub_type = 'Mission' THEN 'All'
+               WHEN ca.sub_type = 'Grenade' THEN 'Throwables'
+               WHEN ca.sub_type = 'Hacking' THEN 'Cryptokeys'
+               WHEN ca.sub_type = 'Utility' THEN 'Gadgets'
+               ELSE 'All' END as sub_category,
+          ca.id, ca.uuid, ca.name, ca.class_name, ca.sub_type, NULL as size,
+          NULL as manufacturer_name, NULL as rarity
+          FROM fps_carryables ca ${dvj("fps_carryables", "ca")}
+          `).all(),
       ])
+
+      // Reclassify grenades from Utility to Weapons/Throwables
+      for (const item of utilities.results) {
+        if (item.sub_category === 'Throwables') {
+          item.category = 'Weapons'
+        }
+      }
 
       const items = [
         ...weapons.results, ...armour.results, ...helmets.results,
         ...clothing.results, ...attachments.results, ...utilities.results,
-        ...melee.results,
+        ...melee.results, ...carryables.results,
       ].sort((a, b) => ((a.name as string) ?? "").localeCompare((b.name as string) ?? ""))
 
       return { items, total: items.length }

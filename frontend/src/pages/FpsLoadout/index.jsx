@@ -212,31 +212,44 @@ function Paperdoll() {
 }
 
 const FILTERS = [
-  { key: 'all', icon: 'icon_common_active_group.svg', label: 'All' },
-  { key: 'weapon', icon: 'icon_common_primary_weapon.svg', label: 'Weapons' },
-  { key: 'core', icon: 'PIT_Looting_Core_Icon.svg', label: 'Armour' },
-  { key: 'helmet', icon: 'icon_common_helmet.svg', label: 'Helmets' },
-  { key: 'clothing', icon: 'icon_common_under_suit.svg', label: 'Clothing' },
-  { key: 'gadget', icon: 'icon_common_gadgets.svg', label: 'Gadgets' },
-  { key: 'melee', icon: 'icon_common_knife.svg', label: 'Melee' },
-  { key: 'attachment', icon: 'icon_common_weapon_attachment_scope.svg', label: 'Attachments' },
+  { key: 'All', icon: 'PIT_Looting_All_Icon.svg', label: 'All' },
+  { key: 'Weapons', icon: 'icon_common_Weapons.svg', label: 'Weapons',
+    subs: ['All', 'Sidearms', 'Primary', 'Special', 'Melee', 'Attachments', 'Throwables'] },
+  { key: 'Armor', icon: 'PIT_Looting_Core_Icon.svg', label: 'Armor',
+    subs: ['All', 'Undersuits', 'Helmets', 'Core', 'Arms', 'Legs', 'Backpacks'] },
+  { key: 'Clothing', icon: 'icon_common_shirt.svg', label: 'Clothing',
+    subs: ['All', 'Headwear', 'Shirts', 'Jackets', 'Gloves', 'Legwear', 'Footwear', 'Eyewear'] },
+  { key: 'Utility', icon: 'icon_common_utility.svg', label: 'Utility',
+    subs: ['All', 'Gadgets', 'Attachments', 'Medical', 'Cryptokeys', 'Technology'] },
+  { key: 'Ammo', icon: 'icon_common_magazine.svg', label: 'Ammo' },
+  { key: 'Consumables', icon: 'icon_common_consumable.svg', label: 'Consumables' },
+  { key: 'Sustenance', icon: 'icon_common_consumable.svg', label: 'Sustenance' },
+  { key: 'Container', icon: 'icon_common_3D_cargo_boxes.svg', label: 'Container',
+    subs: ['All', 'Commodity Cargo', 'Loot Crate'] },
+  { key: 'Other', icon: 'icon_common_four_square_drag.svg', label: 'Other' },
+  { key: 'Missions', icon: 'icon_destination.svg', label: 'Missions' },
 ]
 
 function GearBrowser() {
   const { data, loading } = useFpsGear()
   const [search, setSearch] = useState('')
-  const [activeFilter, setActiveFilter] = useState('all')
+  const [activeCategory, setActiveCategory] = useState('All')
+  const [activeSub, setActiveSub] = useState('All')
+  const [showSubs, setShowSubs] = useState(false)
+
+  const activeFilterDef = FILTERS.find(f => f.key === activeCategory)
 
   const items = useMemo(() => {
     if (!data?.items) return []
     let list = data.items
 
-    // Filter by slot/type
-    if (activeFilter !== 'all') {
-      list = list.filter(item => {
-        if (activeFilter === 'core') return item.slot === 'core' || item.slot === 'arms' || item.slot === 'legs'
-        return item.slot === activeFilter
-      })
+    // Filter by category
+    if (activeCategory !== 'All') {
+      list = list.filter(item => item.category === activeCategory)
+      // Sub-category filter
+      if (activeSub !== 'All') {
+        list = list.filter(item => item.sub_category === activeSub)
+      }
     }
 
     // Search
@@ -249,7 +262,7 @@ function GearBrowser() {
     }
 
     return list
-  }, [data, search, activeFilter])
+  }, [data, search, activeCategory, activeSub])
 
   return (
     <div className="flex flex-col h-full" style={{ padding: '0.93vh 0.73vw' }}>
@@ -282,28 +295,76 @@ function GearBrowser() {
       </div>
 
       {/* Filter row */}
-      <div className="flex items-center gap-[0.1vw] my-[0.37vh]">
-        {FILTERS.map(f => (
+      <div className="relative my-[0.37vh]">
+        <div className="flex items-center gap-[0.1vw]">
+          {FILTERS.map(f => (
+            <div
+              key={f.key}
+              className="flex items-center justify-center cursor-pointer"
+              title={f.label}
+              onClick={() => {
+                if (activeCategory === f.key && f.key !== 'All') {
+                  setShowSubs(prev => !prev)
+                } else {
+                  setActiveCategory(f.key)
+                  setActiveSub('All')
+                  setShowSubs(f.key !== 'All' && !!f.subs)
+                }
+              }}
+              style={{
+                width: '1.46vw', height: '2.4vh',
+                border: `1px solid ${activeCategory === f.key ? '#00e8ff' : 'transparent'}`,
+                background: activeCategory === f.key ? 'rgba(0,232,255,0.07)' : 'transparent',
+              }}
+            >
+              <Ico src={f.icon} size="0.9vw" dim={activeCategory !== f.key} />
+            </div>
+          ))}
+          {(activeCategory !== 'All' || search) && (
+            <span
+              className="ml-auto cursor-pointer"
+              onClick={() => { setActiveCategory('All'); setActiveSub('All'); setShowSubs(false); setSearch('') }}
+              style={{ fontSize: '0.38vw', letterSpacing: '0.05vw', textTransform: 'uppercase', color: 'rgba(192,246,254,0.4)' }}
+            >CLEAR</span>
+          )}
+        </div>
+
+        {/* Sub-filter dropdown */}
+        {showSubs && activeFilterDef?.subs && (
           <div
-            key={f.key}
-            className="flex items-center justify-center cursor-pointer"
-            title={f.label}
-            onClick={() => setActiveFilter(f.key)}
+            className="absolute left-0 right-0 z-20 mt-0.5 flex flex-col"
             style={{
-              width: '1.46vw', height: '2.4vh',
-              border: `1px solid ${activeFilter === f.key ? '#00e8ff' : 'transparent'}`,
-              background: activeFilter === f.key ? 'rgba(0,232,255,0.07)' : 'transparent',
+              background: 'rgba(0,8,14,0.95)',
+              border: '1px solid rgba(0,232,255,0.2)',
             }}
           >
-            <Ico src={f.icon} size="0.9vw" dim={activeFilter !== f.key} />
+            <div className="px-2 py-1" style={{ fontSize: '0.5vw', letterSpacing: '0.12vw', textTransform: 'uppercase', color: '#00e8ff', borderBottom: '1px solid rgba(0,232,255,0.1)' }}>
+              {activeFilterDef.label}
+            </div>
+            {activeFilterDef.subs.map(sub => (
+              <div
+                key={sub}
+                className="flex items-center gap-1 px-2 cursor-pointer"
+                onClick={() => { setActiveSub(sub); setShowSubs(false) }}
+                style={{
+                  padding: '0.3vh 0.4vw',
+                  fontSize: '0.44vw',
+                  color: activeSub === sub ? '#00e8ff' : 'rgba(192,246,254,0.6)',
+                  background: activeSub === sub ? 'rgba(0,232,255,0.06)' : 'transparent',
+                }}
+                onMouseEnter={e => { if (activeSub !== sub) e.currentTarget.style.background = 'rgba(0,232,255,0.03)' }}
+                onMouseLeave={e => { if (activeSub !== sub) e.currentTarget.style.background = 'transparent' }}
+              >
+                <span style={{
+                  width: '0.5vw', height: '0.5vw',
+                  border: `1px solid ${activeSub === sub ? '#00e8ff' : 'rgba(192,246,254,0.3)'}`,
+                  background: activeSub === sub ? '#00e8ff' : 'transparent',
+                  display: 'inline-block', flexShrink: 0,
+                }} />
+                {sub === 'All' ? 'All Categories' : sub}
+              </div>
+            ))}
           </div>
-        ))}
-        {(activeFilter !== 'all' || search) && (
-          <span
-            className="ml-auto cursor-pointer"
-            onClick={() => { setActiveFilter('all'); setSearch('') }}
-            style={{ fontSize: '0.38vw', letterSpacing: '0.05vw', textTransform: 'uppercase', color: 'rgba(192,246,254,0.4)' }}
-          >CLEAR</span>
         )}
       </div>
 
