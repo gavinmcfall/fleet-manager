@@ -369,7 +369,7 @@ export function importRoutes() {
         paintInsertStmts.push(
           db
             .prepare(
-              `INSERT INTO user_paints (user_id, paint_id, pledge_id, pledge_name, is_buyback, synced_at)
+              `INSERT OR IGNORE INTO user_paints (user_id, paint_id, pledge_id, pledge_name, is_buyback, synced_at)
               VALUES (?, ?, ?, ?, 0, datetime('now'))`,
             )
             .bind(userID, paintId, String(pledge.id ?? ""), pledge.name || null),
@@ -377,9 +377,12 @@ export function importRoutes() {
       }
     }
 
-    // Paint swap
+    // Paint swap — delete-then-insert (UNIQUE(user_id, paint_id) prevents insert-then-swap)
     if (paintInsertStmts.length > 0) {
-      await executeTableSwap(db, "user_paints", userID, paintInsertStmts);
+      await db.prepare("DELETE FROM user_paints WHERE user_id = ?").bind(userID).run();
+      for (let i = 0; i < paintInsertStmts.length; i += 500) {
+        await db.batch(paintInsertStmts.slice(i, i + 500));
+      }
     }
     const paintCount = paintInsertStmts.length;
 
