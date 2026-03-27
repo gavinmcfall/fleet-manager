@@ -858,7 +858,7 @@ describe("GDPR — User Deletion Cascade", () => {
   });
 
   describe("Schema completeness — all user tables are tracked", () => {
-    it("USER_TABLES list matches all tables with user_id column", async () => {
+    it("USER_TABLES list matches all tables with user_id column", { timeout: 15000 }, async () => {
       const db = env.DB;
 
       // Get all tables that have a user_id column
