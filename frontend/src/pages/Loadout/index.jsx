@@ -4,6 +4,7 @@ import { RotateCcw, ShoppingCart, ChevronDown, ChevronRight } from 'lucide-react
 import { useShip, useLoadoutComponents, useShipModules, useFleetLoadout, useLoadoutCart, saveFleetLoadout, resetFleetLoadout, addToLoadoutCart } from '../../hooks/useAPI'
 import LoadingState from '../../components/LoadingState'
 import ComponentPicker from './ComponentPicker'
+import StatsPanel from './StatsPanel'
 import CartPanel from './CartPanel'
 import WeaponBlock from './WeaponBlock'
 import MissileBlock from './MissileBlock'
@@ -88,11 +89,18 @@ export default function Loadout() {
     return PORT_CATEGORY_ORDER.filter(cat => groups[cat]).map(cat => groups[cat])
   }, [stockComponents])
 
-  // Aggregate combat stats
-  const combat = useMemo(() => {
+  // Aggregate combat stats — stock baseline
+  const combatStock = useMemo(() => {
     if (!stockComponents) return null
     return aggregateCombatStats(stockComponents)
   }, [stockComponents])
+
+  // Aggregate combat stats — with overrides applied
+  const combat = useMemo(() => {
+    if (!stockComponents) return null
+    const merged = stockComponents.map(c => overrides[c.port_id] ? { ...c, ...overrides[c.port_id] } : c)
+    return aggregateCombatStats(merged)
+  }, [stockComponents, overrides])
 
   // Auto-collapse Point Defense section when >6 items
   useEffect(() => {
@@ -361,6 +369,11 @@ export default function Loadout() {
           </div>
         </div>
       </div>}
+
+      {/* Override-aware stat delta panel — shows when user has customized components */}
+      {hasComponents && Object.keys(overrides).length > 0 && (
+        <StatsPanel stockComponents={stockComponents} overrides={overrides} horizontal />
+      )}
 
       {hasComponents && <>
       {/* ============================================================ */}

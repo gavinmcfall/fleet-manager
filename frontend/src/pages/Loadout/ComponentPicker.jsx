@@ -13,6 +13,9 @@ export default function ComponentPicker({ slug, portId, portType, currentOverrid
   const [filter, setFilter] = useState('')
   const [sortKey, setSortKey] = useState(() => getDefaultSortKey(portType))
   const [sortDir, setSortDir] = useState('desc')
+  const [showSmaller, setShowSmaller] = useState(false)
+  const [mfrFilter, setMfrFilter] = useState('')
+  const [dmgFilter, setDmgFilter] = useState('')
 
   const equippedUuid = currentOverride?.component_uuid || null
 
@@ -40,12 +43,33 @@ export default function ComponentPicker({ slug, portId, portType, currentOverrid
     }
   }
 
+  // Derive available filter options from the data
+  const manufacturers = useMemo(() => {
+    if (!data?.components) return []
+    return [...new Set(data.components.map(c => c.manufacturer_name).filter(Boolean))].sort()
+  }, [data])
+
+  const damageTypes = useMemo(() => {
+    if (!data?.components) return []
+    return [...new Set(data.components.map(c => c.damage_type).filter(Boolean))].sort()
+  }, [data])
+
+  const maxSize = data?.size_max || 0
+
   const sorted = useMemo(() => {
     if (!data?.components) return []
     const lowerFilter = filter.toLowerCase()
-    let filtered = data.components.filter(c =>
-      !lowerFilter || c.name?.toLowerCase().includes(lowerFilter) || c.manufacturer_name?.toLowerCase().includes(lowerFilter)
-    )
+    let filtered = data.components.filter(c => {
+      // Size filter: hide smaller by default
+      if (!showSmaller && maxSize > 0 && c.size < maxSize) return false
+      // Text filter
+      if (lowerFilter && !c.name?.toLowerCase().includes(lowerFilter) && !c.manufacturer_name?.toLowerCase().includes(lowerFilter)) return false
+      // Manufacturer filter
+      if (mfrFilter && c.manufacturer_name !== mfrFilter) return false
+      // Damage type filter
+      if (dmgFilter && c.damage_type !== dmgFilter) return false
+      return true
+    })
 
     filtered.sort((a, b) => {
       const va = a[sortKey], vb = b[sortKey]
@@ -59,7 +83,7 @@ export default function ComponentPicker({ slug, portId, portType, currentOverrid
       return sortDir === 'asc' ? va - vb : vb - va
     })
     return filtered
-  }, [data, filter, sortKey, sortDir])
+  }, [data, filter, sortKey, sortDir, showSmaller, maxSize, mfrFilter, dmgFilter])
 
   const totalCount = data?.components?.length || 0
 
@@ -102,6 +126,52 @@ export default function ComponentPicker({ slug, portId, portType, currentOverrid
             </button>
           </div>
         </div>
+
+        {/* Filter bar */}
+        {!loading && !error && (data?.components?.length > 0) && (
+          <div className="flex items-center gap-2 px-6 py-2 border-b border-white/10 bg-white/[0.01] flex-shrink-0 flex-wrap">
+            {/* Size toggle */}
+            {maxSize > 0 && data?.size_min < maxSize && (
+              <button
+                onClick={() => setShowSmaller(!showSmaller)}
+                className={`px-2.5 py-1 text-xs rounded-md border transition-colors ${
+                  showSmaller
+                    ? 'bg-sc-accent/15 text-sc-accent border-sc-accent/30'
+                    : 'bg-white/[0.04] text-gray-400 border-white/10 hover:text-gray-300'
+                }`}
+              >
+                {showSmaller ? `All Sizes (${data.size_min}–${maxSize})` : `Size ${maxSize} Only`}
+              </button>
+            )}
+
+            {/* Manufacturer filter */}
+            {manufacturers.length > 1 && (
+              <select
+                value={mfrFilter}
+                onChange={e => setMfrFilter(e.target.value)}
+                className="px-2.5 py-1 text-xs bg-white/[0.04] border border-white/10 rounded-md text-gray-300 focus:outline-none focus:border-sc-accent/40 cursor-pointer"
+              >
+                <option value="">All Manufacturers</option>
+                {manufacturers.map(m => <option key={m} value={m}>{m}</option>)}
+              </select>
+            )}
+
+            {/* Damage type filter */}
+            {damageTypes.length > 1 && (
+              <select
+                value={dmgFilter}
+                onChange={e => setDmgFilter(e.target.value)}
+                className="px-2.5 py-1 text-xs bg-white/[0.04] border border-white/10 rounded-md text-gray-300 focus:outline-none focus:border-sc-accent/40 cursor-pointer"
+              >
+                <option value="">All Damage Types</option>
+                {damageTypes.map(d => <option key={d} value={d}>{d}</option>)}
+              </select>
+            )}
+
+            {/* Active filter count */}
+            <span className="text-xs text-gray-500 ml-auto">{sorted.length} of {totalCount} shown</span>
+          </div>
+        )}
 
         {/* Table */}
         <div className="flex-1 overflow-auto min-h-0">
