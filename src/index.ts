@@ -352,6 +352,7 @@ app.get("/api/status", async (c) => {
     },
     features: {
       ops: c.env.ENVIRONMENT !== "production",
+      fpsLoadout: c.env.ENVIRONMENT !== "production",
     },
   });
 });
