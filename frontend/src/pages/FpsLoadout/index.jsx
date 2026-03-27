@@ -1,4 +1,5 @@
-import React, { useState } from 'react'
+import React, { useState, useMemo } from 'react'
+import { useFpsGear } from '../../hooks/useAPI'
 
 const ICON = (name) => `/inventory-assets/${name}`
 
@@ -210,50 +211,146 @@ function Paperdoll() {
   )
 }
 
+const FILTERS = [
+  { key: 'all', icon: 'icon_common_active_group.svg', label: 'All' },
+  { key: 'weapon', icon: 'icon_common_primary_weapon.svg', label: 'Weapons' },
+  { key: 'core', icon: 'PIT_Looting_Core_Icon.svg', label: 'Armour' },
+  { key: 'helmet', icon: 'icon_common_helmet.svg', label: 'Helmets' },
+  { key: 'clothing', icon: 'icon_common_under_suit.svg', label: 'Clothing' },
+  { key: 'gadget', icon: 'icon_common_gadgets.svg', label: 'Gadgets' },
+  { key: 'melee', icon: 'icon_common_knife.svg', label: 'Melee' },
+  { key: 'attachment', icon: 'icon_common_weapon_attachment_scope.svg', label: 'Attachments' },
+]
+
 function GearBrowser() {
+  const { data, loading } = useFpsGear()
+  const [search, setSearch] = useState('')
+  const [activeFilter, setActiveFilter] = useState('all')
+
+  const items = useMemo(() => {
+    if (!data?.items) return []
+    let list = data.items
+
+    // Filter by slot/type
+    if (activeFilter !== 'all') {
+      list = list.filter(item => {
+        if (activeFilter === 'core') return item.slot === 'core' || item.slot === 'arms' || item.slot === 'legs'
+        return item.slot === activeFilter
+      })
+    }
+
+    // Search
+    if (search.trim()) {
+      const tokens = search.toLowerCase().split(/\s+/).filter(Boolean)
+      list = list.filter(item => {
+        const haystack = `${item.name} ${item.manufacturer_name || ''} ${item.sub_type || ''}`.toLowerCase()
+        return tokens.every(t => haystack.includes(t))
+      })
+    }
+
+    return list
+  }, [data, search, activeFilter])
+
   return (
     <div className="flex flex-col h-full" style={{ padding: '0.93vh 0.73vw' }}>
       <div className="text-[0.72vw] tracking-[0.16vw] uppercase mb-1">
         GEAR<span className="mx-1" style={{ color: 'rgba(192,246,254,0.3)' }}>/</span><span style={{ color: '#00e8ff' }}>BROWSE</span>
+        {data?.items && <span className="ml-2" style={{ color: 'rgba(192,246,254,0.3)', fontSize: '0.5vw' }}>{items.length}</span>}
       </div>
 
-      {/* Search bar placeholder */}
+      {/* Search bar */}
       <div className="flex items-center gap-1 mb-1">
         <Ico src="icon_common_menu_search.svg" size="0.94vw" />
-        <div
-          className="flex-1 flex items-center px-2"
+        <input
+          type="text"
+          value={search}
+          onChange={e => setSearch(e.target.value)}
+          placeholder="SEARCH..."
+          className="flex-1 outline-none"
           style={{
             height: '2.2vh',
             border: '1px solid rgba(0,232,255,0.15)',
             background: 'rgba(0,12,20,0.4)',
+            color: '#c0f6fe',
+            fontSize: '0.47vw',
+            letterSpacing: '0.08vw',
+            textTransform: 'uppercase',
+            padding: '0 0.4vw',
+            fontFamily: 'inherit',
           }}
-        >
-          <span style={{ fontSize: '0.47vw', color: 'rgba(192,246,254,0.25)', letterSpacing: '0.08vw', textTransform: 'uppercase' }}>SEARCH...</span>
-        </div>
+        />
       </div>
 
-      {/* Filter row placeholder */}
+      {/* Filter row */}
       <div className="flex items-center gap-[0.1vw] my-[0.37vh]">
-        {['icon_common_active_group.svg', 'icon_common_primary_weapon.svg', 'PIT_Looting_Core_Icon.svg', 'icon_common_under_suit.svg', 'icon_common_helmet.svg', 'icon_common_gadgets.svg'].map((icon, i) => (
+        {FILTERS.map(f => (
           <div
-            key={icon}
+            key={f.key}
             className="flex items-center justify-center cursor-pointer"
+            title={f.label}
+            onClick={() => setActiveFilter(f.key)}
             style={{
               width: '1.46vw', height: '2.4vh',
-              border: `1px solid ${i === 0 ? '#00e8ff' : 'transparent'}`,
-              background: i === 0 ? 'rgba(0,232,255,0.07)' : 'transparent',
+              border: `1px solid ${activeFilter === f.key ? '#00e8ff' : 'transparent'}`,
+              background: activeFilter === f.key ? 'rgba(0,232,255,0.07)' : 'transparent',
             }}
           >
-            <Ico src={icon} size="0.9vw" dim={i !== 0} />
+            <Ico src={f.icon} size="0.9vw" dim={activeFilter !== f.key} />
           </div>
         ))}
+        {(activeFilter !== 'all' || search) && (
+          <span
+            className="ml-auto cursor-pointer"
+            onClick={() => { setActiveFilter('all'); setSearch('') }}
+            style={{ fontSize: '0.38vw', letterSpacing: '0.05vw', textTransform: 'uppercase', color: 'rgba(192,246,254,0.4)' }}
+          >CLEAR</span>
+        )}
       </div>
 
-      {/* Gear list placeholder */}
-      <div className="flex-1 overflow-y-auto" style={{ color: 'rgba(192,246,254,0.25)', fontSize: '0.57vw', letterSpacing: '0.16vw', textTransform: 'uppercase' }}>
-        <div className="flex items-center justify-center h-full">
-          GEAR LIST
-        </div>
+      {/* Gear list */}
+      <div className="flex-1 overflow-y-auto min-h-0">
+        {loading ? (
+          <div className="flex items-center justify-center h-full" style={{ color: 'rgba(192,246,254,0.25)', fontSize: '0.57vw', letterSpacing: '0.16vw', textTransform: 'uppercase' }}>
+            LOADING...
+          </div>
+        ) : items.length === 0 ? (
+          <div className="flex items-center justify-center h-full" style={{ color: 'rgba(192,246,254,0.25)', fontSize: '0.57vw', letterSpacing: '0.16vw', textTransform: 'uppercase' }}>
+            NO ITEMS FOUND
+          </div>
+        ) : (
+          <div className="flex flex-col">
+            {items.map((item, i) => (
+              <div
+                key={`${item.source_table}-${item.id}-${i}`}
+                className="flex items-center gap-2 cursor-pointer"
+                style={{
+                  padding: '0.28vh 0.3vw',
+                  borderBottom: '1px solid rgba(0,200,230,0.06)',
+                }}
+                onMouseEnter={e => e.currentTarget.style.background = 'rgba(0,232,255,0.04)'}
+                onMouseLeave={e => e.currentTarget.style.background = 'transparent'}
+              >
+                <div className="flex-1 min-w-0">
+                  <div style={{ fontSize: '0.52vw', color: '#c0f6fe', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+                    {item.name}
+                  </div>
+                  <div style={{ fontSize: '0.42vw', color: 'rgba(192,246,254,0.4)' }}>
+                    {item.manufacturer_name || item.sub_type || item.slot}
+                  </div>
+                </div>
+                {item.rarity && item.rarity !== 'Common' && (
+                  <span style={{
+                    fontSize: '0.36vw',
+                    letterSpacing: '0.05vw',
+                    textTransform: 'uppercase',
+                    color: item.rarity === 'Rare' ? '#4da6ff' : item.rarity === 'Legendary' ? '#ffa500' : 'rgba(192,246,254,0.35)',
+                    flexShrink: 0,
+                  }}>{item.rarity}</span>
+                )}
+              </div>
+            ))}
+          </div>
+        )}
       </div>
     </div>
   )
