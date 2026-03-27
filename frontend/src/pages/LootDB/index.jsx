@@ -4,6 +4,7 @@ import {
   Search, ShoppingCart, Package, Swords, FileText, MapPin,
   LayoutGrid, List, X, ChevronRight, ChevronDown, Check, Plus, Bookmark, BookmarkPlus,
   ArrowUpDown, ChevronsUpDown, ChevronsDownUp,
+  CheckCircle2, Layers,
 } from 'lucide-react'
 import {
   useLoot, useLootCollection, toggleLootCollection,
@@ -16,6 +17,8 @@ import PageHeader from '../../components/PageHeader'
 import LoadingState from '../../components/LoadingState'
 import ErrorState from '../../components/ErrorState'
 import SearchInput from '../../components/SearchInput'
+import StatCard from '../../components/StatCard'
+import CategoryStrip from './CategoryStrip'
 import {
   RARITY_ORDER, RARITY_STYLES, rarityStyle,
   CATEGORY_LABELS, CATEGORY_BADGE_STYLES, effectiveCategory,
@@ -30,6 +33,86 @@ import CollectionStepper from './CollectionStepper'
 import ItemCard from './ItemCard'
 import DetailPanel from './DetailPanel'
 import WishlistRow from './WishlistRow'
+
+// ── Sort options ────────────────────────────────────────────────────────────
+const BASE_SORT_OPTIONS = [
+  { value: 'name', label: 'Name A-Z' },
+  { value: 'rarity', label: 'Rarity' },
+  { value: 'category', label: 'Category' },
+  { value: 'brand', label: 'Brand' },
+]
+
+const WEAPON_SORT_OPTIONS = [
+  { value: 'dps', label: 'DPS' },
+  { value: 'range', label: 'Range' },
+  { value: 'rpm', label: 'Fire Rate' },
+]
+
+const ARMOUR_SORT_OPTIONS = [
+  { value: 'resist', label: 'Resistance' },
+]
+
+function getSortOptions(category) {
+  const extra = []
+  if (category === 'weapon' || category === 'ship_weapon') extra.push(...WEAPON_SORT_OPTIONS)
+  if (category === 'armour' || category === 'helmet') extra.push(...ARMOUR_SORT_OPTIONS)
+  return [...BASE_SORT_OPTIONS, ...extra]
+}
+
+// ── Show filter labels ──────────────────────────────────────────────────────
+const SHOW_OPTIONS = [
+  { value: 'all', label: 'All Items' },
+  { value: 'collected', label: 'Collected' },
+  { value: 'uncollected', label: 'Uncollected' },
+  { value: 'wishlisted', label: 'Wishlisted' },
+]
+
+// ── Shopping List Modal ─────────────────────────────────────────────────────
+function ShoppingListModal({ shoppingList, onClose }) {
+  const entries = Object.entries(shoppingList)
+  if (!entries.length) return null
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-4" onClick={onClose}>
+      <div className="absolute inset-0 bg-black/70 backdrop-blur-sm" />
+      <div
+        className="relative panel max-w-2xl w-full max-h-[80vh] overflow-y-auto p-6 space-y-4 animate-fade-in-up"
+        onClick={(e) => e.stopPropagation()}
+      >
+        <div className="flex items-center justify-between mb-2">
+          <h2 className="text-sm font-display uppercase tracking-widest text-amber-400">Shopping List</h2>
+          <button onClick={onClose} className="text-gray-400 hover:text-gray-200 transition-colors">
+            <X className="w-5 h-5" />
+          </button>
+        </div>
+        {entries.map(([key, { label, icon: Icon, locations }]) => {
+          const locEntries = Object.entries(locations).sort((a, b) => b[1].length - a[1].length)
+          return (
+            <div key={key} className="space-y-2">
+              <div className="flex items-center gap-2">
+                <Icon className="w-3.5 h-3.5 text-gray-400" />
+                <span className="text-[10px] font-display uppercase tracking-wider text-gray-400">{label}</span>
+                <span className="text-[10px] font-mono text-gray-600 ml-auto">
+                  {locEntries.length} location{locEntries.length !== 1 ? 's' : ''}
+                </span>
+              </div>
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-x-4 gap-y-0">
+                {locEntries.map(([loc, items]) => (
+                  <div key={loc} className="flex items-center justify-between py-1 border-t border-sc-border/50">
+                    <span className="text-xs text-gray-300 truncate mr-2">{loc}</span>
+                    <span className="text-[10px] font-mono text-gray-500 shrink-0">
+                      {[...new Set(items)].length}
+                    </span>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )
+        })}
+      </div>
+    </div>
+  )
+}
 
 // ── Main page ─────────────────────────────────────────────────────────────────
 export default function LootDB() {
@@ -65,17 +148,6 @@ export default function LootDB() {
   useEffect(() => () => clearTimeout(actionErrorTimer.current), [])
 
   const [searchParams, setSearchParams] = useSearchParams()
-  const VALID_TABS = ['browse', 'collection', 'wishlist']
-  const tabParam = searchParams.get('tab')
-  const activeTab = VALID_TABS.includes(tabParam) ? tabParam : 'browse'
-  const setActiveTab = useCallback((tab) => {
-    setSearchParams(prev => {
-      const next = new URLSearchParams(prev)
-      if (tab === 'browse') next.delete('tab')
-      else next.set('tab', tab)
-      return next
-    }, { replace: true })
-  }, [setSearchParams])
 
   const search = searchParams.get('q') || ''
   const category = searchParams.get('cat') || 'all'
@@ -88,6 +160,7 @@ export default function LootDB() {
   const viewMode = searchParams.get('view') || 'grid'
   const sortBy = searchParams.get('sort') || 'name'
   const page = parseInt(searchParams.get('page') || '1', 10)
+  const show = searchParams.get('show') || 'all'
 
   const setSearch = useCallback((value) => {
     setSearchParams(prev => {
@@ -149,47 +222,21 @@ export default function LootDB() {
     }, { replace: true })
   }, [setSearchParams])
 
+  const setShow = useCallback((value) => {
+    setSearchParams(prev => {
+      if (value && value !== 'all') prev.set('show', value); else prev.delete('show')
+      prev.delete('page')
+      return prev
+    }, { replace: true })
+  }, [setSearchParams])
+
   const [detailUuid, setDetailUuid] = useState(routeUuid || null)
+  const [showShoppingList, setShowShoppingList] = useState(false)
 
   // Auto-open detail panel when arriving via /loot/:uuid route
   useEffect(() => {
     if (routeUuid) setDetailUuid(routeUuid)
   }, [routeUuid])
-
-  // Collection tab state (URL params)
-  const collSearch = searchParams.get('coll_search') || ''
-  const collCategory = searchParams.get('coll_category') || 'all'
-  const setCollSearch = useCallback((value) => {
-    setSearchParams(prev => {
-      if (value) prev.set('coll_search', value); else prev.delete('coll_search')
-      return prev
-    }, { replace: true })
-  }, [setSearchParams])
-  const setCollCategory = useCallback((value) => {
-    setSearchParams(prev => {
-      if (value && value !== 'all') prev.set('coll_category', value); else prev.delete('coll_category')
-      return prev
-    }, { replace: true })
-  }, [setSearchParams])
-
-  // Wishlist tab state (URL params)
-  const wishSearch = searchParams.get('wish_search') || ''
-  const wishViewMode = searchParams.get('wish_view') || 'item'
-  const setWishSearch = useCallback((value) => {
-    setSearchParams(prev => {
-      if (value) prev.set('wish_search', value); else prev.delete('wish_search')
-      return prev
-    }, { replace: true })
-  }, [setSearchParams])
-  const setWishViewMode = useCallback((value) => {
-    setSearchParams(prev => {
-      if (value && value !== 'item') prev.set('wish_view', value); else prev.delete('wish_view')
-      return prev
-    }, { replace: true })
-  }, [setSearchParams])
-  const [collapsedWishGroups, setCollapsedWishGroups] = useState(new Set())
-  const [wishShopSort, setWishShopSort] = useState('count') // 'alpha' | 'count'
-  const [wishShopSortDesc, setWishShopSortDesc] = useState(true)
 
   // Category counts
   const categoryCounts = useMemo(() => {
@@ -201,35 +248,6 @@ export default function LootDB() {
     }
     return counts
   }, [allItems])
-
-  // Collection tab — items the user has collected
-  const collectedItems = useMemo(() => {
-    if (!allItems) return []
-    return allItems.filter(i => collected.has(i.id))
-  }, [allItems, collected])
-
-  // Per-category collection stats: { weapon: { total, collected }, ... }
-  const collectionCategoryStats = useMemo(() => {
-    if (!allItems) return {}
-    const stats = {}
-    for (const item of allItems) {
-      const cat = effectiveCategory(item)
-      if (!stats[cat]) stats[cat] = { total: 0, collected: 0 }
-      stats[cat].total++
-      if (collected.has(item.id)) stats[cat].collected++
-    }
-    return stats
-  }, [allItems, collected])
-
-  const filteredCollectedItems = useMemo(() => {
-    let items = collectedItems
-    if (collCategory !== 'all') items = items.filter(i => effectiveCategory(i) === collCategory)
-    if (collSearch.trim()) {
-      const q = collSearch.toLowerCase()
-      items = items.filter(i => i.name.toLowerCase().includes(q))
-    }
-    return items
-  }, [collectedItems, collCategory, collSearch])
 
   // All categories present in data
   const categories = useMemo(() => {
@@ -298,13 +316,23 @@ export default function LootDB() {
       })
     }
 
+    // Show filter (collection/wishlist overlay)
+    if (show === 'collected') {
+      items = items.filter((i) => collected.has(i.id))
+    } else if (show === 'uncollected') {
+      items = items.filter((i) => !collected.has(i.id))
+    } else if (show === 'wishlisted') {
+      items = items.filter((i) => wishlistIds.has(i.id))
+    }
+
     if (search.trim()) {
       const tokens = search.toLowerCase().split(/\s+/).filter(Boolean)
       items = items.filter((i) => {
         const name = i.name.toLowerCase()
         const type = i.type ? i.type.toLowerCase() : ''
         const subType = i.sub_type ? i.sub_type.toLowerCase() : ''
-        const haystack = `${name} ${type} ${subType}`
+        const mfr = i.manufacturer_name ? i.manufacturer_name.toLowerCase() : ''
+        const haystack = `${name} ${type} ${subType} ${mfr}`
         return tokens.every((t) => haystack.includes(t))
       })
     }
@@ -315,12 +343,27 @@ export default function LootDB() {
       items.sort((a, b) => (rarityRank[a.rarity] ?? 5) - (rarityRank[b.rarity] ?? 5) || a.name.localeCompare(b.name))
     } else if (sortBy === 'category') {
       items.sort((a, b) => (effectiveCategory(a)).localeCompare(effectiveCategory(b)) || a.name.localeCompare(b.name))
+    } else if (sortBy === 'brand') {
+      items.sort((a, b) => (a.manufacturer_name || '').localeCompare(b.manufacturer_name || '') || a.name.localeCompare(b.name))
+    } else if (sortBy === 'dps') {
+      items.sort((a, b) => (b.dps || 0) - (a.dps || 0) || a.name.localeCompare(b.name))
+    } else if (sortBy === 'range') {
+      items.sort((a, b) => (b.effective_range || 0) - (a.effective_range || 0) || a.name.localeCompare(b.name))
+    } else if (sortBy === 'rpm') {
+      items.sort((a, b) => (b.rounds_per_minute || 0) - (a.rounds_per_minute || 0) || a.name.localeCompare(b.name))
+    } else if (sortBy === 'resist') {
+      // Sort by average resist (lower multiplier = more resistant, so ascending)
+      const avgResist = (i) => {
+        const vals = [i.resist_physical, i.resist_energy, i.resist_distortion].filter(v => v != null)
+        return vals.length > 0 ? vals.reduce((s, v) => s + v, 0) / vals.length : 999
+      }
+      items.sort((a, b) => avgResist(a) - avgResist(b) || a.name.localeCompare(b.name))
     } else {
       items.sort((a, b) => a.name.localeCompare(b.name))
     }
 
     return items
-  }, [allItems, category, brand, setName, rarities, sources, search, sortBy])
+  }, [allItems, category, brand, setName, rarities, sources, search, sortBy, show, collected, wishlistIds])
 
   const pageSize = viewMode === 'grid' ? PAGE_SIZE_GRID : PAGE_SIZE_LIST
   const totalPages = Math.ceil(filtered.length / pageSize)
@@ -331,36 +374,20 @@ export default function LootDB() {
 
   const shoppingList = useMemo(() => buildShoppingList(wishlistItems), [wishlistItems])
 
-  // Wishlist: search-filtered items
-  const filteredWishlistItems = useMemo(() => {
-    if (!wishlistItems) return []
-    if (!wishSearch.trim()) return wishlistItems
-    const q = wishSearch.toLowerCase()
-    return wishlistItems.filter(i => i.name.toLowerCase().includes(q))
-  }, [wishlistItems, wishSearch])
+  const wishlistCount = wishlistIds.size
 
-  // Wishlist: grouped by category > sub-type (for "By Item" view)
-  const wishlistGrouped = useMemo(
-    () => groupWishlistItems(filteredWishlistItems),
-    [filteredWishlistItems],
-  )
-
-  // Wishlist: grouped by location (for "By Location" view)
-  const wishlistByLocation = useMemo(
-    () => groupWishlistByLocation(filteredWishlistItems),
-    [filteredWishlistItems],
-  )
-
-  // Primary source for each wishlist item (best place to find it)
-  const primarySourceMap = useMemo(() => {
-    const map = new Map()
-    if (!filteredWishlistItems?.length) return map
-    for (const item of filteredWishlistItems) {
-      const src = getPrimarySource(item)
-      if (src) map.set(item.id, src)
+  // Per-category collection stats: { weapon: { total, collected }, ... }
+  const collectionCategoryStats = useMemo(() => {
+    if (!allItems) return {}
+    const stats = {}
+    for (const item of allItems) {
+      const cat = effectiveCategory(item)
+      if (!stats[cat]) stats[cat] = { total: 0, collected: 0 }
+      stats[cat].total++
+      if (collected.has(item.id)) stats[cat].collected++
     }
-    return map
-  }, [filteredWishlistItems])
+    return stats
+  }, [allItems, collected])
 
   // qty=0 removes from collection (backend handles via PATCH)
   const handleSetCollectionQty = useCallback(async (uuid, qty) => {
@@ -417,14 +444,32 @@ export default function LootDB() {
     }, { replace: true })
   }
 
+  const clearAllFilters = useCallback(() => {
+    setSearchParams(prev => {
+      prev.delete('cat')
+      prev.delete('brand')
+      prev.delete('set')
+      prev.delete('rarities')
+      prev.delete('sources')
+      prev.delete('show')
+      prev.delete('q')
+      prev.delete('page')
+      return prev
+    }, { replace: true })
+  }, [setSearchParams])
+
   if (loading) return <LoadingState message="Loading items..." />
   if (error) return <ErrorState message={error} onRetry={refetch} />
-
-  const wishlistCount = wishlistIds.size
 
   // Lookup full item from allItems for the detail panel (provides id, manufacturer_name)
   const detailItemMeta = detailUuid ? allItems?.find(i => i.uuid === detailUuid) ?? null : null
   const detailItemId = detailItemMeta?.id ?? null
+
+  // Active filter tag checks
+  const hasActiveFilters = category !== 'all' || brand || setName || rarities.size > 0 || sources.size > 0 || show !== 'all'
+
+  // Current sort options based on selected category
+  const sortOptions = getSortOptions(category)
 
   return (
     <>
@@ -441,832 +486,398 @@ export default function LootDB() {
         </div>
       )}
 
-      {/* Tab bar (auth only) */}
-      {isAuthed && (
-        <div className="flex gap-0 border-b border-sc-border">
-          <button
-            onClick={() => setActiveTab('browse')}
-            className={`px-4 py-2 text-xs font-display uppercase tracking-wide border-b-2 transition-colors -mb-px ${
-              activeTab === 'browse'
-                ? 'border-sc-accent text-sc-accent'
-                : 'border-transparent text-gray-400 hover:text-gray-200'
-            }`}
-          >
-            Browse
-          </button>
-          <button
-            onClick={() => setActiveTab('collection')}
-            className={`px-4 py-2 text-xs font-display uppercase tracking-wide border-b-2 transition-colors -mb-px flex items-center gap-1.5 ${
-              activeTab === 'collection'
-                ? 'border-sc-accent text-sc-accent'
-                : 'border-transparent text-gray-400 hover:text-gray-200'
-            }`}
-          >
-            Collection
-            {collectionCount > 0 && (
-              <span className={`text-[10px] font-mono px-1 py-0.5 rounded ${
-                activeTab === 'collection' ? 'bg-sc-accent/20 text-sc-accent' : 'bg-gray-700 text-gray-400'
-              }`}>
-                {collectionCount}
-              </span>
-            )}
-          </button>
-          <button
-            onClick={() => setActiveTab('wishlist')}
-            className={`px-4 py-2 text-xs font-display uppercase tracking-wide border-b-2 transition-colors -mb-px flex items-center gap-1.5 ${
-              activeTab === 'wishlist'
-                ? 'border-amber-400 text-amber-400'
-                : 'border-transparent text-gray-400 hover:text-gray-200'
-            }`}
-          >
-            <Bookmark className="w-3 h-3" />
-            Wishlist
-            {wishlistCount > 0 && (
-              <span className={`text-[10px] font-mono px-1 py-0.5 rounded ${
-                activeTab === 'wishlist' ? 'bg-amber-400/20 text-amber-400' : 'bg-gray-700 text-gray-400'
-              }`}>
-                {wishlistCount}
-              </span>
-            )}
-          </button>
-        </div>
-      )}
-
-      {/* ── Browse tab ── */}
-      {activeTab === 'browse' && (
-        <div className="flex gap-4">
-          {/* ── Sidebar ── */}
-          <aside className="hidden lg:flex flex-col gap-4 w-56 shrink-0">
-            {/* Category */}
-            <div>
-              <p className="text-[10px] font-display uppercase tracking-widest text-gray-500 mb-2">Category</p>
-              <div className="space-y-0.5">
-                <button
-                  onClick={() => setCategory('all')}
-                  className={`w-full flex items-center justify-between px-2 py-1.5 rounded text-xs transition-colors ${
-                    category === 'all' ? 'text-sc-accent bg-sc-accent/10' : 'text-gray-400 hover:text-gray-300 hover:bg-white/5'
-                  }`}
-                >
-                  <span className="font-display tracking-wide">All</span>
-                  <span className="font-mono text-[10px] text-gray-500">{totalCount.toLocaleString()}</span>
-                </button>
-                {categories.map((cat) => (
-                  <button
-                    key={cat}
-                    onClick={() => setCategory(cat)}
-                    className={`w-full flex items-center justify-between px-2 py-1.5 rounded text-xs transition-colors ${
-                      category === cat ? 'text-sc-accent bg-sc-accent/10' : 'text-gray-400 hover:text-gray-300 hover:bg-white/5'
-                    }`}
-                  >
-                    <span className="font-display tracking-wide">{CATEGORY_LABELS[cat] || cat}</span>
-                    <span className="font-mono text-[10px] text-gray-500">{(categoryCounts[cat] || 0).toLocaleString()}</span>
-                  </button>
-                ))}
-              </div>
+      {/* StatCards */}
+      <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
+        <StatCard
+          icon={Package}
+          label="Total Items"
+          value={totalCount.toLocaleString()}
+        />
+        <StatCard
+          icon={Layers}
+          label="Categories"
+          value={categories.length}
+        />
+        {isAuthed && (
+          <div className="stat-card hover:border-sc-accent/20 hover:-translate-y-0.5">
+            <div className="flex items-center gap-2 mb-1">
+              <CheckCircle2 className="w-4 h-4 text-sc-accent" />
+              <span className="stat-label">Collected</span>
             </div>
-
-            {/* Brand */}
-            {brands.size > 0 && (
-              <div>
-                <p className="text-[10px] font-display uppercase tracking-widest text-gray-500 mb-2">Brand</p>
-                <div className="space-y-0.5 max-h-48 overflow-y-auto">
-                  {[...brands.entries()].sort((a, b) => a[0].localeCompare(b[0])).map(([brandName, count]) => (
-                    <button
-                      key={brandName}
-                      onClick={() => setBrand(brand === brandName ? null : brandName)}
-                      className={`w-full flex items-center justify-between px-2 py-1.5 rounded text-xs transition-colors ${
-                        brand === brandName ? 'text-sc-accent bg-sc-accent/10' : 'text-gray-400 hover:text-gray-300 hover:bg-white/5'
-                      }`}
-                    >
-                      <span className="font-display tracking-wide truncate">{brandName}</span>
-                      <span className="font-mono text-[10px] text-gray-500 shrink-0">{count.toLocaleString()}</span>
-                    </button>
-                  ))}
-                </div>
-
-                {/* Set/model sub-filter */}
-                {brand && setNames.size > 1 && (
-                  <div className="mt-2 ml-2 pl-2 border-l border-sc-border">
-                    <p className="text-[10px] font-display uppercase tracking-widest text-gray-600 mb-1.5">Set</p>
-                    <div className="space-y-0.5 max-h-40 overflow-y-auto">
-                      {[...setNames.entries()].sort((a, b) => a[0].localeCompare(b[0])).map(([sn, count]) => (
-                        <button
-                          key={sn}
-                          onClick={() => setSetName(setName === sn ? null : sn)}
-                          className={`w-full flex items-center justify-between px-2 py-1 rounded text-[11px] transition-colors ${
-                            setName === sn ? 'text-sc-accent bg-sc-accent/10' : 'text-gray-500 hover:text-gray-300 hover:bg-white/5'
-                          }`}
-                        >
-                          <span className="font-display tracking-wide truncate">{sn}</span>
-                          <span className="font-mono text-[10px] text-gray-600 shrink-0">{count}</span>
-                        </button>
-                      ))}
-                    </div>
-                  </div>
-                )}
-              </div>
-            )}
-
-            {/* Rarity */}
-            <div>
-              <p className="text-[10px] font-display uppercase tracking-widest text-gray-500 mb-2">Rarity</p>
-              <div className="space-y-1">
-                {RARITY_ORDER.map((r) => {
-                  const rs = RARITY_STYLES[r]
-                  const active = rarities.has(r)
-                  return (
-                    <button
-                      key={r}
-                      onClick={() => toggleRarity(r)}
-                      className={`w-full flex items-center gap-2 px-2 py-1.5 rounded text-xs transition-colors ${
-                        active ? 'bg-white/5' : 'hover:bg-white/5'
-                      }`}
-                    >
-                      <div className={`w-3.5 h-3.5 rounded border flex items-center justify-center shrink-0 ${
-                        active ? 'border-sc-accent bg-sc-accent/20' : 'border-gray-600'
-                      }`}>
-                        {active && <Check className="w-2.5 h-2.5 text-sc-accent" />}
-                      </div>
-                      <span className={`font-mono ${rs.dot}`}>{rs.label}</span>
-                    </button>
-                  )
-                })}
-              </div>
-            </div>
-
-            {/* Found in */}
-            <div>
-              <p className="text-[10px] font-display uppercase tracking-widest text-gray-500 mb-2">Found In</p>
-              <div className="space-y-1">
-                {[
-                  { key: 'shops', icon: ShoppingCart, label: 'Shops' },
-                  { key: 'containers', icon: Package, label: 'Containers' },
-                  { key: 'npcs', icon: Swords, label: 'NPCs' },
-                  { key: 'contracts', icon: FileText, label: 'Contracts' },
-                ].map(({ key, icon: Icon, label }) => {
-                  const active = sources.has(key)
-                  return (
-                    <button
-                      key={key}
-                      onClick={() => toggleSource(key)}
-                      className={`w-full flex items-center gap-2 px-2 py-1.5 rounded text-xs transition-colors ${
-                        active ? 'bg-white/5' : 'hover:bg-white/5'
-                      }`}
-                    >
-                      <div className={`w-3.5 h-3.5 rounded border flex items-center justify-center shrink-0 ${
-                        active ? 'border-sc-accent bg-sc-accent/20' : 'border-gray-600'
-                      }`}>
-                        {active && <Check className="w-2.5 h-2.5 text-sc-accent" />}
-                      </div>
-                      <Icon className="w-3 h-3 text-gray-400" />
-                      <span className="text-gray-400 font-display tracking-wide">{label}</span>
-                    </button>
-                  )
-                })}
-              </div>
-            </div>
-
-            {/* Collection stats (auth only) */}
-            {isAuthed && (
-              <div className="border-t border-sc-border pt-4">
-                <p className="text-[10px] font-display uppercase tracking-widest text-gray-500 mb-2">Collection</p>
-                <p className="text-xs font-mono text-gray-300">
-                  {collectionCount.toLocaleString()} / {totalCount.toLocaleString()} collected
-                </p>
-                <div className="mt-1.5 h-1.5 bg-gray-800 rounded-full overflow-hidden">
-                  <div
-                    className="h-full bg-sc-accent/60 rounded-full transition-all duration-300"
-                    style={{ width: totalCount > 0 ? `${(collectionCount / totalCount) * 100}%` : '0%' }}
-                  />
-                </div>
-                <p className="text-[10px] font-mono text-gray-600 mt-1">
-                  {totalCount > 0 ? ((collectionCount / totalCount) * 100).toFixed(1) : 0}%
-                </p>
-              </div>
-            )}
-          </aside>
-
-          {/* ── Main content ── */}
-          <div className="flex-1 min-w-0 space-y-3">
-            {/* Toolbar */}
-            <div className="flex items-center gap-2 flex-wrap">
-              <SearchInput
-                value={search}
-                onChange={setSearch}
-                placeholder="Search items..."
-                className="flex-1 min-w-48"
+            <span className="stat-value text-sc-accent">{collectionCount.toLocaleString()} <span className="text-gray-500 text-xs font-mono">/ {totalCount.toLocaleString()}</span></span>
+            <div className="mt-1.5 h-1 bg-gray-800 rounded-full overflow-hidden">
+              <div
+                className="h-full bg-sc-accent/60 rounded-full transition-all duration-300"
+                style={{ width: totalCount > 0 ? `${(collectionCount / totalCount) * 100}%` : '0%' }}
               />
-              <select
-                value={sortBy}
-                onChange={(e) => setSortBy(e.target.value)}
-                className="text-xs bg-sc-darker border border-sc-border rounded px-2 py-1.5 text-gray-300 focus:outline-none focus:border-sc-accent font-display tracking-wide"
-              >
-                <option value="name">Name A-Z</option>
-                <option value="rarity">Rarity</option>
-                <option value="category">Category</option>
-              </select>
-              <div className="flex items-center gap-1 border border-sc-border rounded p-0.5">
-                <button
-                  onClick={() => setViewMode('grid')}
-                  className={`p-1.5 rounded transition-colors ${viewMode === 'grid' ? 'bg-sc-accent/20 text-sc-accent' : 'text-gray-400 hover:text-gray-300'}`}
-                  title="Grid view"
-                >
-                  <LayoutGrid className="w-3.5 h-3.5" />
-                </button>
-                <button
-                  onClick={() => setViewMode('list')}
-                  className={`p-1.5 rounded transition-colors ${viewMode === 'list' ? 'bg-sc-accent/20 text-sc-accent' : 'text-gray-400 hover:text-gray-300'}`}
-                  title="List view"
-                >
-                  <List className="w-3.5 h-3.5" />
-                </button>
-              </div>
             </div>
-
-            {/* Mobile category tabs */}
-            <div className="lg:hidden flex gap-1 overflow-x-auto pb-1 scrollbar-none">
-              <button
-                onClick={() => setCategory('all')}
-                className={`px-2.5 py-1 rounded text-[10px] font-display uppercase tracking-wide whitespace-nowrap transition-colors shrink-0 ${
-                  category === 'all' ? 'bg-sc-accent/20 text-sc-accent border border-sc-accent/40' : 'text-gray-400 border border-sc-border'
-                }`}
-              >
-                All
-              </button>
-              {categories.map((cat) => (
-                <button
-                  key={cat}
-                  onClick={() => setCategory(cat)}
-                  className={`px-2.5 py-1 rounded text-[10px] font-display uppercase tracking-wide whitespace-nowrap transition-colors shrink-0 ${
-                    category === cat ? 'bg-sc-accent/20 text-sc-accent border border-sc-accent/40' : 'text-gray-400 border border-sc-border'
-                  }`}
-                >
-                  {CATEGORY_LABELS[cat] || cat}
-                </button>
-              ))}
+          </div>
+        )}
+        {isAuthed && (
+          <div
+            className="stat-card hover:border-sc-accent/20 hover:-translate-y-0.5 cursor-pointer"
+            onClick={() => wishlistCount > 0 && setShowShoppingList(true)}
+          >
+            <div className="flex items-center gap-2 mb-1">
+              <Bookmark className="w-4 h-4 text-amber-400" />
+              <span className="stat-label">Wishlist</span>
             </div>
-
-            {/* Active filters pills */}
-            {(brand || setName) && (
-              <div className="flex items-center gap-1.5 flex-wrap">
-                {brand && (
-                  <span className="flex items-center gap-1 text-[10px] font-mono bg-sc-accent/10 border border-sc-accent/30 text-sc-accent px-2 py-0.5 rounded">
-                    {brand}
-                    <button onClick={() => setBrand(null)} className="hover:text-white ml-0.5">
-                      <X className="w-2.5 h-2.5" />
-                    </button>
-                  </span>
-                )}
-                {setName && (
-                  <span className="flex items-center gap-1 text-[10px] font-mono bg-sc-accent/10 border border-sc-accent/30 text-sc-accent px-2 py-0.5 rounded">
-                    {setName}
-                    <button onClick={() => setSetName(null)} className="hover:text-white ml-0.5">
-                      <X className="w-2.5 h-2.5" />
-                    </button>
-                  </span>
-                )}
-              </div>
-            )}
-
-            {/* Result count */}
-            <div className="flex items-center justify-between">
-              <span className="text-xs font-mono text-gray-500">
-                {filtered.length.toLocaleString()} items
-                {filtered.length !== totalCount && ` of ${totalCount.toLocaleString()}`}
-              </span>
-              {totalPages > 1 && (
-                <span className="text-xs font-mono text-gray-500">
-                  Page {page} / {totalPages}
-                </span>
-              )}
-            </div>
-
-            {/* Grid or list */}
-            {viewMode === 'grid' ? (
-              <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-3 xl:grid-cols-4 gap-3">
-                {paged.map((item) => (
-                  <ItemCard
-                    key={item.id}
-                    item={item}
-                    collectionQty={collected.get(item.id) ?? 0}
-                    onSetCollectionQty={handleSetCollectionQty}
-                    wishlisted={wishlistIds.has(item.id)}
-                    onToggleWishlist={handleToggleWishlist}
-                    isAuthed={isAuthed}
-                    onSelect={setDetailUuid}
-                  />
-                ))}
-              </div>
-            ) : (
-              <div className="divide-y divide-sc-border border border-sc-border rounded">
-                {paged.map((item) => {
-                  const rs = item.rarity ? rarityStyle(item.rarity) : null
-                  const eCat = effectiveCategory(item)
-                  const catStyle = CATEGORY_BADGE_STYLES[eCat] || CATEGORY_BADGE_STYLES.unknown
-                  const catLabel = CATEGORY_LABELS[eCat] || eCat
-                  const itemCollectionQty = collected.get(item.id) ?? 0
-                  const isWishlisted = wishlistIds.has(item.id)
-                  return (
-                    <div
-                      key={item.id}
-                      className="flex items-center gap-3 px-3 py-2 hover:bg-white/3 cursor-pointer transition-colors"
-                      onClick={() => setDetailUuid(item.uuid)}
-                    >
-                      <span className={`text-[10px] font-display uppercase px-1.5 py-0.5 rounded w-20 text-center shrink-0 ${catStyle}`}>
-                        {catLabel}
-                      </span>
-                      <span className="text-xs text-gray-200 flex-1 min-w-0 truncate">{item.name}</span>
-                      {item.rarity && rs && (
-                        <span className={`text-[10px] font-mono px-1.5 py-0.5 rounded border ${rs.badge} shrink-0`}>
-                          {item.rarity}
-                        </span>
-                      )}
-                      <SourceIcons item={item} />
-                      <ChevronRight className="w-3 h-3 text-gray-600 shrink-0" />
-                      {isAuthed && (
-                        <div className="flex items-center gap-1.5" onClick={(e) => e.stopPropagation()}>
-                          <button
-                            onClick={() => handleToggleWishlist(item.uuid, isWishlisted)}
-                            className={`flex items-center justify-center transition-all duration-150 shrink-0 ${
-                              isWishlisted ? 'text-amber-400' : 'text-gray-500 hover:text-gray-300'
-                            }`}
-                          >
-                            {isWishlisted ? <Bookmark className="w-3.5 h-3.5" /> : <BookmarkPlus className="w-3.5 h-3.5" />}
-                          </button>
-                          <CollectionStepper
-                            qty={itemCollectionQty}
-                            onSetQty={(qty) => handleSetCollectionQty(item.uuid, qty)}
-                          />
-                        </div>
-                      )}
-                    </div>
-                  )
-                })}
-              </div>
-            )}
-
-            {filtered.length === 0 && (
-              <div className="text-center py-16 text-gray-500 font-mono text-sm">
-                No items found.
-              </div>
-            )}
-
-            {/* Pagination */}
-            {totalPages > 1 && (
-              <div className="flex items-center justify-center gap-2 pt-2">
-                <button
-                  onClick={() => setPage((p) => Math.max(1, p - 1))}
-                  disabled={page === 1}
-                  className="px-3 py-1.5 rounded text-xs font-display uppercase tracking-wide border border-sc-border text-gray-400 hover:text-gray-200 disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
-                >
-                  Prev
-                </button>
-                <span className="text-xs font-mono text-gray-500">{page} / {totalPages}</span>
-                <button
-                  onClick={() => setPage((p) => Math.min(totalPages, p + 1))}
-                  disabled={page === totalPages}
-                  className="px-3 py-1.5 rounded text-xs font-display uppercase tracking-wide border border-sc-border text-gray-400 hover:text-gray-200 disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
-                >
-                  Next
-                </button>
-              </div>
+            <span className="stat-value text-amber-400">{wishlistCount.toLocaleString()}</span>
+            {wishlistCount > 0 && Object.keys(shoppingList).length > 0 && (
+              <p className="text-[10px] font-mono text-gray-500 mt-1">Click for shopping list</p>
             )}
           </div>
-        </div>
-      )}
+        )}
+      </div>
 
-      {/* ── Collection/Wishlist auth gate ── */}
-      {(activeTab === 'collection' || activeTab === 'wishlist') && !isAuthed && (
-        <div className="text-center py-16 space-y-3">
-          <p className="text-gray-400 font-mono text-sm">Sign in to track your collection and wishlist</p>
-          <a href="/login" className="inline-block text-sc-accent hover:text-sc-accent/80 text-sm font-mono transition-colors">Sign in</a>
-        </div>
-      )}
+      {/* CategoryStrip */}
+      <CategoryStrip
+        categories={categories}
+        counts={categoryCounts}
+        active={category}
+        onSelect={setCategory}
+      />
 
-      {/* ── Collection tab ── */}
-      {activeTab === 'collection' && isAuthed && (
-        <div className="space-y-6">
-          {collectedItems.length === 0 ? (
-            <div className="text-center py-16 text-gray-500 font-mono text-sm">
-              Nothing collected yet. Browse items and use the{' '}
-              <Plus className="w-3.5 h-3.5 inline-block mx-0.5" /> button to mark them.
+      {/* Main layout: sidebar + content */}
+      <div className="flex gap-4">
+        {/* ── Sidebar ── */}
+        <aside className="hidden lg:flex flex-col gap-4 w-56 shrink-0">
+          {/* Show filter (auth only) */}
+          {isAuthed && (
+            <div>
+              <p className="text-[10px] font-display uppercase tracking-widest text-gray-500 mb-2">Show</p>
+              <div className="space-y-0.5">
+                {SHOW_OPTIONS.map((opt) => (
+                  <button
+                    key={opt.value}
+                    onClick={() => setShow(opt.value)}
+                    className={`w-full flex items-center gap-2 px-2 py-1.5 rounded text-xs transition-colors ${
+                      show === opt.value ? 'text-sc-accent bg-sc-accent/10' : 'text-gray-400 hover:text-gray-300 hover:bg-white/5'
+                    }`}
+                  >
+                    <div className={`w-3 h-3 rounded-full border flex items-center justify-center shrink-0 ${
+                      show === opt.value ? 'border-sc-accent bg-sc-accent' : 'border-gray-600'
+                    }`}>
+                      {show === opt.value && <div className="w-1.5 h-1.5 rounded-full bg-sc-darker" />}
+                    </div>
+                    <span className="font-display tracking-wide">{opt.label}</span>
+                  </button>
+                ))}
+              </div>
             </div>
-          ) : (
-            <>
-              {/* Overall progress */}
-              <div className="panel p-4 space-y-3">
-                <div className="flex items-center justify-between">
-                  <p className="text-[10px] font-display uppercase tracking-widest text-gray-500">Overall Progress</p>
-                  <span className="text-xs font-mono text-sc-accent">
-                    {collectionCount.toLocaleString()} / {totalCount.toLocaleString()} items
-                  </span>
-                </div>
-                <div className="h-2 bg-gray-800 rounded-full overflow-hidden">
-                  <div
-                    className="h-full bg-sc-accent/70 rounded-full transition-all duration-500"
-                    style={{ width: `${(collectionCount / totalCount) * 100}%` }}
-                  />
-                </div>
-                <p className="text-[10px] font-mono text-gray-500 text-right">
-                  {((collectionCount / totalCount) * 100).toFixed(1)}%
-                </p>
+          )}
+
+          {/* Brand */}
+          {brands.size > 0 && (
+            <div>
+              <p className="text-[10px] font-display uppercase tracking-widest text-gray-500 mb-2">Brand</p>
+              <div className="space-y-0.5 max-h-48 overflow-y-auto">
+                {[...brands.entries()].sort((a, b) => a[0].localeCompare(b[0])).map(([brandName, count]) => (
+                  <button
+                    key={brandName}
+                    onClick={() => setBrand(brand === brandName ? null : brandName)}
+                    className={`w-full flex items-center justify-between px-2 py-1.5 rounded text-xs transition-colors ${
+                      brand === brandName ? 'text-sc-accent bg-sc-accent/10' : 'text-gray-400 hover:text-gray-300 hover:bg-white/5'
+                    }`}
+                  >
+                    <span className="font-display tracking-wide truncate">{brandName}</span>
+                    <span className="font-mono text-[10px] text-gray-500 shrink-0">{count.toLocaleString()}</span>
+                  </button>
+                ))}
               </div>
 
-              {/* Per-category breakdown */}
-              <div>
-                <p className="text-[10px] font-display uppercase tracking-widest text-gray-500 mb-3">By Category</p>
-                <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-2">
-                  {['weapon','armour','helmet','clothing','attachment','consumable','harvestable','prop','utility','ship_component','missile'].map(cat => {
-                    const s = collectionCategoryStats[cat]
-                    if (!s || s.total === 0) return null
-                    const pct = (s.collected / s.total) * 100
-                    const catStyle = CATEGORY_BADGE_STYLES[cat]
-                    return (
+              {/* Set/model sub-filter */}
+              {brand && setNames.size > 1 && (
+                <div className="mt-2 ml-2 pl-2 border-l border-sc-border">
+                  <p className="text-[10px] font-display uppercase tracking-widest text-gray-600 mb-1.5">Set</p>
+                  <div className="space-y-0.5 max-h-40 overflow-y-auto">
+                    {[...setNames.entries()].sort((a, b) => a[0].localeCompare(b[0])).map(([sn, count]) => (
                       <button
-                        key={cat}
-                        onClick={() => setCollCategory(collCategory === cat ? 'all' : cat)}
-                        className={`panel p-3 space-y-2 text-left transition-all ${
-                          collCategory === cat ? 'border-sc-accent/60' : 'hover:border-sc-border/80'
+                        key={sn}
+                        onClick={() => setSetName(setName === sn ? null : sn)}
+                        className={`w-full flex items-center justify-between px-2 py-1 rounded text-[11px] transition-colors ${
+                          setName === sn ? 'text-sc-accent bg-sc-accent/10' : 'text-gray-500 hover:text-gray-300 hover:bg-white/5'
                         }`}
                       >
-                        <span className={`text-[10px] font-display uppercase px-1.5 py-0.5 rounded ${catStyle}`}>
-                          {CATEGORY_LABELS[cat]}
-                        </span>
-                        <div className="h-1 bg-gray-800 rounded-full overflow-hidden">
-                          <div className="h-full bg-sc-accent/60 rounded-full" style={{ width: `${pct}%` }} />
-                        </div>
-                        <div className="flex items-center justify-between">
-                          <span className="text-[10px] font-mono text-sc-accent">{s.collected}</span>
-                          <span className="text-[10px] font-mono text-gray-600">/ {s.total}</span>
-                        </div>
+                        <span className="font-display tracking-wide truncate">{sn}</span>
+                        <span className="font-mono text-[10px] text-gray-600 shrink-0">{count}</span>
                       </button>
-                    )
-                  })}
-                </div>
-              </div>
-
-              {/* Search + filter */}
-              <div className="flex items-center gap-2">
-                <SearchInput
-                  value={collSearch}
-                  onChange={setCollSearch}
-                  placeholder="Search collection..."
-                  className="flex-1"
-                />
-                {collCategory !== 'all' && (
-                  <button
-                    onClick={() => setCollCategory('all')}
-                    className="flex items-center gap-1 text-[10px] font-mono bg-sc-accent/10 border border-sc-accent/30 text-sc-accent px-2 py-1 rounded"
-                  >
-                    {CATEGORY_LABELS[collCategory]}
-                    <X className="w-2.5 h-2.5" />
-                  </button>
-                )}
-              </div>
-
-              {/* Collected items list */}
-              <div>
-                <p className="text-[10px] font-mono text-gray-500 mb-2">
-                  {filteredCollectedItems.length.toLocaleString()} item{filteredCollectedItems.length !== 1 ? 's' : ''}
-                  {collSearch || collCategory !== 'all' ? ' matching filters' : ' collected'}
-                </p>
-                <div className="border border-sc-border rounded overflow-hidden">
-                  {filteredCollectedItems.map((item) => {
-                    const rs = item.rarity ? rarityStyle(item.rarity) : null
-                    const eCat = effectiveCategory(item)
-                    const catStyle = CATEGORY_BADGE_STYLES[eCat] || CATEGORY_BADGE_STYLES.unknown
-                    const catLabel = CATEGORY_LABELS[eCat] || eCat
-                    const qty = collected.get(item.id) ?? 0
-                    return (
-                      <div
-                        key={item.id}
-                        className="flex items-center gap-3 px-3 py-2.5 border-b border-sc-border last:border-0 hover:bg-white/3 cursor-pointer transition-colors"
-                        onClick={() => setDetailUuid(item.uuid)}
-                      >
-                        <span className={`text-[10px] font-display uppercase px-1.5 py-0.5 rounded shrink-0 w-20 text-center ${catStyle}`}>
-                          {catLabel}
-                        </span>
-                        <span className="text-xs text-gray-200 flex-1 min-w-0 truncate">{item.name}</span>
-                        {item.rarity && rs && (
-                          <span className={`text-[10px] font-mono px-1.5 py-0.5 rounded border ${rs.badge} shrink-0`}>
-                            {item.rarity}
-                          </span>
-                        )}
-                        <div onClick={(e) => e.stopPropagation()}>
-                          <CollectionStepper
-                            qty={qty}
-                            onSetQty={(q) => handleSetCollectionQty(item.uuid, q)}
-                          />
-                        </div>
-                      </div>
-                    )
-                  })}
-                  {filteredCollectedItems.length === 0 && (
-                    <div className="py-8 text-center text-gray-500 font-mono text-sm">
-                      No items match your filters.
-                    </div>
-                  )}
-                </div>
-              </div>
-            </>
-          )}
-        </div>
-      )}
-
-      {/* ── Wishlist tab ── */}
-      {activeTab === 'wishlist' && isAuthed && (
-        <div className="space-y-6">
-          {wishlistItems && wishlistItems.length > 0 ? (
-            <>
-              {/* Shopping list — full-width rows per source, 3-col locations inside */}
-              {Object.keys(shoppingList).length > 0 && (
-                <div className="space-y-3">
-                  <div className="flex items-center gap-3">
-                    <p className="text-[10px] font-display uppercase tracking-widest text-gray-500">Shopping List</p>
-                    <div className="flex items-center gap-1 ml-auto">
-                      <button
-                        onClick={() => { setWishShopSort('alpha'); setWishShopSortDesc(d => wishShopSort === 'alpha' ? !d : false) }}
-                        className={`px-1.5 py-0.5 rounded text-[10px] font-display uppercase tracking-wide transition-colors ${
-                          wishShopSort === 'alpha' ? 'bg-amber-400/20 text-amber-400' : 'text-gray-500 hover:text-gray-400'
-                        }`}
-                      >A–Z{wishShopSort === 'alpha' ? (wishShopSortDesc ? ' ↓' : ' ↑') : ''}</button>
-                      <button
-                        onClick={() => { setWishShopSort('count'); setWishShopSortDesc(d => wishShopSort === 'count' ? !d : true) }}
-                        className={`px-1.5 py-0.5 rounded text-[10px] font-display uppercase tracking-wide transition-colors ${
-                          wishShopSort === 'count' ? 'bg-amber-400/20 text-amber-400' : 'text-gray-500 hover:text-gray-400'
-                        }`}
-                      ># Items{wishShopSort === 'count' ? (wishShopSortDesc ? ' ↓' : ' ↑') : ''}</button>
-                    </div>
+                    ))}
                   </div>
-                  {Object.entries(shoppingList).map(([key, { label, icon: Icon, locations }]) => {
-                    let locEntries = Object.entries(locations)
-                    if (wishShopSort === 'alpha') {
-                      locEntries.sort((a, b) => wishShopSortDesc ? b[0].localeCompare(a[0]) : a[0].localeCompare(b[0]))
-                    } else {
-                      locEntries.sort((a, b) => wishShopSortDesc ? b[1].length - a[1].length : a[1].length - b[1].length)
-                    }
-                    return (
-                      <div key={key} className="panel p-3 space-y-2">
-                        <div className="flex items-center gap-2">
-                          <Icon className="w-3.5 h-3.5 text-gray-400" />
-                          <span className="text-[10px] font-display uppercase tracking-wider text-gray-400">{label}</span>
-                          <span className="text-[10px] font-mono text-gray-600 ml-auto">
-                            {locEntries.length} location{locEntries.length !== 1 ? 's' : ''}
-                          </span>
-                        </div>
-                        <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 gap-x-4 gap-y-0">
-                          {locEntries.map(([loc, items]) => (
-                            <div key={loc} className="flex items-center justify-between py-1 border-t border-sc-border/50">
-                              <span className="text-xs text-gray-300 truncate mr-2">{loc}</span>
-                              <span className="text-[10px] font-mono text-gray-500 shrink-0">
-                                {[...new Set(items)].length}
-                              </span>
-                            </div>
-                          ))}
-                        </div>
-                      </div>
-                    )
-                  })}
                 </div>
               )}
+            </div>
+          )}
 
-              {/* Toolbar: search + view toggle */}
-              <div className="flex items-center gap-2 flex-wrap">
-                <SearchInput
-                  value={wishSearch}
-                  onChange={setWishSearch}
-                  placeholder="Search wishlist..."
-                  className="flex-1 min-w-48"
-                />
-                <div className="flex items-center gap-1 border border-sc-border rounded p-0.5">
+          {/* Rarity */}
+          <div>
+            <p className="text-[10px] font-display uppercase tracking-widest text-gray-500 mb-2">Rarity</p>
+            <div className="space-y-1">
+              {RARITY_ORDER.map((r) => {
+                const rs = RARITY_STYLES[r]
+                const active = rarities.has(r)
+                return (
                   <button
-                    onClick={() => setWishViewMode('item')}
-                    className={`px-2 py-1 rounded text-[10px] font-display uppercase tracking-wide transition-colors ${
-                      wishViewMode === 'item' ? 'bg-amber-400/20 text-amber-400' : 'text-gray-400 hover:text-gray-300'
+                    key={r}
+                    onClick={() => toggleRarity(r)}
+                    className={`w-full flex items-center gap-2 px-2 py-1.5 rounded text-xs transition-colors ${
+                      active ? 'bg-white/5' : 'hover:bg-white/5'
                     }`}
                   >
-                    By Item
-                  </button>
-                  <button
-                    onClick={() => setWishViewMode('location')}
-                    className={`px-2 py-1 rounded text-[10px] font-display uppercase tracking-wide transition-colors ${
-                      wishViewMode === 'location' ? 'bg-amber-400/20 text-amber-400' : 'text-gray-400 hover:text-gray-300'
-                    }`}
-                  >
-                    By Location
-                  </button>
-                </div>
-              </div>
-
-              {/* Result count */}
-              <div className="flex items-center justify-between">
-                <span className="text-xs font-mono text-gray-500">
-                  {filteredWishlistItems.length} item{filteredWishlistItems.length !== 1 ? 's' : ''}
-                  {filteredWishlistItems.length !== wishlistItems.length && ` of ${wishlistItems.length}`}
-                </span>
-              </div>
-
-              {/* ── By Item view: grouped by category > sub-type ── */}
-              {wishViewMode === 'item' && (
-                <div className="space-y-2">
-                  {wishlistGrouped.map((group) => {
-                    const groupKey = `group::${group.key}`
-                    const isGroupCollapsed = collapsedWishGroups.has(groupKey)
-                    return (
-                      <div key={group.key} className="border border-sc-border rounded overflow-hidden">
-                        {/* Top-level group header */}
-                        <div className="flex items-center bg-sc-darker/50">
-                          <button
-                            onClick={() => setCollapsedWishGroups(prev => {
-                              const next = new Set(prev)
-                              next.has(groupKey) ? next.delete(groupKey) : next.add(groupKey)
-                              return next
-                            })}
-                            className="flex-1 flex items-center gap-3 px-4 py-2.5 hover:bg-white/3 transition-colors"
-                          >
-                            <ChevronDown className={`w-3.5 h-3.5 text-gray-500 transition-transform ${isGroupCollapsed ? '-rotate-90' : ''}`} />
-                            <span className="text-xs font-display uppercase tracking-wider text-amber-400">{group.label}</span>
-                            <span className="text-[10px] font-mono text-gray-500">{group.count}</span>
-                          </button>
-                          {!isGroupCollapsed && (
-                            <button
-                              onClick={(e) => {
-                                e.stopPropagation()
-                                setCollapsedWishGroups(prev => {
-                                  const next = new Set(prev)
-                                  const subKeys = group.subGroups.map(s => `sub::${group.key}::${s.label}`)
-                                  const allCollapsed = subKeys.every(k => next.has(k))
-                                  subKeys.forEach(k => allCollapsed ? next.delete(k) : next.add(k))
-                                  return next
-                                })
-                              }}
-                              className="px-3 py-2.5 text-gray-500 hover:text-gray-300 transition-colors"
-                              title={group.subGroups.every(s => collapsedWishGroups.has(`sub::${group.key}::${s.label}`)) ? 'Expand all' : 'Collapse all'}
-                            >
-                              {group.subGroups.every(s => collapsedWishGroups.has(`sub::${group.key}::${s.label}`))
-                                ? <ChevronsDownUp className="w-3.5 h-3.5" />
-                                : <ChevronsUpDown className="w-3.5 h-3.5" />}
-                            </button>
-                          )}
-                        </div>
-
-                        {!isGroupCollapsed && group.subGroups.map((sub) => {
-                          const subKey = `sub::${group.key}::${sub.label}`
-                          const isSubCollapsed = collapsedWishGroups.has(subKey)
-                          return (
-                            <div key={sub.label}>
-                              {/* Sub-group header */}
-                              <button
-                                onClick={() => setCollapsedWishGroups(prev => {
-                                  const next = new Set(prev)
-                                  next.has(subKey) ? next.delete(subKey) : next.add(subKey)
-                                  return next
-                                })}
-                                className="w-full flex items-center gap-3 px-4 py-2 pl-8 bg-sc-darker/30 hover:bg-white/3 transition-colors border-t border-sc-border/50"
-                              >
-                                <ChevronDown className={`w-3 h-3 text-gray-600 transition-transform ${isSubCollapsed ? '-rotate-90' : ''}`} />
-                                <span className="text-[11px] font-display tracking-wide text-gray-300">{sub.label}</span>
-                                <span className="text-[10px] font-mono text-gray-600">{sub.items.length}</span>
-                              </button>
-
-                              {!isSubCollapsed && sub.items.map((item) => (
-                                <WishlistRow
-                                  key={item.id}
-                                  item={item}
-                                  primarySource={primarySourceMap.get(item.id)}
-                                  collectionQty={collected.get(item.id) ?? 0}
-                                  onSetCollectionQty={handleSetCollectionQty}
-                                  wishlistQty={wishlistMap.get(item.id) ?? 1}
-                                  onSetWishlistQty={handleSetWishlistQty}
-                                  onSelect={setDetailUuid}
-                                />
-                              ))}
-                            </div>
-                          )
-                        })}
-                      </div>
-                    )
-                  })}
-                </div>
-              )}
-
-              {/* ── By Location view: grouped by source type > location ── */}
-              {wishViewMode === 'location' && (
-                <div className="space-y-2">
-                  {(() => {
-                    // Group locations by source type
-                    const bySource = new Map()
-                    for (const loc of wishlistByLocation) {
-                      if (!bySource.has(loc.sourceType)) bySource.set(loc.sourceType, [])
-                      bySource.get(loc.sourceType).push(loc)
-                    }
-                    return [...bySource.entries()].map(([sourceType, locations]) => {
-                      const sourceKey = `locsrc::${sourceType}`
-                      const isSourceCollapsed = collapsedWishGroups.has(sourceKey)
-                      const SourceIcon = locations[0].sourceIcon
-                      return (
-                        <div key={sourceType} className="border border-sc-border rounded overflow-hidden">
-                          {/* Source type header */}
-                          <div className="flex items-center bg-sc-darker/50">
-                            <button
-                              onClick={() => setCollapsedWishGroups(prev => {
-                                const next = new Set(prev)
-                                next.has(sourceKey) ? next.delete(sourceKey) : next.add(sourceKey)
-                                return next
-                              })}
-                              className="flex-1 flex items-center gap-3 px-4 py-2.5 hover:bg-white/3 transition-colors"
-                            >
-                              <ChevronDown className={`w-3.5 h-3.5 text-gray-500 transition-transform ${isSourceCollapsed ? '-rotate-90' : ''}`} />
-                              <SourceIcon className="w-3.5 h-3.5 text-gray-400" />
-                              <span className="text-xs font-display uppercase tracking-wider text-amber-400">{locations[0].sourceLabel}</span>
-                              <span className="text-[10px] font-mono text-gray-500">{locations.length} location{locations.length !== 1 ? 's' : ''}</span>
-                            </button>
-                            {!isSourceCollapsed && (
-                              <button
-                                onClick={(e) => {
-                                  e.stopPropagation()
-                                  setCollapsedWishGroups(prev => {
-                                    const next = new Set(prev)
-                                    const locKeys = locations.map(l => `loc::${sourceType}::${l.location}`)
-                                    const allCollapsed = locKeys.every(k => next.has(k))
-                                    locKeys.forEach(k => allCollapsed ? next.delete(k) : next.add(k))
-                                    return next
-                                  })
-                                }}
-                                className="px-3 py-2.5 text-gray-500 hover:text-gray-300 transition-colors"
-                                title={locations.every(l => collapsedWishGroups.has(`loc::${sourceType}::${l.location}`)) ? 'Expand all' : 'Collapse all'}
-                              >
-                                {locations.every(l => collapsedWishGroups.has(`loc::${sourceType}::${l.location}`))
-                                  ? <ChevronsDownUp className="w-3.5 h-3.5" />
-                                  : <ChevronsUpDown className="w-3.5 h-3.5" />}
-                              </button>
-                            )}
-                          </div>
-
-                          {!isSourceCollapsed && locations.map((loc) => {
-                            const locKey = `loc::${sourceType}::${loc.location}`
-                            const isLocCollapsed = collapsedWishGroups.has(locKey)
-                            return (
-                              <div key={loc.location}>
-                                {/* Location header */}
-                                <button
-                                  onClick={() => setCollapsedWishGroups(prev => {
-                                    const next = new Set(prev)
-                                    next.has(locKey) ? next.delete(locKey) : next.add(locKey)
-                                    return next
-                                  })}
-                                  className="w-full flex items-center gap-3 px-4 py-2 pl-8 bg-sc-darker/30 hover:bg-white/3 transition-colors border-t border-sc-border/50"
-                                >
-                                  <ChevronDown className={`w-3 h-3 text-gray-600 transition-transform ${isLocCollapsed ? '-rotate-90' : ''}`} />
-                                  <MapPin className="w-3 h-3 text-gray-500" />
-                                  <span className="text-[11px] text-gray-300 flex-1 text-left truncate">{loc.location}</span>
-                                  <span className="text-[10px] font-mono text-gray-600 shrink-0">{loc.items.length} item{loc.items.length !== 1 ? 's' : ''}</span>
-                                </button>
-
-                                {!isLocCollapsed && loc.items.map((item) => (
-                                  <WishlistRow
-                                    key={`${loc.location}-${item.id}`}
-                                    item={item}
-                                    primarySource={primarySourceMap.get(item.id)}
-                                    collectionQty={collected.get(item.id) ?? 0}
-                                    onSetCollectionQty={handleSetCollectionQty}
-                                    wishlistQty={wishlistMap.get(item.id) ?? 1}
-                                    onSetWishlistQty={handleSetWishlistQty}
-                                    onSelect={setDetailUuid}
-                                  />
-                                ))}
-                              </div>
-                            )
-                          })}
-                        </div>
-                      )
-                    })
-                  })()}
-
-                  {wishlistByLocation.length === 0 && (
-                    <div className="py-8 text-center text-gray-500 font-mono text-sm">
-                      No location data available for wishlisted items.
+                    <div className={`w-3.5 h-3.5 rounded border flex items-center justify-center shrink-0 ${
+                      active ? 'border-sc-accent bg-sc-accent/20' : 'border-gray-600'
+                    }`}>
+                      {active && <Check className="w-2.5 h-2.5 text-sc-accent" />}
                     </div>
-                  )}
-                </div>
-              )}
+                    <span className={`font-mono ${rs.dot}`}>{rs.label}</span>
+                  </button>
+                )
+              })}
+            </div>
+          </div>
 
-              {filteredWishlistItems.length === 0 && (
-                <div className="py-8 text-center text-gray-500 font-mono text-sm">
-                  No items match your search.
-                </div>
+          {/* Found in */}
+          <div>
+            <p className="text-[10px] font-display uppercase tracking-widest text-gray-500 mb-2">Found In</p>
+            <div className="space-y-1">
+              {[
+                { key: 'shops', icon: ShoppingCart, label: 'Shops' },
+                { key: 'containers', icon: Package, label: 'Containers' },
+                { key: 'npcs', icon: Swords, label: 'NPCs' },
+                { key: 'contracts', icon: FileText, label: 'Contracts' },
+              ].map(({ key, icon: Icon, label }) => {
+                const active = sources.has(key)
+                return (
+                  <button
+                    key={key}
+                    onClick={() => toggleSource(key)}
+                    className={`w-full flex items-center gap-2 px-2 py-1.5 rounded text-xs transition-colors ${
+                      active ? 'bg-white/5' : 'hover:bg-white/5'
+                    }`}
+                  >
+                    <div className={`w-3.5 h-3.5 rounded border flex items-center justify-center shrink-0 ${
+                      active ? 'border-sc-accent bg-sc-accent/20' : 'border-gray-600'
+                    }`}>
+                      {active && <Check className="w-2.5 h-2.5 text-sc-accent" />}
+                    </div>
+                    <Icon className="w-3 h-3 text-gray-400" />
+                    <span className="text-gray-400 font-display tracking-wide">{label}</span>
+                  </button>
+                )
+              })}
+            </div>
+          </div>
+        </aside>
+
+        {/* ── Main content ── */}
+        <div className="flex-1 min-w-0 space-y-3">
+          {/* Toolbar */}
+          <div className="flex items-center gap-2 flex-wrap">
+            <SearchInput
+              value={search}
+              onChange={setSearch}
+              placeholder="Search items..."
+              className="flex-1 min-w-48"
+            />
+            <select
+              value={sortBy}
+              onChange={(e) => setSortBy(e.target.value)}
+              className="text-xs bg-sc-darker border border-sc-border rounded px-2 py-1.5 text-gray-300 focus:outline-none focus:border-sc-accent font-display tracking-wide"
+            >
+              {sortOptions.map((opt) => (
+                <option key={opt.value} value={opt.value}>{opt.label}</option>
+              ))}
+            </select>
+            <div className="flex items-center gap-1 border border-sc-border rounded p-0.5">
+              <button
+                onClick={() => setViewMode('grid')}
+                className={`p-1.5 rounded transition-colors ${viewMode === 'grid' ? 'bg-sc-accent/20 text-sc-accent' : 'text-gray-400 hover:text-gray-300'}`}
+                title="Grid view"
+              >
+                <LayoutGrid className="w-3.5 h-3.5" />
+              </button>
+              <button
+                onClick={() => setViewMode('list')}
+                className={`p-1.5 rounded transition-colors ${viewMode === 'list' ? 'bg-sc-accent/20 text-sc-accent' : 'text-gray-400 hover:text-gray-300'}`}
+                title="List view"
+              >
+                <List className="w-3.5 h-3.5" />
+              </button>
+            </div>
+            {/* Shopping List button (auth + has wishlist) */}
+            {isAuthed && wishlistCount > 0 && Object.keys(shoppingList).length > 0 && (
+              <button
+                onClick={() => setShowShoppingList(true)}
+                className="flex items-center gap-1.5 px-2.5 py-1.5 rounded text-xs font-display uppercase tracking-wide border border-amber-400/30 text-amber-400 hover:bg-amber-400/10 transition-colors"
+              >
+                <ShoppingCart className="w-3.5 h-3.5" />
+                <span className="hidden sm:inline">Shopping List</span>
+              </button>
+            )}
+          </div>
+
+          {/* Active filter tags */}
+          {hasActiveFilters && (
+            <div className="flex flex-wrap items-center gap-2">
+              <span className="text-xs text-gray-600">Filtered:</span>
+              {category !== 'all' && (
+                <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded text-xs bg-sc-accent/10 text-sc-accent border border-sc-accent/20">
+                  {CATEGORY_LABELS[category] || category}
+                  <button onClick={() => setCategory('all')} className="hover:text-white ml-1"><X className="w-2.5 h-2.5" /></button>
+                </span>
               )}
-            </>
+              {brand && (
+                <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded text-xs bg-sc-accent/10 text-sc-accent border border-sc-accent/20">
+                  {brand}
+                  <button onClick={() => setBrand(null)} className="hover:text-white ml-1"><X className="w-2.5 h-2.5" /></button>
+                </span>
+              )}
+              {setName && (
+                <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded text-xs bg-sc-accent/10 text-sc-accent border border-sc-accent/20">
+                  {setName}
+                  <button onClick={() => setSetName(null)} className="hover:text-white ml-1"><X className="w-2.5 h-2.5" /></button>
+                </span>
+              )}
+              {[...rarities].map((r) => (
+                <span key={r} className="inline-flex items-center gap-1 px-2 py-0.5 rounded text-xs bg-purple-500/10 text-purple-300 border border-purple-500/20">
+                  {r}
+                  <button onClick={() => toggleRarity(r)} className="hover:text-white ml-1"><X className="w-2.5 h-2.5" /></button>
+                </span>
+              ))}
+              {[...sources].map((s) => {
+                const srcDef = SOURCE_DEFS.find(d => d.key === s)
+                return (
+                  <span key={s} className="inline-flex items-center gap-1 px-2 py-0.5 rounded text-xs bg-emerald-500/10 text-emerald-400 border border-emerald-500/20">
+                    {srcDef?.label || s}
+                    <button onClick={() => toggleSource(s)} className="hover:text-white ml-1"><X className="w-2.5 h-2.5" /></button>
+                  </span>
+                )
+              })}
+              {show !== 'all' && (
+                <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded text-xs bg-amber-500/10 text-amber-400 border border-amber-500/20">
+                  {SHOW_OPTIONS.find(o => o.value === show)?.label || show}
+                  <button onClick={() => setShow('all')} className="hover:text-white ml-1"><X className="w-2.5 h-2.5" /></button>
+                </span>
+              )}
+              <button onClick={clearAllFilters} className="text-xs text-gray-500 hover:text-gray-300 transition-colors">Clear all</button>
+            </div>
+          )}
+
+          {/* Result count */}
+          <div className="flex items-center justify-between">
+            <span className="text-xs font-mono text-gray-500">
+              {filtered.length.toLocaleString()} items
+              {filtered.length !== totalCount && ` of ${totalCount.toLocaleString()}`}
+            </span>
+            {totalPages > 1 && (
+              <span className="text-xs font-mono text-gray-500">
+                Page {page} / {totalPages}
+              </span>
+            )}
+          </div>
+
+          {/* Grid or list */}
+          {viewMode === 'grid' ? (
+            <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-3 xl:grid-cols-4 gap-3">
+              {paged.map((item) => (
+                <ItemCard
+                  key={item.id}
+                  item={item}
+                  collectionQty={collected.get(item.id) ?? 0}
+                  onSetCollectionQty={handleSetCollectionQty}
+                  wishlisted={wishlistIds.has(item.id)}
+                  onToggleWishlist={handleToggleWishlist}
+                  isAuthed={isAuthed}
+                  onSelect={setDetailUuid}
+                />
+              ))}
+            </div>
           ) : (
+            <div className="divide-y divide-sc-border border border-sc-border rounded">
+              {paged.map((item) => {
+                const rs = item.rarity ? rarityStyle(item.rarity) : null
+                const eCat = effectiveCategory(item)
+                const catStyle = CATEGORY_BADGE_STYLES[eCat] || CATEGORY_BADGE_STYLES.unknown
+                const catLabel = CATEGORY_LABELS[eCat] || eCat
+                const itemCollectionQty = collected.get(item.id) ?? 0
+                const isWishlisted = wishlistIds.has(item.id)
+                return (
+                  <div
+                    key={item.id}
+                    className="flex items-center gap-3 px-3 py-2 hover:bg-white/3 cursor-pointer transition-colors"
+                    onClick={() => setDetailUuid(item.uuid)}
+                  >
+                    {/* Collected indicator */}
+                    {isAuthed && itemCollectionQty > 0 && (
+                      <CheckCircle2 className="w-3.5 h-3.5 text-sc-accent shrink-0" />
+                    )}
+                    <span className={`text-[10px] font-display uppercase px-1.5 py-0.5 rounded w-20 text-center shrink-0 ${catStyle}`}>
+                      {catLabel}
+                    </span>
+                    <span className="text-xs text-gray-200 flex-1 min-w-0 truncate">{item.name}</span>
+                    {item.rarity && rs && (
+                      <span className={`text-[10px] font-mono px-1.5 py-0.5 rounded border ${rs.badge} shrink-0`}>
+                        {item.rarity}
+                      </span>
+                    )}
+                    <SourceIcons item={item} />
+                    <ChevronRight className="w-3 h-3 text-gray-600 shrink-0" />
+                    {isAuthed && (
+                      <div className="flex items-center gap-1.5" onClick={(e) => e.stopPropagation()}>
+                        <button
+                          onClick={() => handleToggleWishlist(item.uuid, isWishlisted)}
+                          className={`flex items-center justify-center transition-all duration-150 shrink-0 ${
+                            isWishlisted ? 'text-amber-400' : 'text-gray-500 hover:text-gray-300'
+                          }`}
+                        >
+                          {isWishlisted ? <Bookmark className="w-3.5 h-3.5" /> : <BookmarkPlus className="w-3.5 h-3.5" />}
+                        </button>
+                        <CollectionStepper
+                          qty={itemCollectionQty}
+                          onSetQty={(qty) => handleSetCollectionQty(item.uuid, qty)}
+                        />
+                      </div>
+                    )}
+                  </div>
+                )
+              })}
+            </div>
+          )}
+
+          {filtered.length === 0 && (
             <div className="text-center py-16 text-gray-500 font-mono text-sm">
-              No wishlisted items. Browse items and click the{' '}
-              <Bookmark className="w-3.5 h-3.5 inline-block mx-0.5" /> icon to add them.
+              No items found.
+            </div>
+          )}
+
+          {/* Pagination */}
+          {totalPages > 1 && (
+            <div className="flex items-center justify-center gap-2 pt-2">
+              <button
+                onClick={() => setPage((p) => Math.max(1, p - 1))}
+                disabled={page === 1}
+                className="px-3 py-1.5 rounded text-xs font-display uppercase tracking-wide border border-sc-border text-gray-400 hover:text-gray-200 disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
+              >
+                Prev
+              </button>
+              <span className="text-xs font-mono text-gray-500">{page} / {totalPages}</span>
+              <button
+                onClick={() => setPage((p) => Math.min(totalPages, p + 1))}
+                disabled={page === totalPages}
+                className="px-3 py-1.5 rounded text-xs font-display uppercase tracking-wide border border-sc-border text-gray-400 hover:text-gray-200 disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
+              >
+                Next
+              </button>
             </div>
           )}
         </div>
-      )}
+      </div>
 
     </div>
+    {/* Shopping list modal */}
+    {showShoppingList && Object.keys(shoppingList).length > 0 && (
+      <ShoppingListModal shoppingList={shoppingList} onClose={() => setShowShoppingList(false)} />
+    )}
     {/* Detail slide-over — rendered outside animated container to avoid stacking context trap */}
     {detailUuid && (
       <DetailPanel

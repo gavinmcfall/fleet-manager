@@ -1,16 +1,27 @@
 # Session Journal
 
 ## Current Focus
-Loadout page overhaul: data pipeline complete (ports, modules, combat stats, parent links). HTML mockup iterated with Gavin. React implementation next.
+Loot DB page overhaul — UX complete, extraction scripts updating in parallel. Ready for staging deploy.
 
 ## What's Next
-1. Implement loadout page in React from approved mockup (loadout-v2.html + weapons-test.html)
-2. Wire up TTK calculations using armor/shield/damage data now in DB
-3. Wire up power pip system using ship pool data
-4. Continue closing GitHub issues before Saturday March 29 launch
-5. Build 4.7.0 delta extraction pipeline for when 4.7 goes LIVE
+1. Wait for 4 extraction agents (missiles, turrets, ship components, attachments) to complete
+2. Re-extract data and reload to staging DB
+3. Push to staging for visual verification
+4. Push to production after verification
 
 ## Log
+
+### 2026-03-28 07:00 — Started: Loot DB page major overhaul
+- 12-agent audit completed: 10 data investigators + 2 UX designers
+- **Critical data gaps found**: Ship components (80% missing), missiles (77%), turrets (75%), attachments (79%)
+- **8 DB columns created but never populated** in ship_missiles (lock_time, tracking_signal, etc.)
+- **1,614 carryables not routed to loot_map**, 23 melee weapons misrouted
+- Backend: Enhanced getLootItems() with summary stats via LEFT JOINs (8 detail tables)
+- All 238 backend tests pass
+- Frontend: Created CategoryStrip, CategoryStatConfig, ResistanceBar, ItemCardStats, CompareDrawer, CompareTable, InlineExpand
+- Enhanced ItemCard with manufacturer name, collected overlay, category-specific stats
+- Main page rewrite (index.jsx) in progress via background agent
+- User approved: full send (all 3 sprints), ambient collection/wishlist (no tabs), three-tier detail views
 
 ### 2026-03-26 10:30 — Completed: Combat stats pipeline + loadout mockup design
 - **Migration 0148**: Added combat stat columns to vehicles (armor_hp, damage multipliers, deflection, signatures, power pools) and vehicle_components (per-type damage, penetration, weapon_range, shield absorb)

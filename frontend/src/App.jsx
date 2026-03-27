@@ -46,6 +46,7 @@ const JoinOp = lazy(() => import('./pages/JoinOp'))
 const AcceptInvitation = lazy(() => import('./pages/AcceptInvitation'))
 const Missions = lazy(() => import('./pages/Missions'))
 const LootDB = lazy(() => import('./pages/LootDB'))
+const FullItemDetail = lazy(() => import('./pages/LootDB/FullItemDetail'))
 const POI = lazy(() => import('./pages/POI'))
 const POIDetail = lazy(() => import('./pages/POIDetail'))
 const PaintBrowser = lazy(() => import('./pages/PaintBrowser'))
@@ -778,6 +779,7 @@ export default function App() {
                       <Route path="/paints" element={<PaintBrowser />} />
                       <Route path="/loot" element={<LootDB />} />
                       <Route path="/loot/sets/:setSlug" element={<ArmorSetDetail />} />
+                      <Route path="/loot/:uuid/detail" element={<FullItemDetail />} />
                       <Route path="/loot/:uuid" element={<LootDB />} />
                       <Route path="/poi" element={<POI />} />
                       <Route path="/poi/:slug" element={<POIDetail />} />

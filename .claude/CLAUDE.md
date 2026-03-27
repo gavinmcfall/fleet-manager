@@ -77,11 +77,20 @@ React SPA. 41 page components including: `Dashboard`, `FleetTable`, `ShipDB`, `S
 All filter/sort/pagination state uses URL query strings (`useSearchParams`) for deep-linking.
 
 `LootDB/` is the first directory-based page decomposition:
-- `index.jsx` — Main component (state, tabs, Browse/Collection/Wishlist inline)
-- `DetailPanel.jsx` — Item detail slide-over + stat helpers/constants
+- `index.jsx` — Main component (ambient collection/wishlist, category strip, stat cards, filters)
+- `DetailPanel.jsx` — Item detail slide-over + stat helpers/constants + resistance bars
+- `FullItemDetail.jsx` — Full page detail view for ship components (at `/loot/:uuid/detail`)
+- `CategoryStrip.jsx` — Horizontal icon+label category pills with counts
+- `CategoryStatConfig.js` — Per-category stat display configurations
+- `ItemCard.jsx` — Category-aware cards with stats, manufacturer, collected overlay
+- `ItemCardStats.jsx` — Category-specific stat zone renderer (DPS, resistance bars, size/grade)
+- `ResistanceBar.jsx` — Color-coded horizontal resistance visualization
+- `CompareDrawer.jsx` — Bottom-anchored compare drawer (max 3 same-category items)
+- `CompareTable.jsx` — Side-by-side stat comparison with winner highlighting
+- `InlineExpand.jsx` — Lightweight inline detail for simple items
 - `LocationSection.jsx` — Location grouping (containers, NPCs, shops)
 - `lootHelpers.js` — `extractSetName`, `resolveLocationEntry`, `buildShoppingList`, pagination constants
-- `ItemCard.jsx`, `WishlistRow.jsx`, `CollectionStepper.jsx`, `SourceIcons.jsx` — Extracted sub-components
+- `WishlistRow.jsx`, `CollectionStepper.jsx`, `SourceIcons.jsx` — Extracted sub-components
 
 ## Cron Jobs (wrangler.toml)
 

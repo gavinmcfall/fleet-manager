@@ -16,7 +16,23 @@ export default function ComponentPicker({ slug, portId, portType, currentOverrid
 
   const equippedUuid = currentOverride?.component_uuid || stockComponent?.component_uuid || null
   const stockUuid = stockComponent?.component_uuid || null
-  const columns = getColumnsForPortType(portType)
+
+  // Derive the actual component type from data — mining/salvage ports have port_type='weapon'
+  // but the components are WeaponMining/SalvageModifier/etc.
+  const actualType = useMemo(() => {
+    if (!data?.components?.length) return portType
+    const firstType = data.components[0]?.type
+    const TYPE_TO_PORT = {
+      WeaponMining: 'mining_laser',
+      SalvageHead: 'salvage_head',
+      SalvageModifier: 'salvage_module',
+      TractorBeam: 'turret',
+      MiningModifier: 'mining_laser',
+    }
+    return TYPE_TO_PORT[firstType] || portType
+  }, [data, portType])
+
+  const columns = getColumnsForPortType(actualType)
 
   const handleSort = (key) => {
     if (sortKey === key) {
@@ -52,12 +68,12 @@ export default function ComponentPicker({ slug, portId, portType, currentOverrid
 
   return (
     <div className="fixed inset-0 z-50 flex items-start justify-center pt-6 pb-6 px-4 bg-black/60 backdrop-blur-md" onClick={onClose}>
-      <div className="bg-gray-950 border border-white/[0.08] rounded-lg shadow-2xl w-full max-w-5xl max-h-[88vh] flex flex-col" onClick={e => e.stopPropagation()}>
+      <div className="bg-gray-950 border border-white/[0.08] rounded-lg shadow-2xl w-full max-w-7xl max-h-[88vh] flex flex-col" onClick={e => e.stopPropagation()}>
         {/* Header */}
         <div className="flex items-center justify-between px-5 py-3 border-b border-white/[0.06] flex-shrink-0">
           <div>
             <h3 className="text-sm font-semibold text-white">
-              Select {PORT_TYPE_LABELS[portType] || portType}
+              Select {PORT_TYPE_LABELS[actualType] || PORT_TYPE_LABELS[portType] || portType}
             </h3>
             <p className="text-xs text-gray-500 mt-0.5">
               Size {data?.size_min === data?.size_max ? data?.size_min : `${data?.size_min}–${data?.size_max}`}
@@ -84,7 +100,7 @@ export default function ComponentPicker({ slug, portId, portType, currentOverrid
 
         {/* Table header */}
         <div className="flex items-center gap-0 px-5 py-1.5 border-b border-white/[0.08] bg-white/[0.02] text-[11px] font-medium text-gray-500 uppercase tracking-wider flex-shrink-0">
-          <div className="w-6 flex-shrink-0" /> {/* status icon */}
+          <div className="w-4 flex-shrink-0" /> {/* row indicator */}
           {columns.map(col => (
             <button
               key={col.key}
@@ -99,7 +115,8 @@ export default function ComponentPicker({ slug, portId, portType, currentOverrid
               )}
             </button>
           ))}
-          <div className="w-28 flex-shrink-0 text-right">Status</div>
+          <div className="w-20 flex-shrink-0" /> {/* equipped/default badge */}
+          <div className="w-36 flex-shrink-0 text-right">Availability</div>
           <div className="w-8 flex-shrink-0" /> {/* cart */}
         </div>
 
@@ -118,13 +135,13 @@ export default function ComponentPicker({ slug, portId, portType, currentOverrid
               <div
                 key={comp.id}
                 onClick={() => onSelect(comp)}
-                className={`flex items-center gap-0 px-5 py-2 cursor-pointer transition-colors group border-b border-white/[0.03]
-                  ${isEquipped ? 'bg-sc-accent/[0.06] border-l-2 border-l-sc-accent/60' : 'hover:bg-white/[0.03] border-l-2 border-l-transparent'}`}
+                className={`flex items-center gap-0 px-5 py-2.5 cursor-pointer transition-colors group border-b border-white/[0.03]
+                  ${isEquipped ? 'bg-sc-accent/[0.08] border-l-2 border-l-sc-accent' : isStock ? 'bg-amber-500/[0.04] border-l-2 border-l-amber-500/50' : 'hover:bg-white/[0.03] border-l-2 border-l-transparent'}`}
               >
-                {/* Status icon */}
-                <div className="w-6 flex-shrink-0 flex items-center">
-                  {isEquipped && <Star className="w-3.5 h-3.5 text-sc-accent" />}
-                  {isStock && !isEquipped && <Diamond className="w-3.5 h-3.5 text-amber-400" />}
+                {/* Row indicator */}
+                <div className="w-4 flex-shrink-0 flex items-center">
+                  {isEquipped && <Star className="w-3 h-3 text-sc-accent" />}
+                  {isStock && !isEquipped && <Diamond className="w-3 h-3 text-amber-400" />}
                 </div>
 
                 {/* Data columns */}
@@ -143,8 +160,22 @@ export default function ComponentPicker({ slug, portId, portType, currentOverrid
                   )
                 })}
 
-                {/* Availability status */}
-                <div className="w-28 flex-shrink-0 text-right">
+                {/* Badges: equipped / stock (default) */}
+                <div className="w-20 flex-shrink-0 flex items-center justify-end gap-1">
+                  {isEquipped && (
+                    <span className="text-[10px] font-medium text-sc-accent bg-sc-accent/10 px-1.5 py-0.5 rounded">
+                      Equipped
+                    </span>
+                  )}
+                  {isStock && !isEquipped && (
+                    <span className="text-[10px] font-medium text-amber-400 bg-amber-500/10 px-1.5 py-0.5 rounded">
+                      Default
+                    </span>
+                  )}
+                </div>
+
+                {/* Availability / purchasable status */}
+                <div className="w-36 flex-shrink-0 text-right">
                   {comp.in_collection ? (
                     <span className="inline-flex items-center gap-1 text-[10px] text-emerald-400 bg-emerald-900/20 px-1.5 py-0.5 rounded">
                       <Package className="w-3 h-3" /> Collected
@@ -155,11 +186,11 @@ export default function ComponentPicker({ slug, portId, portType, currentOverrid
                     </span>
                   ) : hasBuyShop ? (
                     <span className="inline-flex items-center gap-1 text-[10px] text-amber-300 bg-amber-900/20 px-1.5 py-0.5 rounded truncate max-w-full" title={cheapestShop.shop_name}>
-                      <MapPin className="w-3 h-3" /> {cheapestShop.buy_price ? `${Number(cheapestShop.buy_price).toLocaleString()}` : 'Buy'}
+                      <MapPin className="w-3 h-3" /> {cheapestShop.buy_price ? `${Number(cheapestShop.buy_price).toLocaleString()} aUEC` : 'Buy'}
                     </span>
                   ) : (
                     <span className="text-[10px] text-orange-400 bg-orange-900/20 px-1.5 py-0.5 rounded">
-                      Loot
+                      Loot Only
                     </span>
                   )}
                 </div>
@@ -186,9 +217,11 @@ export default function ComponentPicker({ slug, portId, portType, currentOverrid
         {/* Footer */}
         <div className="px-5 py-2 border-t border-white/[0.04] text-[11px] text-gray-600 flex items-center justify-between flex-shrink-0">
           <span>{sorted.length} of {totalCount} shown</span>
-          <div className="flex items-center gap-3">
+          <div className="flex items-center gap-4">
             <span className="flex items-center gap-1"><Star className="w-3 h-3 text-sc-accent" /> Equipped</span>
-            <span className="flex items-center gap-1"><Diamond className="w-3 h-3 text-amber-400" /> Stock</span>
+            <span className="flex items-center gap-1"><Diamond className="w-3 h-3 text-amber-400" /> Default</span>
+            <span className="flex items-center gap-1"><MapPin className="w-3 h-3 text-amber-300" /> Purchasable</span>
+            <span className="flex items-center gap-1 text-orange-400">Loot Only</span>
           </div>
         </div>
       </div>

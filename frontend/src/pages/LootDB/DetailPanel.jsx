@@ -1,10 +1,11 @@
-import { X, ShoppingCart, Package, FileText, Plus, Bookmark, BookmarkPlus } from 'lucide-react'
+import { X, ShoppingCart, Package, FileText, Plus, Bookmark, BookmarkPlus, ExternalLink } from 'lucide-react'
 import { Link } from 'react-router-dom'
 import { useLootItem } from '../../hooks/useAPI'
 import useGameVersion from '../../hooks/useGameVersion'
 import { rarityStyle, CATEGORY_BADGE_STYLES, CATEGORY_LABELS, RESISTANCE_KEYS, effectiveCategory } from '../../lib/lootDisplay'
 import LoadingState from '../../components/LoadingState'
 import LocationSection from './LocationSection'
+import ResistanceBar from './ResistanceBar'
 
 // ── Detail panel helpers ──────────────────────────────────────────────────────
 
@@ -93,6 +94,8 @@ const STAT_LABELS = {
   fuel_rate:             'Fuel Rate',
   spool_time:            'Spool Time',
   cooldown_time:         'Cooldown',
+  calibration_rate:      'Calibration Rate',
+  engage_speed:          'Engage Speed',
   stage1_accel:          'Stage 1 Accel',
   stage2_accel:          'Stage 2 Accel',
   ammo_container_size:   'Ammo Pool',
@@ -129,7 +132,7 @@ const STAT_ORDER = [
   'power_output', 'overpower_performance', 'overclock_performance', 'thermal_output',
   'cooling_rate', 'max_temperature', 'overheat_temperature',
   'shield_hp', 'shield_regen', 'regen_delay', 'downed_regen_delay',
-  'quantum_speed', 'quantum_range', 'fuel_rate', 'spool_time', 'cooldown_time', 'stage1_accel', 'stage2_accel',
+  'quantum_speed', 'quantum_range', 'fuel_rate', 'spool_time', 'cooldown_time', 'calibration_rate', 'engage_speed', 'stage1_accel', 'stage2_accel',
   'ammo_container_size', 'rotation_speed', 'gimbal_type',
   'thrust_force', 'fuel_burn_rate', 'radar_range', 'radar_angle', 'qed_range', 'qed_strength',
   'missile_type', 'lock_time', 'tracking_signal', 'speed', 'lock_range', 'ammo_count',
@@ -268,6 +271,15 @@ export default function DetailPanel({ uuid, manufacturerName, collectionQty, onS
                   </span>
                 )}
               </div>
+              {/* Full page link for complex items */}
+              {(eCat === 'ship_component' || eCat === 'ship_weapon' || eCat === 'missile') && (
+                <Link
+                  to={`/loot/${uuid}/detail`}
+                  className="inline-flex items-center gap-1.5 text-[10px] font-display uppercase tracking-wide text-sc-accent hover:text-sc-accent/80 transition-colors"
+                >
+                  <ExternalLink className="w-3 h-3" /> View Full Details
+                </Link>
+              )}
             </div>
 
             {/* Action buttons */}
@@ -406,8 +418,21 @@ export default function DetailPanel({ uuid, manufacturerName, collectionQty, onS
                         <span className="text-gray-300">{det.grade}</span>
                       </div>
                     )}
-                    {/* stat fields before description so RPM/fire modes group with structural info */}
-                    {statsEntries.map(({ k, label, display }) => (
+                    {/* Resistance bars (visual) — separate from other stats */}
+                    {(() => {
+                      const resistKeys = statsEntries.filter(({ k }) => k.startsWith('resist_'))
+                      if (resistKeys.length === 0) return null
+                      return (
+                        <div className="space-y-1.5 py-1">
+                          <span className="text-[10px] text-gray-600 uppercase tracking-wider">Resistances</span>
+                          {resistKeys.map(({ k }) => (
+                            <ResistanceBar key={k} statKey={k} value={det[k]} />
+                          ))}
+                        </div>
+                      )
+                    })()}
+                    {/* Other stat fields */}
+                    {statsEntries.filter(({ k }) => !k.startsWith('resist_')).map(({ k, label, display }) => (
                       <div key={k} className="flex gap-2">
                         <span className="text-gray-500 w-32 shrink-0">{label}</span>
                         <span className="text-gray-300">{display}</span>

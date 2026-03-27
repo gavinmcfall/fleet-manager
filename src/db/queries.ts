@@ -16,6 +16,35 @@ import type {
 import { extractSetName, makeSetSlug } from "../lib/loot-sets";
 import { VEHICLE_VERSION_JOIN, vehicleVersionCap, versionSubquery, deltaVersionJoin, deltaVersionId } from "../lib/constants";
 
+// --- Loot summary stats (category-aware card display) ---
+// LEFT JOINs to detail tables for key stats shown on item cards.
+// Each loot_map row has at most ONE FK set, so only one JOIN produces data per row.
+const LOOT_SUMMARY_JOINS = `
+        LEFT JOIN fps_weapons _fw ON _fw.id = lm.fps_weapon_id
+        LEFT JOIN fps_armour _fa ON _fa.id = lm.fps_armour_id
+        LEFT JOIN fps_helmets _fh ON _fh.id = lm.fps_helmet_id
+        LEFT JOIN fps_clothing _fcl ON _fcl.id = lm.fps_clothing_id
+        LEFT JOIN fps_attachments _fat ON _fat.id = lm.fps_attachment_id
+        LEFT JOIN fps_utilities _fu ON _fu.id = lm.fps_utility_id
+        LEFT JOIN vehicle_components _vc ON _vc.id = lm.vehicle_component_id
+        LEFT JOIN ship_missiles _sm ON _sm.id = lm.ship_missile_id`;
+
+const LOOT_SUMMARY_COLS = `
+        COALESCE(_fw.dps, _vc.dps) as dps,
+        COALESCE(_fw.damage_type, _vc.damage_type) as damage_type,
+        COALESCE(_fa.resist_physical, _fh.resist_physical, _fcl.resist_physical) as resist_physical,
+        COALESCE(_fa.resist_energy, _fh.resist_energy, _fcl.resist_energy) as resist_energy,
+        COALESCE(_fa.resist_distortion, _fh.resist_distortion, _fcl.resist_distortion) as resist_distortion,
+        _fh.atmosphere_capacity,
+        _vc.size as comp_size, _vc.grade as comp_grade,
+        _vc.power_output, _vc.cooling_rate, _vc.shield_hp, _vc.shield_regen,
+        _vc.quantum_speed, _vc.quantum_range,
+        _sm.tracking_signal, _sm.damage as missile_damage, _sm.lock_time, _sm.speed as missile_speed,
+        _fcl.storage_capacity, _fcl.temperature_range_min, _fcl.temperature_range_max,
+        _fat.zoom_scale, _fat.damage_multiplier, _fat.sound_radius_multiplier,
+        _fu.heal_amount, _fu.blast_radius as utility_blast_radius, _fu.device_type,
+        _fw.rounds_per_minute, _fw.effective_range, _fw.ammo_capacity`;
+
 // --- Loot JSON "has_*" column expressions ---
 // Reusable SQL fragment for SELECT clauses that compute boolean flags from JSON blob columns.
 // Each flag is 1 if the JSON column contains actual data, 0 otherwise.
@@ -924,9 +953,11 @@ export async function getLootItems(db: D1Database, versionId?: number): Promise<
   const lv = latestAsOf(versionId);
   const sql = `SELECT lm.id, lm.uuid, lm.name, lm.type, lm.sub_type, lm.rarity,
         lm.category, lm.manufacturer_name,
-        ${LOOT_HAS_FLAGS}
+        ${LOOT_HAS_FLAGS},
+        ${LOOT_SUMMARY_COLS}
       FROM loot_map lm
       ${lv.join}
+      ${LOOT_SUMMARY_JOINS}
       WHERE ${lv.where}
         AND lm.name NOT IN ('<= PLACEHOLDER =>')
         AND lm.name NOT LIKE 'EntityClassDefinition.%'
@@ -1051,7 +1082,7 @@ export async function getLootByUuid(db: D1Database, uuid: string, versionId?: nu
       .first() as Record<string, unknown> | null;
   } else if (item.vehicle_component_id) {
     details = await db
-      .prepare("SELECT name, type, sub_type, size, grade, description, power_output, overpower_performance, overclock_performance, overclock_threshold_min, overclock_threshold_max, thermal_output, cooling_rate, max_temperature, overheat_temperature, shield_hp, shield_regen, resist_physical, resist_energy, resist_distortion, resist_thermal, regen_delay, downed_regen_delay, quantum_speed, quantum_range, fuel_rate, spool_time, cooldown_time, stage1_accel, stage2_accel, rounds_per_minute, ammo_container_size, damage_per_shot, damage_type, projectile_speed, effective_range, dps, heat_per_shot, power_draw, fire_modes, rotation_speed, min_pitch, max_pitch, min_yaw, max_yaw, gimbal_type, thrust_force, fuel_burn_rate, radar_range, radar_angle, qed_range, qed_strength FROM vehicle_components WHERE id = ?")
+      .prepare("SELECT name, type, sub_type, size, grade, description, power_output, overpower_performance, overclock_performance, overclock_threshold_min, overclock_threshold_max, thermal_output, cooling_rate, max_temperature, overheat_temperature, shield_hp, shield_regen, resist_physical, resist_energy, resist_distortion, resist_thermal, regen_delay, downed_regen_delay, quantum_speed, quantum_range, fuel_rate, spool_time, cooldown_time, calibration_rate, engage_speed, stage1_accel, stage2_accel, rounds_per_minute, ammo_container_size, damage_per_shot, damage_type, projectile_speed, effective_range, dps, heat_per_shot, power_draw, fire_modes, rotation_speed, min_pitch, max_pitch, min_yaw, max_yaw, gimbal_type, thrust_force, fuel_burn_rate, radar_range, radar_angle, qed_range, qed_strength FROM vehicle_components WHERE id = ?")
       .bind(item.vehicle_component_id)
       .first() as Record<string, unknown> | null;
   } else if (item.ship_missile_id) {
@@ -1175,9 +1206,11 @@ export async function getUserLootWishlist(db: D1Database, userId: string): Promi
       `SELECT lm.id, lm.uuid, lm.name, lm.type, lm.sub_type, lm.rarity,
         lm.category, lm.manufacturer_name,
         ${LOOT_HAS_FLAGS},
+        ${LOOT_SUMMARY_COLS},
         ulw.quantity as wishlist_quantity
       FROM user_loot_wishlist ulw
       JOIN loot_map lm ON lm.id = ulw.loot_map_id
+      ${LOOT_SUMMARY_JOINS}
       WHERE ulw.user_id = ?
       ORDER BY lm.name ASC`,
     )
