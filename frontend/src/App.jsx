@@ -355,10 +355,23 @@ function SidebarContent({ expandedMenu, setExpandedMenu, onNavClick }) {
   const { data: status } = useStatus()
   const navItems = getNavItems(userRole, isLoggedIn, activeCode, status?.features)
 
-  // Auto-expand the group containing the current route on initial load
+  // Auto-expand the group containing the current route on initial load.
+  // Includes implicit routes that aren't sidebar items but belong to a group.
+  const IMPLICIT_GROUP_ROUTES = {
+    '/loadout': 'My Fleet',
+    '/analysis': 'My Fleet',
+  }
   const hasAutoExpanded = React.useRef(false)
   useEffect(() => {
     if (hasAutoExpanded.current) return
+    // Check implicit routes first (pages not in sidebar but belonging to a group)
+    for (const [prefix, group] of Object.entries(IMPLICIT_GROUP_ROUTES)) {
+      if (location.pathname.startsWith(prefix)) {
+        setExpandedMenu(group)
+        hasAutoExpanded.current = true
+        return
+      }
+    }
     for (const item of navItems) {
       if (!item.group) continue
       const active = item.items.some(child =>
