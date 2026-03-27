@@ -274,11 +274,11 @@ export default function FpsLoadout() {
       <div className="absolute inset-0 flex items-center justify-center">
         <div className="relative w-full h-full" style={{ perspective: '2200px' }}>
 
-          {/* Panel frame backgrounds */}
+          {/* Panel frame backgrounds — fixed aspect ratio, pinned to edges */}
           <div
             className="absolute top-0 left-0 h-full pointer-events-none"
             style={{
-              width: '50%',
+              width: 'calc(57.78vh)', /* 624/1080 = 0.5778 of viewport height */
               transformStyle: 'preserve-3d',
               transformOrigin: '0% 50%',
               transform: 'rotateY(5deg)',
@@ -287,7 +287,6 @@ export default function FpsLoadout() {
             <div
               className="absolute inset-0"
               style={{
-                width: '65%',
                 background: `url(${ICON('inventory_panel_composite.png')}) left top / 100% 100% no-repeat`,
               }}
             />
@@ -295,16 +294,15 @@ export default function FpsLoadout() {
           <div
             className="absolute top-0 right-0 h-full pointer-events-none"
             style={{
-              width: '50%',
+              width: 'calc(57.78vh)',
               transformStyle: 'preserve-3d',
               transformOrigin: '100% 50%',
               transform: 'rotateY(-5deg)',
             }}
           >
             <div
-              className="absolute inset-0 right-0 ml-auto"
+              className="absolute inset-0"
               style={{
-                width: '65%',
                 background: `url(${ICON('inventory_panel_composite.png')}) left top / 100% 100% no-repeat`,
                 transform: 'scaleX(-1)',
               }}
