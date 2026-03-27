@@ -364,10 +364,31 @@ export function loadoutRoutes() {
       // Not authenticated — skip collection/fleet data
     }
 
+    // Resolve the actual stock component UUID by walking the port tree.
+    // For turret-housed weapons, port.equipped_item_uuid points to the housing (TurretBase),
+    // not the actual weapon. Walk down: port → child → grandchild to find the deepest equipped UUID.
+    let stockUuid = port.equipped_item_uuid;
+    if (stockUuid) {
+      const deepest = await db
+        .prepare(
+          `SELECT COALESCE(grandchild.equipped_item_uuid, child.equipped_item_uuid, p.equipped_item_uuid) AS deep_uuid
+           FROM vehicle_ports p
+           LEFT JOIN vehicle_ports child ON child.parent_port_id = p.id AND child.game_version_id = p.game_version_id
+           LEFT JOIN vehicle_ports grandchild ON grandchild.parent_port_id = child.id AND grandchild.game_version_id = child.game_version_id
+           WHERE p.id = ?
+           ORDER BY CASE WHEN grandchild.equipped_item_uuid IS NOT NULL THEN 0
+                         WHEN child.equipped_item_uuid IS NOT NULL THEN 1 ELSE 2 END
+           LIMIT 1`,
+        )
+        .bind(portId)
+        .first<{ deep_uuid: string | null }>();
+      if (deepest?.deep_uuid) stockUuid = deepest.deep_uuid;
+    }
+
     // Merge shop + collection + fleet data into components
     const enriched = components.results.map((comp: any) => ({
       ...comp,
-      is_stock: comp.uuid === port.equipped_item_uuid,
+      is_stock: comp.uuid === stockUuid,
       shops: shopMap[comp.uuid] || [],
       in_collection: collectionSet.has(comp.class_name),
       on_ships: fleetMap[comp.uuid] || [],
@@ -378,7 +399,7 @@ export function loadoutRoutes() {
       port_type: port.port_type,
       size_min: resolvedSizeMin,
       size_max: resolvedSizeMax,
-      stock_uuid: port.equipped_item_uuid,
+      stock_uuid: stockUuid,
       components: enriched,
     });
   });

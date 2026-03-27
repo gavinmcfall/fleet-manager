@@ -891,6 +891,72 @@ describe("Loadout API — Asgard golden data", () => {
     // These should be DIFFERENT — proves COALESCE picks deepest weapon, not mount
     expect(topRight1!.mount_name).not.toBe(topRight1!.component_name);
   });
+
+  // --- Compatible components: stock detection ---
+  // The Asgard weapon port structure is:
+  //   hardpoint_weapon_top_left_1 (port_type=weapon, equipped=varipuckS3 gimbal)
+  //     └─ hardpoint_class_2 (child, equipped=pantherS3 weapon)
+  // The compatible endpoint must walk the tree to find that pantherS3 is the stock weapon.
+
+  it("compatible: marks the stock weapon (CF-337 Panther) via is_stock on turret-housed ports", async () => {
+    const portRow = await env.DB
+      .prepare("SELECT id FROM vehicle_ports WHERE uuid = 'port-weapon-top_left_1'")
+      .first<{ id: number }>();
+    expect(portRow).toBeDefined();
+
+    const res = await SELF.fetch(
+      `http://localhost/api/loadout/asgard/compatible?port_id=${portRow!.id}`
+    );
+    expect(res.status).toBe(200);
+    const data = (await res.json()) as {
+      stock_uuid: string | null;
+      components: Array<{ uuid: string; name: string; is_stock: boolean }>;
+    };
+
+    // stock_uuid should be the PANTHER uuid, not the gimbal uuid
+    expect(data.stock_uuid).toBe(UUID.pantherS3);
+
+    // Exactly one component should have is_stock=true
+    const stockComps = data.components.filter((c: any) => c.is_stock);
+    expect(stockComps).toHaveLength(1);
+    expect(stockComps[0].name).toBe("CF-337 Panther Repeater");
+  });
+
+  it("compatible: returns the Panther in the list with correct type", async () => {
+    const portRow = await env.DB
+      .prepare("SELECT id FROM vehicle_ports WHERE uuid = 'port-weapon-top_left_1'")
+      .first<{ id: number }>();
+
+    const res = await SELF.fetch(
+      `http://localhost/api/loadout/asgard/compatible?port_id=${portRow!.id}`
+    );
+    const data = (await res.json()) as {
+      components: Array<{ uuid: string; name: string; type: string }>;
+    };
+
+    const panther = data.components.find((c: any) => c.uuid === UUID.pantherS3);
+    expect(panther).toBeDefined();
+    expect(panther!.name).toBe("CF-337 Panther Repeater");
+    expect(panther!.type).toBe("WeaponGun");
+  });
+
+  it("compatible: Rhino S4 is NOT marked as stock for a Panther port", async () => {
+    const portRow = await env.DB
+      .prepare("SELECT id FROM vehicle_ports WHERE uuid = 'port-weapon-top_left_1'")
+      .first<{ id: number }>();
+
+    const res = await SELF.fetch(
+      `http://localhost/api/loadout/asgard/compatible?port_id=${portRow!.id}`
+    );
+    const data = (await res.json()) as {
+      components: Array<{ uuid: string; name: string; is_stock: boolean }>;
+    };
+
+    const rhino = data.components.find((c: any) => c.uuid === UUID.rhinoS4);
+    if (rhino) {
+      expect(rhino.is_stock).toBe(false);
+    }
+  });
 });
 
 // ===========================================================================
