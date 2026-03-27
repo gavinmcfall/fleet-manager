@@ -32,6 +32,42 @@ const FACTION_LOGOS = {
   "wildstarracing": "https://imagedelivery.net/JnUjHiDCDHvj44u4fjoYBg/faction-logo-wildstar/thumb",
 }
 
+// Human-friendly descriptions for mission types from contract generators
+const MISSION_TYPE_DESCRIPTIONS = {
+  "Recovery": "Travel to a location and recover a lost item, then deliver it to the client.",
+  "Recovery (Unlawful)": "Recover items from restricted or contested areas. May involve illegal activity.",
+  "Recovery + Combat": "Recover an item from a hostile location. Expect armed resistance.",
+  "Black Box Recovery": "Locate and retrieve a ship's black box flight recorder from a wreck site.",
+  "Elimination": "Locate and eliminate a specific target at a known location.",
+  "Ship Defense": "Protect a friendly ship from incoming hostile waves.",
+  "Defend Assets": "Defend structures or cargo from attack until reinforcements arrive.",
+  "Escort": "Escort a ship or convoy safely through dangerous space.",
+  "Patrol": "Patrol a designated area and engage any hostile contacts.",
+  "Ship Wave Attack": "Engage and destroy waves of incoming hostile ships.",
+  "Ambush": "Set up and execute an ambush on hostile forces.",
+  "Bounty": "Track down and neutralize a bounty target.",
+  "Bounty (FPS)": "Hunt and eliminate a target on foot at a ground location.",
+  "Data Recovery": "Retrieve encrypted data from a terminal or device at a target location.",
+  "Investigation": "Investigate a location and report findings back to the client.",
+  "Missing Person": "Search for a missing person and determine their fate.",
+  "Cargo Recovery": "Locate and recover lost cargo, then deliver it to the client.",
+  "Mining (FPS)": "Hand-mine resources at a designated location and deliver them.",
+  "Mining (Ship)": "Mine asteroids or surface deposits using a mining ship.",
+  "Mining (Ground)": "Mine surface deposits using a ground vehicle.",
+  "Salvage (FPS)": "Salvage materials from a wreck on foot.",
+  "Salvage (Ship)": "Salvage a derelict ship using salvage equipment.",
+  "Hauling": "Transport cargo between two locations.",
+  "Delivery": "Pick up a package and deliver it to the destination.",
+  "Facility Raid": "Assault a hostile facility and complete objectives inside.",
+  "Animal Hunt": "Track and eliminate dangerous wildlife.",
+  "Hunt & Collect": "Hunt animals and collect specimens for the client.",
+  "Assassination": "Eliminate a high-value target.",
+  "Ship Hijack": "Board and take control of a target ship.",
+  "Criminal Bounties": "Eliminate criminal targets in open space.",
+  "Collection": "Collect specific items and deliver them to the client.",
+  "Resource Gathering": "Gather resources from the environment and deliver them.",
+}
+
 const GUILD_LABELS = {
   thecouncil_guild: 'The Council', mercenary_guild: 'Mercenary Guild',
   unitedresourceworkers_guild: 'United Resource Workers', interstellartransport_guild: 'Interstellar Transport',
@@ -84,6 +120,11 @@ function MissionDetailPanel({ mission, type, onBack }) {
               {mission.mission_type}
             </span>
             <h2 className="text-lg font-bold text-white mb-2">{mission.mission_type}</h2>
+
+            {/* Mission description */}
+            {MISSION_TYPE_DESCRIPTIONS[mission.mission_type] && (
+              <p className="text-sm text-gray-400 leading-relaxed mb-3">{MISSION_TYPE_DESCRIPTIONS[mission.mission_type]}</p>
+            )}
 
             {/* Systems */}
             {mission.systems?.length > 0 && (
