@@ -313,10 +313,9 @@ const SYSTEM_PILL_COLORS = {
 function FactionCard({ faction }) {
   const logo = FACTION_LOGOS[faction.name] || FACTION_LOGOS[faction.faction_name]
   const guild = GUILD_LABELS[faction.guild] || ''
-  // Link to the first generator for now — faction page will show all
-  const linkTo = faction.generators.length === 1
-    ? `/missions/${faction.generators[0].generator_key}`
-    : `/missions/faction/${encodeURIComponent(faction.name)}`
+  // Always link to faction page by slug
+  const factionSlug = faction.faction_slug || faction.name.toLowerCase().replace(/\s+/g, '')
+  const linkTo = `/missions/faction/${factionSlug}`
   return (
     <Link
       to={linkTo}
@@ -578,9 +577,6 @@ export default function Missions() {
         <Pill active={view === 'factions'} onClick={() => setParam('view', 'factions')}>
           <span className="flex items-center gap-1.5"><Building2 className="w-3 h-3" /> Factions <span className="opacity-60">{new Set((missionGivers || []).map(g => g.display_name)).size}</span></span>
         </Pill>
-        <Pill active={view === 'types'} onClick={() => setParam('view', 'types')}>
-          <span className="flex items-center gap-1.5"><Crosshair className="w-3 h-3" /> Types <span className="opacity-60">{filteredTypes.length}</span></span>
-        </Pill>
         <Pill active={view === 'reputation'} onClick={() => setParam('view', 'reputation')}>
           <span className="flex items-center gap-1.5"><Star className="w-3 h-3" /> Reputation <span className="opacity-60">{repScopes.length}</span></span>
         </Pill>
@@ -658,6 +654,7 @@ export default function Missions() {
             factionMap.set(key, {
               name: g.display_name,
               faction_name: g.faction_name,
+              faction_slug: g.faction_slug,
               guild: g.guild,
               focus: g.focus,
               description: g.description,
@@ -785,7 +782,7 @@ export default function Missions() {
                     return (
                       <Link
                         key={scope.name}
-                        to={`/missions/${scope.generator_key}`}
+                        to={`/missions/faction/${scope.faction_slug || scope.name.toLowerCase().replace(/\s+/g, '')}`}
                         className="panel overflow-hidden text-left w-full hover:border-sc-accent/30 transition-colors group flex"
                       >
                         <div className="flex-1 p-4">

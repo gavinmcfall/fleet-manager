@@ -780,7 +780,7 @@ export default function App() {
                       <Route path="/crafting" element={<Suspense fallback={<LoadingState fullScreen />}><Crafting /></Suspense>} />
                       <Route path="/crafting/sim" element={<Suspense fallback={<LoadingState fullScreen />}><QualitySimPage /></Suspense>} />
                       <Route path="/crafting/saved" element={<RequireAuth><Suspense fallback={<LoadingState fullScreen />}><SavedBlueprints /></Suspense></RequireAuth>} />
-                      <Route path="/missions/faction/:name" element={<Suspense fallback={<LoadingState fullScreen />}><FactionDetail /></Suspense>} />
+                      <Route path="/missions/faction/:slug" element={<Suspense fallback={<LoadingState fullScreen />}><FactionDetail /></Suspense>} />
                       <Route path="/missions/:key" element={<Suspense fallback={<LoadingState fullScreen />}><MissionDetail /></Suspense>} />
                       <Route path="/crafting/:id" element={<Suspense fallback={<LoadingState fullScreen />}><BlueprintDetail /></Suspense>} />
                       <Route path="/careers" element={<Careers />} />

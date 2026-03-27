@@ -1288,7 +1288,7 @@ export function gamedataRoutes<E extends HonoEnv>() {
     return cachedJson(c, `gd:mission-givers:${versionId}`, async () => {
       const rows = await db.prepare(
         `SELECT cg.generator_key, cg.display_name, cg.faction_name, cg.guild,
-                cg.mission_type, cg.focus, cg.description,
+                cg.mission_type, cg.focus, cg.description, cg.faction_slug,
                 GROUP_CONCAT(DISTINCT cgca.system) as systems_csv,
                 COUNT(DISTINCT rpi.crafting_blueprint_id) as blueprint_count
          FROM contract_generators cg
@@ -1305,6 +1305,7 @@ export function gamedataRoutes<E extends HonoEnv>() {
         generator_key: r.generator_key,
         display_name: r.display_name,
         faction_name: r.faction_name,
+        faction_slug: r.faction_slug || null,
         guild: r.guild,
         mission_type: r.mission_type,
         focus: r.focus || null,
@@ -1471,6 +1472,222 @@ export function gamedataRoutes<E extends HonoEnv>() {
       }
 
       return { items, total: items.length }
+    })
+  })
+
+  // GET /api/gamedata/faction/:slug — unified faction page: generators + pu_missions + contracts
+  app.get("/faction/:slug", async (c) => {
+    const db = c.env.DB
+    const slug = c.req.param("slug")
+    const versionId = await resolveVersionId(db, c.req.query("patch"))
+
+    // Map of giver_name variants → faction_slug
+    const GIVER_SLUG_MAP: Record<string, string> = {
+      "covalex independent contractors": "covalexshipping",
+      "covalex": "covalexshipping",
+      "civilian defense force initiative": "cdf",
+      "civilian defense force": "cdf",
+      "blacjac security": "deadsaints",
+      "blacjac": "deadsaints",
+      "miles eckhart": "eckhartsecurity",
+      "mt protection services": "microtechprotectionservices",
+      "tecia pacheco": "twitchgang",
+      "tecia \"twitch\" pacheco": "twitchgang",
+    }
+
+    return cachedJson(c, `gd:faction:${versionId}:${cacheSlug(slug)}`, async () => {
+      // Get all generators for this faction slug
+      const generators = await db.prepare(
+        `SELECT * FROM contract_generators WHERE faction_slug = ? AND game_version_id <= ? ORDER BY mission_type`
+      ).bind(slug, versionId).all()
+
+      if (generators.results.length === 0) {
+        // Check if it's a giver_slug from contracts table
+        // or a giver_name from pu_missions — still return pu data
+      }
+
+      const firstGen = generators.results[0] as Record<string, unknown> | undefined
+
+      // Get careers, contracts, blueprint pools for each generator
+      const genIds = generators.results.map(g => g.id as number)
+      let genData: Record<string, unknown>[] = []
+
+      if (genIds.length > 0) {
+        const careers = await db.prepare(
+          `SELECT cgca.*, cg.generator_key, cg.mission_type
+           FROM contract_generator_careers cgca
+           JOIN contract_generators cg ON cg.id = cgca.contract_generator_id
+           WHERE cgca.contract_generator_id IN (${genIds.join(",")})
+           AND cgca.game_version_id <= ?
+           ORDER BY cg.mission_type, cgca.system`
+        ).bind(versionId).all()
+
+        const careerIds = careers.results.map(c => c.id as number)
+        const contracts = careerIds.length > 0 ? await db.prepare(
+          `SELECT * FROM contract_generator_contracts
+           WHERE career_id IN (${careerIds.join(",")}) AND game_version_id <= ?
+           ORDER BY career_id, difficulty`
+        ).bind(versionId).all() : { results: [] }
+
+        const contractIds = contracts.results.map(c => c.id as number)
+        const bpPools = contractIds.length > 0 ? await db.prepare(
+          `SELECT cgbp.contract_generator_contract_id, cgbp.chance,
+                  rp.key as pool_key, rp.name as pool_name,
+                  rpi.crafting_blueprint_id, cb.name as blueprint_name,
+                  COALESCE(fw.name, fa.name) as item_name,
+                  cb.type as blueprint_type, cb.sub_type as blueprint_sub_type
+           FROM contract_generator_blueprint_pools cgbp
+           JOIN crafting_blueprint_reward_pools rp ON rp.id = cgbp.crafting_blueprint_reward_pool_id
+           JOIN crafting_blueprint_reward_pool_items rpi ON rpi.crafting_blueprint_reward_pool_id = rp.id
+           JOIN crafting_blueprints cb ON cb.id = rpi.crafting_blueprint_id
+           LEFT JOIN fps_weapons fw ON fw.class_name = REPLACE(cb.tag, 'BP_CRAFT_', '') AND fw.game_version_id = cb.game_version_id
+           LEFT JOIN fps_armour fa ON fa.class_name = REPLACE(cb.tag, 'BP_CRAFT_', '') AND fa.game_version_id = cb.game_version_id
+           WHERE cgbp.contract_generator_contract_id IN (${contractIds.join(",")})
+             AND cgbp.game_version_id <= ?`
+        ).bind(versionId).all() : { results: [] }
+
+        // Group into generator summaries
+        const DIFF_ORDER = ["Intro", "VeryEasy", "Easy", "Medium", "Hard", "VeryHard", "Super"]
+        for (const gen of generators.results) {
+          const genCareers = careers.results.filter(c => c.contract_generator_id === gen.id)
+          const genCareerIds = new Set(genCareers.map(c => c.id as number))
+          const genContracts = contracts.results.filter(c => genCareerIds.has(c.career_id as number))
+          const genContractIds = new Set(genContracts.map(c => c.id as number))
+          const genBpPools = bpPools.results.filter(p => genContractIds.has(p.contract_generator_contract_id as number))
+
+          // Tiers
+          const tierMap = new Map<string, { difficulty: string; min_rank: number; rep_reward: number | null }>()
+          for (const c of genContracts) {
+            const diff = c.difficulty as string
+            if (!diff || tierMap.has(diff)) continue
+            const minMatch = ((c.min_standing as string) || "").match(/rank(\d+)/)
+            tierMap.set(diff, {
+              difficulty: diff,
+              min_rank: minMatch ? parseInt(minMatch[1]) : 0,
+              rep_reward: (c.rep_reward as number) || null,
+            })
+          }
+
+          // Blueprint pools
+          const poolMap = new Map<string, { pool_key: string; pool_name: string; chance: number; blueprints: { id: number; name: string; type: string; sub_type: string }[] }>()
+          for (const p of genBpPools) {
+            const pk = p.pool_key as string
+            if (!poolMap.has(pk)) {
+              poolMap.set(pk, { pool_key: pk, pool_name: p.pool_name as string, chance: p.chance as number, blueprints: [] })
+            }
+            const entry = poolMap.get(pk)!
+            const bpId = p.crafting_blueprint_id as number
+            if (!entry.blueprints.some(b => b.id === bpId)) {
+              entry.blueprints.push({
+                id: bpId,
+                name: (p.item_name as string) || (p.blueprint_name as string),
+                type: p.blueprint_type as string,
+                sub_type: p.blueprint_sub_type as string,
+              })
+            }
+          }
+
+          genData.push({
+            key: gen.generator_key,
+            mission_type: gen.mission_type,
+            systems: [...new Set(genCareers.map(c => c.system as string).filter(Boolean))],
+            tiers: DIFF_ORDER.filter(d => tierMap.has(d)).map(d => tierMap.get(d)!),
+            blueprint_pools: [...poolMap.values()],
+          })
+        }
+      }
+
+      // Get pu_missions for this faction (by giver_name → slug matching)
+      const puMissions = await db.prepare(
+        `SELECT m.id, m.title, m.description, m.reward_amount, m.reward_currency,
+                m.is_lawful, m.difficulty, m.category, mg.name as giver_name
+         FROM missions m
+         LEFT JOIN mission_givers mg ON mg.id = m.mission_giver_id
+         WHERE m.game_version_id <= ? AND m.removed = 0
+         ORDER BY m.reward_amount DESC`
+      ).bind(versionId).all()
+
+      // Filter pu_missions to this faction
+      const factionPuMissions = puMissions.results.filter(m => {
+        const gn = (m.giver_name as string || "").toLowerCase().replace(/[^a-z0-9]/g, "")
+        const mapped = GIVER_SLUG_MAP[(m.giver_name as string || "").toLowerCase()] || gn
+        return mapped === slug || gn === slug
+      })
+
+      // Get NPC contracts for this faction
+      const SLUG_TO_GIVER_SLUG: Record<string, string> = {
+        wikelo: "wikelo", ruto: "ruto", gfs: "gfs",
+      }
+      const contractGiverSlug = SLUG_TO_GIVER_SLUG[slug]
+      let npcContracts: Record<string, unknown>[] = []
+      if (contractGiverSlug) {
+        const contractResult = await db.prepare(
+          `SELECT * FROM contracts WHERE giver_slug = ? AND is_active = 1 AND game_version_id <= ? ORDER BY sequence_num, id`
+        ).bind(contractGiverSlug, versionId).all()
+        npcContracts = contractResult.results as Record<string, unknown>[]
+      }
+
+      // Build faction info from first generator or pu_mission giver
+      const factionInfo = firstGen ? {
+        slug,
+        display_name: firstGen.display_name,
+        faction_name: firstGen.faction_name,
+        guild: firstGen.guild,
+        mission_type: null,
+        description: firstGen.description || null,
+        focus: firstGen.focus || null,
+        headquarters: firstGen.headquarters || null,
+        leadership: firstGen.leadership || null,
+      } : {
+        slug,
+        display_name: factionPuMissions[0]?.giver_name || slug,
+        faction_name: null,
+        guild: null,
+        mission_type: null,
+        description: null,
+        focus: null,
+        headquarters: null,
+        leadership: null,
+      }
+
+      const allSystems = [...new Set(genData.flatMap(g => (g as { systems: string[] }).systems))]
+      const totalBlueprintCount = genData.reduce((sum, g) => {
+        const pools = (g as { blueprint_pools: { blueprints: unknown[] }[] }).blueprint_pools
+        return sum + pools.reduce((s, p) => s + p.blueprints.length, 0)
+      }, 0)
+
+      if (!firstGen && factionPuMissions.length === 0 && npcContracts.length === 0) {
+        return null
+      }
+
+      return {
+        faction: factionInfo,
+        systems: allSystems,
+        stats: {
+          mission_count: genData.length + factionPuMissions.length + npcContracts.length,
+          blueprint_count: totalBlueprintCount,
+        },
+        generators: genData,
+        pu_missions: factionPuMissions.map(m => ({
+          id: m.id,
+          title: m.title,
+          description: m.description,
+          reward_amount: m.reward_amount,
+          reward_currency: m.reward_currency,
+          is_lawful: m.is_lawful,
+          difficulty: m.difficulty,
+          category: m.category,
+        })),
+        contracts: npcContracts.map(c => ({
+          id: c.id,
+          title: c.title,
+          description: c.description,
+          reward_amount: c.reward_amount,
+          reward_text: c.reward_text,
+          category: c.category,
+          requirements_json: c.requirements_json,
+        })),
+      }
     })
   })
 

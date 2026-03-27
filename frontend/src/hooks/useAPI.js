@@ -417,6 +417,10 @@ export function useMissionGivers() {
   return useAPI('/gamedata/mission-givers')
 }
 
+export function useFactionDetail(slug) {
+  return useAPI(slug ? `/gamedata/faction/${slug}` : null)
+}
+
 export function useMissionDetail(key) {
   return useAPI(key ? `/gamedata/mission/${key}` : null)
 }
