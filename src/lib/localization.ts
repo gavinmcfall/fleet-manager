@@ -207,7 +207,8 @@ export function generateContrabandWarnings(
   const overrides: LabelOverride[] = [];
   for (const row of rows) {
     if (!row.className) continue;
-    const key = `item_Name${row.className}`;
+    // Commodity names use items_commodities_{class_name} key pattern
+    const key = `items_commodities_${row.className}`;
     if (validKeys && !validKeys.has(key)) continue;
     overrides.push({
       key,
@@ -221,7 +222,7 @@ export function generateContrabandWarnings(
 /** Material name shortening map — long mining names → short versions */
 const MATERIAL_SHORT_NAMES: Record<string, string> = {
   Hephaestanite: "Heph",
-  Quantanium: "Quant",
+  Quantainium: "Quant",
   Taranite: "Tara",
   Bexalite: "Bex",
   Laranite: "Lara",
@@ -255,8 +256,14 @@ export function generateMaterialShortNames(
     }
     if (!shortened) continue;
 
-    const key = `item_Name${row.className}`;
-    if (validKeys && !validKeys.has(key)) continue;
+    // Materials use items_commodities_{class_name} for trade commodities
+    // and potentially item_Name{class_name} for mineable elements
+    const keys = [
+      `items_commodities_${row.className}`,
+      `item_Name${row.className}`,
+    ];
+    const key = keys.find((k) => !validKeys || validKeys.has(k));
+    if (!key) continue;
     overrides.push({
       key,
       value: shortened,
