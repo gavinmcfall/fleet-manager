@@ -1,11 +1,11 @@
 import React, { useMemo, useState } from 'react'
-import { useSearchParams } from 'react-router-dom'
+import { useSearchParams, Link } from 'react-router-dom'
 import { useAPI } from '../hooks/useAPI'
 import PageHeader from '../components/PageHeader'
 import LoadingState from '../components/LoadingState'
 import ErrorState from '../components/ErrorState'
 import SearchInput from '../components/SearchInput'
-import { Star, Lock, TrendingDown, ChevronDown, ChevronRight, Users, Layers, Shield } from 'lucide-react'
+import { Star, Lock, TrendingDown, ChevronDown, ChevronRight, Users, Layers, Shield, FileText } from 'lucide-react'
 
 /** Clean internal standing names into human-friendly labels */
 function friendlyStandingName(name) {
@@ -140,6 +140,14 @@ function ScopeCard({ scope }) {
               {driftCount}
             </span>
           )}
+          <Link
+            to={`/missions?view=reputation&rep=${encodeURIComponent(scope.name)}`}
+            className="flex items-center gap-1 text-[10px] font-mono text-sc-accent/70 hover:text-sc-accent transition-colors"
+            title="View missions that affect this reputation"
+          >
+            <FileText className="w-3 h-3" />
+            Missions
+          </Link>
         </div>
       </div>
 

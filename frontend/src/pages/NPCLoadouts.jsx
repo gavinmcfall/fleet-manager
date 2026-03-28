@@ -1,5 +1,5 @@
 import React, { useState, useMemo, useCallback } from 'react'
-import { useSearchParams } from 'react-router-dom'
+import { useSearchParams, Link } from 'react-router-dom'
 import {
   useNPCLoadouts, useNPCFactionLoadouts,
   useLootCollection, useLootWishlist,
@@ -9,7 +9,7 @@ import { useSession } from '../lib/auth-client'
 import PageHeader from '../components/PageHeader'
 import LoadingState from '../components/LoadingState'
 import ErrorState from '../components/ErrorState'
-import { Users, ChevronDown, ChevronRight, ChevronLeft, ArrowLeft, Shield, Shirt, Crosshair, Wrench, Bug, Swords } from 'lucide-react'
+import { Users, ChevronDown, ChevronRight, ChevronLeft, ArrowLeft, Shield, Shirt, Crosshair, Wrench, Bug, Swords, FileText } from 'lucide-react'
 import { toWords } from '../lib/lootLocations'
 import { formatLoadoutName } from '../lib/npcNames'
 import DetailPanel from './LootDB/DetailPanel'
@@ -114,19 +114,32 @@ const FACTION_COLORS = [
 function FactionCard({ faction, index, onClick }) {
   const borderColor = FACTION_COLORS[index % FACTION_COLORS.length]
   return (
-    <button
-      onClick={onClick}
-      className={`panel p-4 text-left transition-all duration-150 hover:bg-white/[0.04] border-l-2 ${borderColor}`}
-    >
-      <div className="flex items-center justify-between">
-        <h3 className="text-sm font-display uppercase tracking-wider text-white">{faction.name}</h3>
-        <ChevronRight className="w-4 h-4 text-gray-500" />
+    <div className={`panel text-left transition-all duration-150 hover:bg-white/[0.04] border-l-2 ${borderColor}`}>
+      <button
+        onClick={onClick}
+        className="p-4 w-full text-left"
+      >
+        <div className="flex items-center justify-between">
+          <h3 className="text-sm font-display uppercase tracking-wider text-white">{faction.name}</h3>
+          <ChevronRight className="w-4 h-4 text-gray-500" />
+        </div>
+        <div className="flex gap-3 mt-2 text-xs text-gray-500 font-mono">
+          <span>{faction.loadout_count} loadouts</span>
+          <span>{faction.item_count} items</span>
+        </div>
+      </button>
+      <div className="px-4 pb-3 -mt-1">
+        <Link
+          to="/missions?view=factions"
+          className="inline-flex items-center gap-1 text-[10px] font-mono text-sc-accent/70 hover:text-sc-accent transition-colors"
+          title="View faction missions"
+          onClick={(e) => e.stopPropagation()}
+        >
+          <FileText className="w-3 h-3" />
+          View Missions
+        </Link>
       </div>
-      <div className="flex gap-3 mt-2 text-xs text-gray-500 font-mono">
-        <span>{faction.loadout_count} loadouts</span>
-        <span>{faction.item_count} items</span>
-      </div>
-    </button>
+    </div>
   )
 }
 

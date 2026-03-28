@@ -5,9 +5,26 @@ import PageHeader from '../components/PageHeader'
 import LoadingState from '../components/LoadingState'
 import ErrorState from '../components/ErrorState'
 import SearchInput from '../components/SearchInput'
-import { Briefcase, Target, ChevronDown, ChevronRight } from 'lucide-react'
+import { Briefcase, Target, ChevronDown, ChevronRight, FileText } from 'lucide-react'
 
 const FILTERED_NAMES = ['<= PLACEHOLDER =>', 'haymaker']
+
+/** Map vehicle career names to the closest mission category display label */
+const CAREER_TO_MISSION_CATEGORY = {
+  'Combat': 'Bounty',
+  'Bounty Hunting': 'Bounty',
+  'Mercenary': 'Mercenary',
+  'Transport': 'Delivery',
+  'Cargo': 'Cargo',
+  'Mining': 'Mining',
+  'Salvage': 'Salvage',
+  'Exploration': 'Exploration',
+  'Medical': 'Search & Rescue',
+  'Support': 'Support',
+  'Investigation': 'Investigation',
+  'Defense': 'Defense',
+  'Recovery': 'Recovery',
+}
 
 const CAREER_COLORS = [
   { text: 'text-red-400', border: 'border-red-400/60', bg: 'bg-red-400/10' },
@@ -75,26 +92,39 @@ function MiniVehicleCard({ vehicle }) {
   )
 }
 
-function ExpandableCard({ name, icon: Icon, vehicleCount, vehicles, colorClasses, subtitle }) {
+function ExpandableCard({ name, icon: Icon, vehicleCount, vehicles, colorClasses, subtitle, missionsLink }) {
   const [expanded, setExpanded] = useState(false)
   const ChevronIcon = expanded ? ChevronDown : ChevronRight
 
   return (
     <div>
-      <button
-        onClick={() => setExpanded(!expanded)}
-        className={`panel p-4 w-full flex items-center gap-3 hover:bg-white/[0.02] transition-colors text-left border-l-2 ${colorClasses?.border || 'border-sc-accent/60'}`}
-      >
-        <Icon className={`w-5 h-5 shrink-0 ${colorClasses?.text || 'text-sc-accent'}`} />
-        <span className="font-display font-semibold text-white text-sm flex-1">{name}</span>
-        {subtitle && (
-          <span className="text-[11px] text-gray-500 font-mono mr-2">{subtitle}</span>
+      <div className={`panel flex items-center border-l-2 ${colorClasses?.border || 'border-sc-accent/60'}`}>
+        <button
+          onClick={() => setExpanded(!expanded)}
+          className="p-4 flex-1 flex items-center gap-3 hover:bg-white/[0.02] transition-colors text-left"
+        >
+          <Icon className={`w-5 h-5 shrink-0 ${colorClasses?.text || 'text-sc-accent'}`} />
+          <span className="font-display font-semibold text-white text-sm flex-1">{name}</span>
+          {subtitle && (
+            <span className="text-[11px] text-gray-500 font-mono mr-2">{subtitle}</span>
+          )}
+          <span className={`text-[10px] font-mono px-1.5 py-0.5 rounded ${colorClasses?.bg || 'bg-sc-accent/10'} ${colorClasses?.text || 'text-sc-accent'}`}>
+            {vehicleCount}
+          </span>
+          <ChevronIcon className="w-4 h-4 text-gray-500 shrink-0" />
+        </button>
+        {missionsLink && (
+          <Link
+            to={missionsLink}
+            className="flex items-center gap-1 text-[10px] font-mono text-sc-accent/70 hover:text-sc-accent transition-colors px-3 shrink-0"
+            title={`View ${name} missions`}
+            onClick={(e) => e.stopPropagation()}
+          >
+            <FileText className="w-3 h-3" />
+            Missions
+          </Link>
         )}
-        <span className={`text-[10px] font-mono px-1.5 py-0.5 rounded ${colorClasses?.bg || 'bg-sc-accent/10'} ${colorClasses?.text || 'text-sc-accent'}`}>
-          {vehicleCount}
-        </span>
-        <ChevronIcon className="w-4 h-4 text-gray-500 shrink-0" />
-      </button>
+      </div>
       {expanded && vehicles && vehicles.length > 0 && (
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-2 mt-2 ml-3">
           {vehicles.map((v) => (
@@ -248,16 +278,23 @@ export default function Careers() {
       {/* ── Careers tab ── */}
       {activeTab === 'careers' && filteredCareers.length > 0 && (
         <section className="space-y-2">
-          {filteredCareers.map((career, i) => (
-            <ExpandableCard
-              key={career.id}
-              name={career.name}
-              icon={Briefcase}
-              vehicleCount={career.vehicle_count || 0}
-              vehicles={career.vehicles}
-              colorClasses={getCareerColor(i)}
-            />
-          ))}
+          {filteredCareers.map((career, i) => {
+            const missionCat = CAREER_TO_MISSION_CATEGORY[career.name]
+            const missionsLink = missionCat
+              ? `/missions?view=all&cat=${encodeURIComponent(missionCat)}`
+              : `/missions?q=${encodeURIComponent(career.name)}`
+            return (
+              <ExpandableCard
+                key={career.id}
+                name={career.name}
+                icon={Briefcase}
+                vehicleCount={career.vehicle_count || 0}
+                vehicles={career.vehicles}
+                colorClasses={getCareerColor(i)}
+                missionsLink={missionsLink}
+              />
+            )
+          })}
         </section>
       )}
 

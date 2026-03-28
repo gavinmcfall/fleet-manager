@@ -1,6 +1,6 @@
 import React, { useState, useMemo, useCallback, useEffect, useRef } from 'react'
 import { Link, useSearchParams } from 'react-router-dom'
-import { ChevronDown, ChevronUp, Package, Users, Crosshair, Shield, Coins, AlertTriangle, FileText, Star, MapPin, FlaskConical, Building2 } from 'lucide-react'
+import { ChevronDown, ChevronUp, Package, Users, Crosshair, Shield, Coins, AlertTriangle, FileText, Star, MapPin, FlaskConical, Building2, Clock, Lock, Ban } from 'lucide-react'
 import { useContracts, useAPI, useMissionGivers } from '../hooks/useAPI'
 import PageHeader from '../components/PageHeader'
 import LoadingState from '../components/LoadingState'
@@ -45,6 +45,29 @@ const CATEGORY_LABELS = {
   Recovery: 'Recovery', Theft: 'Theft', Tutorial: 'Tutorial', Exploration: 'Exploration',
 }
 
+function deriveSystem(locationRef, locality) {
+  const val = (locationRef || locality || '').toLowerCase()
+  if (val.includes('stanton') || val.startsWith('stanton')) return 'Stanton'
+  if (val.includes('pyro') || val.startsWith('pyro')) return 'Pyro'
+  if (val.includes('nyx') || val.startsWith('nyx')) return 'Nyx'
+  return null
+}
+
+function playerCountLabel(maxPlayers) {
+  if (maxPlayers == null) return null
+  if (maxPlayers === 1) return { label: 'Solo', style: 'bg-sky-500/10 text-sky-400 border-sky-500/20' }
+  if (maxPlayers > 50) return { label: 'Server Event', style: 'bg-purple-500/10 text-purple-400 border-purple-500/20' }
+  if (maxPlayers >= 2) return { label: `Group (${maxPlayers})`, style: 'bg-emerald-500/10 text-emerald-400 border-emerald-500/20' }
+  if (maxPlayers === -1) return { label: 'Unlimited', style: 'bg-gray-500/10 text-gray-400 border-gray-500/20' }
+  return null
+}
+
+const SYSTEM_BADGE_STYLES = {
+  Stanton: 'bg-sc-accent/10 text-sc-accent border-sc-accent/20',
+  Nyx: 'bg-purple-500/10 text-purple-400 border-purple-500/20',
+  Pyro: 'bg-orange-500/10 text-orange-400 border-orange-500/20',
+}
+
 function parseRequirements(json) {
   if (!json || json === 'random') return null
   try {
@@ -55,7 +78,7 @@ function parseRequirements(json) {
 
 // ── Unified row ─────────────────────────────────────────────────────────────
 
-function EntryRow({ entry, repFocus, isHighlighted, highlightRef }) {
+function EntryRow({ entry, repFocus, isHighlighted, highlightRef, prerequisites, repRequirements }) {
   const [expanded, setExpanded] = useState(isHighlighted)
   const source = SOURCE_BADGE[entry.source] || SOURCE_BADGE.dynamic
   const reward = entry.reward_amount || 0
@@ -94,7 +117,15 @@ function EntryRow({ entry, repFocus, isHighlighted, highlightRef }) {
                 {entry.reward_text}
               </span>
             ) : reward > 0 ? (
-              <><span className="text-sc-warn">{reward.toLocaleString()}</span> <span className="text-gray-600">aUEC</span></>
+              <>
+                <span className="text-sc-warn">
+                  {entry.reward_max > 0 && entry.reward_max !== reward
+                    ? `${reward.toLocaleString()} - ${entry.reward_max.toLocaleString()}`
+                    : reward.toLocaleString()}
+                </span>
+                {' '}<span className="text-gray-600">aUEC</span>
+                {entry.has_standing_bonus === 1 && <span className="text-emerald-400 ml-1" title="Standing bonus available">+</span>}
+              </>
             ) : (
               <span className="text-gray-700">—</span>
             )}
@@ -109,8 +140,58 @@ function EntryRow({ entry, repFocus, isHighlighted, highlightRef }) {
           {expanded ? <ChevronUp className="w-3.5 h-3.5 text-gray-500" /> : <ChevronDown className="w-3.5 h-3.5 text-gray-500" />}
         </span>
       </button>
-      {expanded && (
+      {expanded && (() => {
+        const system = deriveSystem(entry.location_ref, entry.locality)
+        const players = playerCountLabel(entry.max_players)
+        return (
         <div className="px-4 pb-3 space-y-2">
+          {/* Top badge row — time limit, player count, one-time, prison, system */}
+          {(entry.time_limit_minutes || players || entry.once_only || entry.available_in_prison || system) && (
+            <div className="flex flex-wrap gap-1.5">
+              {entry.time_limit_minutes != null && (
+                <span className="inline-flex items-center gap-1 text-[10px] font-mono px-1.5 py-0.5 rounded border bg-amber-500/10 text-amber-400 border-amber-500/20">
+                  <Clock className="w-3 h-3" />{entry.time_limit_minutes} min
+                </span>
+              )}
+              {players && (
+                <span className={`inline-flex items-center gap-1 text-[10px] font-mono px-1.5 py-0.5 rounded border ${players.style}`}>
+                  <Users className="w-3 h-3" />{players.label}
+                </span>
+              )}
+              {entry.once_only === 1 && (
+                <span className="inline-flex items-center gap-1 text-[10px] font-mono px-1.5 py-0.5 rounded border bg-indigo-500/10 text-indigo-400 border-indigo-500/20">
+                  One-time
+                </span>
+              )}
+              {entry.available_in_prison === 1 && (
+                <span className="inline-flex items-center gap-1 text-[10px] font-mono px-1.5 py-0.5 rounded border bg-gray-500/10 text-gray-400 border-gray-500/20">
+                  <Lock className="w-3 h-3" />Prison Mission
+                </span>
+              )}
+              {system && (
+                <span className={`inline-flex items-center gap-1 text-[10px] font-mono px-1.5 py-0.5 rounded border ${SYSTEM_BADGE_STYLES[system] || 'bg-gray-500/10 text-gray-400 border-gray-500/20'}`}>
+                  <MapPin className="w-3 h-3" />{system}
+                </span>
+              )}
+            </div>
+          )}
+
+          {/* Crime warnings */}
+          {(entry.fail_if_criminal === 1 || entry.wanted_level_min > 0) && (
+            <div className="flex flex-wrap gap-2">
+              {entry.wanted_level_min > 0 && (
+                <span className="inline-flex items-center gap-1 text-[10px] font-mono text-red-400">
+                  <AlertTriangle className="w-3 h-3" />Requires CrimStat {entry.wanted_level_min}+
+                </span>
+              )}
+              {entry.fail_if_criminal === 1 && (
+                <span className="inline-flex items-center gap-1 text-[10px] font-mono text-amber-400">
+                  <Ban className="w-3 h-3" />Fails if CrimStat gained
+                </span>
+              )}
+            </div>
+          )}
+
           {desc ? (
             <p className="text-xs text-gray-400 leading-relaxed whitespace-pre-line">{desc}</p>
           ) : (
@@ -153,15 +234,39 @@ function EntryRow({ entry, repFocus, isHighlighted, highlightRef }) {
             </div>
           )}
 
-          {/* Mission-specific: rep */}
-          {entry.rep_summary && (
+          {/* Buy-in */}
+          {entry.buy_in_amount > 0 && (
             <div className="text-[11px] font-mono">
-              <span className="text-gray-500">Rep: </span>
-              {entry.rep_summary.split(', ').map((r, i) => (
-                <span key={i} className={`${r.includes('+') ? 'text-emerald-400' : 'text-red-400'} ${i > 0 ? 'ml-1' : ''}`}>
-                  {r}{i < entry.rep_summary.split(', ').length - 1 ? ',' : ''}
+              <span className="text-gray-500">Buy-in: </span>
+              <span className="text-sc-warn">{entry.buy_in_amount.toLocaleString()} aUEC</span>
+            </div>
+          )}
+
+          {/* Rep: success / fail / abandon columns */}
+          {(entry.rep_summary || entry.rep_fail || entry.rep_abandon) && (
+            <div className="flex flex-wrap gap-x-5 gap-y-1 text-[11px] font-mono">
+              {entry.rep_summary && (
+                <span>
+                  <span className="text-gray-500">Success: </span>
+                  {entry.rep_summary.split(', ').map((r, i) => (
+                    <span key={i} className={`${r.includes('+') ? 'text-emerald-400' : 'text-red-400'} ${i > 0 ? 'ml-1' : ''}`}>
+                      {r}{i < entry.rep_summary.split(', ').length - 1 ? ',' : ''}
+                    </span>
+                  ))}
                 </span>
-              ))}
+              )}
+              {entry.rep_fail && (
+                <span>
+                  <span className="text-gray-500">Fail: </span>
+                  <span className="text-red-400">{entry.rep_fail}</span>
+                </span>
+              )}
+              {entry.rep_abandon && (
+                <span>
+                  <span className="text-gray-500">Abandon: </span>
+                  <span className="text-red-400">{entry.rep_abandon}</span>
+                </span>
+              )}
             </div>
           )}
 
@@ -172,42 +277,33 @@ function EntryRow({ entry, repFocus, isHighlighted, highlightRef }) {
             {entry.sequence_num != null && <span>#{entry.sequence_num}</span>}
           </div>
 
+          {/* Prerequisites (missions only, not contracts) */}
+          {entry.source !== 'contract' && (() => {
+            const mId = entry.mission_id
+            const prereqs = mId != null ? prerequisites?.[mId] : null
+            const repReqs = mId != null ? repRequirements?.[mId] : null
+            if (!prereqs?.length && !repReqs?.length) return null
+            return (
+              <div className="flex flex-wrap gap-1.5">
+                {prereqs?.map((p, i) => (
+                  <span key={i} className="inline-flex items-center gap-1 text-[10px] font-mono px-1.5 py-0.5 rounded border bg-amber-500/10 text-amber-400 border-amber-500/20">
+                    Requires: {p.title}
+                  </span>
+                ))}
+                {repReqs?.map((r, i) => (
+                  <span key={`rep-${i}`} className="inline-flex items-center gap-1 text-[10px] font-mono px-1.5 py-0.5 rounded border bg-blue-500/10 text-blue-400 border-blue-500/20">
+                    <Star className="w-3 h-3" />Requires: {r.standing_slug} rank with {r.scope_slug} ({r.faction_slug})
+                  </span>
+                ))}
+              </div>
+            )
+          })()}
+
           {entry.notes && <p className="text-[10px] font-mono text-amber-400/80 italic">{entry.notes}</p>}
         </div>
-      )}
+        )
+      })()}
     </div>
-  )
-}
-
-// ── Type / Giver cards ──────────────────────────────────────────────────────
-
-function TypeCard({ type, count, onClick }) {
-  return (
-    <button onClick={onClick} className="panel p-4 text-left w-full hover:border-sc-accent/30 transition-colors group">
-      <div className="flex items-center justify-between gap-2">
-        <h3 className="font-display font-semibold text-white text-sm group-hover:text-sc-accent transition-colors">{type.name}</h3>
-        <span className="text-[10px] font-mono px-2 py-0.5 rounded bg-sc-accent/10 text-sc-accent border border-sc-accent/20 shrink-0">{count} missions</span>
-      </div>
-      {type.description && <p className="text-xs text-gray-500 mt-1.5 leading-relaxed">{cleanDesc(type.description)}</p>}
-    </button>
-  )
-}
-
-function GiverCard({ giver, count, onClick }) {
-  const desc = cleanDesc(giver.description)
-  return (
-    <button onClick={onClick} className="panel p-4 text-left w-full hover:border-sc-accent/30 transition-colors group flex flex-col">
-      <div className="flex items-center justify-between gap-2 mb-1.5">
-        <h3 className="font-display font-semibold text-white text-sm group-hover:text-sc-accent transition-colors">{giver.name}</h3>
-        <span className="text-[10px] font-mono px-2 py-0.5 rounded bg-sc-accent/10 text-sc-accent border border-sc-accent/20 shrink-0">{count} missions</span>
-      </div>
-      {giver.faction_name && (
-        <span className="inline-flex items-center gap-1 text-[10px] font-mono px-1.5 py-0.5 rounded-full bg-sc-accent/10 text-sc-accent border border-sc-accent/20 mb-2">
-          <Users className="w-2.5 h-2.5" />{giver.faction_name}
-        </span>
-      )}
-      {desc && <p className="text-xs text-gray-500 leading-relaxed">{desc}</p>}
-    </button>
   )
 }
 
@@ -281,22 +377,30 @@ export default function Missions() {
   const repFilter = searchParams.get('rep') || ''
   const highlightId = searchParams.get('highlight') || ''
   const guildFilter = searchParams.get('guild') || ''
+  const page = Math.max(1, parseInt(searchParams.get('page') || '1', 10) || 1)
+  const PAGE_SIZE = 50
 
   const setParam = useCallback((key, val, replace = false) => {
     setSearchParams(prev => {
       const next = new URLSearchParams(prev)
       if (val) next.set(key, val)
       else next.delete(key)
+      // Reset page when changing any filter (but not page itself)
+      if (key !== 'page') next.delete('page')
       return next
     }, { replace })
   }, [setSearchParams])
   const setParams = useCallback((updates, replace = false) => {
     setSearchParams(prev => {
       const next = new URLSearchParams(prev)
+      let hasNonPageChange = false
       for (const [key, val] of Object.entries(updates)) {
         if (val) next.set(key, val)
         else next.delete(key)
+        if (key !== 'page') hasNonPageChange = true
       }
+      // Reset page when changing any filter
+      if (hasNonPageChange && !('page' in updates)) next.delete('page')
       return next
     }, { replace })
   }, [setSearchParams])
@@ -309,6 +413,7 @@ export default function Missions() {
     for (const c of (contracts || [])) {
       entries.push({
         id: `c-${c.id}`,
+        mission_id: null,
         contract_id: c.id,
         title: c.title,
         description: c.description,
@@ -335,6 +440,7 @@ export default function Missions() {
     for (const m of (missionData?.missions || [])) {
       entries.push({
         id: `m-${m.id}`,
+        mission_id: m.id,
         contract_id: null,
         title: m.title,
         description: m.description,
@@ -355,6 +461,22 @@ export default function Missions() {
         type_slug: m.type_slug,
         rep_summary: m.rep_summary,
         contract_key: m.contract_key || null,
+        // Enriched mission fields
+        time_limit_minutes: m.time_limit_minutes ?? null,
+        max_players: m.max_players ?? null,
+        can_share: m.can_share ?? 0,
+        once_only: m.once_only ?? 0,
+        fail_if_criminal: m.fail_if_criminal ?? 0,
+        available_in_prison: m.available_in_prison ?? 0,
+        wanted_level_min: m.wanted_level_min ?? 0,
+        wanted_level_max: m.wanted_level_max ?? 0,
+        buy_in_amount: m.buy_in_amount ?? 0,
+        reward_max: m.reward_max ?? 0,
+        has_standing_bonus: m.has_standing_bonus ?? 0,
+        location_ref: m.location_ref ?? null,
+        locality: m.locality ?? null,
+        rep_fail: m.rep_fail ?? null,
+        rep_abandon: m.rep_abandon ?? null,
       })
     }
 
@@ -425,48 +547,6 @@ export default function Missions() {
     return counts
   }, [allEntries])
 
-  // Types + givers for browse views
-  const types = missionData?.types || []
-  const givers = missionData?.givers || []
-
-  const missionCountByType = useMemo(() => {
-    const counts = {}
-    for (const e of allEntries) if (e.type_slug) counts[e.type_slug] = (counts[e.type_slug] || 0) + 1
-    return counts
-  }, [allEntries])
-
-  const entryCountByGiver = useMemo(() => {
-    const counts = {}
-    for (const e of allEntries) if (e.giver_display) counts[e.giver_display] = (counts[e.giver_display] || 0) + 1
-    return counts
-  }, [allEntries])
-
-  const filteredTypes = useMemo(() => {
-    return types.filter(t => t.name !== '<= UNINITIALIZED =>' && t.name !== '<= PLACEHOLDER =>' && (missionCountByType[t.slug] || 0) > 0)
-  }, [types, missionCountByType])
-
-  // Build unified giver list (mission givers + contract givers)
-  const allGivers = useMemo(() => {
-    const gMap = new Map()
-    for (const g of givers) {
-      if ((entryCountByGiver[g.name] || 0) > 0) {
-        gMap.set(g.name, { name: g.name, description: g.description, faction_name: g.faction_name })
-      }
-    }
-    // Add contract givers with descriptions
-    const contractGiverInfo = {
-      'Wikelo': { description: 'Come to Wikelo Emporium for fine made things. Always looking for useful things. Will trade or make in return.', faction_name: null },
-      "Gilly's Flight School": { description: 'Instructor Lucas "Gilly" Baramsco has served in six squadrons and has over ten years of teaching experience. Offers combat gauntlets and navy patrol training courses.', faction_name: null },
-      'Ruto': { description: 'One of the best known info brokers in Stanton. Only appearing as a hologram of former Imperator Kelos Costigan, Ruto manages a vast network of criminal activity and connections.', faction_name: null },
-    }
-    for (const [name, info] of Object.entries(contractGiverInfo)) {
-      if ((entryCountByGiver[name] || 0) > 0 && !gMap.has(name)) {
-        gMap.set(name, { name, ...info })
-      }
-    }
-    return [...gMap.values()].sort((a, b) => (entryCountByGiver[b.name] || 0) - (entryCountByGiver[a.name] || 0))
-  }, [givers, entryCountByGiver])
-
   // Rep scopes — extract from rep_summary strings
   const repScopes = useMemo(() => {
     const scopes = {}
@@ -510,6 +590,7 @@ export default function Missions() {
   const totalReward = allEntries.reduce((s, e) => s + (e.reward_amount || 0), 0)
   const avgReward = allEntries.length > 0 ? Math.round(totalReward / allEntries.length) : 0
   const unlawfulCount = allEntries.filter(e => e.is_unlawful).length
+  const onceOnlyCount = allEntries.filter(e => e.once_only === 1).length
 
   return (
     <div className="space-y-6 animate-fade-in-up">
@@ -519,11 +600,12 @@ export default function Missions() {
       />
 
       {/* Stats */}
-      <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
+      <div className="grid grid-cols-2 lg:grid-cols-5 gap-3">
         <StatCard icon={Crosshair} label="Missions" value={sourceCounts.mission_board + sourceCounts.dynamic + sourceCounts.service_beacon} />
         <StatCard icon={FileText} label="Contracts" value={sourceCounts.contract} />
         <StatCard icon={Coins} label="Avg Reward" value={`${avgReward.toLocaleString()} aUEC`} color="text-sc-warn" />
         <StatCard icon={AlertTriangle} label="Unlawful" value={unlawfulCount} color="text-red-400" />
+        <StatCard icon={Lock} label="One-time" value={onceOnlyCount} color="text-indigo-400" />
       </div>
 
       {/* View pills */}
@@ -581,7 +663,7 @@ export default function Missions() {
           )}
           {typeFilter && (
             <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded text-xs bg-sc-accent/10 text-sc-accent border border-sc-accent/20">
-              {types.find(t => t.slug === typeFilter)?.name || typeFilter}
+              {typeFilter}
               <button onClick={() => setParam('type', '')} className="hover:text-white ml-1">&times;</button>
             </span>
           )}
@@ -680,41 +762,53 @@ export default function Missions() {
       })()}
 
       {/* All entries view */}
-      {view === 'all' && (
-        <>
-          <p className="text-xs font-mono text-gray-600">{filtered.length} results</p>
-          {filtered.length === 0 ? (
-            <div className="panel p-12 text-center">
-              <Crosshair className="w-10 h-10 mx-auto mb-3 text-gray-700" />
-              <p className="text-gray-500 text-sm">No missions or contracts match your filters.</p>
-            </div>
-          ) : (
-            <div className="panel overflow-hidden">
-              {filtered.slice(0, 200).map(e => {
-                const isMatch = highlightId && (e.contract_id === Number(highlightId) || e.id === `c-${highlightId}`)
-                return <EntryRow key={e.id} entry={e} repFocus={repFilter || null} isHighlighted={!!isMatch} highlightRef={isMatch ? highlightRef : undefined} />
-              })}
-              {filtered.length > 200 && (
-                <div className="px-4 py-3 text-xs text-gray-600 font-mono text-center border-t border-sc-border/30">
-                  Showing 200 of {filtered.length} — refine your search
-                </div>
-              )}
-            </div>
-          )}
-        </>
-      )}
+      {view === 'all' && (() => {
+        const totalPages = Math.max(1, Math.ceil(filtered.length / PAGE_SIZE))
+        const safePage = Math.min(page, totalPages)
+        const pageSlice = filtered.slice((safePage - 1) * PAGE_SIZE, safePage * PAGE_SIZE)
 
-      {/* Types view */}
-      {view === 'types' && (
-        <>
-          <p className="text-xs font-mono text-gray-600">{filteredTypes.length} types — click to filter</p>
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">
-            {filteredTypes.map(t => (
-              <TypeCard key={t.id} type={t} count={missionCountByType[t.slug] || 0} onClick={() => setParams({ view: '', type: t.slug, cat: '', giver: '', source: '' })} />
-            ))}
-          </div>
-        </>
-      )}
+        return (
+          <>
+            <p className="text-xs font-mono text-gray-600">{filtered.length} results</p>
+            {filtered.length === 0 ? (
+              <div className="panel p-12 text-center">
+                <Crosshair className="w-10 h-10 mx-auto mb-3 text-gray-700" />
+                <p className="text-gray-500 text-sm">No missions or contracts match your filters.</p>
+              </div>
+            ) : (
+              <>
+                <div className="panel overflow-hidden">
+                  {pageSlice.map(e => {
+                    const isMatch = highlightId && (e.contract_id === Number(highlightId) || e.id === `c-${highlightId}`)
+                    return <EntryRow key={e.id} entry={e} repFocus={repFilter || null} isHighlighted={!!isMatch} highlightRef={isMatch ? highlightRef : undefined} prerequisites={missionData?.prerequisites} repRequirements={missionData?.rep_requirements} />
+                  })}
+                </div>
+                {totalPages > 1 && (
+                  <div className="flex items-center justify-center gap-4 text-xs font-mono">
+                    <button
+                      onClick={() => setParam('page', String(safePage - 1))}
+                      disabled={safePage <= 1}
+                      className="px-3 py-1.5 rounded border border-sc-border/30 text-gray-400 hover:text-white hover:border-sc-accent/30 transition-colors disabled:opacity-30 disabled:pointer-events-none"
+                    >
+                      Prev
+                    </button>
+                    <span className="text-gray-500">
+                      Page {safePage} of {totalPages} <span className="text-gray-700">({filtered.length} total)</span>
+                    </span>
+                    <button
+                      onClick={() => setParam('page', String(safePage + 1))}
+                      disabled={safePage >= totalPages}
+                      className="px-3 py-1.5 rounded border border-sc-border/30 text-gray-400 hover:text-white hover:border-sc-accent/30 transition-colors disabled:opacity-30 disabled:pointer-events-none"
+                    >
+                      Next
+                    </button>
+                  </div>
+                )}
+              </>
+            )}
+          </>
+        )
+      })()}
 
       {/* Reputation view */}
       {view === 'reputation' && (() => {

@@ -1307,17 +1307,40 @@ export function gamedataRoutes<E extends HonoEnv>() {
       }
       const tiers = DIFF_ORDER.filter(d => tierMap.has(d)).map(d => tierMap.get(d)!)
 
+      // Look up enriched mission giver data (portrait, bio, etc.)
+      const factionSlug = gen.faction_slug as string | null
+      let missionGiver: Record<string, unknown> | undefined
+      if (factionSlug) {
+        const giverRes = await db.prepare(
+          `SELECT mg.biography, mg.occupation, mg.association,
+                  mg.portrait_url, mg.is_lawful as giver_is_lawful,
+                  mg.allies_json, mg.enemies_json
+           FROM mission_givers mg
+           WHERE mg.slug = ? AND mg.game_version_id <= ?
+           ORDER BY mg.game_version_id DESC LIMIT 1`
+        ).bind(factionSlug, versionId).all()
+        missionGiver = giverRes.results[0] as Record<string, unknown> | undefined
+      }
+
       return {
         generator: {
           key: gen.generator_key,
           display_name: gen.display_name,
           faction_name: gen.faction_name,
+          faction_slug: factionSlug,
           guild: gen.guild,
           mission_type: gen.mission_type,
           description: gen.description || null,
           focus: gen.focus || null,
           headquarters: gen.headquarters || null,
           leadership: gen.leadership || null,
+          biography: (missionGiver?.biography as string) || null,
+          occupation: (missionGiver?.occupation as string) || null,
+          association: (missionGiver?.association as string) || null,
+          portrait_url: (missionGiver?.portrait_url as string) || null,
+          is_lawful: missionGiver?.giver_is_lawful ?? null,
+          allies_json: (missionGiver?.allies_json as string) || null,
+          enemies_json: (missionGiver?.enemies_json as string) || null,
         },
         systems,
         tiers,
@@ -1730,6 +1753,79 @@ export function gamedataRoutes<E extends HonoEnv>() {
       ).bind(slug, versionId).all()
       const giver = giverResult.results[0] as Record<string, unknown> | undefined
 
+      // Look up reputation ladder: faction → primary scope → standings + perks
+      let repLadder: { scope_name: string; standings: { name: string; slug: string | null; min_reputation: number; is_gated: number; perk_description: string | null; perks: { perk_name: string; display_name: string | null; description: string | null }[] }[] } | null = null
+
+      // Find the faction_id via mission_givers (slug match) or factions table directly
+      const factionIdResult = await db.prepare(
+        `SELECT f.id as faction_id FROM factions f
+         JOIN mission_givers mg ON mg.faction_id = f.id
+         WHERE mg.slug = ? AND mg.game_version_id <= ?
+         ORDER BY mg.game_version_id DESC LIMIT 1`
+      ).bind(slug, versionId).all()
+
+      const factionId = factionIdResult.results[0]?.faction_id as number | undefined
+      if (factionId) {
+        // Get primary reputation scope for this faction
+        const scopeResult = await db.prepare(
+          `SELECT rs.id as scope_id, rs.name as scope_name
+           FROM faction_reputation_scopes frs
+           JOIN reputation_scopes rs ON rs.id = frs.reputation_scope_id
+           WHERE frs.faction_id = ? AND frs.is_primary = 1
+             AND frs.game_version_id = ${deltaVersionId("faction_reputation_scopes", versionId)}
+           LIMIT 1`
+        ).bind(factionId).all()
+
+        const scopeRow = scopeResult.results[0]
+        if (scopeRow) {
+          const scopeId = scopeRow.scope_id as number
+          const scopeName = scopeRow.scope_name as string
+
+          // Get standings for this scope
+          const dvjStandings = deltaVersionJoin('reputation_standings', 'rs2', 'uuid', versionId)
+          const standingsResult = await db.prepare(
+            `SELECT rs2.name, rs2.slug, rs2.min_reputation, rs2.is_gated, rs2.perk_description, rs2.id as standing_id
+             FROM reputation_standings rs2
+             ${dvjStandings}
+             WHERE rs2.scope_id = ? AND rs2.name != '<= PLACEHOLDER =>'
+             ORDER BY rs2.min_reputation ASC, rs2.sort_order ASC`
+          ).bind(scopeId).all()
+
+          // Get perks for each standing
+          const standingIds = standingsResult.results.map(s => s.standing_id as number)
+          let perksByStanding = new Map<number, { perk_name: string; display_name: string | null; description: string | null }[]>()
+          if (standingIds.length > 0) {
+            const perksResult = await db.prepare(
+              `SELECT rp.standing_id, rp.perk_name, rp.display_name, rp.description
+               FROM reputation_perks rp
+               WHERE rp.scope_id = ? AND rp.standing_id IN (${standingIds.join(",")})
+                 AND rp.game_version_id = ${deltaVersionId("reputation_perks", versionId)}`
+            ).bind(scopeId).all()
+            for (const p of perksResult.results) {
+              const sid = p.standing_id as number
+              if (!perksByStanding.has(sid)) perksByStanding.set(sid, [])
+              perksByStanding.get(sid)!.push({
+                perk_name: p.perk_name as string,
+                display_name: (p.display_name as string) || null,
+                description: (p.description as string) || null,
+              })
+            }
+          }
+
+          repLadder = {
+            scope_name: scopeName,
+            standings: standingsResult.results.map(s => ({
+              name: s.name as string,
+              slug: (s.slug as string) || null,
+              min_reputation: s.min_reputation as number,
+              is_gated: s.is_gated as number,
+              perk_description: (s.perk_description as string) || null,
+              perks: perksByStanding.get(s.standing_id as number) || [],
+            })),
+          }
+        }
+      }
+
       // Build faction info from first generator or pu_mission giver
       const factionInfo = firstGen ? {
         slug,
@@ -1822,6 +1918,7 @@ export function gamedataRoutes<E extends HonoEnv>() {
         })),
         prerequisites: factionPrerequisites,
         rep_requirements: factionRepRequirements,
+        rep_ladder: repLadder,
       }
     })
   })
