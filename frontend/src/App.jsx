@@ -763,7 +763,7 @@ export default function App() {
 
             {/* Main content */}
             <main id="main-content" className="flex-1 overflow-auto" tabIndex={-1}>
-              <div className={location.pathname === '/fps-loadout' ? 'p-4' : location.pathname.startsWith('/components') ? 'p-6 md:p-6 pt-16 md:pt-6' : 'max-w-7xl mx-auto p-6 md:p-6 pt-16 md:pt-6'}>
+              <div className={location.pathname === '/fps-loadout' ? 'p-4' : location.pathname.startsWith('/components') ? 'px-3 py-6 pt-16 md:pt-6' : 'max-w-7xl mx-auto p-6 md:p-6 pt-16 md:pt-6'}>
                 <ErrorBoundary>
                   <Suspense fallback={<LoadingState fullScreen />}>
                     <Routes>
