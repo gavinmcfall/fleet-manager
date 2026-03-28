@@ -174,3 +174,173 @@ export function cleanDesc(text) {
   if (!text) return ''
   return text.replace(/<[^>]+>/g, '').replace(/^-+$/gm, '').replace(/\n{3,}/g, '\n\n').trim()
 }
+
+// ── Slug humanization ──────────────────────────────────────────────────────
+// These are shared between Missions.jsx and FactionDetail.jsx.
+// FactionDetail.jsx still has its own copies (separate cleanup pass).
+
+/** Known faction slug → display name */
+export const FACTION_SLUG_NAMES = {
+  bountyhuntersguild: 'Bounty Hunters Guild',
+  citizensforprosperity: 'Citizens for Prosperity',
+  xenothreat: 'XenoThreat',
+  cdf: 'Civilian Defense Force',
+  headhunters: 'Headhunters',
+  bitzeros: 'Bit Zeros',
+  foxwellenforcement: 'Foxwell Enforcement',
+  intersecdefensesolutions: 'InterSec Defense Solutions',
+  northrockservicegroup: 'Northrock Service Group',
+  covalexshipping: 'Covalex',
+  lingfamilyhauling: 'Ling Family Hauling',
+  redwindlinehaul: 'Red Wind Linehaul',
+  vaughn: 'Vaughn',
+  tarpits: 'Tar Pits',
+  eckhartsecurity: 'Eckhart Security',
+  shubininterstellar: 'Shubin Interstellar',
+  klescher: 'Klescher',
+  wildstarracing: 'Wildstar Racing',
+  rayariinc: 'Rayari Inc',
+  ruto: 'Ruto',
+  twitchgang: 'Tecia Pacheco',
+  udm: 'UDM',
+  lawful_eckhartsecurity: 'Eckhart Security',
+  lawful_bountyhuntersguild: 'Bounty Hunters Guild',
+  lawful_covalexshipping: 'Covalex',
+  lawful_foxwellenforcement: 'Foxwell Enforcement',
+  lawful_intersecdefense: 'InterSec Defense',
+  lawful_northrockservicegroup: 'Northrock Service Group',
+  lawful_lingfamilyhauling: 'Ling Family Hauling',
+  lawful_redwindlinehaul: 'Red Wind Linehaul',
+  lawful_shubininterstellar: 'Shubin Interstellar',
+  lawful_citizensforprosperity: 'Citizens for Prosperity',
+  lawful_wildstarracing: 'Wildstar Racing',
+  lawful_rayariinc: 'Rayari Inc',
+  unlawful_headhunters: 'Headhunters',
+  unlawful_vaughn: 'Vaughn',
+  unlawful_tarpits: 'Tar Pits',
+  unlawful_twitchgang: 'Tecia Pacheco',
+}
+
+/** Known scope slug → display name */
+export const SCOPE_SLUG_NAMES = {
+  bounty: 'Bounty',
+  hiredmuscle: 'Hired Muscle',
+  hauling: 'Hauling',
+  courier: 'Courier',
+  delivery: 'Delivery',
+  mining: 'Mining',
+  salvage: 'Salvage',
+  security: 'Security',
+  mercenary: 'Mercenary',
+  assassination: 'Assassination',
+  exploration: 'Exploration',
+  affinity: 'Affinity',
+}
+
+/** Humanize a faction slug: known lookup, then camelCase split, then fallback word split */
+export function humanizeFactionSlug(slug) {
+  if (!slug) return ''
+  const lower = slug.toLowerCase()
+  if (FACTION_SLUG_NAMES[lower]) return FACTION_SLUG_NAMES[lower]
+  // Strip "lawful_" / "unlawful_" prefix and retry
+  const stripped = lower.replace(/^(?:lawful|unlawful)_/, '')
+  if (FACTION_SLUG_NAMES[stripped]) return FACTION_SLUG_NAMES[stripped]
+  // Split camelCase: "BountyHuntersGuild" → "Bounty Hunters Guild"
+  const spaced = slug.replace(/([a-z])([A-Z])/g, '$1 $2')
+  if (spaced !== slug) return spaced
+  // Snake_case fallback: title-case each word
+  return slug.replace(/_/g, ' ')
+    .split(' ').map(w => w.charAt(0).toUpperCase() + w.slice(1).toLowerCase()).join(' ')
+}
+
+/** Humanize a scope slug: known lookup, then snake_case/camelCase split + title-case */
+export function humanizeScopeSlug(slug) {
+  if (!slug) return ''
+  const lower = slug.toLowerCase()
+  if (SCOPE_SLUG_NAMES[lower]) return SCOPE_SLUG_NAMES[lower]
+  return slug.replace(/_/g, ' ').replace(/([a-z])([A-Z])/g, '$1 $2')
+    .split(' ').map(w => w.charAt(0).toUpperCase() + w.slice(1).toLowerCase()).join(' ')
+}
+
+/** Humanize a standing slug: known patterns, then fallback split + title-case */
+export function humanizeStandingSlug(slug) {
+  if (!slug) return ''
+  // Handle affinity patterns: "affinity_enemy_005" → "Enemy (-5)", "affinity_friend_003" → "Friendly (+3)"
+  const affinityMatch = slug.match(/^affinity_(enemy|friend|neutral)_?(\d*)$/i)
+  if (affinityMatch) {
+    const type = affinityMatch[1].toLowerCase()
+    const level = parseInt(affinityMatch[2]) || 0
+    if (type === 'enemy') return level > 0 ? `Enemy Standing (-${level})` : 'Enemy Standing'
+    if (type === 'friend') return level > 0 ? `Friendly Standing (+${level})` : 'Friendly Standing'
+    return 'Neutral Standing'
+  }
+  // Handle "rank4", "hauling_rank4" etc.
+  const rankMatch = slug.match(/^(?:(.+)_)?rank(\d+)$/i)
+  if (rankMatch) {
+    const prefix = rankMatch[1] ? humanizeScopeSlug(rankMatch[1]) + ' ' : ''
+    return `${prefix}Rank ${rankMatch[2]}`
+  }
+  // Handle "bounty_agent", "bounty_masteragent" etc.
+  const compoundMatch = slug.match(/^(.+)_(agent|masteragent|senioragent|junioragent)$/i)
+  if (compoundMatch) {
+    const AGENT_NAMES = { agent: 'Agent', masteragent: 'Master Agent', senioragent: 'Senior Agent', junioragent: 'Junior Agent' }
+    const scope = humanizeScopeSlug(compoundMatch[1])
+    return `${scope} ${AGENT_NAMES[compoundMatch[2].toLowerCase()] || compoundMatch[2]}`
+  }
+  // Known standalone slugs
+  const STANDING_NAMES = {
+    agent: 'Agent', masteragent: 'Master Agent', senioragent: 'Senior Agent',
+    junioragent: 'Junior Agent', neutral: 'Neutral', hostile: 'Hostile', friendly: 'Friendly',
+  }
+  const lower = slug.toLowerCase()
+  if (STANDING_NAMES[lower]) return STANDING_NAMES[lower]
+  // Fallback: snake_case split, camelCase split, title-case
+  return slug.replace(/_/g, ' ').replace(/([a-z])([A-Z])/g, '$1 $2')
+    .split(' ').map(w => w.charAt(0).toUpperCase() + w.slice(1).toLowerCase()).join(' ')
+}
+
+/** Humanize comparison operator */
+export function humanizeComparison(cmp) {
+  const map = { gte: 'or higher', lte: 'or lower', gt: 'above', lt: 'below', eq: 'exactly' }
+  return map[cmp] || cmp
+}
+
+// ── Description cleanup ────────────────────────────────────────────────────
+
+/**
+ * Clean up raw game description text for display in the mission briefing zone.
+ * Strips HTML tags, all-caps header lines, contract metadata lines,
+ * and collapses excess whitespace.
+ */
+export function cleanMissionDescription(text) {
+  if (!text) return ''
+  let clean = text
+    // Strip HTML-like tags (EM4, etc.) but keep their inner text
+    .replace(/<[^>]+>/g, '')
+    // Remove all-caps header lines (lines that are ALL CAPS and < 60 chars)
+    .replace(/^[A-Z][A-Z\s&,.:;\-/()]{3,58}$/gm, '')
+    // Remove "CONTRACT TYPE:", "CONTRACTOR STATUS:", "APPROVAL CODE:", "FOR IMMEDIATE PROCESSING" lines
+    .replace(/^(CONTRACT TYPE|CONTRACTOR STATUS|APPROVAL CODE|FOR IMMEDIATE PROCESSING):?.*$/gim, '')
+    // Remove lines that are just "= <alphanumeric code>" (approval codes)
+    .replace(/^=\s*[a-zA-Z0-9]+\s*$/gm, '')
+    // Remove lines that are just dashes
+    .replace(/^-+$/gm, '')
+    // Collapse triple+ newlines to double
+    .replace(/\n{3,}/g, '\n\n')
+    // Trim leading/trailing whitespace
+    .trim()
+  return clean
+}
+
+/** Format raw rep_reward strings like "+50bountyhuntersguild" or "+250citizensforprosperity,-100xenothreat" */
+export function formatRepReward(raw) {
+  if (!raw) return null
+  return raw.split(/,\s*/).map(part => {
+    const match = part.match(/^([+-]?\d+)\s*(.*)$/)
+    if (!match) return { amount: part.trim(), faction: '', raw: part.trim() }
+    const amount = match[1]
+    const slug = match[2].trim()
+    const name = humanizeFactionSlug(slug)
+    return { amount, faction: name || slug, raw: `${amount} ${name || slug}` }
+  })
+}

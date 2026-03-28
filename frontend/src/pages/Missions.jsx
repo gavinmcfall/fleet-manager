@@ -1,13 +1,13 @@
 import React, { useState, useMemo, useCallback, useEffect, useRef } from 'react'
 import { Link, useSearchParams } from 'react-router-dom'
-import { ChevronDown, ChevronUp, Package, Users, Crosshair, Shield, Coins, AlertTriangle, FileText, Star, MapPin, FlaskConical, Building2, Clock, Lock, Ban } from 'lucide-react'
+import { ChevronDown, ChevronUp, Package, Users, Crosshair, Shield, Coins, AlertTriangle, FileText, Star, MapPin, FlaskConical, Building2, Clock, Lock, Ban, Trophy, TrendingUp, TrendingDown, Minus } from 'lucide-react'
 import { useContracts, useAPI, useMissionGivers } from '../hooks/useAPI'
 import PageHeader from '../components/PageHeader'
 import LoadingState from '../components/LoadingState'
 import ErrorState from '../components/ErrorState'
 import SearchInput from '../components/SearchInput'
 import StatCard from '../components/StatCard'
-import { FACTION_LOGOS, getFactionLogo, GUILD_LABELS, cleanDesc } from '../lib/missionConstants'
+import { FACTION_LOGOS, getFactionLogo, GUILD_LABELS, cleanMissionDescription, humanizeFactionSlug, humanizeScopeSlug, humanizeStandingSlug, humanizeComparison, formatRepReward } from '../lib/missionConstants'
 
 function Pill({ active, onClick, children }) {
   return (
@@ -76,14 +76,316 @@ function parseRequirements(json) {
   } catch { return null }
 }
 
+// ── Expanded section (3-zone layout) ───────────────────────────────────────
+
+function RepRewardCell({ raw }) {
+  if (!raw) return null
+  const parts = formatRepReward(raw)
+  if (!parts) return null
+  return (
+    <div className="space-y-0.5">
+      {parts.map((p, i) => {
+        const isPositive = p.amount.startsWith('+')
+        const isNegative = p.amount.startsWith('-')
+        return (
+          <div key={i} className="flex items-center gap-1.5">
+            {isPositive ? <TrendingUp className="w-3 h-3 text-emerald-400 shrink-0" /> :
+             isNegative ? <TrendingDown className="w-3 h-3 text-red-400 shrink-0" /> :
+             <Minus className="w-3 h-3 text-gray-500 shrink-0" />}
+            <span className={`text-[11px] font-mono ${isPositive ? 'text-emerald-400' : isNegative ? 'text-red-400' : 'text-gray-400'}`}>
+              {p.amount}
+            </span>
+            <span className="text-[11px] font-mono text-gray-500">{p.faction}</span>
+          </div>
+        )
+      })}
+    </div>
+  )
+}
+
+function ExpandedSection({ entry, prerequisites, repRequirements }) {
+  const [descExpanded, setDescExpanded] = useState(false)
+  const [prereqsExpanded, setPrereqsExpanded] = useState(false)
+
+  const system = deriveSystem(entry.location_ref, entry.locality)
+  const players = playerCountLabel(entry.max_players)
+  const source = SOURCE_BADGE[entry.source] || SOURCE_BADGE.dynamic
+  const requirements = parseRequirements(entry.requirements_json)
+
+  // Clean description
+  const briefingText = cleanMissionDescription(entry.description)
+  const DESC_MAX = 280
+  const isLongDesc = briefingText.length > DESC_MAX
+  const displayDesc = isLongDesc && !descExpanded ? briefingText.slice(0, DESC_MAX) + '...' : briefingText
+
+  // Prerequisites / rep requirements
+  const mId = entry.mission_id
+  const prereqs = (entry.source !== 'contract' && mId != null) ? prerequisites?.[mId] : null
+  const repReqs = (entry.source !== 'contract' && mId != null) ? repRequirements?.[mId] : null
+  const hasPrereqs = prereqs?.length > 0
+  const hasRepReqs = repReqs?.length > 0
+  const hasRepRewards = entry.rep_summary || entry.rep_fail || entry.rep_abandon
+  const hasCrimeWarnings = entry.fail_if_criminal === 1 || entry.wanted_level_min > 0
+  const hasRequirementsSection = hasPrereqs || hasRepReqs || hasRepRewards || hasCrimeWarnings || requirements
+
+  // Reward display
+  const reward = entry.reward_amount || 0
+  const rewardText = (() => {
+    if (entry.reward_text) return entry.reward_text
+    if (reward <= 0) return null
+    if (entry.reward_max > 0 && entry.reward_max !== reward) {
+      return `${reward.toLocaleString()} - ${entry.reward_max.toLocaleString()} aUEC`
+    }
+    return `${reward.toLocaleString()} aUEC`
+  })()
+
+  return (
+    <div className="px-4 pb-4 space-y-0">
+      {/* ── Zone 1: Mission Intel Bar ────────────────────────── */}
+      <div className="flex flex-wrap items-center gap-x-4 gap-y-2 py-2.5 border-b border-white/[0.04]">
+        {/* Left group: source, category, system */}
+        <div className="flex flex-wrap items-center gap-1.5">
+          {entry.giver_display && (
+            <span className="text-[11px] font-mono text-gray-400">{entry.giver_display}</span>
+          )}
+          {entry.giver_display && entry.category_display && (
+            <span className="text-gray-700 select-none">/</span>
+          )}
+          {entry.category_display && (
+            <span className="text-[11px] font-mono text-gray-500">{entry.category_display}</span>
+          )}
+          {system && (
+            <span className={`inline-flex items-center gap-1 text-[10px] font-mono px-1.5 py-0.5 rounded border ${SYSTEM_BADGE_STYLES[system] || 'bg-gray-500/10 text-gray-400 border-gray-500/20'}`}>
+              <MapPin className="w-3 h-3" />{system}
+            </span>
+          )}
+        </div>
+
+        {/* Center group: time limit, player count, one-time, prison */}
+        <div className="flex flex-wrap items-center gap-1.5">
+          {entry.time_limit_minutes != null && (
+            <span className="inline-flex items-center gap-1 text-[10px] font-mono px-1.5 py-0.5 rounded border bg-amber-500/10 text-amber-400 border-amber-500/20">
+              <Clock className="w-3 h-3" />{entry.time_limit_minutes} min
+            </span>
+          )}
+          {players && (
+            <span className={`inline-flex items-center gap-1 text-[10px] font-mono px-1.5 py-0.5 rounded border ${players.style}`}>
+              <Users className="w-3 h-3" />{players.label}
+            </span>
+          )}
+          {entry.once_only === 1 && (
+            <span className="inline-flex items-center gap-1 text-[10px] font-mono px-1.5 py-0.5 rounded border bg-indigo-500/10 text-indigo-400 border-indigo-500/20">
+              One-time
+            </span>
+          )}
+          {entry.available_in_prison === 1 && (
+            <span className="inline-flex items-center gap-1 text-[10px] font-mono px-1.5 py-0.5 rounded border bg-gray-500/10 text-gray-400 border-gray-500/20">
+              <Lock className="w-3 h-3" />Prison
+            </span>
+          )}
+        </div>
+
+        {/* Right group: reward, buy-in */}
+        <div className="flex items-center gap-2 ml-auto">
+          {entry.buy_in_amount > 0 && (
+            <span className="text-[10px] font-mono text-gray-500">
+              Buy-in: <span className="text-sc-warn">{entry.buy_in_amount.toLocaleString()}</span>
+            </span>
+          )}
+          {rewardText && (
+            <span className="inline-flex items-center gap-1 text-[11px] font-mono px-2 py-0.5 rounded border bg-sc-warn/10 text-sc-warn border-sc-warn/20">
+              <Coins className="w-3 h-3" />{rewardText}
+              {entry.has_standing_bonus === 1 && <span className="text-emerald-400" title="Standing bonus available">+</span>}
+            </span>
+          )}
+          {entry.sequence_num != null && (
+            <span className="text-[10px] font-mono text-gray-600">#{entry.sequence_num}</span>
+          )}
+        </div>
+      </div>
+
+      {/* ── Zone 2: Mission Briefing ─────────────────────────── */}
+      <div className="py-3">
+        {/* Crime warnings — red alert bar */}
+        {hasCrimeWarnings && (
+          <div className="flex items-center gap-3 mb-3 px-3 py-2 rounded-lg bg-red-500/[0.07] border border-red-500/20">
+            <AlertTriangle className="w-4 h-4 text-red-400 shrink-0" />
+            <div className="flex flex-wrap items-center gap-x-4 gap-y-1 text-xs font-mono">
+              {entry.fail_if_criminal === 1 && (
+                <span className="text-red-400">Fails if CrimStat gained</span>
+              )}
+              {entry.wanted_level_min > 0 && (
+                <span className="text-red-400">Requires CrimStat {entry.wanted_level_min}+</span>
+              )}
+              {entry.wanted_level_max > 0 && entry.wanted_level_max < 99 && (
+                <span className="text-amber-400">Max CrimStat: {entry.wanted_level_max}</span>
+              )}
+            </div>
+          </div>
+        )}
+
+        {/* Linked reward (contract-specific) */}
+        {(entry.reward_vehicle_slug || entry.reward_item_uuid) && (
+          <div className="flex items-center gap-2 mb-3 px-3 py-2 rounded-lg bg-sc-accent2/[0.07] border border-sc-accent2/20">
+            <Trophy className="w-4 h-4 text-sc-accent2 shrink-0" />
+            <span className="text-xs font-mono text-gray-400">Reward:</span>
+            {entry.reward_vehicle_slug && (
+              <Link to={`/ships/${entry.reward_vehicle_slug}`} className="text-xs font-mono text-sc-accent2 hover:text-sc-accent transition-colors">{entry.reward_text}</Link>
+            )}
+            {entry.reward_item_uuid && (
+              <Link to={`/loot/${entry.reward_item_uuid}`} className="text-xs font-mono text-sc-accent2 hover:text-sc-accent transition-colors">{entry.reward_text}</Link>
+            )}
+          </div>
+        )}
+
+        {/* Description */}
+        {briefingText ? (
+          <div>
+            <p className="text-sm text-gray-300 leading-relaxed whitespace-pre-line">{displayDesc}</p>
+            {isLongDesc && (
+              <button
+                onClick={() => setDescExpanded(!descExpanded)}
+                className="text-xs text-sc-accent/70 hover:text-sc-accent mt-1 transition-colors"
+              >
+                {descExpanded ? 'Show less' : 'Show more'}
+              </button>
+            )}
+          </div>
+        ) : (
+          <p className="text-xs text-gray-600 italic">No description available</p>
+        )}
+
+        {entry.notes && (
+          <p className="text-[11px] font-mono text-amber-400/80 italic mt-2">{entry.notes}</p>
+        )}
+      </div>
+
+      {/* ── Zone 3: Mission Requirements ─────────────────────── */}
+      {hasRequirementsSection && (
+        <div className="border-t border-white/[0.04] pt-3 space-y-3">
+
+          {/* Contract requirements (delivery items) */}
+          {requirements && (
+            <div>
+              <div className="flex items-center gap-1.5 mb-1.5">
+                <Package className="w-3.5 h-3.5 text-gray-500" />
+                <span className="text-[10px] font-mono uppercase tracking-wider text-gray-500">Delivery Requirements</span>
+              </div>
+              <ul className="space-y-0.5 pl-1">
+                {requirements.map((req, i) => (
+                  <li key={i} className="flex items-center gap-2 text-xs font-mono text-gray-300">
+                    <span className="text-sc-accent2 min-w-[2ch] text-right">{req.quantity}x</span>
+                    <span>{req.item}</span>
+                  </li>
+                ))}
+              </ul>
+            </div>
+          )}
+          {entry.requirements_json === 'random' && (
+            <div className="flex items-center gap-1.5">
+              <Package className="w-3.5 h-3.5 text-gray-500" />
+              <span className="text-xs font-mono text-gray-500 italic">Requirements randomized each time</span>
+            </div>
+          )}
+
+          {/* Prerequisites (mission chain) */}
+          {hasPrereqs && (
+            <div>
+              <div className="flex items-center gap-1.5 mb-1.5">
+                <Lock className="w-3.5 h-3.5 text-amber-400/70" />
+                <span className="text-[10px] font-mono uppercase tracking-wider text-amber-400/70">
+                  Prerequisites ({prereqs.length})
+                </span>
+                {prereqs.length > 3 && (
+                  <button
+                    onClick={() => setPrereqsExpanded(!prereqsExpanded)}
+                    className="text-[10px] text-amber-400/50 hover:text-amber-400 transition-colors ml-1"
+                  >
+                    {prereqsExpanded ? 'collapse' : 'show all'}
+                  </button>
+                )}
+              </div>
+              <ol className="space-y-0.5 pl-1">
+                {(prereqs.length <= 3 || prereqsExpanded ? prereqs : prereqs.slice(0, 3)).map((p, i) => (
+                  <li key={i} className="flex items-start gap-2 text-xs">
+                    <span className="text-amber-400/50 font-mono min-w-[1.5ch] text-right shrink-0">{i + 1}.</span>
+                    <span className="text-gray-300">{p.title}</span>
+                  </li>
+                ))}
+                {prereqs.length > 3 && !prereqsExpanded && (
+                  <li className="text-[10px] text-amber-400/40 font-mono pl-5">
+                    +{prereqs.length - 3} more
+                  </li>
+                )}
+              </ol>
+            </div>
+          )}
+
+          {/* Reputation requirements */}
+          {hasRepReqs && (
+            <div>
+              <div className="flex items-center gap-1.5 mb-1.5">
+                <Star className="w-3.5 h-3.5 text-blue-400/70" />
+                <span className="text-[10px] font-mono uppercase tracking-wider text-blue-400/70">Reputation Required</span>
+              </div>
+              <ul className="space-y-1 pl-1">
+                {repReqs.map((r, i) => (
+                  <li key={i} className="text-xs text-gray-300">
+                    <span className="text-blue-400">
+                      {humanizeStandingSlug(r.standing_slug)} {humanizeComparison(r.comparison)}
+                    </span>
+                    <span className="text-gray-500"> with </span>
+                    <span className="text-gray-300">{humanizeFactionSlug(r.faction_slug)}</span>
+                    {r.scope_slug && (
+                      <span className="text-gray-600 ml-1">({humanizeScopeSlug(r.scope_slug)})</span>
+                    )}
+                  </li>
+                ))}
+              </ul>
+            </div>
+          )}
+
+          {/* Rep rewards table: success / fail / abandon */}
+          {hasRepRewards && (
+            <div>
+              <div className="flex items-center gap-1.5 mb-1.5">
+                <TrendingUp className="w-3.5 h-3.5 text-gray-500" />
+                <span className="text-[10px] font-mono uppercase tracking-wider text-gray-500">Reputation Rewards</span>
+              </div>
+              <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                {entry.rep_summary && (
+                  <div>
+                    <span className="text-[10px] font-mono uppercase tracking-wider text-emerald-400/60 block mb-1">Success</span>
+                    <RepRewardCell raw={entry.rep_summary} />
+                  </div>
+                )}
+                {entry.rep_fail && (
+                  <div>
+                    <span className="text-[10px] font-mono uppercase tracking-wider text-red-400/60 block mb-1">Fail</span>
+                    <RepRewardCell raw={entry.rep_fail} />
+                  </div>
+                )}
+                {entry.rep_abandon && (
+                  <div>
+                    <span className="text-[10px] font-mono uppercase tracking-wider text-red-400/60 block mb-1">Abandon</span>
+                    <RepRewardCell raw={entry.rep_abandon} />
+                  </div>
+                )}
+              </div>
+            </div>
+          )}
+        </div>
+      )}
+    </div>
+  )
+}
+
 // ── Unified row ─────────────────────────────────────────────────────────────
 
 function EntryRow({ entry, repFocus, isHighlighted, highlightRef, prerequisites, repRequirements }) {
   const [expanded, setExpanded] = useState(isHighlighted)
   const source = SOURCE_BADGE[entry.source] || SOURCE_BADGE.dynamic
   const reward = entry.reward_amount || 0
-  const desc = cleanDesc(entry.description)
-  const requirements = parseRequirements(entry.requirements_json)
 
   // Extract focused rep amount if filtering by rep
   let focusedRep = null
@@ -98,7 +400,7 @@ function EntryRow({ entry, repFocus, isHighlighted, highlightRef, prerequisites,
         <div className="flex-1 min-w-0">
           <span className="text-sm text-gray-200">{entry.title}</span>
           {entry.giver_display && (
-            <span className="text-[10px] text-gray-600 ml-2 font-mono hidden sm:inline">{entry.giver_display}</span>
+            <span className="text-[10px] text-gray-500 ml-2 font-mono hidden sm:inline">{entry.giver_display}</span>
           )}
         </div>
         <span className={`w-[4.5rem] text-center text-[10px] font-mono px-1.5 py-0.5 rounded border shrink-0 ${source.style}`}>
@@ -140,169 +442,7 @@ function EntryRow({ entry, repFocus, isHighlighted, highlightRef, prerequisites,
           {expanded ? <ChevronUp className="w-3.5 h-3.5 text-gray-500" /> : <ChevronDown className="w-3.5 h-3.5 text-gray-500" />}
         </span>
       </button>
-      {expanded && (() => {
-        const system = deriveSystem(entry.location_ref, entry.locality)
-        const players = playerCountLabel(entry.max_players)
-        return (
-        <div className="px-4 pb-3 space-y-2">
-          {/* Top badge row — time limit, player count, one-time, prison, system */}
-          {(entry.time_limit_minutes || players || entry.once_only || entry.available_in_prison || system) && (
-            <div className="flex flex-wrap gap-1.5">
-              {entry.time_limit_minutes != null && (
-                <span className="inline-flex items-center gap-1 text-[10px] font-mono px-1.5 py-0.5 rounded border bg-amber-500/10 text-amber-400 border-amber-500/20">
-                  <Clock className="w-3 h-3" />{entry.time_limit_minutes} min
-                </span>
-              )}
-              {players && (
-                <span className={`inline-flex items-center gap-1 text-[10px] font-mono px-1.5 py-0.5 rounded border ${players.style}`}>
-                  <Users className="w-3 h-3" />{players.label}
-                </span>
-              )}
-              {entry.once_only === 1 && (
-                <span className="inline-flex items-center gap-1 text-[10px] font-mono px-1.5 py-0.5 rounded border bg-indigo-500/10 text-indigo-400 border-indigo-500/20">
-                  One-time
-                </span>
-              )}
-              {entry.available_in_prison === 1 && (
-                <span className="inline-flex items-center gap-1 text-[10px] font-mono px-1.5 py-0.5 rounded border bg-gray-500/10 text-gray-400 border-gray-500/20">
-                  <Lock className="w-3 h-3" />Prison Mission
-                </span>
-              )}
-              {system && (
-                <span className={`inline-flex items-center gap-1 text-[10px] font-mono px-1.5 py-0.5 rounded border ${SYSTEM_BADGE_STYLES[system] || 'bg-gray-500/10 text-gray-400 border-gray-500/20'}`}>
-                  <MapPin className="w-3 h-3" />{system}
-                </span>
-              )}
-            </div>
-          )}
-
-          {/* Crime warnings */}
-          {(entry.fail_if_criminal === 1 || entry.wanted_level_min > 0) && (
-            <div className="flex flex-wrap gap-2">
-              {entry.wanted_level_min > 0 && (
-                <span className="inline-flex items-center gap-1 text-[10px] font-mono text-red-400">
-                  <AlertTriangle className="w-3 h-3" />Requires CrimStat {entry.wanted_level_min}+
-                </span>
-              )}
-              {entry.fail_if_criminal === 1 && (
-                <span className="inline-flex items-center gap-1 text-[10px] font-mono text-amber-400">
-                  <Ban className="w-3 h-3" />Fails if CrimStat gained
-                </span>
-              )}
-            </div>
-          )}
-
-          {desc ? (
-            <p className="text-xs text-gray-400 leading-relaxed whitespace-pre-line">{desc}</p>
-          ) : (
-            <p className="text-xs text-gray-600 italic">No description available</p>
-          )}
-
-          {/* Contract-specific: requirements */}
-          {requirements && (
-            <div className="space-y-1">
-              <div className="flex items-center gap-1.5">
-                <Package className="w-3 h-3 text-gray-600" />
-                <span className="text-[10px] font-mono uppercase tracking-wider text-gray-600">Requirements</span>
-              </div>
-              <ul className="space-y-0.5 pl-1">
-                {requirements.map((req, i) => (
-                  <li key={i} className="flex items-center gap-2 text-xs font-mono text-gray-300">
-                    <span className="text-sc-accent2 min-w-[2ch] text-right">{req.quantity}x</span>
-                    <span>{req.item}</span>
-                  </li>
-                ))}
-              </ul>
-            </div>
-          )}
-          {entry.requirements_json === 'random' && (
-            <div className="flex items-center gap-1.5">
-              <Package className="w-3 h-3 text-gray-600" />
-              <span className="text-xs font-mono text-gray-500 italic">Randomized each time</span>
-            </div>
-          )}
-
-          {/* Contract-specific: linked reward */}
-          {entry.reward_vehicle_slug && (
-            <div className="text-xs font-mono">
-              Reward: <Link to={`/ships/${entry.reward_vehicle_slug}`} className="text-sc-accent2 hover:text-sc-accent transition-colors">{entry.reward_text}</Link>
-            </div>
-          )}
-          {entry.reward_item_uuid && (
-            <div className="text-xs font-mono">
-              Reward: <Link to={`/loot/${entry.reward_item_uuid}`} className="text-sc-accent2 hover:text-sc-accent transition-colors">{entry.reward_text}</Link>
-            </div>
-          )}
-
-          {/* Buy-in */}
-          {entry.buy_in_amount > 0 && (
-            <div className="text-[11px] font-mono">
-              <span className="text-gray-500">Buy-in: </span>
-              <span className="text-sc-warn">{entry.buy_in_amount.toLocaleString()} aUEC</span>
-            </div>
-          )}
-
-          {/* Rep: success / fail / abandon columns */}
-          {(entry.rep_summary || entry.rep_fail || entry.rep_abandon) && (
-            <div className="flex flex-wrap gap-x-5 gap-y-1 text-[11px] font-mono">
-              {entry.rep_summary && (
-                <span>
-                  <span className="text-gray-500">Success: </span>
-                  {entry.rep_summary.split(', ').map((r, i) => (
-                    <span key={i} className={`${r.includes('+') ? 'text-emerald-400' : 'text-red-400'} ${i > 0 ? 'ml-1' : ''}`}>
-                      {r}{i < entry.rep_summary.split(', ').length - 1 ? ',' : ''}
-                    </span>
-                  ))}
-                </span>
-              )}
-              {entry.rep_fail && (
-                <span>
-                  <span className="text-gray-500">Fail: </span>
-                  <span className="text-red-400">{entry.rep_fail}</span>
-                </span>
-              )}
-              {entry.rep_abandon && (
-                <span>
-                  <span className="text-gray-500">Abandon: </span>
-                  <span className="text-red-400">{entry.rep_abandon}</span>
-                </span>
-              )}
-            </div>
-          )}
-
-          {/* Meta row */}
-          <div className="flex flex-wrap gap-x-4 gap-y-1 text-[11px] font-mono text-gray-600">
-            {entry.giver_display && <span>From: <span className="text-gray-400">{entry.giver_display}</span></span>}
-            {entry.category_display && <span>Category: <span className="text-gray-400">{entry.category_display}</span></span>}
-            {entry.sequence_num != null && <span>#{entry.sequence_num}</span>}
-          </div>
-
-          {/* Prerequisites (missions only, not contracts) */}
-          {entry.source !== 'contract' && (() => {
-            const mId = entry.mission_id
-            const prereqs = mId != null ? prerequisites?.[mId] : null
-            const repReqs = mId != null ? repRequirements?.[mId] : null
-            if (!prereqs?.length && !repReqs?.length) return null
-            return (
-              <div className="flex flex-wrap gap-1.5">
-                {prereqs?.map((p, i) => (
-                  <span key={i} className="inline-flex items-center gap-1 text-[10px] font-mono px-1.5 py-0.5 rounded border bg-amber-500/10 text-amber-400 border-amber-500/20">
-                    Requires: {p.title}
-                  </span>
-                ))}
-                {repReqs?.map((r, i) => (
-                  <span key={`rep-${i}`} className="inline-flex items-center gap-1 text-[10px] font-mono px-1.5 py-0.5 rounded border bg-blue-500/10 text-blue-400 border-blue-500/20">
-                    <Star className="w-3 h-3" />Requires: {r.standing_slug} rank with {r.scope_slug} ({r.faction_slug})
-                  </span>
-                ))}
-              </div>
-            )
-          })()}
-
-          {entry.notes && <p className="text-[10px] font-mono text-amber-400/80 italic">{entry.notes}</p>}
-        </div>
-        )
-      })()}
+      {expanded && <ExpandedSection entry={entry} prerequisites={prerequisites} repRequirements={repRequirements} />}
     </div>
   )
 }
