@@ -240,10 +240,6 @@ export function usePublicOp(code) {
   return useAPI(code ? `/ops/join/${code}` : null, { skip: !code })
 }
 
-export function useReputation(userId) {
-  return useAPI(userId ? `/users/${userId}/reputation` : null, { skip: !userId })
-}
-
 export async function updateShipVisibility(fleetEntryId, updates) {
   return patchJSON(`/vehicles/${fleetEntryId}/visibility`, updates)
 }

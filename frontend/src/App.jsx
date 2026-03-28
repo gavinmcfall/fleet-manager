@@ -1,6 +1,6 @@
 import React, { useState, useEffect, Suspense, lazy } from 'react'
 import { Routes, Route, NavLink, Navigate, useLocation, useNavigate } from 'react-router-dom'
-import { Rocket, BarChart3, Shield, Upload, RefreshCw, Database, Settings as SettingsIcon, ChevronDown, ChevronRight, ChevronLeft, History, Menu, X, LogOut, LogIn, User, Wrench, Users, Building2, FileText, Search, MapPin, Palette, ShoppingCart, Hammer, Briefcase, Star, Scale, Crosshair, BookOpen, Layers, TrendingUp, Languages, Heart, FlaskConical, SlidersHorizontal, Bookmark, Sparkles, Shirt, Zap, Thermometer, Gauge, Radar, Target, Navigation } from 'lucide-react'
+import { Rocket, BarChart3, Shield, Upload, RefreshCw, Database, Settings as SettingsIcon, ChevronDown, ChevronRight, ChevronLeft, History, Menu, X, LogOut, LogIn, User, Wrench, Users, Building2, FileText, Search, MapPin, Palette, ShoppingCart, Hammer, Briefcase, Scale, Crosshair, BookOpen, Layers, TrendingUp, Languages, Heart, FlaskConical, SlidersHorizontal, Bookmark, Sparkles, Shirt, Zap, Thermometer, Gauge, Radar, Target, Navigation } from 'lucide-react'
 import LoadingState from './components/LoadingState'
 import ErrorBoundary from './components/ErrorBoundary'
 import RequireAuth from './components/RequireAuth'
@@ -63,7 +63,6 @@ const SavedBlueprints = lazy(() => import('./pages/Crafting/SavedBlueprints'))
 const MissionDetail = lazy(() => import('./pages/MissionDetail'))
 const FactionDetail = lazy(() => import('./pages/FactionDetail'))
 const Careers = lazy(() => import('./pages/Careers'))
-const Reputation = lazy(() => import('./pages/Reputation'))
 const LawSystem = lazy(() => import('./pages/LawSystem'))
 const NPCLoadouts = lazy(() => import('./pages/NPCLoadouts'))
 const LocalizationBuilder = lazy(() => import('./pages/LocalizationBuilder'))
@@ -106,7 +105,6 @@ const referenceGroup = {
     { to: '/ships', icon: Database, label: 'Ship DB' },
     { to: '/paints', icon: Palette, label: 'Paints' },
     { to: '/careers', icon: Briefcase, label: 'Careers & Roles' },
-    { to: '/reputation', icon: Star, label: 'Reputation' },
     { to: '/law', icon: Scale, label: 'Law System' },
     {
       to: '/components',
@@ -796,7 +794,6 @@ export default function App() {
                       <Route path="/missions/:key" element={<Suspense fallback={<LoadingState fullScreen />}><MissionDetail /></Suspense>} />
                       <Route path="/crafting/:id" element={<Suspense fallback={<LoadingState fullScreen />}><BlueprintDetail /></Suspense>} />
                       <Route path="/careers" element={<Careers />} />
-                      <Route path="/reputation" element={<Reputation />} />
                       <Route path="/law" element={<LawSystem />} />
                       <Route path="/npc-loadouts" element={<NPCLoadouts />} />
                       <Route path="/components" element={<Navigate to="/components/weapons" replace />} />
