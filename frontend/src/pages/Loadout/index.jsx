@@ -370,8 +370,8 @@ export default function Loadout() {
         </div>
       </div>}
 
-      {/* Override-aware stat delta panel — shows when user has customized components */}
-      {hasComponents && Object.keys(overrides).length > 0 && (
+      {/* Stats panel — always visible, shows deltas when overrides active */}
+      {hasComponents && (
         <StatsPanel stockComponents={stockComponents} overrides={overrides} horizontal />
       )}
 
