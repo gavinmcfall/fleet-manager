@@ -2,6 +2,25 @@
 
 A Star Citizen companion web app — fleet management, hangar sync, ship database, insurance tracking, loot data, and game reference. Live at [scbridge.app](https://scbridge.app).
 
+## Downloads
+
+### Browser Extension — SC Bridge Sync
+
+[![Chrome](https://img.shields.io/badge/Chrome-4285F4?style=for-the-badge&logo=googlechrome&logoColor=white)](https://github.com/SC-Bridge/sc-bridge-sync/releases/latest/download/sc-bridge-sync-chrome.zip)
+[![Firefox](https://img.shields.io/badge/Firefox-FF7139?style=for-the-badge&logo=firefox&logoColor=white)](https://github.com/SC-Bridge/sc-bridge-sync/releases/latest/download/sc-bridge-sync-firefox.zip)
+[![Edge](https://img.shields.io/badge/Edge-0078D7?style=for-the-badge&logo=microsoftedge&logoColor=white)](https://github.com/SC-Bridge/sc-bridge-sync/releases/latest/download/sc-bridge-sync-edge.zip)
+[![Opera](https://img.shields.io/badge/Opera-FF1B2D?style=for-the-badge&logo=opera&logoColor=white)](https://github.com/SC-Bridge/sc-bridge-sync/releases/latest/download/sc-bridge-sync-opera.zip)
+
+### SC Bridge HUD — In-Game Overlay
+
+[![Download Portable EXE](https://img.shields.io/badge/Download-Portable%20EXE-2ea44f?style=for-the-badge&logo=windows)](https://github.com/SC-Bridge/SC-HUD/releases/latest/download/SCBridgeHUD-portable.exe)
+[![Download MSI Installer](https://img.shields.io/badge/Download-MSI%20Installer-0078d4?style=for-the-badge&logo=windows)](https://github.com/SC-Bridge/SC-HUD/releases/latest/download/SCBridgeHUD-setup.msi)
+
+### SC Bridge Companion — Desktop App
+
+[![Download Portable EXE](https://img.shields.io/badge/Download-Portable%20EXE-2ea44f?style=for-the-badge&logo=windows)](https://github.com/SC-Bridge/sc-companion/releases/latest/download/SCBridgeCompanion-portable.exe)
+[![Download MSI Installer](https://img.shields.io/badge/Download-MSI%20Installer-0078d4?style=for-the-badge&logo=windows)](https://github.com/SC-Bridge/sc-companion/releases/latest/download/SCBridgeCompanion-setup.msi)
+
 ![Dashboard](screenshots/dashboard.png)
 
 ## Features
