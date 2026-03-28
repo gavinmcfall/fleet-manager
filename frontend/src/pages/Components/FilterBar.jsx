@@ -39,29 +39,31 @@ function DimensionRow({ dimension, items, includes, excludes, onToggle }) {
   const excSet = excludes?.[key] || new Set()
 
   return (
-    <div className="flex items-center gap-2 flex-wrap">
-      <span className="text-xs font-display uppercase tracking-wider text-sc-accent2 whitespace-nowrap shrink-0">{label}</span>
-      {orderedValues.map(({ value, label: pillLabel, count }) => {
-        const isIncluded = incSet.has(value)
-        const isExcluded = excSet.has(value)
-        let pillStyle
-        if (isExcluded) {
-          pillStyle = 'bg-red-500/15 text-red-400 border-red-500/30 line-through'
-        } else if (isIncluded) {
-          pillStyle = 'bg-sc-accent/15 text-sc-accent border-sc-accent/30'
-        } else {
-          pillStyle = 'bg-sc-panel text-gray-400 border-sc-border/60 hover:border-sc-accent2/40 hover:text-gray-200'
-        }
-        return (
-          <button
-            key={value}
-            onClick={(e) => onToggle(key, value, e)}
-            className={`px-2.5 py-1 rounded text-xs font-medium transition-all duration-150 border whitespace-nowrap cursor-pointer ${pillStyle}`}
-          >
-            {pillLabel} <span className="font-mono opacity-60">{count}</span>
-          </button>
-        )
-      })}
+    <div className="grid grid-cols-[auto_1fr] gap-x-3 gap-y-1 items-start">
+      <span className="text-xs font-display uppercase tracking-wider text-sc-accent2 whitespace-nowrap pt-1">{label}</span>
+      <div className="flex flex-wrap gap-1.5">
+        {orderedValues.map(({ value, label: pillLabel, count }) => {
+          const isIncluded = incSet.has(value)
+          const isExcluded = excSet.has(value)
+          let pillStyle
+          if (isExcluded) {
+            pillStyle = 'bg-red-500/15 text-red-400 border-red-500/30 line-through'
+          } else if (isIncluded) {
+            pillStyle = 'bg-sc-accent/15 text-sc-accent border-sc-accent/30'
+          } else {
+            pillStyle = 'bg-sc-panel text-gray-400 border-sc-border/60 hover:border-sc-accent2/40 hover:text-gray-200'
+          }
+          return (
+            <button
+              key={value}
+              onClick={(e) => onToggle(key, value, e)}
+              className={`px-2.5 py-1 rounded text-xs font-medium transition-all duration-150 border whitespace-nowrap cursor-pointer ${pillStyle}`}
+            >
+              {pillLabel} <span className="font-mono opacity-60">{count}</span>
+            </button>
+          )
+        })}
+      </div>
     </div>
   )
 }
