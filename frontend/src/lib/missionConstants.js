@@ -265,8 +265,8 @@ export function humanizeScopeSlug(slug) {
 /** Humanize a standing slug: known patterns, then fallback split + title-case */
 export function humanizeStandingSlug(slug) {
   if (!slug) return ''
-  // Handle affinity patterns: "affinity_enemy_005" → "Not Hostile"
-  const affinityMatch = slug.match(/^affinity_(enemy|friend|neutral|ally)_?(\d*)$/i)
+  // Handle affinity patterns: "affinity_enemy_-005" → "Not Hostile"
+  const affinityMatch = slug.match(/^affinity_(enemy|friend|neutral|ally)_?(-?\d*)$/i)
   if (affinityMatch) {
     const type = affinityMatch[1].toLowerCase()
     if (type === 'enemy') return 'Not Hostile'
