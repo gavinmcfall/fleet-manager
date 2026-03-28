@@ -390,6 +390,7 @@ export function humanizeLocationName(raw) {
 
 // Rock tier display labels and colors
 export const ROCK_TIER_INFO = {
+  Ground:    { label: 'Ground',    color: 'text-cyan-400',   bg: 'bg-cyan-500/10',   border: 'border-cyan-500/20' },
   Common:    { label: 'Common',    color: 'text-gray-400',   bg: 'bg-gray-500/10',   border: 'border-gray-500/20' },
   Uncommon:  { label: 'Uncommon',  color: 'text-green-400',  bg: 'bg-green-500/10',  border: 'border-green-500/20' },
   Rare:      { label: 'Rare',      color: 'text-blue-400',   bg: 'bg-blue-500/10',   border: 'border-blue-500/20' },

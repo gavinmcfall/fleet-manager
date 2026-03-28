@@ -1051,19 +1051,39 @@ export function gamedataRoutes<E extends HonoEnv>() {
         }
       }
 
-      // Fetch resource location data (where each crafting resource can be mined)
-      const [depositResult, qualityResult] = await Promise.all([
+      // Fetch resource location data using separate queries for compositions and deposits.
+      // Compositions may be updated in new versions (e.g. 4.7 added ouratite/aslarite)
+      // while deposit-to-location mappings may only exist for older versions.
+      // Matching by class_name lets new compositions inherit location data.
+      const classNameFilters = `
+        AND rc.class_name NOT LIKE '%test%'
+        AND rc.class_name NOT LIKE 'FPS_Composition_%'
+        AND rc.class_name NOT LIKE 'GroundVehicle_%'
+        AND rc.class_name NOT LIKE 'TestCompositionPreset%'
+        AND rc.class_name NOT LIKE 'TestFPSDeposit%'`
+
+      const [compositionResult, depositLocResult, qualityResult] = await Promise.all([
+        // Latest compositions per class_name (for element data)
         db
           .prepare(
-            `SELECT rc.class_name, rc.composition_json,
-                    ml.name as location_name, ml.system, ml.location_type,
-                    mld.group_probability, mld.relative_probability
+            `SELECT rc.class_name, rc.composition_json
+             FROM rock_compositions rc
+             WHERE rc.game_version_id <= ${versionSub(versionId)}
+               ${classNameFilters}
+             ORDER BY rc.game_version_id DESC`
+          )
+          .all(),
+        // Deposits with location data (may use earlier version's deposit links)
+        db
+          .prepare(
+            `SELECT rc.class_name,
+                    ml.name as location_name, ml.system, ml.location_type
              FROM mining_location_deposits mld
              JOIN rock_compositions rc ON rc.id = mld.rock_composition_id
              JOIN mining_locations ml ON ml.id = mld.mining_location_id
              WHERE rc.game_version_id <= ${versionSub(versionId)}
                AND ml.game_version_id <= ${versionSub(versionId)}
-               AND rc.class_name LIKE 'Asteroid_%' AND rc.class_name NOT LIKE '%test%'`
+               ${classNameFilters}`
           )
           .all(),
         db
@@ -1075,6 +1095,38 @@ export function gamedataRoutes<E extends HonoEnv>() {
           )
           .all(),
       ])
+
+      // Deduplicate compositions: keep latest version per class_name (ordered DESC above)
+      const latestCompositions = new Map<
+        string,
+        string
+      >()
+      for (const comp of compositionResult.results) {
+        const cn = comp.class_name as string
+        if (!latestCompositions.has(cn)) {
+          latestCompositions.set(cn, comp.composition_json as string)
+        }
+      }
+
+      // Build location map: class_name → unique locations
+      const locationsByClass = new Map<
+        string,
+        Array<{ location_name: string; system: string; location_type: string }>
+      >()
+      for (const dep of depositLocResult.results) {
+        const cn = dep.class_name as string
+        if (!locationsByClass.has(cn)) locationsByClass.set(cn, [])
+        const locs = locationsByClass.get(cn)!
+        const locName = dep.location_name as string
+        // Deduplicate by location name within a class_name
+        if (!locs.some((l) => l.location_name === locName)) {
+          locs.push({
+            location_name: locName,
+            system: dep.system as string,
+            location_type: dep.location_type as string,
+          })
+        }
+      }
 
       // Build quality distribution lookup: { "Common_Default": {...}, "Common_Pyro": {...} }
       const qualityMap = new Map<string, Record<string, unknown>>()
@@ -1099,8 +1151,12 @@ export function gamedataRoutes<E extends HonoEnv>() {
       const elementToResource = (element: string): string | null => {
         // Strip _ore / _raw suffix
         const base = element.replace(/_(ore|raw)$/, "")
-        // Handle British → American spelling
-        const name = base === "aluminium" ? "aluminum" : base
+        // Handle naming mismatches between mining elements and crafting resources
+        const nameMap: Record<string, string> = {
+          aluminium: "aluminum",
+          sileron: "stileron",
+        }
+        const name = nameMap[base] ?? base
         // Capitalize first letter
         const capitalized = name.charAt(0).toUpperCase() + name.slice(1)
         // Verify it's a known crafting resource
@@ -1121,20 +1177,25 @@ export function gamedataRoutes<E extends HonoEnv>() {
       }
       const resourceLocations: Record<string, LocationEntry[]> = {}
 
-      for (const dep of depositResult.results) {
-        const className = dep.class_name as string
-        const compositionJson = dep.composition_json as string
+      // Iterate latest compositions and match to locations by class_name
+      for (const [className, compositionJson] of latestCompositions) {
         if (!compositionJson) continue
 
         // Extract rock tier from class_name
         // 4.6 format: "CommonShipMineables_Default" → "Common"
         // 4.7 format: "Asteroid_CType_Aluminium" → use Common as default
+        // Ground deposits: "ShaleDeposit_Iron" → "Ground"
         const tierMatch = className.match(
           /^(Common|Uncommon|Rare|Epic|Legendary)ShipMineables/
         )
         const isAsteroid = /^Asteroid_/.test(className)
-        if (!tierMatch && !isAsteroid) continue
-        const tier = tierMatch ? tierMatch[1] : "Common"
+        const isGroundDeposit = /Deposit/.test(className)
+        if (!tierMatch && !isAsteroid && !isGroundDeposit) continue
+        const tier = tierMatch
+          ? tierMatch[1]
+          : isGroundDeposit
+            ? "Ground"
+            : "Common"
 
         // Parse composition to find elements
         let elements: {
@@ -1149,37 +1210,41 @@ export function gamedataRoutes<E extends HonoEnv>() {
           continue
         }
 
-        // Get quality distribution for this tier + location system
-        const system = dep.system as string
-        const qualityKey =
-          system === "Pyro" ? `${tier}_Pyro` : `${tier}_Default`
-        const quality = qualityMap.get(qualityKey) ?? null
+        // Get locations for this class_name (may come from an earlier version)
+        const locations = locationsByClass.get(className)
+        if (!locations || locations.length === 0) continue
 
-        for (const el of elements) {
-          const resourceName = elementToResource(el.element)
-          if (!resourceName) continue
+        for (const loc of locations) {
+          // Get quality distribution for this tier + location system
+          const qualityKey =
+            loc.system === "Pyro" ? `${tier}_Pyro` : `${tier}_Default`
+          const quality = qualityMap.get(qualityKey) ?? null
 
-          if (!resourceLocations[resourceName])
-            resourceLocations[resourceName] = []
+          for (const el of elements) {
+            const resourceName = elementToResource(el.element)
+            if (!resourceName) continue
 
-          // Deduplicate: same resource + location + tier
-          const locName = dep.location_name as string
-          const existing = resourceLocations[resourceName].find(
-            (e) =>
-              e.location === locName &&
-              e.rock_tier === tier &&
-              e.element_pct.min === el.minPct &&
-              e.element_pct.max === el.maxPct
-          )
-          if (!existing) {
-            resourceLocations[resourceName].push({
-              location: locName,
-              system,
-              type: dep.location_type as string,
-              rock_tier: tier,
-              element_pct: { min: el.minPct, max: el.maxPct },
-              quality,
-            })
+            if (!resourceLocations[resourceName])
+              resourceLocations[resourceName] = []
+
+            // Deduplicate: same resource + location + tier + element_pct
+            const existing = resourceLocations[resourceName].find(
+              (e) =>
+                e.location === loc.location_name &&
+                e.rock_tier === tier &&
+                e.element_pct.min === el.minPct &&
+                e.element_pct.max === el.maxPct
+            )
+            if (!existing) {
+              resourceLocations[resourceName].push({
+                location: loc.location_name,
+                system: loc.system,
+                type: loc.location_type,
+                rock_tier: tier,
+                element_pct: { min: el.minPct, max: el.maxPct },
+                quality,
+              })
+            }
           }
         }
       }

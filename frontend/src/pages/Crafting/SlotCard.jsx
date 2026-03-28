@@ -74,7 +74,7 @@ function ResourceLocations({ locations }) {
     }
   }
 
-  const tierOrder = { Common: 0, Uncommon: 1, Rare: 2, Epic: 3, Legendary: 4 }
+  const tierOrder = { Ground: -1, Common: 0, Uncommon: 1, Rare: 2, Epic: 3, Legendary: 4 }
 
   // Pre-compute quality bands for sorting
   const locsWithBands = useMemo(() =>
