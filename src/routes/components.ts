@@ -49,6 +49,8 @@ export function componentRoutes() {
                   vc.qed_range, vc.qed_strength,
                   vc.ammo_count, vc.missile_type, vc.lock_time, vc.tracking_signal,
                   vc.damage, vc.blast_radius, vc.speed, vc.lock_range,
+                  vc.em_signature, vc.mass, vc.hp, vc.overheat_temperature,
+                  vc.base_heat_generation, vc.distortion_max,
                   m.name AS manufacturer_name, m.code AS manufacturer_code
            FROM vehicle_components vc
            ${deltaVersionJoin('vehicle_components', 'vc', 'uuid', versionId)}
