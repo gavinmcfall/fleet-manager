@@ -10,7 +10,6 @@ import {
   saveLocalizationShipOrder,
   useFleet,
   useShips,
-  useLocalizationPacks,
 } from '../../hooks/useAPI'
 import { LABEL_CATEGORIES, CATEGORY_FIELDS } from './constants'
 import FleetOrderSection from './FleetOrderSection'
@@ -51,8 +50,6 @@ export default function LocalizationBuilder() {
   const { data: shipOrder, loading: orderLoading, refetch: refetchOrder } = useLocalizationShipOrder()
   const { data: fleet } = useFleet()
   const { data: allShips } = useShips()
-  const { data: packsData } = useLocalizationPacks()
-
   const [searchParams, setSearchParams] = useSearchParams()
   const [localConfig, setLocalConfig] = useState(null)
   const [orderedShips, setOrderedShips] = useState([])
@@ -64,7 +61,6 @@ export default function LocalizationBuilder() {
 
   const section = searchParams.get('section') || 'fleet'
   const config = localConfig || serverConfig || {}
-  const packs = packsData?.packs || []
 
   const setSection = useCallback((s) => {
     setSearchParams(prev => {
@@ -110,15 +106,6 @@ export default function LocalizationBuilder() {
     const formats = { ...(config.categoryFormats || {}), [dbKey]: fmt }
     updateConfig({ categoryFormats: formats })
   }
-
-  // ── Pack toggle ───────────────────────────────────────────────────
-  const togglePack = useCallback((packName) => {
-    const current = config.enabledPacks || []
-    const next = current.includes(packName)
-      ? current.filter(n => n !== packName)
-      : [...current, packName]
-    updateConfig({ enabledPacks: next })
-  }, [config, serverConfig])
 
   // ── Ship order helpers ────────────────────────────────────────────
   const renumber = (list) => list.map((s, i) => ({ ...s, sortPosition: i + 1 }))
@@ -227,8 +214,8 @@ export default function LocalizationBuilder() {
 
   // ── Stats ─────────────────────────────────────────────────────────
   const enabledLabelCount = LABEL_CATEGORIES.filter(c => config[c.key]).length
-  const enabledPackCount = (config.enabledPacks || []).length
-  const hasAnyEnabled = config.asopEnabled || enabledLabelCount > 0 || enabledPackCount > 0
+  const enabledEnhancementCount = [config.enhanceContrabandWarnings, config.enhanceMaterialNames, config.enhanceBlueprintPools].filter(Boolean).length
+  const hasAnyEnabled = config.asopEnabled || enabledLabelCount > 0 || enabledEnhancementCount > 0
 
   if (configLoading) {
     return <div className="flex items-center justify-center py-20"><Loader className="w-5 h-5 animate-spin text-sc-accent" /></div>
@@ -276,7 +263,7 @@ export default function LocalizationBuilder() {
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
         <StatCard icon={Rocket} label="ASOP Ships" value={config.asopEnabled ? orderedShips.length : 'Off'} color={config.asopEnabled ? 'text-sc-accent' : 'text-gray-500'} />
         <StatCard icon={Tags} label="Label Categories" value={`${enabledLabelCount} / ${LABEL_CATEGORIES.length}`} color={enabledLabelCount > 0 ? 'text-sc-accent' : 'text-gray-500'} />
-        <StatCard icon={Sparkles} label="Enhancements" value={`${enabledPackCount} active`} color={enabledPackCount > 0 ? 'text-purple-400' : 'text-gray-500'} />
+        <StatCard icon={Sparkles} label="Enhancements" value={`${enabledEnhancementCount} / 3`} color={enabledEnhancementCount > 0 ? 'text-purple-400' : 'text-gray-500'} />
         <StatCard icon={Download} label="Ready" value={hasAnyEnabled ? 'Yes' : 'No features enabled'} color={hasAnyEnabled ? 'text-emerald-400' : 'text-gray-500'} />
       </div>
 
@@ -290,8 +277,8 @@ export default function LocalizationBuilder() {
               {s.key === 'labels' && enabledLabelCount > 0 && (
                 <span className="opacity-60">{enabledLabelCount}</span>
               )}
-              {s.key === 'enhancements' && enabledPackCount > 0 && (
-                <span className="opacity-60">{enabledPackCount}</span>
+              {s.key === 'enhancements' && enabledEnhancementCount > 0 && (
+                <span className="opacity-60">{enabledEnhancementCount}</span>
               )}
               {s.key === 'fleet' && config.asopEnabled && orderedShips.length > 0 && (
                 <span className="opacity-60">{orderedShips.length}</span>
@@ -329,9 +316,8 @@ export default function LocalizationBuilder() {
 
       {section === 'enhancements' && (
         <EnhancementsSection
-          enabledPacks={config.enabledPacks || []}
-          availablePacks={packs}
-          onToggle={togglePack}
+          config={config}
+          onUpdateConfig={updateConfig}
         />
       )}
 

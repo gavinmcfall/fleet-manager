@@ -12,6 +12,8 @@ import {
   configFromRow,
   generateAsopOverrides,
   generateItemLabels,
+  generateContrabandWarnings,
+  generateMaterialShortNames,
   parseIniOverrides,
   resolveCategoryFormat,
 } from "../lib/localization";
@@ -58,6 +60,9 @@ export function localizationRoutes() {
           format: z.enum(["suffix", "prefix"]),
         })).optional(),
         enabledPacks: z.array(z.string().max(100)).max(50).optional(),
+        enhanceContrabandWarnings: z.boolean().optional(),
+        enhanceMaterialNames: z.boolean().optional(),
+        enhanceBlueprintPools: z.boolean().optional(),
       }),
     ),
     async (c) => {
@@ -80,8 +85,10 @@ export function localizationRoutes() {
             labels_vehicle_components, labels_fps_weapons, labels_fps_armour,
             labels_fps_helmets, labels_fps_attachments, labels_fps_utilities,
             labels_consumables, labels_ship_missiles, label_format,
-            category_formats_json, enabled_packs_json, updated_at
-          ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, datetime('now'))
+            category_formats_json, enabled_packs_json,
+            enhance_contraband_warnings, enhance_material_names, enhance_blueprint_pools,
+            updated_at
+          ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, datetime('now'))
           ON CONFLICT(user_id) DO UPDATE SET
             asop_enabled = excluded.asop_enabled,
             labels_vehicle_components = excluded.labels_vehicle_components,
@@ -95,6 +102,9 @@ export function localizationRoutes() {
             label_format = excluded.label_format,
             category_formats_json = COALESCE(excluded.category_formats_json, user_localization_configs.category_formats_json),
             enabled_packs_json = COALESCE(excluded.enabled_packs_json, user_localization_configs.enabled_packs_json),
+            enhance_contraband_warnings = excluded.enhance_contraband_warnings,
+            enhance_material_names = excluded.enhance_material_names,
+            enhance_blueprint_pools = excluded.enhance_blueprint_pools,
             updated_at = excluded.updated_at`,
         )
         .bind(
@@ -111,6 +121,9 @@ export function localizationRoutes() {
           body.labelFormat ?? "suffix",
           categoryFormatsJson,
           enabledPacksJson,
+          body.enhanceContrabandWarnings ? 1 : 0,
+          body.enhanceMaterialNames ? 1 : 0,
+          body.enhanceBlueprintPools ? 1 : 0,
         )
         .run();
 
@@ -522,6 +535,64 @@ async function buildOverrides(
     const catFormat = resolveCategoryFormat(config, cat.table);
     overrides.push(...generateItemLabels(itemRows, catFormat, validKeys));
   }
+
+  // ── Enhancements ──────────────────────────────────────────────────
+
+  // Contraband warnings: prefix illegal commodity names with [!]
+  if (config.enhanceContrabandWarnings) {
+    const rows = await db
+      .prepare(
+        `SELECT class_name, name FROM trade_commodities
+         WHERE category IN ('vice', 'counterfeit')
+         AND game_version_id = ?
+         AND class_name IS NOT NULL`,
+      )
+      .bind(versionId)
+      .all<{ class_name: string; name: string }>();
+
+    overrides.push(
+      ...generateContrabandWarnings(
+        rows.results.map((r) => ({ className: r.class_name, name: r.name })),
+        validKeys,
+      ),
+    );
+  }
+
+  // Material name shortening: shorten verbose mining material names
+  if (config.enhanceMaterialNames) {
+    // Query both trade commodities (minerals/metals) and mineable elements
+    const tradeRows = await db
+      .prepare(
+        `SELECT class_name, name FROM trade_commodities
+         WHERE category IN ('minerals', 'metals', 'mixedmining')
+         AND game_version_id = ?
+         AND class_name IS NOT NULL`,
+      )
+      .bind(versionId)
+      .all<{ class_name: string; name: string }>();
+
+    const mineableRows = await db
+      .prepare(
+        `SELECT class_name, name FROM mineable_elements
+         WHERE game_version_id = ?
+         AND class_name IS NOT NULL`,
+      )
+      .bind(versionId)
+      .all<{ class_name: string; name: string }>();
+
+    const allMaterialRows = [
+      ...tradeRows.results.map((r) => ({ className: r.class_name, name: r.name })),
+      ...mineableRows.results.map((r) => ({ className: r.class_name, name: r.name })),
+    ];
+
+    overrides.push(...generateMaterialShortNames(allMaterialRows, validKeys));
+  }
+
+  // Blueprint pools: append blueprint reward lists to contract descriptions
+  // (This enhancement works differently — it modifies description values,
+  //  not item names. It needs access to the base content to append to existing text.
+  //  For now, we skip it in buildOverrides and handle it in the download endpoint
+  //  where we have access to the base file content.)
 
   return overrides;
 }

@@ -196,6 +196,118 @@ export function generateItemLabels(
 }
 
 // ---------------------------------------------------------------------------
+// Enhancements — server-generated overrides from our own data
+// ---------------------------------------------------------------------------
+
+/** Contraband warnings: prefix illegal commodity names with [!] */
+export function generateContrabandWarnings(
+  rows: Array<{ className: string; name: string }>,
+  validKeys?: Set<string>,
+): LabelOverride[] {
+  const overrides: LabelOverride[] = [];
+  for (const row of rows) {
+    if (!row.className) continue;
+    const key = `item_Name${row.className}`;
+    if (validKeys && !validKeys.has(key)) continue;
+    overrides.push({
+      key,
+      value: `[!] ${row.name}`,
+      original: row.name,
+    });
+  }
+  return overrides;
+}
+
+/** Material name shortening map — long mining names → short versions */
+const MATERIAL_SHORT_NAMES: Record<string, string> = {
+  Hephaestanite: "Heph",
+  Quantanium: "Quant",
+  Taranite: "Tara",
+  Bexalite: "Bex",
+  Laranite: "Lara",
+  Agricium: "Agri",
+  Titanium: "Ti",
+  Aluminium: "Al",
+  Tungsten: "W",
+  Corundum: "Corun",
+  Lindinium: "Lind",
+  Stileron: "Stil",
+  Hadanite: "Had",
+  Aphorite: "Aph",
+  Dolivine: "Dol",
+};
+
+/** Shorten material/mineable element names */
+export function generateMaterialShortNames(
+  rows: Array<{ className: string; name: string }>,
+  validKeys?: Set<string>,
+): LabelOverride[] {
+  const overrides: LabelOverride[] = [];
+  for (const row of rows) {
+    if (!row.className) continue;
+    // Find a matching short name
+    let shortened: string | null = null;
+    for (const [long, short] of Object.entries(MATERIAL_SHORT_NAMES)) {
+      if (row.name.startsWith(long)) {
+        shortened = row.name.replace(long, short);
+        break;
+      }
+    }
+    if (!shortened) continue;
+
+    const key = `item_Name${row.className}`;
+    if (validKeys && !validKeys.has(key)) continue;
+    overrides.push({
+      key,
+      value: shortened,
+      original: row.name,
+    });
+  }
+  return overrides;
+}
+
+/**
+ * Generate blueprint pool text for contract descriptions.
+ * Returns overrides that append blueprint lists to description strings.
+ */
+export function generateBlueprintPoolOverrides(
+  contracts: Array<{
+    debugName: string;
+    blueprintNames: string[];
+  }>,
+  baseContent: Map<string, string>,
+): LabelOverride[] {
+  const overrides: LabelOverride[] = [];
+
+  for (const contract of contracts) {
+    if (contract.blueprintNames.length === 0) continue;
+
+    // Try common description key patterns
+    const descKeys = [
+      `${contract.debugName}_desc`,
+      `${contract.debugName}_Desc`,
+    ];
+
+    for (const key of descKeys) {
+      const existing = baseContent.get(key);
+      if (existing === undefined) continue;
+
+      const bpList = contract.blueprintNames.map((n) => `- ${n}`).join("\\n");
+      const appended = `${existing}\\n\\n<EM4>Potential Blueprints</EM4>\\n${bpList}`;
+
+      overrides.push({
+        key,
+        value: appended,
+        original: existing,
+      });
+      break; // Only match first key variant
+    }
+  }
+
+  return overrides;
+}
+
+// ---------------------------------------------------------------------------
 // Merge engine
 // ---------------------------------------------------------------------------
 
@@ -268,6 +380,9 @@ export interface LocalizationConfig {
   labelFormat: LabelFormat;
   categoryFormats: CategoryFormats;
   enabledPacks: string[];
+  enhanceContrabandWarnings: boolean;
+  enhanceMaterialNames: boolean;
+  enhanceBlueprintPools: boolean;
 }
 
 export const DEFAULT_CONFIG: LocalizationConfig = {
@@ -283,6 +398,9 @@ export const DEFAULT_CONFIG: LocalizationConfig = {
   labelFormat: "suffix",
   categoryFormats: {},
   enabledPacks: [],
+  enhanceContrabandWarnings: false,
+  enhanceMaterialNames: false,
+  enhanceBlueprintPools: false,
 };
 
 export function configFromRow(row: Record<string, unknown>): LocalizationConfig {
@@ -317,6 +435,9 @@ export function configFromRow(row: Record<string, unknown>): LocalizationConfig 
     labelFormat: (row.label_format as LabelFormat) || "suffix",
     categoryFormats,
     enabledPacks,
+    enhanceContrabandWarnings: !!row.enhance_contraband_warnings,
+    enhanceMaterialNames: !!row.enhance_material_names,
+    enhanceBlueprintPools: !!row.enhance_blueprint_pools,
   };
 }
 
