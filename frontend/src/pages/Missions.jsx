@@ -334,11 +334,17 @@ function ExpandedSection({ entry, prerequisites, repRequirements }) {
                   if (!fmt) return null
                   return (
                     <li key={i} className="text-xs text-gray-300">
-                      <span className="text-blue-400">{fmt.standing}</span>
-                      <span className="text-gray-500"> {fmt.cmp} with </span>
-                      <span className="font-medium text-gray-200">{fmt.faction}</span>
-                      {fmt.scope && (
-                        <span className="text-gray-600 ml-1">({fmt.scope})</span>
+                      {fmt.label ? (
+                        <span className="text-blue-400">{fmt.label}</span>
+                      ) : (
+                        <>
+                          <span className="text-blue-400">{fmt.standing}</span>
+                          <span className="text-gray-500"> {fmt.cmp} with </span>
+                          <span className="font-medium text-gray-200">{fmt.faction}</span>
+                          {fmt.scope && (
+                            <span className="text-gray-600 ml-1">({fmt.scope})</span>
+                          )}
+                        </>
                       )}
                     </li>
                   )

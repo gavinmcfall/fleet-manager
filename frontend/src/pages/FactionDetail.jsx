@@ -401,8 +401,7 @@ function MissionDetailPanel({ mission, type, onBack, prerequisites, repRequireme
                   if (!fmt) return null
                   return (
                     <span key={i} className="text-[10px] px-2 py-0.5 rounded bg-blue-500/10 text-blue-400 border border-blue-500/20">
-                      {fmt.standing} {fmt.cmp} with <span className="font-medium text-blue-300">{fmt.faction}</span>
-                      {fmt.scope ? ` (${fmt.scope})` : ''}
+                      {fmt.label || (<>{fmt.standing} {fmt.cmp} with <span className="font-medium text-blue-300">{fmt.faction}</span>{fmt.scope ? ` (${fmt.scope})` : ''}</>)}
                     </span>
                   )
                 })}

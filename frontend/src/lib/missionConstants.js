@@ -320,12 +320,15 @@ export function formatRepRequirement(r) {
   const faction = humanizeFactionSlug(r.faction_slug)
   const scope = humanizeScopeSlug(r.scope_slug)
   const cmp = humanizeComparison(r.comparison)
-  // For affinity scope, don't repeat it — it's the relationship itself
+  // For affinity scope: express as a simple relationship statement
+  // "Not Hostile" + "above" + "Eckhart Security" → "Not hostile with Eckhart Security"
+  // "Friendly" + "or higher" + "BHG" → "Friendly with BHG"
   const isAffinity = r.scope_slug === 'affinity' || r.standing_slug?.startsWith('affinity_')
   if (isAffinity) {
-    return { standing, cmp, faction, scope: null }
+    return { label: `${standing} with ${faction}`, standing: null, cmp: null, faction: null, scope: null }
   }
-  return { standing, cmp, faction, scope }
+  // Career scopes: "Agent or higher with BHG (Bounty)"
+  return { label: null, standing, cmp, faction, scope }
 }
 
 // ── Description cleanup ────────────────────────────────────────────────────
