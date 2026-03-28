@@ -27,11 +27,11 @@ export function getTypeConfig(slug) {
 
 // Full column definitions per type — extends PICKER_COLUMNS with all stat columns
 // Each column: key, label, format?, align?, width?, higherIsBetter? (for compare)
-const NAME_COL    = { key: 'name', label: 'Name', align: 'left', width: 'min-w-44' }
-const MFR_COL     = { key: 'manufacturer_name', label: 'Manufacturer', align: 'left', width: 'min-w-28' }
-const SIZE_COL    = { key: 'size', label: 'Size', width: 'w-12' }
-const GRADE_COL   = { key: 'grade', label: 'Grade', width: 'w-12' }
-const CLASS_COL   = { key: 'class', label: 'Class', width: 'w-14' }
+const NAME_COL    = { key: 'name', label: 'Name', align: 'left', width: 'min-w-56' }
+const MFR_COL     = { key: 'manufacturer_name', label: 'Manufacturer', align: 'left', width: 'min-w-48' }
+const SIZE_COL    = { key: 'size', label: 'Size', width: 'w-14' }
+const GRADE_COL   = { key: 'grade', label: 'Grade', width: 'w-14' }
+const CLASS_COL   = { key: 'class', label: 'Class', width: 'w-16' }
 
 export const COLUMNS = {
   weapon: [

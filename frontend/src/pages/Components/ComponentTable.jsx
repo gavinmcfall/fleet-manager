@@ -88,7 +88,7 @@ export default function ComponentTable({
   return (
     <div className="panel overflow-hidden">
       <div className="overflow-x-auto scrollbar-thin">
-        <table className="w-full" style={{ minWidth: `${orderedCols.length * 110 + 60}px` }}>
+        <table className="w-full" style={{ minWidth: `${orderedCols.length * 120 + 200}px` }}>
           <thead className="sticky top-0 z-20">
             <tr className="bg-sc-panel border-b border-sc-border">
               <th className="w-12 px-3 py-3 text-center">
