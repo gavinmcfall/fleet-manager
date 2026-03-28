@@ -548,6 +548,22 @@ export function importRoutes() {
           .bind(userID)
           .run();
       }
+
+      // Auto-set user.image from RSI avatar if user has no avatar yet
+      if (acct.avatar_url) {
+        const currentUser = await db
+          .prepare("SELECT image FROM user WHERE id = ?")
+          .bind(userID)
+          .first<{ image: string | null }>();
+        if (!currentUser?.image) {
+          await db
+            .prepare("UPDATE user SET image = ? WHERE id = ?")
+            .bind(acct.avatar_url, userID)
+            .run();
+        }
+      }
+    } else {
+      console.warn(`[hangar-sync] No account data in payload for user=${userID}`);
     }
 
     // --- Buy-back pledges: insert-then-swap ---
