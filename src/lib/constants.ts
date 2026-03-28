@@ -107,7 +107,7 @@ export const PORT_TYPE_TO_COMPONENT_TYPE: Record<string, string[]> = {
   quantum_drive: ["QuantumDrive"],
   weapon: ["WeaponGun"],
   turret: ["TurretBase", "Turret"],
-  missile: ["MissileLauncher", "BombLauncher"],
+  missile: ["Missile", "MissileLauncher", "BombLauncher"],
   sensor: ["Radar", "Scanner"],
   countermeasure: ["WeaponDefensive"],
   mining_laser: ["WeaponMining"],

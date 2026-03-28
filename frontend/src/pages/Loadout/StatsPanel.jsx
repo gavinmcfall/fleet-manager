@@ -39,6 +39,7 @@ export default function StatsPanel({ stockComponents, overrides, horizontal }) {
 
       <StatsSection icon={Thermometer} title="Cooling" color="text-cyan-400">
         <StatRow label="Cooling Rate" stock={stock.cooling} custom={custom.cooling} hasChanges={hasChanges} suffix="/s" />
+        <StatRow label="Heat Output" stock={stock.thermalOutput} custom={custom.thermalOutput} hasChanges={hasChanges} suffix="/s" invert />
       </StatsSection>
 
       <StatsSection icon={Gauge} title="Quantum" color="text-violet-400">
@@ -157,12 +158,13 @@ function PowerBudget({ output, draw, stockOutput, stockDraw, hasChanges }) {
 }
 
 function aggregateStats(stockComponents, overrides) {
-  let power = 0, powerDraw = 0, cooling = 0
+  let power = 0, powerDraw = 0, cooling = 0, thermalOutput = 0
   let shieldHp = 0, shieldRegen = 0, resistPhys = 0, resistEnergy = 0, resistDist = 0, shieldCount = 0
   let dps = 0, ballisticDps = 0, energyDps = 0, alpha = 0
   let qtSpeed = 0, qtRange = 0, qtFuelRate = 0, qtSpool = 0
+  let radarRange = 0, radarAngle = 0
 
-  if (!stockComponents) return { power, powerDraw, cooling, shieldHp, shieldRegen, resistPhys, resistEnergy, resistDist, dps, ballisticDps, energyDps, alpha, qtSpeed, qtRange, qtFuelRate, qtSpool }
+  if (!stockComponents) return { power, powerDraw, cooling, thermalOutput, shieldHp, shieldRegen, resistPhys, resistEnergy, resistDist, dps, ballisticDps, energyDps, alpha, qtSpeed, qtRange, qtFuelRate, qtSpool, radarRange, radarAngle }
 
   for (const comp of stockComponents) {
     const data = overrides[comp.port_id] || comp
@@ -181,11 +183,18 @@ function aggregateStats(stockComponents, overrides) {
       qtSpeed = Math.max(qtSpeed, Number(data.quantum_speed) || 0)
       qtRange = Math.max(qtRange, Number(data.quantum_range) || 0)
       qtFuelRate = Number(data.fuel_rate) || 0; qtSpool = Number(data.spool_time) || 0
+    } else if (pt === 'sensor') {
+      radarRange = Math.max(radarRange, Number(data.radar_range) || 0)
+      radarAngle = Math.max(radarAngle, Number(data.radar_angle) || 0)
     }
-    if (pt !== 'power') { powerDraw += Number(data.power_draw) || 0 }
+    // Sum power draw and thermal output from ALL non-power components
+    if (pt !== 'power') {
+      powerDraw += Number(data.power_draw) || 0
+      thermalOutput += Number(data.thermal_output) || 0
+    }
   }
   if (shieldCount > 0) { resistPhys /= shieldCount; resistEnergy /= shieldCount; resistDist /= shieldCount }
-  return { power, powerDraw, cooling, shieldHp, shieldRegen, resistPhys, resistEnergy, resistDist, dps, ballisticDps, energyDps, alpha, qtSpeed, qtRange, qtFuelRate, qtSpool }
+  return { power, powerDraw, cooling, thermalOutput, shieldHp, shieldRegen, resistPhys, resistEnergy, resistDist, dps, ballisticDps, energyDps, alpha, qtSpeed, qtRange, qtFuelRate, qtSpool, radarRange, radarAngle }
 }
 
 function fmtNum(v) {

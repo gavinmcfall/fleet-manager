@@ -241,6 +241,7 @@ export function loadoutRoutes() {
          LEFT JOIN manufacturers m ON m.id = vc.manufacturer_id
          WHERE vc.type IN (${typePlaceholders})
            ${resolvedSizeMin === 0 && resolvedSizeMax === 0 ? "" : "AND vc.size BETWEEN ? AND ?"}
+           AND vc.name NOT LIKE '%Template%'
          ORDER BY ${sortKey} DESC NULLS LAST, vc.name`,
       )
       .bind(...componentTypes, ...(resolvedSizeMin === 0 && resolvedSizeMax === 0 ? [] : [resolvedSizeMin, resolvedSizeMax]))

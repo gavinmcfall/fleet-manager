@@ -54,6 +54,7 @@ export function componentRoutes() {
            ${deltaVersionJoin('vehicle_components', 'vc', 'uuid', versionId)}
            LEFT JOIN manufacturers m ON m.id = vc.manufacturer_id
            WHERE vc.type IN (${typePlaceholders})
+             AND vc.name NOT LIKE '%Template%'
            ORDER BY ${sortKey} DESC NULLS LAST, vc.name`,
         )
         .bind(...componentTypes)
