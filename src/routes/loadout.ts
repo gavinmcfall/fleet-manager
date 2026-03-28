@@ -167,6 +167,7 @@ export function loadoutRoutes() {
 
     // If the direct item is a turret/housing, walk the port tree to find the deepest
     // child's component_type AND size range. The user is swapping the child, not the housing.
+    const directComponentType = resolvedComponentType;
     let resolvedSizeMin = port.size_min;
     let resolvedSizeMax = port.size_max;
     if (!resolvedComponentType || resolvedComponentType === "UtilityTurret" || resolvedComponentType === "TurretBase" || resolvedComponentType === "Turret") {
@@ -339,8 +340,11 @@ export function loadoutRoutes() {
     // Resolve the actual stock component UUID by walking the port tree.
     // For turret-housed weapons, port.equipped_item_uuid points to the housing (TurretBase),
     // not the actual weapon. Walk down: port → child → grandchild to find the deepest equipped UUID.
+    // Only walk for turret/housing types — simple ports (QD, shield, etc.) have children that are
+    // different component types (e.g. QD → JumpDrive sub-port) and must not be walked.
     let stockUuid = port.equipped_item_uuid;
-    if (stockUuid) {
+    const isTurretHousing = !directComponentType || directComponentType === "UtilityTurret" || directComponentType === "TurretBase" || directComponentType === "Turret";
+    if (stockUuid && isTurretHousing) {
       const deepest = await db
         .prepare(
           `SELECT COALESCE(grandchild.equipped_item_uuid, child.equipped_item_uuid, p.equipped_item_uuid) AS deep_uuid
@@ -515,6 +519,29 @@ export function loadoutRoutes() {
       .all();
 
     return c.json({ items: rows.results });
+  });
+
+  // GET /api/loadout/cart/shops?class_name=X — all shops selling a component
+  app.get("/cart/shops", async (c) => {
+    const className = c.req.query("class_name");
+    if (!className) return c.json({ error: "class_name required" }, 400);
+
+    const rows = await c.env.DB
+      .prepare(
+        `SELECT lil.location_key, ROUND(lil.buy_price) AS buy_price,
+                COALESCE(s.display_name, REPLACE(REPLACE(lil.location_key, 'Inv_', ''), '_', ' ')) AS shop_name,
+                s.location_label
+         FROM loot_item_locations lil
+         JOIN loot_map lm ON lm.id = lil.loot_map_id
+         LEFT JOIN shops s ON REPLACE(s.name, ' ', '_') = lil.location_key AND s.display_name IS NOT NULL
+         WHERE lil.source_type = 'shop' AND lil.buy_price > 0
+           AND REPLACE(lm.class_name, 'EntityClassDefinition.', '') = ?
+         ORDER BY lil.buy_price ASC`,
+      )
+      .bind(className)
+      .all();
+
+    return c.json({ shops: rows.results });
   });
 
   // POST /api/loadout/cart — add items to cart

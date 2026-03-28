@@ -1,12 +1,98 @@
-import React, { useState, useMemo } from 'react'
-import { X, Trash2, RefreshCw, ShoppingCart, MapPin } from 'lucide-react'
+import React, { useState, useMemo, useEffect } from 'react'
+import { X, Trash2, RefreshCw, ShoppingCart, MapPin, Store, ChevronLeft } from 'lucide-react'
 import { removeLoadoutCartItem, emptyLoadoutCart, optimizeLoadoutCart, updateLoadoutCartItem } from '../../hooks/useAPI'
+
+const API_BASE = import.meta.env.VITE_API_BASE || ''
+
+/**
+ * Detail slide-over for a single cart item — shows component info + all shops.
+ */
+function CartItemDetail({ item, onClose }) {
+  const [shops, setShops] = useState(null)
+  const [loading, setLoading] = useState(true)
+
+  useEffect(() => {
+    if (!item?.class_name) { setLoading(false); return }
+    let cancelled = false
+    setLoading(true)
+    fetch(`${API_BASE}/api/loadout/cart/shops?class_name=${encodeURIComponent(item.class_name)}`, { credentials: 'same-origin' })
+      .then(r => r.json())
+      .then(data => { if (!cancelled) setShops(data.shops || []) })
+      .catch(() => { if (!cancelled) setShops([]) })
+      .finally(() => { if (!cancelled) setLoading(false) })
+    return () => { cancelled = true }
+  }, [item?.class_name])
+
+  return (
+    <div className="absolute inset-0 z-10 bg-gray-950 flex flex-col">
+      {/* Header */}
+      <div className="flex items-center gap-2 px-5 py-3 border-b border-white/[0.06]">
+        <button onClick={onClose} className="p-1 text-gray-400 hover:text-gray-300 rounded transition-colors">
+          <ChevronLeft className="w-4 h-4" />
+        </button>
+        <h3 className="text-sm font-medium text-white truncate flex-1">{item.component_name}</h3>
+        <button onClick={onClose} className="p-1.5 text-gray-400 hover:text-gray-300 rounded transition-colors">
+          <X className="w-4 h-4" />
+        </button>
+      </div>
+
+      {/* Component info */}
+      <div className="px-5 py-3 border-b border-white/[0.06] space-y-1.5">
+        <div className="flex items-center gap-3 text-xs text-gray-400">
+          {item.manufacturer_name && <span className="text-gray-300">{item.manufacturer_name}</span>}
+          <span>Size {item.size}</span>
+          {item.grade != null && <span>Grade {item.grade}</span>}
+          {item.type && <span className="text-gray-500">{item.type}</span>}
+        </div>
+        {item.fleet_ship_name && (
+          <div className="text-xs text-sc-accent/70">For {item.fleet_custom_name || item.fleet_ship_name}</div>
+        )}
+      </div>
+
+      {/* Shop list */}
+      <div className="flex-1 overflow-y-auto">
+        <div className="px-5 py-2 border-b border-white/[0.06]">
+          <div className="flex items-center gap-1.5 text-xs font-medium text-gray-400">
+            <Store className="w-3 h-3" />
+            Available at
+          </div>
+        </div>
+
+        {loading && (
+          <div className="p-6 text-center text-gray-500 text-sm">Loading shops...</div>
+        )}
+
+        {!loading && (!shops || shops.length === 0) && (
+          <div className="p-6 text-center text-gray-500 text-sm">
+            Not available at any shop. Loot only.
+          </div>
+        )}
+
+        {!loading && shops && shops.map((shop, i) => (
+          <div key={i} className="flex items-center gap-3 px-5 py-2 border-b border-white/[0.04] hover:bg-white/[0.02]">
+            <MapPin className="w-3 h-3 text-gray-500 flex-shrink-0" />
+            <div className="flex-1 min-w-0">
+              <div className="text-sm text-gray-300 truncate">{shop.shop_name}</div>
+              {shop.location_label && (
+                <div className="text-[11px] text-gray-500">{shop.location_label}</div>
+              )}
+            </div>
+            {shop.buy_price > 0 && (
+              <span className="text-xs text-amber-300 flex-shrink-0">{Math.round(shop.buy_price).toLocaleString()} aUEC</span>
+            )}
+          </div>
+        ))}
+      </div>
+    </div>
+  )
+}
 
 /**
  * Sliding cart panel showing all cart items grouped by shop for minimum-stops shopping.
  */
 export default function CartPanel({ cartData, cartLoading, refetchCart, onClose }) {
   const [optimizing, setOptimizing] = useState(false)
+  const [detailItem, setDetailItem] = useState(null)
 
   const items = cartData?.items || []
   const totalPrice = items.reduce((sum, item) => sum + (Number(item.buy_price) || 0) * (item.quantity || 1), 0)
@@ -15,11 +101,12 @@ export default function CartPanel({ cartData, cartLoading, refetchCart, onClose 
   const byShop = useMemo(() => {
     const groups = {}
     for (const item of items) {
-      const shopKey = item.shop_name || 'No shop (loot only)'
+      const displayName = item.shop_name ? [item.shop_name, item.shop_location].filter(Boolean).join(', ') : null
+      const shopKey = displayName || 'No shop (loot only)'
       if (!groups[shopKey]) {
         groups[shopKey] = {
-          shop_name: item.shop_name,
-          location: item.location_label,
+          shop_name: displayName,
+          location: item.shop_location,
           items: [],
           subtotal: 0,
         }
@@ -60,7 +147,12 @@ export default function CartPanel({ cartData, cartLoading, refetchCart, onClose 
   }
 
   return (
-    <div className="fixed inset-y-0 right-0 z-50 w-full max-w-md bg-gray-950 border-l border-white/[0.08] shadow-2xl flex flex-col" onClick={e => e.stopPropagation()}>
+    <div className="fixed inset-y-0 right-0 z-50 w-full max-w-[520px] bg-gray-950 border-l border-white/[0.08] shadow-2xl flex flex-col" onClick={e => e.stopPropagation()}>
+      {/* Detail slide-over (covers cart when open) */}
+      {detailItem && (
+        <CartItemDetail item={detailItem} onClose={() => setDetailItem(null)} />
+      )}
+
       {/* Header */}
       <div className="flex items-center justify-between px-5 py-3 border-b border-white/[0.06]">
         <div className="flex items-center gap-2">
@@ -111,15 +203,16 @@ export default function CartPanel({ cartData, cartLoading, refetchCart, onClose 
                 {group.location && <span className="text-[11px] text-gray-500">{group.location}</span>}
               </div>
               {group.subtotal > 0 && (
-                <span className="text-xs text-amber-300">{group.subtotal.toLocaleString()} aUEC</span>
+                <span className="text-xs text-amber-300 flex-shrink-0">{Math.round(group.subtotal).toLocaleString()} aUEC</span>
               )}
             </div>
 
             {/* Items */}
             {group.items.map(item => (
               <div key={item.id} className="flex items-center gap-3 px-5 py-2 hover:bg-white/[0.02] transition-colors">
-                <div className="flex-1 min-w-0">
-                  <div className="text-sm text-gray-300 truncate">{item.component_name}</div>
+                {/* Name + meta — clickable */}
+                <div className="flex-1 min-w-0 cursor-pointer" onClick={() => setDetailItem(item)}>
+                  <div className="text-sm text-gray-300 truncate hover:text-white transition-colors">{item.component_name}</div>
                   <div className="text-[11px] text-gray-500 flex items-center gap-2">
                     {item.manufacturer_name && <span>{item.manufacturer_name}</span>}
                     <span>S{item.size}</span>
@@ -129,8 +222,8 @@ export default function CartPanel({ cartData, cartLoading, refetchCart, onClose 
                   </div>
                 </div>
 
-                {/* Quantity */}
-                <div className="flex items-center gap-0.5">
+                {/* Quantity — fixed width */}
+                <div className="flex items-center gap-0.5 w-[72px] flex-shrink-0 justify-center">
                   <button
                     onClick={() => handleQuantityChange(item.id, item.quantity - 1)}
                     className="w-5 h-5 text-xs bg-white/[0.06] hover:bg-white/[0.1] text-gray-300 rounded flex items-center justify-center"
@@ -142,19 +235,19 @@ export default function CartPanel({ cartData, cartLoading, refetchCart, onClose 
                   >+</button>
                 </div>
 
-                {/* Price */}
-                <div className="w-20 text-right">
+                {/* Price — fixed width */}
+                <div className="w-[88px] text-right flex-shrink-0">
                   {item.buy_price ? (
-                    <span className="text-xs text-amber-300">{(Number(item.buy_price) * item.quantity).toLocaleString()}</span>
+                    <span className="text-xs text-amber-300">{Math.round(Number(item.buy_price) * item.quantity).toLocaleString()} aUEC</span>
                   ) : (
                     <span className="text-[11px] text-orange-400">Loot</span>
                   )}
                 </div>
 
-                {/* Remove */}
+                {/* Remove — fixed width */}
                 <button
                   onClick={() => handleRemoveItem(item.id)}
-                  className="p-1 text-gray-500 hover:text-red-400 transition-colors"
+                  className="p-1 text-gray-500 hover:text-red-400 transition-colors flex-shrink-0"
                 >
                   <Trash2 className="w-3 h-3" />
                 </button>
