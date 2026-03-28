@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useCallback, useMemo } from 'react'
 import { useSearchParams } from 'react-router-dom'
-import { Rocket, Tags, Package, Eye, Download, Loader, Save, AlertCircle, CheckCircle } from 'lucide-react'
+import { Rocket, Tags, Sparkles, Eye, Download, Loader, Save, AlertCircle, CheckCircle } from 'lucide-react'
 import PageHeader from '../../components/PageHeader'
 import StatCard from '../../components/StatCard'
 import {
@@ -15,7 +15,7 @@ import {
 import { LABEL_CATEGORIES, CATEGORY_FIELDS } from './constants'
 import FleetOrderSection from './FleetOrderSection'
 import ItemLabelsSection from './ItemLabelsSection'
-import CommunityPacksSection from './CommunityPacksSection'
+import EnhancementsSection from './EnhancementsSection'
 import PreviewDownloadSection from './PreviewDownloadSection'
 
 // ── Pill nav ────────────────────────────────────────────────────────
@@ -40,7 +40,7 @@ function Pill({ active, onClick, children }) {
 const SECTIONS = [
   { key: 'fleet', label: 'Fleet Order', icon: Rocket },
   { key: 'labels', label: 'Item Labels', icon: Tags },
-  { key: 'packs', label: 'Community Packs', icon: Package },
+  { key: 'enhancements', label: 'Enhancements', icon: Sparkles },
   { key: 'preview', label: 'Preview & Download', icon: Eye },
 ]
 
@@ -276,7 +276,7 @@ export default function LocalizationBuilder() {
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
         <StatCard icon={Rocket} label="ASOP Ships" value={config.asopEnabled ? orderedShips.length : 'Off'} color={config.asopEnabled ? 'text-sc-accent' : 'text-gray-500'} />
         <StatCard icon={Tags} label="Label Categories" value={`${enabledLabelCount} / ${LABEL_CATEGORIES.length}`} color={enabledLabelCount > 0 ? 'text-sc-accent' : 'text-gray-500'} />
-        <StatCard icon={Package} label="Community Packs" value={`${enabledPackCount} / ${packs.length}`} color={enabledPackCount > 0 ? 'text-purple-400' : 'text-gray-500'} />
+        <StatCard icon={Sparkles} label="Enhancements" value={`${enabledPackCount} active`} color={enabledPackCount > 0 ? 'text-purple-400' : 'text-gray-500'} />
         <StatCard icon={Download} label="Ready" value={hasAnyEnabled ? 'Yes' : 'No features enabled'} color={hasAnyEnabled ? 'text-emerald-400' : 'text-gray-500'} />
       </div>
 
@@ -290,7 +290,7 @@ export default function LocalizationBuilder() {
               {s.key === 'labels' && enabledLabelCount > 0 && (
                 <span className="opacity-60">{enabledLabelCount}</span>
               )}
-              {s.key === 'packs' && enabledPackCount > 0 && (
+              {s.key === 'enhancements' && enabledPackCount > 0 && (
                 <span className="opacity-60">{enabledPackCount}</span>
               )}
               {s.key === 'fleet' && config.asopEnabled && orderedShips.length > 0 && (
@@ -327,11 +327,11 @@ export default function LocalizationBuilder() {
         />
       )}
 
-      {section === 'packs' && (
-        <CommunityPacksSection
-          packs={packs}
+      {section === 'enhancements' && (
+        <EnhancementsSection
           enabledPacks={config.enabledPacks || []}
-          onTogglePack={togglePack}
+          availablePacks={packs}
+          onToggle={togglePack}
         />
       )}
 
