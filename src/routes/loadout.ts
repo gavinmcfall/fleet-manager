@@ -289,11 +289,12 @@ export function loadoutRoutes() {
         db,
         classNames,
         (ph) =>
-          `SELECT lm.class_name, lil.location_key, lil.buy_price
+          `SELECT REPLACE(lm.class_name, 'EntityClassDefinition.', '') AS class_name,
+                  lil.location_key, lil.buy_price
            FROM loot_item_locations lil
            JOIN loot_map lm ON lm.id = lil.loot_map_id
            WHERE lil.source_type = 'shop' AND lil.buy_price > 0
-             AND lm.class_name IN (${ph})`,
+             AND REPLACE(lm.class_name, 'EntityClassDefinition.', '') IN (${ph})`,
       );
 
       for (const row of shopRows) {
@@ -521,7 +522,8 @@ export function loadoutRoutes() {
          JOIN vehicle_components vc ON vc.id = ulc.component_id
          LEFT JOIN manufacturers m ON m.id = vc.manufacturer_id
          LEFT JOIN (
-           SELECT lm.class_name, lil.location_key, lil.buy_price,
+           SELECT REPLACE(lm.class_name, 'EntityClassDefinition.', '') AS class_name,
+                  lil.location_key, lil.buy_price,
                   ROW_NUMBER() OVER (PARTITION BY lm.class_name ORDER BY lil.buy_price ASC) AS rn
            FROM loot_item_locations lil
            JOIN loot_map lm ON lm.id = lil.loot_map_id
