@@ -83,4 +83,5 @@ e2e/test-results/
 frontend/mockups/
 
 # SQLite
+*.sqlite
 *.sqlite3
