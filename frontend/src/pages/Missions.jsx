@@ -126,7 +126,7 @@ function ExpandedSection({ entry, prerequisites, repRequirements }) {
   const hasRepReqs = repReqs?.length > 0
   const hasRepRewards = entry.rep_summary || entry.rep_fail || entry.rep_abandon
   const hasCrimeWarnings = entry.fail_if_criminal === 1 || entry.wanted_level_min > 0
-  const hasRequirementsSection = hasPrereqs || hasRepReqs || hasRepRewards || hasCrimeWarnings || requirements
+  const hasRequirementsSection = hasPrereqs || hasRepReqs || hasRepRewards || hasCrimeWarnings || requirements || entry.source !== 'contract'
 
   // Reward display
   const reward = entry.reward_amount || 0
@@ -192,12 +192,16 @@ function ExpandedSection({ entry, prerequisites, repRequirements }) {
               Buy-in: <span className="text-sc-warn">{entry.buy_in_amount.toLocaleString()}</span>
             </span>
           )}
-          {rewardText && (
+          {rewardText ? (
             <span className="inline-flex items-center gap-1 text-[11px] font-mono px-2 py-0.5 rounded border bg-sc-warn/10 text-sc-warn border-sc-warn/20">
               <Coins className="w-3 h-3" />{rewardText}
               {entry.has_standing_bonus === 1 && <span className="text-emerald-400" title="Standing bonus available">+</span>}
             </span>
-          )}
+          ) : entry.source === 'mission_board' ? (
+            <span className="inline-flex items-center gap-1 text-[10px] font-mono px-2 py-0.5 rounded border bg-white/[0.03] text-gray-500 border-white/[0.06] italic">
+              <Coins className="w-3 h-3" />Reward Unknown
+            </span>
+          ) : null}
           {entry.sequence_num != null && (
             <span className="text-[10px] font-mono text-gray-600">#{entry.sequence_num}</span>
           )}
@@ -354,7 +358,7 @@ function ExpandedSection({ entry, prerequisites, repRequirements }) {
           )}
 
           {/* Rep rewards table: success / fail / abandon */}
-          {hasRepRewards && (
+          {hasRepRewards ? (
             <div>
               <div className="flex items-center gap-1.5 mb-1.5">
                 <TrendingUp className="w-3.5 h-3.5 text-gray-500" />
@@ -380,6 +384,11 @@ function ExpandedSection({ entry, prerequisites, repRequirements }) {
                   </div>
                 )}
               </div>
+            </div>
+          ) : (
+            <div className="flex items-center gap-1.5">
+              <Minus className="w-3.5 h-3.5 text-gray-600" />
+              <span className="text-[10px] font-mono uppercase tracking-wider text-gray-600">No Reputation Affiliation</span>
             </div>
           )}
         </div>
@@ -436,6 +445,8 @@ function EntryRow({ entry, repFocus, isHighlighted, highlightRef, prerequisites,
                 {' '}<span className="text-gray-600">aUEC</span>
                 {entry.has_standing_bonus === 1 && <span className="text-emerald-400 ml-1" title="Standing bonus available">+</span>}
               </>
+            ) : entry.source === 'mission_board' ? (
+              <span className="text-gray-600 italic text-[10px]">Reward Unknown</span>
             ) : (
               <span className="text-gray-700">—</span>
             )}
@@ -598,8 +609,10 @@ export default function Missions() {
         giver_display: (m.giver_name && m.giver_name !== 'SENDER NOT FOUND') ? m.giver_name : null,
         giver_slug: m.giver_slug || null,
         reward_amount: m.reward_amount || 0,
-        reward_text: null,
-        reward_currency: 'aUEC',
+        reward_text: (m.reward_currency && m.reward_currency !== 'UEC' && (m.reward_amount || 0) > 0)
+          ? `${m.reward_amount}x ${m.reward_currency}`
+          : null,
+        reward_currency: m.reward_currency || 'aUEC',
         reward_vehicle_slug: null,
         reward_item_uuid: null,
         is_unlawful: !m.is_lawful,
