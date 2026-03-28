@@ -86,9 +86,9 @@ export default function ComponentTable({
   }
 
   return (
-    <div className="panel overflow-hidden">
+    <div className="panel overflow-hidden -mx-6 md:-mx-10 lg:-mx-16">
       <div className="overflow-x-auto">
-        <table className="w-full min-w-[800px]">
+        <table className="w-full min-w-[1000px]">
           <thead>
             <tr className="bg-sc-darker/40">
               <th className="w-10 px-3 py-2.5">
