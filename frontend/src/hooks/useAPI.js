@@ -415,6 +415,12 @@ export async function optimizeLoadoutCart() {
   return postJSON('/loadout/cart/optimize', {})
 }
 
+// --- Components Reference ---
+
+export function useComponents(type) {
+  return useAPI(type ? `/components/${type}` : null, { skip: !type })
+}
+
 // --- Missions ---
 
 export function useMissionGivers() {

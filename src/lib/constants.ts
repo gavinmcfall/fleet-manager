@@ -97,3 +97,36 @@ export function deltaVersionId(table: string, versionId?: number): string {
   const vq = versionSubquery(versionId);
   return `(SELECT MAX(game_version_id) FROM ${table} WHERE game_version_id <= ${vq})`;
 }
+
+// --- Map port_type (vehicle_ports) → component type (vehicle_components) ---
+// vehicle_ports uses lowercase, vehicle_components uses PascalCase
+export const PORT_TYPE_TO_COMPONENT_TYPE: Record<string, string[]> = {
+  power: ["PowerPlant"],
+  cooler: ["Cooler"],
+  shield: ["Shield"],
+  quantum_drive: ["QuantumDrive"],
+  weapon: ["WeaponGun"],
+  turret: ["TurretBase", "Turret"],
+  missile: ["MissileLauncher", "BombLauncher"],
+  sensor: ["Radar", "Scanner"],
+  countermeasure: ["WeaponDefensive"],
+  mining_laser: ["WeaponMining"],
+  salvage_head: ["SalvageHead"],
+  salvage_module: ["SalvageModifier", "MiningModifier"],
+  qed: ["QuantumInterdictionGenerator"],
+  jump_drive: ["JumpDrive"],
+};
+
+// --- Stat sort keys per component type ---
+export const STAT_SORT_KEY: Record<string, string> = {
+  PowerPlant: "vc.power_output",
+  Cooler: "vc.cooling_rate",
+  Shield: "vc.shield_hp",
+  QuantumDrive: "vc.quantum_speed",
+  WeaponGun: "vc.dps",
+  Radar: "vc.radar_range",
+  MissileLauncher: "vc.damage",
+  TurretBase: "vc.dps",
+  Turret: "vc.dps",
+  QuantumInterdictionGenerator: "vc.qed_range",
+};

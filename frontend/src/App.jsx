@@ -69,6 +69,7 @@ const LawSystem = lazy(() => import('./pages/LawSystem'))
 const NPCLoadouts = lazy(() => import('./pages/NPCLoadouts'))
 const LocalizationBuilder = lazy(() => import('./pages/LocalizationBuilder'))
 const Loadout = lazy(() => import('./pages/Loadout'))
+const Components = lazy(() => import('./pages/Components'))
 const FpsLoadout = lazy(() => import('./pages/FpsLoadout'))
 const About = lazy(() => import('./pages/About'))
 const NotFound = lazy(() => import('./pages/NotFound'))
@@ -108,6 +109,21 @@ const referenceGroup = {
     { to: '/careers', icon: Briefcase, label: 'Careers & Roles' },
     { to: '/reputation', icon: Star, label: 'Reputation' },
     { to: '/law', icon: Scale, label: 'Law System' },
+    {
+      to: '/components',
+      icon: Layers,
+      label: 'Components',
+      submenu: [
+        { to: '/components/weapons', label: 'Weapons' },
+        { to: '/components/shields', label: 'Shields' },
+        { to: '/components/coolers', label: 'Coolers' },
+        { to: '/components/power-plants', label: 'Power Plants' },
+        { to: '/components/quantum-drives', label: 'Quantum Drives' },
+        { to: '/components/turrets', label: 'Turrets' },
+        { to: '/components/missiles', label: 'Missiles' },
+        { to: '/components/sensors', label: 'Sensors' },
+      ],
+    },
   ],
 }
 
@@ -766,7 +782,7 @@ export default function App() {
 
             {/* Main content */}
             <main id="main-content" className="flex-1 overflow-auto" tabIndex={-1}>
-              <div className={location.pathname === '/fps-loadout' ? '' : 'max-w-7xl mx-auto p-6 md:p-6 pt-16 md:pt-6'}>
+              <div className={location.pathname === '/fps-loadout' ? 'p-4' : 'max-w-7xl mx-auto p-6 md:p-6 pt-16 md:pt-6'}>
                 <ErrorBoundary>
                   <Suspense fallback={<LoadingState fullScreen />}>
                     <Routes>
@@ -802,6 +818,8 @@ export default function App() {
                       <Route path="/reputation" element={<Reputation />} />
                       <Route path="/law" element={<LawSystem />} />
                       <Route path="/npc-loadouts" element={<NPCLoadouts />} />
+                      <Route path="/components" element={<Navigate to="/components/weapons" replace />} />
+                      <Route path="/components/:type" element={<Suspense fallback={<LoadingState fullScreen />}><Components /></Suspense>} />
                       <Route path="/about" element={<Suspense fallback={<LoadingState fullScreen />}><About /></Suspense>} />
                       <Route path="/loadout/:slug" element={<RequireAuth><Suspense fallback={<LoadingState fullScreen />}><Loadout /></Suspense></RequireAuth>} />
                       <Route path="/fps-loadout" element={<RequireAuth><RequireFeature flag="fpsLoadout"><Suspense fallback={<LoadingState fullScreen />}><FpsLoadout /></Suspense></RequireFeature></RequireAuth>} />

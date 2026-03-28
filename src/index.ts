@@ -26,6 +26,7 @@ import { reputationRoutes } from "./routes/reputation";
 import { companionRoutes } from "./routes/companion";
 import { companionAuthRoutes } from "./routes/companion-auth";
 import { loadoutRoutes } from "./routes/loadout";
+import { componentRoutes } from "./routes/components";
 import { blueprintRoutes } from "./routes/blueprints";
 import { validateEncryptionKey } from "./lib/crypto";
 import { logEvent } from "./lib/logger";
@@ -416,6 +417,7 @@ app.route("/api/ops", publicOpsRoutes());
 app.route("/api/users", reputationRoutes());
 app.route("/api/companion", companionRoutes());
 app.route("/api/loadout", loadoutRoutes());
+app.route("/api/components", componentRoutes());
 app.route("/api/blueprints", blueprintRoutes());
 
 // Companion app auth flow — HTML pages outside /api/* (no CORS, no JSON middleware)

@@ -2,7 +2,7 @@ import { Hono } from "hono";
 import { z } from "zod";
 import { getAuthUser, type HonoEnv } from "../lib/types";
 import { validate } from "../lib/validation";
-import { versionSubquery, deltaVersionJoin } from "../lib/constants";
+import { versionSubquery, deltaVersionJoin, PORT_TYPE_TO_COMPONENT_TYPE, STAT_SORT_KEY } from "../lib/constants";
 import { cachedJson, resolveVersionId, cacheSlug } from "../lib/cache";
 import { getShipLoadout, getShipModules } from "../db/queries";
 
@@ -51,39 +51,6 @@ const CartUpdateBody = z.object({
   shop_id: z.number().int().positive().nullable().optional(),
   quantity: z.number().int().min(1).optional(),
 });
-
-// --- Map port_type (vehicle_ports) → component type (vehicle_components) ---
-// vehicle_ports uses lowercase, vehicle_components uses PascalCase
-const PORT_TYPE_TO_COMPONENT_TYPE: Record<string, string[]> = {
-  power: ["PowerPlant"],
-  cooler: ["Cooler"],
-  shield: ["Shield"],
-  quantum_drive: ["QuantumDrive"],
-  weapon: ["WeaponGun"],
-  turret: ["TurretBase", "Turret"],
-  missile: ["MissileLauncher", "BombLauncher"],
-  sensor: ["Radar", "Scanner"],
-  countermeasure: ["WeaponDefensive"],
-  mining_laser: ["WeaponMining"],
-  salvage_head: ["SalvageHead"],
-  salvage_module: ["SalvageModifier", "MiningModifier"],
-  qed: ["QuantumInterdictionGenerator"],
-  jump_drive: ["JumpDrive"],
-};
-
-// --- Stat sort keys per component type ---
-const STAT_SORT_KEY: Record<string, string> = {
-  PowerPlant: "vc.power_output",
-  Cooler: "vc.cooling_rate",
-  Shield: "vc.shield_hp",
-  QuantumDrive: "vc.quantum_speed",
-  WeaponGun: "vc.dps",
-  Radar: "vc.radar_range",
-  MissileLauncher: "vc.damage",
-  TurretBase: "vc.dps",
-  Turret: "vc.dps",
-  QuantumInterdictionGenerator: "vc.qed_range",
-};
 
 /**
  * /api/loadout/* — Ship loadout builder (public compatible components, auth-gated customization)
@@ -282,7 +249,7 @@ export function loadoutRoutes() {
     // Fetch shop availability via loot_map → loot_item_locations (source_type='shop')
     const classNames = components.results.map((c: any) => c.class_name).filter(Boolean);
     const componentUuids = components.results.map((c: any) => c.uuid).filter(Boolean);
-    let shopMap: Record<string, Array<{ location_key: string; buy_price: number | null }>> = {};
+    let shopMap: Record<string, Array<{ location_key: string; shop_name: string; location_label: string | null; buy_price: number | null }>> = {};
 
     if (classNames.length > 0) {
       const shopRows = await batchInQuery<any>(
@@ -290,9 +257,12 @@ export function loadoutRoutes() {
         classNames,
         (ph) =>
           `SELECT REPLACE(lm.class_name, 'EntityClassDefinition.', '') AS class_name,
-                  lil.location_key, lil.buy_price
+                  lil.location_key, ROUND(lil.buy_price) AS buy_price,
+                  s.display_name AS shop_name, s.location_label
            FROM loot_item_locations lil
            JOIN loot_map lm ON lm.id = lil.loot_map_id
+           LEFT JOIN shops s ON REPLACE(s.name, ' ', '_') = lil.location_key
+             AND s.display_name IS NOT NULL
            WHERE lil.source_type = 'shop' AND lil.buy_price > 0
              AND REPLACE(lm.class_name, 'EntityClassDefinition.', '') IN (${ph})`,
       );
@@ -301,6 +271,8 @@ export function loadoutRoutes() {
         if (!shopMap[row.class_name]) shopMap[row.class_name] = [];
         shopMap[row.class_name].push({
           location_key: row.location_key,
+          shop_name: row.shop_name || row.location_key.replace(/^Inv_/, '').replace(/_/g, ' '),
+          location_label: row.location_label,
           buy_price: row.buy_price,
         });
       }
@@ -514,7 +486,8 @@ export function loadoutRoutes() {
         `SELECT ulc.id, ulc.component_id, ulc.shop_id, ulc.quantity, ulc.source_fleet_id,
                 vc.name AS component_name, vc.uuid AS component_uuid, vc.class_name, vc.type, vc.size, vc.grade,
                 m.name AS manufacturer_name,
-                cheapest.location_key AS shop_name,
+                cheapest.shop_display_name AS shop_name,
+                cheapest.location_label AS shop_location,
                 cheapest.buy_price,
                 uf.custom_name AS fleet_custom_name,
                 v.name AS fleet_ship_name
@@ -523,10 +496,13 @@ export function loadoutRoutes() {
          LEFT JOIN manufacturers m ON m.id = vc.manufacturer_id
          LEFT JOIN (
            SELECT REPLACE(lm.class_name, 'EntityClassDefinition.', '') AS class_name,
-                  lil.location_key, lil.buy_price,
+                  COALESCE(s.display_name, REPLACE(REPLACE(lil.location_key, 'Inv_', ''), '_', ' ')) AS shop_display_name,
+                  s.location_label,
+                  ROUND(lil.buy_price) AS buy_price,
                   ROW_NUMBER() OVER (PARTITION BY lm.class_name ORDER BY lil.buy_price ASC) AS rn
            FROM loot_item_locations lil
            JOIN loot_map lm ON lm.id = lil.loot_map_id
+           LEFT JOIN shops s ON REPLACE(s.name, ' ', '_') = lil.location_key AND s.display_name IS NOT NULL
            WHERE lil.source_type = 'shop' AND lil.buy_price > 0
          ) cheapest ON cheapest.class_name = vc.class_name AND cheapest.rn = 1
          LEFT JOIN user_fleet uf ON uf.id = ulc.source_fleet_id
