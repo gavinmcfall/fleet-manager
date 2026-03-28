@@ -78,21 +78,21 @@ export default function ComponentTable({
     }
     if (col.key === 'damage_type') {
       const dt = getDamageType(comp)
-      if (dt) return <span className="flex items-center gap-1"><DmgShape type={dt} size={10} /><span>{val}</span></span>
-      return <span>{val}</span>
+      if (dt) return <span className="inline-flex items-center gap-1.5"><DmgShape type={dt} size={12} />{val}</span>
+      return val
     }
     if (col.format) return col.format(val)
     return String(val)
   }
 
   return (
-    <div className="panel overflow-hidden -mx-6 md:-mx-10 lg:-mx-16">
-      <div className="overflow-x-auto">
-        <table className="w-full min-w-[1000px]">
-          <thead>
-            <tr className="bg-sc-darker/40">
-              <th className="w-10 px-3 py-2.5">
-                <span className="text-[10px] font-mono text-sc-accent2">{compareCount}/{maxCompare}</span>
+    <div className="panel overflow-hidden">
+      <div className="overflow-x-auto scrollbar-thin">
+        <table className="w-full" style={{ minWidth: `${orderedCols.length * 110 + 60}px` }}>
+          <thead className="sticky top-0 z-20">
+            <tr className="bg-sc-panel border-b border-sc-border">
+              <th className="w-12 px-3 py-3 text-center">
+                <span className="text-xs font-mono text-sc-accent2">{compareCount}/{maxCompare}</span>
               </th>
               {orderedCols.map((col, idx) => {
                 const isSorted = sortKey === col.key
@@ -105,23 +105,25 @@ export default function ComponentTable({
                     onDragOver={handleDragOver}
                     onDrop={(e) => handleDrop(e, idx)}
                     onClick={() => toggleSort(col.key)}
-                    className={`table-header cursor-pointer select-none whitespace-nowrap hover:text-sc-accent transition-colors ${
-                      col.align === 'left' ? 'text-left' : 'text-right'
-                    } ${col.width || ''} ${isNameCol ? 'sticky left-0 z-10 bg-sc-darker/40' : ''}`}
+                    className={`px-3 py-3 text-xs font-mono uppercase tracking-wider cursor-pointer select-none whitespace-nowrap transition-colors ${
+                      isSorted ? 'text-sc-accent' : 'text-sc-accent2 hover:text-sc-accent'
+                    } ${col.align === 'left' ? 'text-left' : 'text-right'} ${
+                      isNameCol ? 'sticky left-0 z-30 bg-sc-panel' : ''
+                    }`}
                   >
                     <span className="inline-flex items-center gap-1">
                       {col.label}
                       {isSorted && (
                         sortDir === 'asc'
-                          ? <ChevronUp className="w-3.5 h-3.5 text-sc-accent" />
-                          : <ChevronDown className="w-3.5 h-3.5 text-sc-accent" />
+                          ? <ChevronUp className="w-3.5 h-3.5" />
+                          : <ChevronDown className="w-3.5 h-3.5" />
                       )}
                     </span>
                   </th>
                 )
               })}
               {columnOrder && (
-                <th className="w-8 px-2 py-2.5">
+                <th className="w-10 px-2 py-3">
                   <button
                     onClick={(e) => { e.stopPropagation(); onResetColumns() }}
                     title="Reset column order"
@@ -139,38 +141,41 @@ export default function ComponentTable({
               return (
                 <tr
                   key={comp.id}
-                  className={`transition-colors ${
+                  className={`border-b border-sc-border/30 transition-colors ${
                     selected
-                      ? 'bg-sc-accent/10 border-l-2 border-l-sc-accent'
+                      ? 'bg-sc-accent/10'
                       : 'hover:bg-white/[0.04]'
                   }`}
                 >
-                  <td className="w-10 px-3 py-2.5 text-center">
+                  <td className="w-12 px-3 py-3 text-center">
                     <input
                       type="checkbox"
                       checked={selected}
                       onChange={() => onToggleCompare(comp.id)}
-                      className="w-3.5 h-3.5 rounded cursor-pointer accent-sc-accent"
+                      className="w-4 h-4 rounded cursor-pointer accent-sc-accent"
                     />
                   </td>
                   {orderedCols.map((col) => {
                     const isNameCol = col.key === 'name'
+                    const isMfr = col.key === 'manufacturer_name'
                     return (
                       <td
                         key={col.key}
-                        className={`table-cell ${
+                        className={`px-3 py-3 text-sm whitespace-nowrap ${
                           isNameCol
-                            ? 'sticky left-0 z-10 bg-inherit text-white font-medium'
-                            : col.align === 'left'
-                              ? 'text-left text-gray-300'
-                              : 'text-right font-mono tabular-nums text-gray-300'
-                        } ${col.width || ''}`}
+                            ? 'sticky left-0 z-10 bg-sc-panel text-white font-medium'
+                            : isMfr
+                              ? 'text-gray-400'
+                              : col.align === 'left'
+                                ? 'text-gray-300'
+                                : 'text-right font-mono tabular-nums text-gray-200'
+                        }`}
                       >
                         {renderCell(comp, col)}
                       </td>
                     )
                   })}
-                  {columnOrder && <td className="w-8" />}
+                  {columnOrder && <td className="w-10" />}
                 </tr>
               )
             })}

@@ -40,7 +40,7 @@ function DimensionRow({ dimension, items, includes, excludes, onToggle }) {
 
   return (
     <div className="flex items-center gap-2 flex-wrap">
-      <span className="text-xs font-display uppercase tracking-wider text-sc-accent2 w-20 shrink-0">{label}</span>
+      <span className="text-xs font-display uppercase tracking-wider text-sc-accent2 whitespace-nowrap shrink-0">{label}</span>
       {orderedValues.map(({ value, label: pillLabel, count }) => {
         const isIncluded = incSet.has(value)
         const isExcluded = excSet.has(value)
