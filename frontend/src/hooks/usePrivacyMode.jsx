@@ -13,6 +13,7 @@ const PrivacyModeContext = createContext({
   privacyMode: false,
   stealthPercent: 10,
   cycleMode: () => {},
+  setMode: () => {},
   setStealthPercent: () => {},
   togglePrivacy: () => {},
 })
@@ -55,6 +56,13 @@ export function PrivacyModeProvider({ children }) {
     cycleMode()
   }, [cycleMode])
 
+  const setModeExplicit = useCallback((newMode) => {
+    if (MODE_ORDER.includes(newMode)) {
+      setMode(newMode)
+      try { localStorage.setItem(STORAGE_KEY, newMode) } catch {}
+    }
+  }, [])
+
   const setStealthPercent = useCallback((pct) => {
     const clamped = Math.max(1, Math.min(100, pct))
     setStealthPercentState(clamped)
@@ -67,6 +75,7 @@ export function PrivacyModeProvider({ children }) {
       privacyMode: mode !== 'off',
       stealthPercent,
       cycleMode,
+      setMode: setModeExplicit,
       setStealthPercent,
       togglePrivacy,
     }}>

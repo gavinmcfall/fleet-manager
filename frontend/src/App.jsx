@@ -1,6 +1,6 @@
 import React, { useState, useEffect, Suspense, lazy } from 'react'
 import { Routes, Route, NavLink, Navigate, useLocation, useNavigate } from 'react-router-dom'
-import { Rocket, BarChart3, Shield, Upload, RefreshCw, Database, Settings as SettingsIcon, ChevronDown, ChevronRight, ChevronLeft, History, Menu, X, LogOut, LogIn, User, Wrench, Users, Building2, FileText, Search, MapPin, Palette, ShoppingCart, Hammer, Briefcase, Star, Scale, Crosshair, BookOpen, Layers, TrendingUp, Languages, Heart, FlaskConical, SlidersHorizontal, Bookmark, Sparkles, EyeOff, Eye, Shirt } from 'lucide-react'
+import { Rocket, BarChart3, Shield, Upload, RefreshCw, Database, Settings as SettingsIcon, ChevronDown, ChevronRight, ChevronLeft, History, Menu, X, LogOut, LogIn, User, Wrench, Users, Building2, FileText, Search, MapPin, Palette, ShoppingCart, Hammer, Briefcase, Star, Scale, Crosshair, BookOpen, Layers, TrendingUp, Languages, Heart, FlaskConical, SlidersHorizontal, Bookmark, Sparkles, Shirt } from 'lucide-react'
 import LoadingState from './components/LoadingState'
 import ErrorBoundary from './components/ErrorBoundary'
 import RequireAuth from './components/RequireAuth'
@@ -11,7 +11,6 @@ import { authClient, useSession, signOut } from './lib/auth-client'
 import { TimezoneProvider } from './hooks/useTimezone'
 import { GameVersionProvider } from './hooks/useGameVersion'
 import { PrivacyModeProvider } from './hooks/usePrivacyMode'
-import usePrivacyMode from './hooks/usePrivacyMode'
 import { formatVersionLabel, formatVersionFull } from './lib/gameVersion'
 import useGameVersion from './hooks/useGameVersion'
 
@@ -368,7 +367,7 @@ function SidebarContent({ expandedMenu, setExpandedMenu, onNavClick }) {
   const isLoggedIn = !!session?.user
   const userRole = session?.user?.role || 'user'
   const { activeCode } = useGameVersion()
-  const { mode: privacyModeState, privacyMode, cycleMode, stealthPercent, setStealthPercent } = usePrivacyMode()
+
   const { data: status } = useStatus()
   const navItems = getNavItems(userRole, isLoggedIn, activeCode, status?.features)
 
@@ -466,43 +465,7 @@ function SidebarContent({ expandedMenu, setExpandedMenu, onNavClick }) {
         })}
       </div>
 
-      {/* Privacy / Stealth mode toggle */}
-      {isLoggedIn && (
-        <div className="px-3 pt-2 space-y-1">
-          <button
-            onClick={cycleMode}
-            className={`w-full flex items-center gap-2.5 px-3 py-2 rounded-lg text-xs font-medium transition-all ${
-              privacyMode
-                ? 'bg-sc-accent/10 text-sc-accent border border-sc-accent/20'
-                : 'text-gray-500 hover:text-gray-300 hover:bg-white/5 border border-transparent'
-            }`}
-            title="Cycle: Off → Hidden → Stealth"
-          >
-            {privacyModeState === 'stealth' ? <EyeOff className="w-3.5 h-3.5 text-sc-warn" /> : privacyMode ? <EyeOff className="w-3.5 h-3.5" /> : <Eye className="w-3.5 h-3.5" />}
-            <span className="font-display tracking-wide uppercase">
-              {privacyModeState === 'stealth' ? 'Stealth Mode' : 'Privacy Mode'}
-            </span>
-            <span className={`ml-auto text-[10px] font-mono ${
-              privacyModeState === 'stealth' ? 'text-sc-warn' : privacyMode ? 'text-sc-accent' : 'text-gray-600'
-            }`}>
-              {privacyModeState === 'off' ? 'OFF' : privacyModeState === 'hidden' ? 'ON' : `${stealthPercent}%`}
-            </span>
-          </button>
-          {privacyModeState === 'stealth' && (
-            <div className="flex items-center gap-2 px-3 py-1.5">
-              <input
-                type="range"
-                min={1}
-                max={90}
-                value={stealthPercent}
-                onChange={(e) => setStealthPercent(parseInt(e.target.value, 10))}
-                className="flex-1 h-1 accent-sc-warn cursor-pointer"
-              />
-              <span className="text-[10px] font-mono text-sc-warn w-7 text-right">{stealthPercent}%</span>
-            </div>
-          )}
-        </div>
-      )}
+      {/* Privacy mode removed from sidebar — managed in Settings */}
 
       {/* User info + sign out / Sign in CTA */}
       {isLoggedIn ? (

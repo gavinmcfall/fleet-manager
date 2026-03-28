@@ -7,6 +7,7 @@ import ProviderLogo, { PROVIDER_INFO } from '../components/ProviderLogo'
 import ConfirmDialog from '../components/ConfirmDialog'
 import useFontPreference from '../hooks/useFontPreference'
 import useTimezone from '../hooks/useTimezone'
+import usePrivacyMode from '../hooks/usePrivacyMode'
 import { formatDate } from '../lib/dates'
 
 const FONT_OPTIONS = [
@@ -24,9 +25,16 @@ const PROVIDERS = [
   { value: 'google', label: 'Gemini', company: 'Google', desc: '2.5 Pro, Flash, Flash-Lite' },
 ]
 
+const PRIVACY_MODES = [
+  { value: 'off', label: 'Off', desc: 'Show real values everywhere' },
+  { value: 'hidden', label: 'Hidden', desc: 'Replace dollar amounts with •••' },
+  { value: 'stealth', label: 'Stealth', desc: 'Show values reduced by a percentage' },
+]
+
 export default function Settings() {
   const { fontPreference, setFontPreference } = useFontPreference()
   const { timezone, setTimezone } = useTimezone()
+  const { mode: privacyModeState, stealthPercent, setStealthPercent, setMode } = usePrivacyMode()
   const [tzSearch, setTzSearch] = useState('')
   const [tzDropdownOpen, setTzDropdownOpen] = useState(false)
   const { data: config, refetch } = useLLMConfig()
@@ -159,6 +167,62 @@ export default function Settings() {
               </label>
             ))}
           </div>
+        </div>
+      </PanelSection>
+
+      <PanelSection title="Privacy" icon={Shield}>
+        <div className="p-5 space-y-4">
+          <p className="text-sm text-gray-400">
+            Control how dollar values are displayed. Useful when streaming or screen sharing.
+          </p>
+
+          <div className="space-y-2">
+            {PRIVACY_MODES.map((m) => (
+              <label
+                key={m.value}
+                className={`block p-4 rounded border-2 cursor-pointer transition-colors ${
+                  privacyModeState === m.value
+                    ? 'border-sc-accent bg-sc-accent/10'
+                    : 'border-sc-border hover:border-sc-accent2/40'
+                }`}
+              >
+                <div className="flex items-center gap-3">
+                  <input
+                    type="radio"
+                    name="privacy-mode"
+                    value={m.value}
+                    checked={privacyModeState === m.value}
+                    onChange={() => setMode(m.value)}
+                    className="mr-1"
+                  />
+                  <div className="flex-1">
+                    <span className="text-white font-medium">{m.label}</span>
+                    <span className="text-xs text-gray-500 ml-2">{m.desc}</span>
+                  </div>
+                </div>
+              </label>
+            ))}
+          </div>
+
+          {privacyModeState === 'stealth' && (
+            <div className="p-4 rounded bg-white/[0.02] border border-sc-border/40 space-y-3">
+              <div className="flex items-center justify-between">
+                <span className="text-sm text-gray-300">Display percentage</span>
+                <span className="text-sm font-mono text-sc-accent">{stealthPercent}%</span>
+              </div>
+              <input
+                type="range"
+                min={1}
+                max={90}
+                value={stealthPercent}
+                onChange={(e) => setStealthPercent(parseInt(e.target.value, 10))}
+                className="w-full h-1.5 accent-sc-accent cursor-pointer"
+              />
+              <p className="text-xs text-gray-500">
+                A $1,000 ship will display as ${Math.round(1000 * stealthPercent / 100).toLocaleString()}
+              </p>
+            </div>
+          )}
         </div>
       </PanelSection>
 
