@@ -31,6 +31,9 @@ const COMPARE_STATS = {
     { key: 'quantum_speed', label: 'QT Speed', higher: true, suffix: ' m/s' },
     { key: 'quantum_range', label: 'QT Range', higher: true },
     { key: 'dps', label: 'DPS', higher: true },
+    { key: 'hp', label: 'HP', higher: true },
+    { key: 'mass', label: 'Mass', suffix: ' kg', lower: true },
+    { key: 'em_signature', label: 'EM Signature', lower: true },
   ],
   ship_weapon: [
     { key: 'dps', label: 'DPS', higher: true },
