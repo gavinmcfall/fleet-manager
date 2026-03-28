@@ -86,8 +86,8 @@ export default function ComponentTable({
   }
 
   return (
-    <div className="panel overflow-hidden">
-      <div className="overflow-x-auto scrollbar-thin">
+    <div className="panel !overflow-visible">
+      <div className="overflow-x-auto">
         <table>
           <thead className="sticky top-0 z-20">
             <tr className="bg-sc-panel border-b border-sc-border">
