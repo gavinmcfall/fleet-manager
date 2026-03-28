@@ -219,11 +219,20 @@ export const FACTION_SLUG_NAMES = {
   unlawful_vaughn: 'Vaughn',
   unlawful_tarpits: 'Tar Pits',
   unlawful_twitchgang: 'Tecia Pacheco',
+  unlawful_bitzeros: 'Bit Zeros',
+  crusaderindustries: 'Crusader Industries',
+  hurstondynamics: 'Hurston Dynamics',
+  microtech: 'microTech',
+  arccorp: 'ArcCorp',
+  xenothreat: 'XenoThreat',
+  cdf: 'CDF',
+  klescherrehabilitationservices: 'Klescher',
 }
 
 /** Known scope slug → display name */
 export const SCOPE_SLUG_NAMES = {
   bounty: 'Bounty',
+  bounty_bountyhuntersguild: 'Bounty (BHG)',
   hiredmuscle: 'Hired Muscle',
   hauling: 'Hauling',
   courier: 'Courier',
@@ -234,6 +243,7 @@ export const SCOPE_SLUG_NAMES = {
   mercenary: 'Mercenary',
   assassination: 'Assassination',
   exploration: 'Exploration',
+  emergency: 'Emergency',
   affinity: 'Affinity',
 }
 
@@ -273,38 +283,42 @@ export function humanizeStandingSlug(slug) {
     if (type === 'friend' || type === 'ally') return 'Friendly'
     return 'Neutral'
   }
-  // Handle NPC reliability: "npc_fired_fired" → "Not Fired", "npc_reliability_fireable" → skip
+  // Handle NPC reliability: "npc_fired_fired" → skip (internal game data)
   if (slug.match(/^npc_/i)) return null
-  // Handle "rank4", "hauling_rank4" etc.
-  const rankMatch = slug.match(/^(?:(.+)_)?rank(\d+)$/i)
-  if (rankMatch) {
-    const prefix = rankMatch[1] ? humanizeScopeSlug(rankMatch[1]) + ' ' : ''
-    return `${prefix}Rank ${rankMatch[2]}`
-  }
-  // Handle "bounty_agent", "bounty_masteragent" etc.
-  const compoundMatch = slug.match(/^(.+)_(applicant|probation|agent|masteragent|senioragent|junioragent|veteranagent|tracker|advancedtracker|seniortracker|mastertracker)$/i)
-  if (compoundMatch) {
-    const AGENT_NAMES = {
-      applicant: 'Applicant', probation: 'Probation', agent: 'Agent',
-      masteragent: 'Master Agent', senioragent: 'Senior Agent', junioragent: 'Junior Agent',
-      veteranagent: 'Veteran Agent', tracker: 'Tracker', advancedtracker: 'Advanced Tracker',
-      seniortracker: 'Senior Tracker', mastertracker: 'Master Tracker',
-    }
-    return AGENT_NAMES[compoundMatch[2].toLowerCase()] || compoundMatch[2]
-  }
-  // Known standalone slugs
+  // Known rank/standing names — checked against the last segment of compound slugs
   const STANDING_NAMES = {
     applicant: 'Applicant', probation: 'Probation',
     agent: 'Agent', masteragent: 'Master Agent', senioragent: 'Senior Agent',
     junioragent: 'Junior Agent', veteranagent: 'Veteran Agent',
+    tracker: 'Tracker', advancedtracker: 'Advanced Tracker',
+    seniortracker: 'Senior Tracker', mastertracker: 'Master Tracker',
     neutral: 'Neutral', hostile: 'Hostile', friendly: 'Friendly',
-    noteligible: 'Not Eligible',
+    noteligible: 'Not Eligible', outsider: 'Outsider', counsel: 'Counsel',
+    senior: 'Senior', junior: 'Junior', veteran: 'Veteran',
   }
+  // Handle "rank4", "hauling_rank4", "security_rank4" etc.
+  const rankMatch = slug.match(/(?:^|_)rank(\d+)$/i)
+  if (rankMatch) {
+    return `Rank ${rankMatch[1]}`
+  }
+  // Split on underscores, check if the LAST segment (or last 2 joined) is a known standing name
+  const parts = slug.toLowerCase().split('_')
+  // Try last segment: "bounty_applicant" → "applicant" → "Applicant"
+  if (STANDING_NAMES[parts[parts.length - 1]]) {
+    return STANDING_NAMES[parts[parts.length - 1]]
+  }
+  // Try last two segments joined: "bounty_masteragent_bountyhuntersguild" → skip guild suffix, try "masteragent"
+  // Try each segment from the end until we find a known name
+  for (let i = parts.length - 1; i >= 0; i--) {
+    if (STANDING_NAMES[parts[i]]) return STANDING_NAMES[parts[i]]
+    // Try joined pair: "veteranagent" from "veteran" + "agent"? No, these are already single slugs
+  }
+  // Standalone known slugs
   const lower = slug.toLowerCase()
   if (STANDING_NAMES[lower]) return STANDING_NAMES[lower]
-  // Fallback: snake_case split, camelCase split, title-case
-  return slug.replace(/_/g, ' ').replace(/([a-z])([A-Z])/g, '$1 $2')
-    .split(' ').map(w => w.charAt(0).toUpperCase() + w.slice(1).toLowerCase()).join(' ')
+  // Fallback: title-case the last meaningful segment
+  const lastPart = parts[parts.length - 1]
+  return lastPart.charAt(0).toUpperCase() + lastPart.slice(1)
 }
 
 /** Humanize comparison operator */
@@ -328,7 +342,9 @@ export function formatRepRequirement(r) {
     return { label: `${standing} with ${faction}`, standing: null, cmp: null, faction: null, scope: null }
   }
   // Career scopes: "Agent or higher with BHG (Bounty)"
-  return { label: null, standing, cmp, faction, scope }
+  // Suppress scope if it's redundant with the faction name (e.g. "Bounty (BHG)" after "Bounty Hunters Guild")
+  const showScope = scope && !scope.toLowerCase().includes('bhg') && scope !== faction
+  return { label: null, standing, cmp, faction, scope: showScope ? scope : null }
 }
 
 // ── Description cleanup ────────────────────────────────────────────────────
