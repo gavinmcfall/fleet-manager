@@ -13,7 +13,7 @@ export default function FleetOverviewGrid({ overview, totalVehicles, ltiPercent,
           <span className="stat-label">Total Fleet Value</span>
         </div>
         <p className="text-5xl font-display font-bold text-sc-accent leading-tight">
-          <PrivacyMask placeholder="$•••••">${(overview.total_pledge_value || 0).toLocaleString()}</PrivacyMask>
+          <PrivacyMask placeholder="$•••••" value={overview.total_pledge_value || 0}>${(overview.total_pledge_value || 0).toLocaleString()}</PrivacyMask>
         </p>
         <p className="text-sm text-gray-500 mt-2 font-mono">{totalVehicles} ships pledged</p>
       </div>

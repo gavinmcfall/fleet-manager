@@ -61,7 +61,14 @@ export default function Dashboard() {
   const totalVehicles = overview.total_vehicles || 0
 
   const sizeData = Object.entries(sizeDist).map(([name, value]) => ({ name, value }))
-  const roleData = Object.entries(roles).map(([name, ships]) => ({ name, count: ships.length }))
+  const roleData = Object.entries(roles).map(([name, ships]) => {
+    const counts = {}
+    for (const s of ships) counts[s] = (counts[s] || 0) + 1
+    const deduped = Object.entries(counts)
+      .sort(([a], [b]) => a.localeCompare(b))
+      .map(([s, n]) => n > 1 ? `${s} (x${n})` : s)
+    return { name, count: ships.length, ships: deduped }
+  })
 
   const ltiPercent = totalVehicles > 0 ? Math.round(((overview.lti_count || 0) / totalVehicles) * 100) : 0
   const readyPercent = totalVehicles > 0 ? Math.round(((overview.flight_ready || 0) / totalVehicles) * 100) : 0
@@ -158,7 +165,7 @@ export default function Dashboard() {
         <PanelSection title="Role Categories" icon={Shield}>
           <div className="p-4 bg-grid" style={{ height: Math.max(280, roleData.length * 36 + 40) }} role="img" aria-label={`Role categories: ${roleData.map(d => `${d.name}: ${d.count}`).join(', ')}`}>
             <ResponsiveContainer width="100%" height="100%">
-              <BarChart data={roleData} layout="vertical" margin={{ left: 100, right: 30 }}>
+              <BarChart data={roleData} layout="vertical" margin={{ left: 100, right: 30 }} barSize={20}>
                 <XAxis type="number" allowDecimals={false} domain={[0, 'dataMax + 1']} tick={{ fill: '#6b7280', fontSize: 11 }} />
                 <YAxis
                   dataKey="name"
@@ -167,7 +174,18 @@ export default function Dashboard() {
                   width={95}
                   interval={0}
                 />
-                <Tooltip {...TOOLTIP_STYLE} />
+                <Tooltip
+                  content={({ active, payload }) => {
+                    if (!active || !payload?.[0]) return null
+                    const { name, count, ships } = payload[0].payload
+                    return (
+                      <div style={{ ...TOOLTIP_STYLE.contentStyle, padding: '8px 12px', maxWidth: 280 }}>
+                        <p style={{ ...TOOLTIP_STYLE.labelStyle, marginBottom: 4 }}>{name} ({count})</p>
+                        {ships.map((s, i) => <p key={i} style={{ ...TOOLTIP_STYLE.itemStyle, margin: 0, lineHeight: 1.5 }}>{s}</p>)}
+                      </div>
+                    )
+                  }}
+                />
                 <Bar dataKey="count" fill={CHART_COLORS[0]} fillOpacity={0.7} radius={[0, 4, 4, 0]}>
                   <LabelList dataKey="count" position="right" fill="#9ca3af" fontSize={11} />
                 </Bar>

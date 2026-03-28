@@ -178,7 +178,7 @@ function InsuranceRow({ ship }) {
             if (!m) return <span className="text-gray-600">N/A</span>
             const num = parseFloat(m[1].replace(/,/g, ''))
             if (!num || num === 0) return <span className="text-gray-600">Gift</span>
-            return <span className="flex items-center gap-1 justify-end"><PrivacyMask placeholder="$•••">${Math.round(num).toLocaleString('en-US')}</PrivacyMask></span>
+            return <span className="flex items-center gap-1 justify-end"><PrivacyMask placeholder="$•••" value={Math.round(num)}>${Math.round(num).toLocaleString('en-US')}</PrivacyMask></span>
           })()}
         </span>
         <span className="w-44 text-right text-xs font-mono text-gray-500 whitespace-nowrap">
