@@ -247,6 +247,14 @@ export function parseGlobalIniKeys(content: string): Set<string> {
 // Config
 // ---------------------------------------------------------------------------
 
+export interface OverlayPackMeta {
+  name: string;
+  label: string;
+  description: string | null;
+  icon: string | null;
+  keyCount: number;
+}
+
 export interface LocalizationConfig {
   asopEnabled: boolean;
   labelsVehicleComponents: boolean;
@@ -259,6 +267,7 @@ export interface LocalizationConfig {
   labelsShipMissiles: boolean;
   labelFormat: LabelFormat;
   categoryFormats: CategoryFormats;
+  enabledPacks: string[];
 }
 
 export const DEFAULT_CONFIG: LocalizationConfig = {
@@ -273,6 +282,7 @@ export const DEFAULT_CONFIG: LocalizationConfig = {
   labelsShipMissiles: false,
   labelFormat: "suffix",
   categoryFormats: {},
+  enabledPacks: [],
 };
 
 export function configFromRow(row: Record<string, unknown>): LocalizationConfig {
@@ -282,6 +292,15 @@ export function configFromRow(row: Record<string, unknown>): LocalizationConfig 
       categoryFormats = JSON.parse(row.category_formats_json);
     } catch {
       categoryFormats = {};
+    }
+  }
+
+  let enabledPacks: string[] = [];
+  if (row.enabled_packs_json && typeof row.enabled_packs_json === "string") {
+    try {
+      enabledPacks = JSON.parse(row.enabled_packs_json);
+    } catch {
+      enabledPacks = [];
     }
   }
 
@@ -297,7 +316,22 @@ export function configFromRow(row: Record<string, unknown>): LocalizationConfig 
     labelsShipMissiles: !!row.labels_ship_missiles,
     labelFormat: (row.label_format as LabelFormat) || "suffix",
     categoryFormats,
+    enabledPacks,
   };
+}
+
+/** Parse key=value lines from INI content into a Map */
+export function parseIniOverrides(content: string): Map<string, string> {
+  const overrides = new Map<string, string>();
+  const lines = content.split("\n");
+  for (const line of lines) {
+    const eqIdx = line.indexOf("=");
+    if (eqIdx === -1) continue;
+    const key = line.substring(0, eqIdx).trim();
+    if (!key) continue;
+    overrides.set(key, line.substring(eqIdx + 1));
+  }
+  return overrides;
 }
 
 /** Resolve the format for a category: per-category override → global fallback */

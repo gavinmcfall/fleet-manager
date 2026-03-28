@@ -362,6 +362,10 @@ export function useLocalizationPreview() {
   return useAPI('/localization/preview')
 }
 
+export function useLocalizationPacks() {
+  return useAPI('/localization/overlay-packs')
+}
+
 // Loadout Builder hooks
 export function useLoadoutComponents(slug) {
   return useAPI(slug ? `/loadout/${slug}/components` : null, { skip: !slug })

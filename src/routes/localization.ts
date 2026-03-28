@@ -12,6 +12,7 @@ import {
   configFromRow,
   generateAsopOverrides,
   generateItemLabels,
+  parseIniOverrides,
   resolveCategoryFormat,
 } from "../lib/localization";
 
@@ -56,6 +57,7 @@ export function localizationRoutes() {
           fields: z.array(z.enum(["manufacturer", "size", "grade", "subType"])),
           format: z.enum(["suffix", "prefix"]),
         })).optional(),
+        enabledPacks: z.array(z.string().max(100)).max(50).optional(),
       }),
     ),
     async (c) => {
@@ -67,6 +69,10 @@ export function localizationRoutes() {
         ? JSON.stringify(body.categoryFormats)
         : null;
 
+      const enabledPacksJson = body.enabledPacks
+        ? JSON.stringify(body.enabledPacks)
+        : null;
+
       await db
         .prepare(
           `INSERT INTO user_localization_configs (
@@ -74,8 +80,8 @@ export function localizationRoutes() {
             labels_vehicle_components, labels_fps_weapons, labels_fps_armour,
             labels_fps_helmets, labels_fps_attachments, labels_fps_utilities,
             labels_consumables, labels_ship_missiles, label_format,
-            category_formats_json, updated_at
-          ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, datetime('now'))
+            category_formats_json, enabled_packs_json, updated_at
+          ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, datetime('now'))
           ON CONFLICT(user_id) DO UPDATE SET
             asop_enabled = excluded.asop_enabled,
             labels_vehicle_components = excluded.labels_vehicle_components,
@@ -88,6 +94,7 @@ export function localizationRoutes() {
             labels_ship_missiles = excluded.labels_ship_missiles,
             label_format = excluded.label_format,
             category_formats_json = COALESCE(excluded.category_formats_json, user_localization_configs.category_formats_json),
+            enabled_packs_json = COALESCE(excluded.enabled_packs_json, user_localization_configs.enabled_packs_json),
             updated_at = excluded.updated_at`,
         )
         .bind(
@@ -103,6 +110,7 @@ export function localizationRoutes() {
           body.labelsShipMissiles ? 1 : 0,
           body.labelFormat ?? "suffix",
           categoryFormatsJson,
+          enabledPacksJson,
         )
         .run();
 
@@ -176,10 +184,43 @@ export function localizationRoutes() {
     },
   );
 
+  // ── GET /overlay-packs — list active overlay packs ─────────────────
+
+  routes.get("/overlay-packs", async (c) => {
+    const db = c.env.DB;
+    const rows = await db
+      .prepare(
+        `SELECT name, label, description, icon, key_count, version_code
+         FROM localization_overlay_packs
+         WHERE is_active = 1
+         ORDER BY sort_order`,
+      )
+      .all<{
+        name: string;
+        label: string;
+        description: string | null;
+        icon: string | null;
+        key_count: number;
+        version_code: string | null;
+      }>();
+
+    return c.json({
+      packs: rows.results.map((r) => ({
+        name: r.name,
+        label: r.label,
+        description: r.description,
+        icon: r.icon,
+        keyCount: r.key_count,
+        versionCode: r.version_code,
+      })),
+    });
+  });
+
   // ── GET /preview — preview override key/value pairs ───────────────
 
   routes.get("/preview", async (c) => {
     const db = c.env.DB;
+    const kv = c.env.SC_BRIDGE_CACHE;
     const userId = getAuthUser(c).id;
 
     const configRow = await db
@@ -191,16 +232,47 @@ export function localizationRoutes() {
       ? configFromRow(configRow)
       : DEFAULT_CONFIG;
 
-    const overrides = await buildOverrides(db, userId, config);
+    // Get default version for pack loading
+    const ver = await db
+      .prepare("SELECT code FROM game_versions WHERE is_default = 1 LIMIT 1")
+      .first<{ code: string }>();
+
+    // Load pack overrides
+    let packOverrideCount = 0;
+    const packOverrides = new Map<string, string>();
+    if (ver && config.enabledPacks.length > 0) {
+      const packRows = await db
+        .prepare(
+          `SELECT name FROM localization_overlay_packs
+           WHERE is_active = 1 AND name IN (${config.enabledPacks.map(() => "?").join(",")})
+           ORDER BY sort_order`,
+        )
+        .bind(...config.enabledPacks)
+        .all<{ name: string }>();
+
+      for (const pack of packRows.results) {
+        const content = await kv.get(`localization:pack:${pack.name}:${ver.code}`, "text");
+        if (content) {
+          const parsed = parseIniOverrides(content);
+          for (const [k, v] of parsed) packOverrides.set(k, v);
+        }
+      }
+      packOverrideCount = packOverrides.size;
+    }
+
+    const personalOverrides = await buildOverrides(db, userId, config);
 
     return c.json({
       config,
-      overrides: overrides.map((o) => ({
+      overrides: personalOverrides.map((o) => ({
         key: o.key,
         value: o.value,
         original: o.original,
+        source: "personal",
       })),
-      count: overrides.length,
+      personalCount: personalOverrides.length,
+      packOverrideCount,
+      totalCount: packOverrideCount + personalOverrides.length,
     });
   });
 
@@ -266,10 +338,31 @@ export function localizationRoutes() {
       }
     }
 
-    const overrideList = await buildOverrides(db, userId, config, validKeys);
-
-    // Build override map
+    // Three-layer merge: base → packs → personal overrides
+    // 1. Load enabled pack overrides (lowest priority of overrides)
     const overrideMap = new Map<string, string>();
+
+    if (config.enabledPacks.length > 0) {
+      const packRows = await db
+        .prepare(
+          `SELECT name FROM localization_overlay_packs
+           WHERE is_active = 1 AND name IN (${config.enabledPacks.map(() => "?").join(",")})
+           ORDER BY sort_order`,
+        )
+        .bind(...config.enabledPacks)
+        .all<{ name: string }>();
+
+      for (const pack of packRows.results) {
+        const content = await kv.get(`localization:pack:${pack.name}:${ver.code}`, "text");
+        if (content) {
+          const parsed = parseIniOverrides(content);
+          for (const [k, v] of parsed) overrideMap.set(k, v);
+        }
+      }
+    }
+
+    // 2. Generate personal overrides (highest priority — overwrites packs)
+    const overrideList = await buildOverrides(db, userId, config, validKeys);
     for (const o of overrideList) {
       overrideMap.set(o.key, o.value);
     }

@@ -336,6 +336,86 @@ export function adminRoutes() {
     });
   });
 
+  // ── Localization overlay packs ──────────────────────────────────────
+
+  /**
+   * PUT /api/admin/localization/overlay-pack
+   *
+   * Upload or update an overlay pack. Metadata stored in D1, content in KV.
+   * Body: raw text/plain INI content (key=value lines)
+   */
+  routes.put("/localization/overlay-pack",
+    validate("query", z.object({
+      name: z.string().min(1).max(100).regex(/^[a-z0-9-]+$/),
+      label: z.string().min(1).max(200),
+      description: z.string().max(500).optional(),
+      icon: z.string().max(50).optional(),
+      version_code: z.string().min(1).max(100),
+      sort_order: z.coerce.number().int().optional(),
+    })),
+    async (c) => {
+      const { name, label, description, icon, version_code, sort_order } = c.req.valid("query");
+      const db = c.env.DB;
+      const kv = c.env.SC_BRIDGE_CACHE;
+
+      // Verify the version exists
+      const ver = await db
+        .prepare("SELECT id FROM game_versions WHERE code = ?")
+        .bind(version_code)
+        .first<{ id: number }>();
+      if (!ver) {
+        return c.json({ error: `Game version '${version_code}' not found` }, 404);
+      }
+
+      const body = await c.req.text();
+      if (!body || body.length < 10) {
+        return c.json({ error: "Body too small to be a valid overlay pack" }, 400);
+      }
+
+      // Count keys
+      const keyCount = body.split("\n").filter((l: string) => l.includes("=")).length;
+
+      // Upsert metadata
+      await db
+        .prepare(
+          `INSERT INTO localization_overlay_packs (name, label, description, icon, sort_order, version_code, key_count, updated_at)
+           VALUES (?, ?, ?, ?, ?, ?, ?, datetime('now'))
+           ON CONFLICT(name) DO UPDATE SET
+             label = excluded.label,
+             description = COALESCE(excluded.description, localization_overlay_packs.description),
+             icon = COALESCE(excluded.icon, localization_overlay_packs.icon),
+             sort_order = COALESCE(excluded.sort_order, localization_overlay_packs.sort_order),
+             version_code = excluded.version_code,
+             key_count = excluded.key_count,
+             updated_at = excluded.updated_at`,
+        )
+        .bind(name, label, description ?? null, icon ?? null, sort_order ?? 0, version_code, keyCount)
+        .run();
+
+      // Store content in KV
+      const kvKey = `localization:pack:${name}:${version_code}`;
+      await kv.put(kvKey, body);
+
+      const sizeKB = Math.round(body.length / 1024);
+
+      return c.json({
+        ok: true,
+        message: `Stored overlay pack '${name}' for ${version_code}`,
+        keyCount,
+        sizeKB,
+      });
+    },
+  );
+
+  /** GET /api/admin/localization/overlay-packs — list all packs (admin view) */
+  routes.get("/localization/overlay-packs", async (c) => {
+    const db = c.env.DB;
+    const rows = await db
+      .prepare("SELECT * FROM localization_overlay_packs ORDER BY sort_order")
+      .all();
+    return c.json({ packs: rows.results });
+  });
+
   // ── Rating audit (super_admin) ──────────────────────────────────────
 
   // GET /api/admin/ratings/user/:userId — all ratings for a user (not anonymized)
