@@ -45,13 +45,13 @@ export default function CompareTable({ items, apiType }) {
       <div className="grid gap-3" style={{ gridTemplateColumns: `8rem repeat(${items.length}, 1fr)` }}>
         <div />
         {items.map(item => (
-          <div key={item.id} className="bg-white/[0.03] border border-white/[0.06] rounded p-3 text-center">
-            <p className="text-xs font-medium text-white truncate">{item.name}</p>
+          <div key={item.id} className="panel p-3 text-center">
+            <p className="text-sm font-medium text-white truncate">{item.name}</p>
             {item.manufacturer_name && (
-              <p className="text-[9px] font-mono text-gray-500 mt-0.5 truncate">{item.manufacturer_name}</p>
+              <p className="text-xs font-mono text-gray-400 mt-0.5 truncate">{item.manufacturer_name}</p>
             )}
             {item.size != null && (
-              <span className="inline-block text-[9px] font-mono text-gray-400 bg-white/[0.06] px-1.5 py-0.5 rounded mt-1">
+              <span className="inline-block text-xs font-mono text-sc-accent2 bg-sc-accent2/15 px-1.5 py-0.5 rounded border border-sc-accent2/25 mt-1">
                 S{item.size}
               </span>
             )}
@@ -59,28 +59,27 @@ export default function CompareTable({ items, apiType }) {
         ))}
       </div>
 
-      {/* Stat rows */}
       {activeStats.length === 0 ? (
-        <p className="text-xs font-mono text-gray-600 text-center py-4">No comparable stats</p>
+        <p className="text-sm text-gray-400 text-center py-4">No comparable stats</p>
       ) : (
-        <div className="border border-white/[0.06] rounded overflow-hidden divide-y divide-white/[0.04]">
+        <div className="panel overflow-hidden divide-y divide-sc-border/50">
           {activeStats.map(stat => {
             const values = items.map(i => i[stat.key])
             const winner = getWinner(values, stat)
             return (
               <div
                 key={stat.key}
-                className="grid items-center gap-3 px-3 py-2"
+                className="grid items-center gap-3 px-4 py-2.5"
                 style={{ gridTemplateColumns: `8rem repeat(${items.length}, 1fr)` }}
               >
-                <span className="text-[10px] font-mono text-gray-500 truncate">{stat.label}</span>
+                <span className="text-xs font-mono text-sc-accent2 truncate">{stat.label}</span>
                 {values.map((val, idx) => (
                   <span
                     key={idx}
-                    className={`text-xs font-mono text-center ${
+                    className={`text-sm font-mono text-center ${
                       winner === idx
                         ? 'text-sc-accent font-semibold'
-                        : val == null ? 'text-gray-700' : 'text-gray-300'
+                        : val == null ? 'text-gray-600' : 'text-gray-200'
                     }`}
                     style={winner === idx ? { textShadow: '0 0 8px rgba(34, 211, 238, 0.4)' } : undefined}
                   >

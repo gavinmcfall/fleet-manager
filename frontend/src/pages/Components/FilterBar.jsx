@@ -1,6 +1,6 @@
 import { useMemo, useCallback } from 'react'
 import { useSearchParams } from 'react-router-dom'
-import { Search, X } from 'lucide-react'
+import SearchInput from '../../components/SearchInput'
 
 function getItemValues(item, field) {
   const raw = item[field]
@@ -39,24 +39,24 @@ function DimensionRow({ dimension, items, includes, excludes, onToggle }) {
   const excSet = excludes?.[key] || new Set()
 
   return (
-    <div className="flex items-center gap-1.5 flex-wrap">
-      <span className="text-[10px] font-display uppercase tracking-wider text-gray-600 w-14 shrink-0">{label}</span>
+    <div className="flex items-center gap-2 flex-wrap">
+      <span className="text-xs font-display uppercase tracking-wider text-sc-accent2 w-16 shrink-0">{label}</span>
       {orderedValues.map(({ value, label: pillLabel, count }) => {
         const isIncluded = incSet.has(value)
         const isExcluded = excSet.has(value)
         let pillStyle
         if (isExcluded) {
-          pillStyle = 'bg-red-500/10 text-red-400 border-red-500/25 line-through'
+          pillStyle = 'bg-red-500/15 text-red-400 border-red-500/30 line-through'
         } else if (isIncluded) {
-          pillStyle = 'bg-sc-accent/10 text-sc-accent border-sc-accent/25'
+          pillStyle = 'bg-sc-accent/15 text-sc-accent border-sc-accent/30'
         } else {
-          pillStyle = 'bg-white/[0.02] text-gray-500 border-white/[0.05] hover:border-white/[0.1] hover:text-gray-400'
+          pillStyle = 'bg-sc-panel text-gray-400 border-sc-border/60 hover:border-sc-accent2/40 hover:text-gray-200'
         }
         return (
           <button
             key={value}
             onClick={(e) => onToggle(key, value, e)}
-            className={`px-2 py-0.5 rounded text-[10px] font-medium transition-all duration-150 border whitespace-nowrap cursor-pointer ${pillStyle}`}
+            className={`px-2.5 py-1 rounded text-xs font-medium transition-all duration-150 border whitespace-nowrap cursor-pointer ${pillStyle}`}
           >
             {pillLabel} <span className="font-mono opacity-60">{count}</span>
           </button>
@@ -142,25 +142,14 @@ export default function FilterBar({ dimensions, items, search, onSearchChange })
   }, [setSearchParams, dimensions])
 
   return (
-    <div className="space-y-2">
-      {/* Search input */}
-      <div className="relative">
-        <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-gray-600" />
-        <input
-          type="text"
-          value={search}
-          onChange={(e) => onSearchChange(e.target.value)}
-          placeholder="Search components..."
-          className="w-full bg-white/[0.03] border border-white/[0.06] rounded-lg pl-9 pr-8 py-2 text-xs text-gray-300 placeholder-gray-600 focus:outline-none focus:border-sc-accent/30 transition-colors"
-        />
-        {search && (
-          <button onClick={() => onSearchChange('')} className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-600 hover:text-gray-400">
-            <X className="w-3.5 h-3.5" />
-          </button>
-        )}
-      </div>
+    <div className="space-y-3">
+      <SearchInput
+        value={search}
+        onChange={onSearchChange}
+        placeholder="Search components..."
+        className="max-w-md"
+      />
 
-      {/* Filter dimensions */}
       {dimensions.map(dim => (
         <DimensionRow
           key={dim.key}
@@ -172,11 +161,10 @@ export default function FilterBar({ dimensions, items, search, onSearchChange })
         />
       ))}
 
-      {/* Clear all */}
       {hasAny && (
         <button
           onClick={clearAll}
-          className="text-[10px] font-mono text-gray-500 hover:text-gray-300 transition-colors"
+          className="text-xs text-gray-500 hover:text-gray-300 transition-colors"
         >
           Clear all filters
         </button>
@@ -185,7 +173,6 @@ export default function FilterBar({ dimensions, items, search, onSearchChange })
   )
 }
 
-/** Apply filter includes/excludes to a component list */
 export function applyFilters(components, dimensions, searchParams) {
   let result = components
   for (const dim of dimensions) {

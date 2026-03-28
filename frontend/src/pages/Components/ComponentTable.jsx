@@ -1,6 +1,6 @@
 import { useRef, useMemo } from 'react'
 import { useSearchParams } from 'react-router-dom'
-import { ChevronUp, ChevronDown, GripVertical, RotateCcw } from 'lucide-react'
+import { ChevronUp, ChevronDown, RotateCcw } from 'lucide-react'
 import { DmgShape, getDamageType } from '../Loadout/loadoutHelpers'
 import { reconcileColumns } from './useColumnOrder'
 
@@ -13,7 +13,6 @@ export default function ComponentTable({
   const sortDir = searchParams.get('dir') || 'desc'
   const dragColRef = useRef(null)
 
-  // Reconcile saved column order with current config
   const orderedKeys = useMemo(
     () => reconcileColumns(columnOrder, columns),
     [columnOrder, columns],
@@ -25,10 +24,8 @@ export default function ComponentTable({
   }, [columns])
   const orderedCols = orderedKeys.map(k => colMap[k]).filter(Boolean)
 
-  // Sort
   const sorted = useMemo(() => {
     if (!sortKey) return components
-    const col = colMap[sortKey]
     return [...components].sort((a, b) => {
       let va = a[sortKey], vb = b[sortKey]
       if (va == null && vb == null) return 0
@@ -42,7 +39,7 @@ export default function ComponentTable({
       if (!isNaN(na) && !isNaN(nb)) return sortDir === 'asc' ? na - nb : nb - na
       return 0
     })
-  }, [components, sortKey, sortDir, colMap])
+  }, [components, sortKey, sortDir])
 
   const toggleSort = (key) => {
     setSearchParams(prev => {
@@ -57,7 +54,6 @@ export default function ComponentTable({
     }, { replace: true })
   }
 
-  // Drag-and-drop column reorder handlers
   const handleDragStart = (e, idx) => {
     dragColRef.current = idx
     e.dataTransfer.effectAllowed = 'move'
@@ -80,25 +76,23 @@ export default function ComponentTable({
     if (val == null || val === '') {
       return <span className="text-gray-600">&mdash;</span>
     }
-    // Special: damage_type column with shape
     if (col.key === 'damage_type') {
       const dt = getDamageType(comp)
-      if (dt) return <span className="flex items-center gap-1"><DmgShape type={dt} size={10} /><span className="text-[10px]">{val}</span></span>
-      return <span className="text-[10px]">{val}</span>
+      if (dt) return <span className="flex items-center gap-1"><DmgShape type={dt} size={10} /><span>{val}</span></span>
+      return <span>{val}</span>
     }
     if (col.format) return col.format(val)
     return String(val)
   }
 
   return (
-    <div className="bg-white/[0.02] border border-white/[0.06] rounded-lg overflow-hidden">
+    <div className="panel overflow-hidden">
       <div className="overflow-x-auto">
         <table className="w-full min-w-[800px]">
           <thead>
-            <tr className="bg-white/[0.03] border-b border-white/[0.08]">
-              {/* Compare checkbox header */}
-              <th className="w-10 px-2 py-2.5">
-                <span className="text-[9px] font-mono text-gray-600">{compareCount}/{maxCompare}</span>
+            <tr className="bg-sc-darker/40">
+              <th className="w-10 px-3 py-2.5">
+                <span className="text-[10px] font-mono text-sc-accent2">{compareCount}/{maxCompare}</span>
               </th>
               {orderedCols.map((col, idx) => {
                 const isSorted = sortKey === col.key
@@ -111,31 +105,29 @@ export default function ComponentTable({
                     onDragOver={handleDragOver}
                     onDrop={(e) => handleDrop(e, idx)}
                     onClick={() => toggleSort(col.key)}
-                    className={`px-2 py-2.5 text-[11px] font-medium text-gray-500 uppercase tracking-wider cursor-pointer select-none whitespace-nowrap transition-colors hover:text-gray-300 ${col.align === 'left' ? 'text-left' : 'text-right'} ${col.width || ''} ${isNameCol ? 'sticky left-0 z-10 bg-white/[0.03]' : ''}`}
+                    className={`table-header cursor-pointer select-none whitespace-nowrap hover:text-sc-accent transition-colors ${
+                      col.align === 'left' ? 'text-left' : 'text-right'
+                    } ${col.width || ''} ${isNameCol ? 'sticky left-0 z-10 bg-sc-darker/40' : ''}`}
                   >
-                    <span className="inline-flex items-center gap-0.5">
-                      {!isNameCol && (
-                        <GripVertical className="w-2.5 h-2.5 text-gray-700 opacity-0 group-hover:opacity-100 cursor-grab flex-shrink-0" />
-                      )}
+                    <span className="inline-flex items-center gap-1">
                       {col.label}
                       {isSorted && (
                         sortDir === 'asc'
-                          ? <ChevronUp className="w-3 h-3 text-sc-accent" />
-                          : <ChevronDown className="w-3 h-3 text-sc-accent" />
+                          ? <ChevronUp className="w-3.5 h-3.5 text-sc-accent" />
+                          : <ChevronDown className="w-3.5 h-3.5 text-sc-accent" />
                       )}
                     </span>
                   </th>
                 )
               })}
-              {/* Reset column order */}
               {columnOrder && (
-                <th className="w-8 px-1 py-2.5">
+                <th className="w-8 px-2 py-2.5">
                   <button
                     onClick={(e) => { e.stopPropagation(); onResetColumns() }}
                     title="Reset column order"
-                    className="text-gray-600 hover:text-gray-400 transition-colors"
+                    className="text-gray-500 hover:text-sc-accent transition-colors"
                   >
-                    <RotateCcw className="w-3 h-3" />
+                    <RotateCcw className="w-3.5 h-3.5" />
                   </button>
                 </th>
               )}
@@ -147,19 +139,18 @@ export default function ComponentTable({
               return (
                 <tr
                   key={comp.id}
-                  className={`border-b border-white/[0.03] transition-colors ${
+                  className={`transition-colors ${
                     selected
-                      ? 'bg-sc-accent/[0.06] border-l-2 border-l-sc-accent/60'
-                      : 'hover:bg-white/[0.03]'
+                      ? 'bg-sc-accent/10 border-l-2 border-l-sc-accent'
+                      : 'hover:bg-white/[0.04]'
                   }`}
                 >
-                  {/* Compare checkbox */}
-                  <td className="w-10 px-2 py-1.5 text-center">
+                  <td className="w-10 px-3 py-2.5 text-center">
                     <input
                       type="checkbox"
                       checked={selected}
                       onChange={() => onToggleCompare(comp.id)}
-                      className="w-3.5 h-3.5 rounded border-white/[0.15] bg-white/[0.03] text-sc-accent focus:ring-sc-accent/30 cursor-pointer accent-sc-accent"
+                      className="w-3.5 h-3.5 rounded cursor-pointer accent-sc-accent"
                     />
                   </td>
                   {orderedCols.map((col) => {
@@ -167,11 +158,11 @@ export default function ComponentTable({
                     return (
                       <td
                         key={col.key}
-                        className={`px-2 py-1.5 text-xs ${
+                        className={`table-cell ${
                           isNameCol
-                            ? 'sticky left-0 z-10 bg-inherit text-gray-200 font-medium'
+                            ? 'sticky left-0 z-10 bg-inherit text-white font-medium'
                             : col.align === 'left'
-                              ? 'text-left text-gray-400'
+                              ? 'text-left text-gray-300'
                               : 'text-right font-mono tabular-nums text-gray-300'
                         } ${col.width || ''}`}
                       >
@@ -187,7 +178,7 @@ export default function ComponentTable({
         </table>
       </div>
       {sorted.length === 0 && (
-        <div className="py-12 text-center text-gray-600 text-xs font-mono">No components match your filters</div>
+        <div className="py-12 text-center text-gray-400 text-sm">No components match your filters</div>
       )}
     </div>
   )
