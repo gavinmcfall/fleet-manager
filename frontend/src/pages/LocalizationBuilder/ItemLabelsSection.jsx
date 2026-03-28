@@ -1,4 +1,4 @@
-import React, { useState } from 'react'
+import React, { useState, useEffect } from 'react'
 import { ChevronDown, ChevronUp } from 'lucide-react'
 import CategoryFieldConfig from './CategoryFieldConfig'
 import { LABEL_CATEGORIES, CATEGORY_FIELDS, buildPreviewLabel } from './constants'
@@ -19,11 +19,24 @@ function Toggle({ checked, onChange }) {
 export default function ItemLabelsSection({ config, onUpdateConfig, getCatFormat, onUpdateCatFormat }) {
   const [expandedCat, setExpandedCat] = useState(null)
 
+  // Auto-expand when a category gets toggled on
+  const handleToggle = (cat) => {
+    const wasEnabled = config[cat.key] || false
+    onUpdateConfig({ [cat.key]: !wasEnabled })
+    if (!wasEnabled) {
+      // Toggling ON — auto-expand to show config
+      setExpandedCat(cat.dbKey)
+    } else {
+      // Toggling OFF — collapse if this one was expanded
+      if (expandedCat === cat.dbKey) setExpandedCat(null)
+    }
+  }
+
   return (
     <div className="panel">
       <div className="px-5 py-4 border-b border-sc-border">
         <h3 className="font-display font-semibold text-sm text-white">Item Labels</h3>
-        <p className="text-xs text-gray-500 mt-0.5">Add metadata to item names in-game. Configure each category independently.</p>
+        <p className="text-xs text-gray-500 mt-0.5">Add metadata to item names in-game. Toggle a category on to configure which fields appear and their order.</p>
       </div>
 
       <div className="p-4 space-y-2">
@@ -46,7 +59,7 @@ export default function ItemLabelsSection({ config, onUpdateConfig, getCatFormat
                 }`}
               >
                 <div onClick={(e) => { e.stopPropagation() }}>
-                  <Toggle checked={enabled} onChange={() => onUpdateConfig({ [cat.key]: !enabled })} />
+                  <Toggle checked={enabled} onChange={() => handleToggle(cat)} />
                 </div>
                 <div className="flex-1 min-w-0">
                   <span className="text-sm text-gray-200">{cat.label}</span>
@@ -64,7 +77,7 @@ export default function ItemLabelsSection({ config, onUpdateConfig, getCatFormat
                 )}
               </button>
 
-              {/* Expanded config */}
+              {/* Expanded config — shows field order, visibility, prefix/suffix */}
               {isExpanded && (
                 <div className="border border-t-0 border-sc-accent/20 rounded-b bg-black/10 pt-3">
                   <CategoryFieldConfig

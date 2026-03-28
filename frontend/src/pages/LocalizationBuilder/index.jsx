@@ -145,6 +145,17 @@ export default function LocalizationBuilder() {
     setDirty(true)
   }
 
+  const addFromFleet = (fleetEntry) => {
+    if (orderedShips.some(s => s.vehicleId === fleetEntry.vehicle_id)) return
+    setOrderedShips(renumber([...orderedShips, {
+      vehicleId: fleetEntry.vehicle_id,
+      vehicleName: fleetEntry.vehicle_name,
+      customLabel: fleetEntry.custom_name || null,
+      sortPosition: 0,
+    }]))
+    setDirty(true)
+  }
+
   // ── Save all ──────────────────────────────────────────────────────
   const handleSave = async () => {
     setSaving(true)
@@ -296,12 +307,14 @@ export default function LocalizationBuilder() {
           config={config}
           orderedShips={orderedShips}
           allShips={allShips}
+          fleet={fleet}
           shipSearch={shipSearch}
           setShipSearch={setShipSearch}
           onToggle={() => updateConfig({ asopEnabled: !config.asopEnabled })}
           onReorder={handleShipReorder}
           onRemove={removeShip}
           onAdd={addShip}
+          onAddFromFleet={addFromFleet}
         />
       )}
 

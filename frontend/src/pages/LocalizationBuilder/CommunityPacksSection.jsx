@@ -30,12 +30,36 @@ export default function CommunityPacksSection({ packs, enabledPacks, onTogglePac
       <div className="panel">
         <div className="px-5 py-4 border-b border-sc-border">
           <h3 className="font-display font-semibold text-sm text-white">Community Packs</h3>
-          <p className="text-xs text-gray-500 mt-0.5">Curated string replacement packs from the community</p>
+          <p className="text-xs text-gray-500 mt-0.5">Curated string replacement packs inspired by the community</p>
         </div>
-        <div className="p-8 text-center">
-          <Package className="w-10 h-10 mx-auto mb-3 text-gray-700" />
-          <p className="text-sm text-gray-500">No community packs available yet.</p>
-          <p className="text-xs text-gray-600 mt-1">Packs will appear here once uploaded by an admin.</p>
+        <div className="p-6 space-y-4">
+          <div className="flex gap-4 items-start">
+            <div className="w-10 h-10 rounded-lg bg-purple-500/10 flex items-center justify-center shrink-0">
+              <Package className="w-5 h-5 text-purple-400" />
+            </div>
+            <div>
+              <p className="text-sm text-gray-300">Coming soon</p>
+              <p className="text-xs text-gray-500 mt-1 leading-relaxed">
+                Community packs add bulk string replacements to your global.ini — things like blueprint reward pools
+                on contract descriptions, contraband warnings on illegal items, and shortened material names.
+                Inspired by the <span className="text-sc-accent">StarStrings</span> mod.
+              </p>
+            </div>
+          </div>
+          <div className="bg-black/30 rounded p-3 space-y-2">
+            <p className="text-[10px] uppercase tracking-wider text-gray-500">Planned packs</p>
+            <div className="flex flex-wrap gap-2">
+              {[
+                { icon: FlaskConical, label: 'Blueprint Pools', color: 'text-purple-400 bg-purple-500/10 border-purple-500/20' },
+                { icon: AlertTriangle, label: 'Contraband Warnings', color: 'text-red-400 bg-red-500/10 border-red-500/20' },
+                { icon: Gem, label: 'Material Names', color: 'text-emerald-400 bg-emerald-500/10 border-emerald-500/20' },
+              ].map(p => (
+                <span key={p.label} className={`inline-flex items-center gap-1.5 text-[10px] font-mono px-2 py-1 rounded border ${p.color}`}>
+                  <p.icon className="w-3 h-3" />{p.label}
+                </span>
+              ))}
+            </div>
+          </div>
         </div>
       </div>
     )
