@@ -522,7 +522,20 @@ const ROLE_GROUP_MAP: Record<string, string> = {
   "Starter": "Multi-Role",
 };
 
-function getRoleGroup(focus: string): string {
+function getRoleGroup(focus: string, classification?: string): string {
+  // Check classification first — it's more specific than focus
+  // e.g. Prospector: focus "Industrial", classification "Light Mining" → Mining
+  // e.g. ROC: focus "Ground", classification "Mining" → Mining
+  if (classification) {
+    const classGroup = ROLE_GROUP_MAP[classification];
+    if (classGroup) return classGroup;
+    if (/mining/i.test(classification)) return "Mining";
+    if (/salvage/i.test(classification)) return "Salvage";
+    if (/freight/i.test(classification)) return "Cargo";
+    if (/science/i.test(classification)) return "Exploration";
+    if (/medical|ambulance/i.test(classification)) return "Medical";
+    if (/refuel/i.test(classification)) return "Refueling";
+  }
   return ROLE_GROUP_MAP[focus] ?? focus;
 }
 
@@ -571,7 +584,7 @@ export function analyzeFleet(fleet: UserFleetEntry[], _allVehicles: Vehicle[], t
     sizeDistribution[size] = (sizeDistribution[size] ?? 0) + 1;
 
     // Role categories — group granular focus values into broad roles
-    const roleGroup = getRoleGroup(entry.focus || "Unknown");
+    const roleGroup = getRoleGroup(entry.focus || "Unknown", entry.classification ?? undefined);
     if (!roleCategories[roleGroup]) {
       roleCategories[roleGroup] = [];
     }

@@ -129,15 +129,15 @@ export default function Dashboard() {
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
         <SectionBoundary label="Size Distribution">
         <PanelSection title="Size Distribution" icon={Crosshair}>
-          <div className="p-4 h-64 bg-grid" role="img" aria-label={`Size distribution: ${sizeData.map(d => `${d.name}: ${d.value}`).join(', ')}`}>
+          <div className="p-4 h-80 bg-grid" role="img" aria-label={`Size distribution: ${sizeData.map(d => `${d.name}: ${d.value}`).join(', ')}`}>
             <ResponsiveContainer width="100%" height="100%">
-              <PieChart>
+              <PieChart margin={{ top: 20, right: 20, bottom: 20, left: 20 }}>
                 <Pie
                   data={sizeData}
                   cx="50%"
                   cy="50%"
-                  innerRadius={50}
-                  outerRadius={90}
+                  innerRadius={45}
+                  outerRadius={80}
                   paddingAngle={3}
                   dataKey="value"
                   label={({ name, value }) => `${name}: ${value}`}
@@ -156,7 +156,7 @@ export default function Dashboard() {
 
         <SectionBoundary label="Role Categories">
         <PanelSection title="Role Categories" icon={Shield}>
-          <div className="p-4 h-64 bg-grid" role="img" aria-label={`Role categories: ${roleData.map(d => `${d.name}: ${d.count}`).join(', ')}`}>
+          <div className="p-4 bg-grid" style={{ height: Math.max(280, roleData.length * 36 + 40) }} role="img" aria-label={`Role categories: ${roleData.map(d => `${d.name}: ${d.count}`).join(', ')}`}>
             <ResponsiveContainer width="100%" height="100%">
               <BarChart data={roleData} layout="vertical" margin={{ left: 100, right: 30 }}>
                 <XAxis type="number" allowDecimals={false} domain={[0, 'dataMax + 1']} tick={{ fill: '#6b7280', fontSize: 11 }} />
@@ -165,6 +165,7 @@ export default function Dashboard() {
                   type="category"
                   tick={{ fill: '#9ca3af', fontSize: 11 }}
                   width={95}
+                  interval={0}
                 />
                 <Tooltip {...TOOLTIP_STYLE} />
                 <Bar dataKey="count" fill={CHART_COLORS[0]} fillOpacity={0.7} radius={[0, 4, 4, 0]}>
