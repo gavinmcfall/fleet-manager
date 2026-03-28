@@ -78,13 +78,15 @@ export default function Components() {
         })}
       </div>
 
-      {/* Filters */}
-      <FilterBar
-        dimensions={dimensions}
-        items={allComponents}
-        search={search}
-        onSearchChange={setSearch}
-      />
+      {/* Filters — constrained to viewport, pills wrap */}
+      <div className="overflow-hidden">
+        <FilterBar
+          dimensions={dimensions}
+          items={allComponents}
+          search={search}
+          onSearchChange={setSearch}
+        />
+      </div>
 
       {/* Loading / Error / Table */}
       {loading ? (

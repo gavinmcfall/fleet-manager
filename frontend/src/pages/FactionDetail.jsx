@@ -1,6 +1,6 @@
 import React, { useState, useMemo } from 'react'
 import { useParams, Link, useSearchParams } from 'react-router-dom'
-import { ArrowLeft, MapPin, FlaskConical, Shield, Users, Building2, ChevronRight, Coins, FileText, Crosshair, Info } from 'lucide-react'
+import { ArrowLeft, MapPin, FlaskConical, Shield, Users, Building2, ChevronRight, Coins, FileText, Info, Briefcase, Scale, Swords, HeartHandshake, Lock, ChevronDown, Trophy, Package } from 'lucide-react'
 import { useFactionDetail } from '../hooks/useAPI'
 import LoadingState from '../components/LoadingState'
 import ErrorState from '../components/ErrorState'
@@ -42,6 +42,35 @@ const MISSION_TYPE_DESCRIPTIONS = {
   "Resource Gathering": "Gather resources from the environment and deliver them.",
 }
 
+// ── Area loot hints — maps mission type → likely container location keys ──────
+// v1 heuristic: not every mission of a type goes to every location, but these are
+// the locations players commonly encounter when running each mission type.
+const MISSION_CATEGORY_LOCATIONS = {
+  Mercenary:       ['UGFs', 'ColonialOutpost', 'DCDelving'],
+  Theft:           ['UGFs', 'ColonialOutpost'],
+  Recovery:        ['Derelict', 'Caves'],
+  'Recovery + Combat': ['UGFs', 'ColonialOutpost', 'Derelict'],
+  'Recovery (Unlawful)': ['UGFs', 'ColonialOutpost'],
+  Exploration:     ['Caves', 'Derelict'],
+  'Combined Ops':  ['UGFs', 'DCDelving'],
+  'Facility Raid': ['UGFs', 'ASDDelving', 'DCDelving'],
+  'Bounty (FPS)':  ['UGFs', 'ColonialOutpost', 'Caves'],
+  Elimination:     ['UGFs', 'ColonialOutpost', 'DCDelving'],
+  Investigation:   ['Derelict', 'Caves'],
+  'Data Recovery': ['UGFs', 'ColonialOutpost'],
+  'Missing Person': ['Caves', 'Derelict'],
+}
+
+// location_key → { label, poiPath } for building area loot hint links
+const AREA_LOOT_LOCATIONS = {
+  UGFs:            { label: 'Bunkers', path: '/poi/UGFs' },
+  ColonialOutpost: { label: 'Colonial Outposts', path: '/poi/ColonialOutpost' },
+  DCDelving:       { label: 'Distribution Centres', path: '/poi/DCDelving' },
+  Caves:           { label: 'Caves', path: '/poi/Caves' },
+  Derelict:        { label: 'Derelicts', path: '/poi/Derelict' },
+  ASDDelving:      { label: 'ASD Facilities', path: '/poi/ASDDelving' },
+}
+
 // Known faction slug → display name mapping for rep reward formatting
 const FACTION_SLUG_NAMES = {
   bountyhuntersguild: 'Bounty Hunters Guild',
@@ -77,6 +106,63 @@ function humanizeFactionSlug(slug) {
   return slug.charAt(0).toUpperCase() + slug.slice(1)
 }
 
+/** Known scope slug → display name */
+const SCOPE_SLUG_NAMES = {
+  bounty: 'Bounty',
+  hiredmuscle: 'Hired Muscle',
+  hauling: 'Hauling',
+  courier: 'Courier',
+  delivery: 'Delivery',
+  mining: 'Mining',
+  salvage: 'Salvage',
+  security: 'Security',
+  mercenary: 'Mercenary',
+  assassination: 'Assassination',
+  exploration: 'Exploration',
+}
+
+/** Humanize a scope slug: known lookup, then snake_case/camelCase split + title-case */
+function humanizeScopeSlug(slug) {
+  if (!slug) return ''
+  const lower = slug.toLowerCase()
+  if (SCOPE_SLUG_NAMES[lower]) return SCOPE_SLUG_NAMES[lower]
+  // Split snake_case: "hired_muscle" → "Hired Muscle"
+  return slug.replace(/_/g, ' ').replace(/([a-z])([A-Z])/g, '$1 $2')
+    .split(' ').map(w => w.charAt(0).toUpperCase() + w.slice(1).toLowerCase()).join(' ')
+}
+
+/** Humanize a standing slug: known patterns, then fallback split + title-case */
+function humanizeStandingSlug(slug) {
+  if (!slug) return ''
+  // Handle "rank4", "hauling_rank4" etc.
+  const rankMatch = slug.match(/^(?:(.+)_)?rank(\d+)$/i)
+  if (rankMatch) {
+    const prefix = rankMatch[1] ? humanizeScopeSlug(rankMatch[1]) + ' ' : ''
+    return `${prefix}Rank ${rankMatch[2]}`
+  }
+  // Handle known compound words
+  const STANDING_NAMES = {
+    agent: 'Agent',
+    masteragent: 'Master Agent',
+    senioragent: 'Senior Agent',
+    junioragent: 'Junior Agent',
+    neutral: 'Neutral',
+    hostile: 'Hostile',
+    friendly: 'Friendly',
+  }
+  const lower = slug.toLowerCase()
+  if (STANDING_NAMES[lower]) return STANDING_NAMES[lower]
+  // Fallback: snake_case split, camelCase split, title-case
+  return slug.replace(/_/g, ' ').replace(/([a-z])([A-Z])/g, '$1 $2')
+    .split(' ').map(w => w.charAt(0).toUpperCase() + w.slice(1).toLowerCase()).join(' ')
+}
+
+/** Humanize comparison operator */
+function humanizeComparison(cmp) {
+  const map = { gte: 'or higher', lte: 'or lower', gt: 'above', lt: 'below', eq: 'exactly' }
+  return map[cmp] || cmp
+}
+
 /** Format raw rep_reward strings like "+50bountyhuntersguild" or "+250citizensforprosperity,-100xenothreat" */
 function formatRepReward(raw) {
   if (!raw) return null
@@ -90,11 +176,116 @@ function formatRepReward(raw) {
   }).join(', ')
 }
 
+// ── Reputation Tier Ladder ──────────────────────────────────────────
+function RepTierLadder({ repLadder }) {
+  const [expanded, setExpanded] = useState(false)
+
+  if (!repLadder || !repLadder.standings || repLadder.standings.length === 0) return null
+
+  const standings = repLadder.standings
+  const COLLAPSE_THRESHOLD = 6
+  const shouldCollapse = standings.length > COLLAPSE_THRESHOLD
+  const isOpen = !shouldCollapse || expanded
+
+  // Color gradient from dim (low tiers) to bright (high tiers)
+  const TIER_COLORS = [
+    { bg: 'bg-gray-500/8', text: 'text-gray-500', border: 'border-gray-500/15', bar: 'bg-gray-500/20' },
+    { bg: 'bg-gray-500/10', text: 'text-gray-400', border: 'border-gray-500/20', bar: 'bg-gray-500/30' },
+    { bg: 'bg-blue-500/8', text: 'text-blue-400', border: 'border-blue-500/15', bar: 'bg-blue-500/20' },
+    { bg: 'bg-cyan-500/8', text: 'text-cyan-400', border: 'border-cyan-500/15', bar: 'bg-cyan-500/20' },
+    { bg: 'bg-emerald-500/8', text: 'text-emerald-400', border: 'border-emerald-500/15', bar: 'bg-emerald-500/25' },
+    { bg: 'bg-amber-500/8', text: 'text-amber-400', border: 'border-amber-500/15', bar: 'bg-amber-500/25' },
+    { bg: 'bg-orange-500/10', text: 'text-orange-400', border: 'border-orange-500/20', bar: 'bg-orange-500/30' },
+    { bg: 'bg-red-500/10', text: 'text-red-400', border: 'border-red-500/20', bar: 'bg-red-500/30' },
+    { bg: 'bg-purple-500/10', text: 'text-purple-400', border: 'border-purple-500/20', bar: 'bg-purple-500/30' },
+    { bg: 'bg-fuchsia-500/12', text: 'text-fuchsia-400', border: 'border-fuchsia-500/25', bar: 'bg-fuchsia-500/35' },
+  ]
+
+  function tierColor(index, total) {
+    const scaled = total <= 1 ? 0 : Math.round((index / (total - 1)) * (TIER_COLORS.length - 1))
+    return TIER_COLORS[Math.min(scaled, TIER_COLORS.length - 1)]
+  }
+
+  // Find max rep for the progress bar scaling
+  const maxRep = Math.max(...standings.map(s => s.min_reputation), 1)
+
+  return (
+    <div className="bg-white/[0.03] border border-white/[0.06] rounded-xl overflow-hidden">
+      <button
+        onClick={() => setExpanded(e => !e)}
+        className="w-full flex items-center justify-between px-5 py-3 hover:bg-white/[0.02] transition-colors"
+      >
+        <h2 className="text-xs uppercase tracking-wider text-gray-500 flex items-center gap-2">
+          <Trophy className="w-3.5 h-3.5" /> Reputation Progression
+          <span className="text-gray-600 normal-case tracking-normal">({repLadder.scope_name})</span>
+        </h2>
+        <ChevronDown className={`w-4 h-4 text-gray-600 transition-transform duration-200 ${isOpen ? 'rotate-180' : ''}`} />
+      </button>
+
+      {isOpen && (
+        <div className="px-5 pb-4 space-y-1">
+          {standings.map((standing, i) => {
+            const colors = tierColor(i, standings.length)
+            const barWidth = maxRep > 0 ? Math.max((standing.min_reputation / maxRep) * 100, 2) : 2
+            const perkText = standing.perks?.length > 0
+              ? standing.perks.map(p => p.display_name || p.perk_name).join(', ')
+              : standing.perk_description
+
+            return (
+              <div
+                key={standing.slug || i}
+                className={`flex items-center gap-3 px-3 py-2 rounded-lg border ${colors.border} ${colors.bg} transition-all`}
+              >
+                {/* Rank number */}
+                <span className={`text-[10px] font-mono w-5 text-center ${colors.text} opacity-60`}>{i + 1}</span>
+
+                {/* Rank name + lock icon */}
+                <div className="w-36 shrink-0 flex items-center gap-1.5">
+                  {standing.is_gated ? <Lock className="w-3 h-3 text-amber-400/60 shrink-0" /> : null}
+                  <span className={`text-xs font-medium ${colors.text}`}>
+                    {humanizeStandingSlug(standing.name)}
+                  </span>
+                </div>
+
+                {/* Rep bar + value */}
+                <div className="flex-1 min-w-0">
+                  <div className="flex items-center gap-2">
+                    <div className="flex-1 h-1.5 rounded-full bg-white/[0.04] overflow-hidden">
+                      <div
+                        className={`h-full rounded-full ${colors.bar} transition-all`}
+                        style={{ width: `${barWidth}%` }}
+                      />
+                    </div>
+                    <span className="text-[10px] font-mono text-gray-500 w-12 text-right shrink-0">
+                      {standing.min_reputation.toLocaleString()}
+                    </span>
+                  </div>
+                </div>
+
+                {/* Perk description */}
+                {perkText && (
+                  <span className="text-[10px] text-gray-500 max-w-[180px] truncate shrink-0" title={perkText}>
+                    {perkText}
+                  </span>
+                )}
+              </div>
+            )
+          })}
+        </div>
+      )}
+    </div>
+  )
+}
+
 // ── Mission Detail Panel (slides in from right) ──────────────────────
-function MissionDetailPanel({ mission, type, onBack }) {
+function MissionDetailPanel({ mission, type, onBack, prerequisites, repRequirements }) {
   const isGenerator = type === 'generator'
   const isPuMission = type === 'pu_mission'
   const isContract = type === 'contract'
+
+  // Look up prereqs and rep requirements for this pu_mission
+  const missionPrereqs = isPuMission && mission.id ? (prerequisites?.[mission.id] || []) : []
+  const missionRepReqs = isPuMission && mission.id ? (repRequirements?.[mission.id] || []) : []
 
   return (
     <div className="space-y-4">
@@ -200,6 +391,40 @@ function MissionDetailPanel({ mission, type, onBack }) {
               </div>
             </div>
           )}
+
+          {/* Area loot hints */}
+          {(() => {
+            const locations = MISSION_CATEGORY_LOCATIONS[mission.mission_type]
+            if (!locations || locations.length === 0) return null
+            return (
+              <div className="bg-white/[0.03] border border-white/[0.06] rounded-xl p-5">
+                <h3 className="text-xs uppercase tracking-wider text-gray-500 mb-3 flex items-center gap-2">
+                  <Package className="w-3.5 h-3.5" /> Loot at Mission Locations
+                </h3>
+                <div className="flex flex-wrap gap-1.5 mb-3">
+                  {locations.map(key => {
+                    const loc = AREA_LOOT_LOCATIONS[key]
+                    if (!loc) return null
+                    return (
+                      <Link
+                        key={key}
+                        to={loc.path}
+                        className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-xs text-sc-accent bg-sc-accent/5 border border-sc-accent/15 hover:bg-sc-accent/10 hover:border-sc-accent/30 transition-all"
+                      >
+                        <MapPin className="w-3 h-3" />
+                        {loc.label}
+                        <ChevronRight className="w-3 h-3 opacity-50" />
+                      </Link>
+                    )
+                  })}
+                </div>
+                <div className="flex items-start gap-2 px-3 py-2 rounded-lg bg-white/[0.02] border border-white/[0.04]">
+                  <Info className="w-3.5 h-3.5 text-gray-600 mt-0.5 shrink-0" />
+                  <p className="text-[10px] text-gray-500">Items commonly found at locations used by this mission type. Actual loot varies by location.</p>
+                </div>
+              </div>
+            )
+          })()}
         </div>
       )}
 
@@ -237,6 +462,72 @@ function MissionDetailPanel({ mission, type, onBack }) {
           {mission.description && (
             <p className="text-sm text-gray-400 leading-relaxed whitespace-pre-line">{cleanDesc(mission.description)}</p>
           )}
+
+          {/* Prerequisites */}
+          {missionPrereqs.length > 0 && (
+            <div className="space-y-1.5">
+              <div className="flex items-center gap-1.5">
+                <Lock className="w-3 h-3 text-amber-400" />
+                <span className="text-[10px] font-mono uppercase tracking-wider text-amber-400">Prerequisites</span>
+              </div>
+              <div className="flex flex-wrap gap-1.5">
+                {missionPrereqs.map((p, i) => (
+                  <span key={i} className="text-[10px] px-2 py-0.5 rounded bg-amber-500/10 text-amber-400 border border-amber-500/20">
+                    {p.title || p.uuid?.slice(0, 8)}
+                  </span>
+                ))}
+              </div>
+            </div>
+          )}
+
+          {/* Reputation requirements */}
+          {missionRepReqs.length > 0 && (
+            <div className="space-y-1.5">
+              <div className="flex items-center gap-1.5">
+                <Shield className="w-3 h-3 text-blue-400" />
+                <span className="text-[10px] font-mono uppercase tracking-wider text-blue-400">Reputation Required</span>
+              </div>
+              <div className="flex flex-wrap gap-1.5">
+                {missionRepReqs.map((r, i) => (
+                  <span key={i} className="text-[10px] px-2 py-0.5 rounded bg-blue-500/10 text-blue-400 border border-blue-500/20">
+                    {humanizeStandingSlug(r.standing_slug)} {humanizeComparison(r.comparison)} with {humanizeFactionSlug(r.faction_slug)}
+                    {r.scope_slug ? ` (${humanizeScopeSlug(r.scope_slug)})` : ''}
+                  </span>
+                ))}
+              </div>
+            </div>
+          )}
+
+          {/* Area loot hints for pu_missions */}
+          {(() => {
+            const locations = MISSION_CATEGORY_LOCATIONS[mission.category]
+            if (!locations || locations.length === 0) return null
+            return (
+              <div className="space-y-1.5">
+                <div className="flex items-center gap-1.5">
+                  <Package className="w-3 h-3 text-gray-500" />
+                  <span className="text-[10px] font-mono uppercase tracking-wider text-gray-500">Loot at Mission Locations</span>
+                </div>
+                <div className="flex flex-wrap gap-1.5">
+                  {locations.map(key => {
+                    const loc = AREA_LOOT_LOCATIONS[key]
+                    if (!loc) return null
+                    return (
+                      <Link
+                        key={key}
+                        to={loc.path}
+                        className="inline-flex items-center gap-1 px-2 py-0.5 rounded text-[10px] text-sc-accent bg-sc-accent/5 border border-sc-accent/15 hover:bg-sc-accent/10 hover:border-sc-accent/30 transition-all"
+                      >
+                        <MapPin className="w-2.5 h-2.5" />
+                        {loc.label}
+                      </Link>
+                    )
+                  })}
+                </div>
+                <p className="text-[9px] text-gray-600 pl-4">Items commonly found at locations used by this mission type</p>
+              </div>
+            )
+          })()}
         </div>
       )}
 
@@ -289,6 +580,9 @@ export default function FactionDetail() {
     // Generators → one entry per mission type
     for (const gen of (data.generators || [])) {
       const hasBP = gen.blueprint_pools?.some(p => p.blueprints?.length > 0)
+      const bpCount = hasBP
+        ? gen.blueprint_pools.reduce((sum, p) => sum + (p.blueprints?.length || 0), 0)
+        : 0
       missions.push({
         id: `gen-${gen.key}`,
         type: 'generator',
@@ -297,6 +591,7 @@ export default function FactionDetail() {
         source: hasBP ? 'blueprint' : 'dynamic',
         data: gen,
         hasBP,
+        bpCount,
         reward: null,
       })
     }
@@ -385,19 +680,78 @@ export default function FactionDetail() {
         <div className="flex items-start gap-6">
           {logo && <img src={logo} alt={faction.display_name} className="w-36 h-36 rounded-xl border border-white/[0.08] object-cover shrink-0 shadow-lg shadow-black/30 bg-white/[0.02]" />}
           <div className="flex-1 min-w-0">
-            {guildLabel && <span className="px-2 py-0.5 rounded text-[10px] text-gray-500 bg-white/[0.04] border border-white/[0.06] uppercase tracking-wider">{guildLabel}</span>}
+            <div className="flex flex-wrap items-center gap-2 mb-1">
+              {guildLabel && <span className="px-2 py-0.5 rounded text-[10px] text-gray-500 bg-white/[0.04] border border-white/[0.06] uppercase tracking-wider">{guildLabel}</span>}
+              {faction.is_lawful != null && (
+                <span className={`inline-flex items-center gap-1 px-2 py-0.5 rounded text-[10px] border ${
+                  faction.is_lawful ? 'bg-sky-500/10 text-sky-400 border-sky-500/20' : 'bg-red-500/10 text-red-400 border-red-500/20'
+                }`}>
+                  <Scale className="w-2.5 h-2.5" />
+                  {faction.is_lawful ? 'Lawful' : 'Unlawful'}
+                </span>
+              )}
+            </div>
             <h1 className="text-2xl font-bold text-white tracking-wide mt-1 mb-1" style={{ textShadow: '0 0 20px rgba(34, 211, 238, 0.15)' }}>
               {faction.display_name}
             </h1>
             {faction.focus && <p className="text-sm text-gray-400 mb-2">{faction.focus}</p>}
             {faction.description && <p className="text-sm text-gray-500 leading-relaxed mb-2">{faction.description}</p>}
+
+            {/* Occupation and Association */}
+            {(faction.occupation || faction.association) && (
+              <div className="flex flex-wrap gap-x-5 gap-y-1 text-xs text-gray-400 mb-2">
+                {faction.occupation && (
+                  <span className="flex items-center gap-1.5">
+                    <Briefcase className="w-3 h-3 text-gray-600" /> {faction.occupation}
+                  </span>
+                )}
+                {faction.association && (
+                  <span className="flex items-center gap-1.5">
+                    <Building2 className="w-3 h-3 text-gray-600" /> {faction.association}
+                  </span>
+                )}
+              </div>
+            )}
+
             <div className="flex flex-wrap gap-x-5 gap-y-1 text-xs text-gray-500">
               {faction.headquarters && <span className="flex items-center gap-1.5"><Building2 className="w-3 h-3 text-gray-600" /> HQ: {faction.headquarters}</span>}
               {faction.leadership && <span className="flex items-center gap-1.5"><Users className="w-3 h-3 text-gray-600" /> Led by {faction.leadership}</span>}
             </div>
+
+            {/* Biography */}
+            {faction.biography && (
+              <p className="text-sm text-gray-500/80 leading-relaxed mt-3 italic border-l-2 border-white/[0.06] pl-3">
+                {faction.biography}
+              </p>
+            )}
+
+            {/* Allies and Enemies */}
+            {(faction.allies_json || faction.enemies_json) && (() => {
+              const allies = faction.allies_json ? (() => { try { return JSON.parse(faction.allies_json) } catch { return [] } })() : []
+              const enemies = faction.enemies_json ? (() => { try { return JSON.parse(faction.enemies_json) } catch { return [] } })() : []
+              return (allies.length > 0 || enemies.length > 0) ? (
+                <div className="flex flex-wrap gap-x-5 gap-y-1 text-xs text-gray-500 mt-2">
+                  {allies.length > 0 && (
+                    <span className="flex items-center gap-1.5">
+                      <HeartHandshake className="w-3 h-3 text-emerald-500/60" />
+                      <span className="text-gray-600">Allies:</span> {allies.join(', ')}
+                    </span>
+                  )}
+                  {enemies.length > 0 && (
+                    <span className="flex items-center gap-1.5">
+                      <Swords className="w-3 h-3 text-red-500/60" />
+                      <span className="text-gray-600">Rivals:</span> {enemies.join(', ')}
+                    </span>
+                  )}
+                </div>
+              ) : null
+            })()}
           </div>
         </div>
       </div>
+
+      {/* Reputation Progression */}
+      {data.rep_ladder && <RepTierLadder repLadder={data.rep_ladder} />}
 
       {/* Stats pills */}
       <div className="flex flex-wrap items-center gap-3">
@@ -458,7 +812,15 @@ export default function FactionDetail() {
                   </div>
                   <h3 className="text-sm text-gray-200 group-hover:text-white transition-colors truncate">{m.title}</h3>
                 </div>
-                {m.hasBP && <FlaskConical className="w-3.5 h-3.5 text-emerald-400 shrink-0" />}
+                {m.hasBP && (
+                  <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded bg-emerald-500/10 border border-emerald-500/20 shrink-0" title={`${m.bpCount || ''} blueprint${m.bpCount === 1 ? '' : 's'}`}>
+                    <FlaskConical className="w-3 h-3 text-emerald-400" />
+                    {m.bpCount > 0 && <span className="text-[9px] font-mono text-emerald-400">{m.bpCount}</span>}
+                  </span>
+                )}
+                {m.type === 'pu_mission' && (data.prerequisites?.[m.data.id]?.length > 0 || data.rep_requirements?.[m.data.id]?.length > 0) && (
+                  <Lock className="w-3.5 h-3.5 text-amber-400/60 shrink-0" title="Has prerequisites or reputation requirements" />
+                )}
                 {m.reward > 0 && (
                   <span className="text-xs font-mono text-amber-400 shrink-0">{m.reward.toLocaleString()} aUEC</span>
                 )}
@@ -481,6 +843,8 @@ export default function FactionDetail() {
               mission={selectedMission.data}
               type={selectedMission.type}
               onBack={() => setSelectedMission(null)}
+              prerequisites={data.prerequisites}
+              repRequirements={data.rep_requirements}
             />
           )}
         </div>

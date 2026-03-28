@@ -1,6 +1,6 @@
 import React from 'react'
 import { useParams, Link } from 'react-router-dom'
-import { ArrowLeft, FileText, MapPin, FlaskConical, Shield, Users, Building2, Info } from 'lucide-react'
+import { ArrowLeft, FileText, MapPin, FlaskConical, Shield, Users, Building2, Info, Briefcase, Scale, Swords, HeartHandshake } from 'lucide-react'
 import { useMissionDetail } from '../hooks/useAPI'
 import LoadingState from '../components/LoadingState'
 import ErrorState from '../components/ErrorState'
@@ -111,6 +111,14 @@ export default function MissionDetail() {
                 <span className="px-2 py-0.5 rounded text-[10px] text-gray-500 bg-white/[0.04] border border-white/[0.06] uppercase tracking-wider">{guildLabel}</span>
               )}
               <span className="px-2 py-0.5 rounded text-[10px] text-amber-400 bg-amber-500/10 border border-amber-500/20">{generator.mission_type}</span>
+              {generator.is_lawful != null && (
+                <span className={`inline-flex items-center gap-1 px-2 py-0.5 rounded text-[10px] border ${
+                  generator.is_lawful ? 'bg-sky-500/10 text-sky-400 border-sky-500/20' : 'bg-red-500/10 text-red-400 border-red-500/20'
+                }`}>
+                  <Scale className="w-2.5 h-2.5" />
+                  {generator.is_lawful ? 'Lawful' : 'Unlawful'}
+                </span>
+              )}
             </div>
 
             {/* Name */}
@@ -128,6 +136,22 @@ export default function MissionDetail() {
               <p className="text-sm text-gray-500 leading-relaxed mb-3">{generator.description}</p>
             )}
 
+            {/* Occupation and Association */}
+            {(generator.occupation || generator.association) && (
+              <div className="flex flex-wrap gap-x-5 gap-y-1 text-xs text-gray-400 mb-3">
+                {generator.occupation && (
+                  <span className="flex items-center gap-1.5">
+                    <Briefcase className="w-3 h-3 text-gray-600" /> {generator.occupation}
+                  </span>
+                )}
+                {generator.association && (
+                  <span className="flex items-center gap-1.5">
+                    <Building2 className="w-3 h-3 text-gray-600" /> {generator.association}
+                  </span>
+                )}
+              </div>
+            )}
+
             {/* Faction meta */}
             <div className="flex flex-wrap gap-x-5 gap-y-1 text-xs text-gray-500">
               {generator.headquarters && (
@@ -143,6 +167,35 @@ export default function MissionDetail() {
                 </span>
               )}
             </div>
+
+            {/* Biography */}
+            {generator.biography && (
+              <p className="text-sm text-gray-500/80 leading-relaxed mt-3 italic border-l-2 border-white/[0.06] pl-3">
+                {generator.biography}
+              </p>
+            )}
+
+            {/* Allies and Enemies */}
+            {(generator.allies_json || generator.enemies_json) && (() => {
+              const allies = generator.allies_json ? (() => { try { return JSON.parse(generator.allies_json) } catch { return [] } })() : []
+              const enemies = generator.enemies_json ? (() => { try { return JSON.parse(generator.enemies_json) } catch { return [] } })() : []
+              return (allies.length > 0 || enemies.length > 0) ? (
+                <div className="flex flex-wrap gap-x-5 gap-y-1 text-xs text-gray-500 mt-2">
+                  {allies.length > 0 && (
+                    <span className="flex items-center gap-1.5">
+                      <HeartHandshake className="w-3 h-3 text-emerald-500/60" />
+                      <span className="text-gray-600">Allies:</span> {allies.join(', ')}
+                    </span>
+                  )}
+                  {enemies.length > 0 && (
+                    <span className="flex items-center gap-1.5">
+                      <Swords className="w-3 h-3 text-red-500/60" />
+                      <span className="text-gray-600">Rivals:</span> {enemies.join(', ')}
+                    </span>
+                  )}
+                </div>
+              ) : null
+            })()}
           </div>
         </div>
       </div>

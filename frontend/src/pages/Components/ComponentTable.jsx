@@ -1,4 +1,4 @@
-import { useRef, useMemo } from 'react'
+import { useRef, useMemo, useEffect, useCallback } from 'react'
 import { useSearchParams } from 'react-router-dom'
 import { ChevronUp, ChevronDown, RotateCcw } from 'lucide-react'
 import { DmgShape, getDamageType } from '../Loadout/loadoutHelpers'
@@ -12,6 +12,9 @@ export default function ComponentTable({
   const sortKey = searchParams.get('sort') || null
   const sortDir = searchParams.get('dir') || 'desc'
   const dragColRef = useRef(null)
+  const topScrollRef = useRef(null)
+  const tableScrollRef = useRef(null)
+  const syncingRef = useRef(false)
 
   const orderedKeys = useMemo(
     () => reconcileColumns(columnOrder, columns),
@@ -40,6 +43,26 @@ export default function ComponentTable({
       return 0
     })
   }, [components, sortKey, sortDir])
+
+  // Sync top scrollbar ↔ table scroll
+  const syncScroll = useCallback((source) => {
+    if (syncingRef.current) return
+    syncingRef.current = true
+    const top = topScrollRef.current
+    const tbl = tableScrollRef.current
+    if (source === 'top' && top && tbl) tbl.scrollLeft = top.scrollLeft
+    else if (source === 'table' && top && tbl) top.scrollLeft = tbl.scrollLeft
+    requestAnimationFrame(() => { syncingRef.current = false })
+  }, [])
+
+  // Set top scrollbar width to match table
+  useEffect(() => {
+    const tbl = tableScrollRef.current
+    const top = topScrollRef.current
+    if (!tbl || !top) return
+    const inner = top.firstElementChild
+    if (inner) inner.style.width = `${tbl.scrollWidth}px`
+  }, [sorted, orderedCols])
 
   const toggleSort = (key) => {
     setSearchParams(prev => {
@@ -86,12 +109,28 @@ export default function ComponentTable({
   }
 
   return (
-    <div className="panel !overflow-visible">
-      <div className="overflow-x-auto">
+    <div className="border border-sc-border rounded-lg bg-sc-panel/90">
+      {/* Top scrollbar — mirrors table horizontal scroll */}
+      <div
+        ref={topScrollRef}
+        onScroll={() => syncScroll('top')}
+        className="overflow-x-auto overflow-y-hidden"
+        style={{ height: '12px' }}
+      >
+        <div style={{ height: '1px' }} />
+      </div>
+
+      {/* Scrollable table container — vertical + horizontal */}
+      <div
+        ref={tableScrollRef}
+        onScroll={() => syncScroll('table')}
+        className="overflow-x-auto overflow-y-auto"
+        style={{ maxHeight: 'calc(100vh - 120px)' }}
+      >
         <table>
           <thead className="sticky top-0 z-20">
             <tr className="bg-sc-panel border-b border-sc-border">
-              <th className="w-12 px-3 py-3 text-center">
+              <th className="w-12 px-3 py-3 text-center bg-sc-panel">
                 <span className="text-xs font-mono text-sc-accent2">{compareCount}/{maxCompare}</span>
               </th>
               {orderedCols.map((col, idx) => {
@@ -105,10 +144,10 @@ export default function ComponentTable({
                     onDragOver={handleDragOver}
                     onDrop={(e) => handleDrop(e, idx)}
                     onClick={() => toggleSort(col.key)}
-                    className={`px-3 py-3 text-xs font-mono uppercase tracking-wider cursor-pointer select-none whitespace-nowrap transition-colors ${
+                    className={`px-3 py-3 text-xs font-mono uppercase tracking-wider cursor-pointer select-none whitespace-nowrap transition-colors bg-sc-panel ${
                       isSorted ? 'text-sc-accent' : 'text-sc-accent2 hover:text-sc-accent'
                     } ${col.align === 'left' ? 'text-left' : 'text-right'} ${
-                      isNameCol ? 'sticky left-0 z-30 bg-sc-panel' : ''
+                      isNameCol ? 'sticky left-0 z-30' : ''
                     }`}
                   >
                     <span className="inline-flex items-center gap-1">
@@ -123,7 +162,7 @@ export default function ComponentTable({
                 )
               })}
               {columnOrder && (
-                <th className="w-10 px-2 py-3">
+                <th className="w-10 px-2 py-3 bg-sc-panel">
                   <button
                     onClick={(e) => { e.stopPropagation(); onResetColumns() }}
                     title="Reset column order"
