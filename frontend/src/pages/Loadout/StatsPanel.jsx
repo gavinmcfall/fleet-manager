@@ -34,7 +34,7 @@ export default function StatsPanel({ stockComponents, overrides, horizontal }) {
       </StatsSection>
 
       <StatsSection icon={Zap} title="Power" color="text-amber-400">
-        <PowerBudget output={custom.power} draw={custom.powerDraw} stockOutput={stock.power} stockDraw={stock.powerDraw} hasChanges={hasChanges} />
+        <PowerBudget output={custom.power} draw={custom.powerDraw} idleDraw={custom.powerDrawMin} stockOutput={stock.power} stockDraw={stock.powerDraw} hasChanges={hasChanges} />
       </StatsSection>
 
       <StatsSection icon={Thermometer} title="Cooling" color="text-cyan-400">
@@ -129,8 +129,9 @@ function ResistBar({ label, value, stockValue, hasChanges, color }) {
   )
 }
 
-function PowerBudget({ output, draw, stockOutput, stockDraw, hasChanges }) {
-  const pct = output > 0 ? Math.min((draw / output) * 100, 100) : 0
+function PowerBudget({ output, draw, idleDraw, stockOutput, stockDraw, hasChanges }) {
+  const maxPct = output > 0 ? Math.min((draw / output) * 100, 100) : 0
+  const idlePct = output > 0 ? Math.min(((idleDraw || 0) / output) * 100, 100) : 0
   const isOverBudget = draw > output
 
   return (
@@ -140,31 +141,43 @@ function PowerBudget({ output, draw, stockOutput, stockDraw, hasChanges }) {
         <span className="font-mono text-gray-300 tabular-nums">{fmtNum(output)}</span>
       </div>
       <div className="flex items-center justify-between text-[11px]">
-        <span className="text-gray-500">Draw</span>
+        <span className="text-gray-500" title="Idle power draw (all components at minimum)">Idle Draw</span>
+        <span className="font-mono text-gray-400 tabular-nums">{fmtNum(idleDraw || 0)}</span>
+      </div>
+      <div className="flex items-center justify-between text-[11px]">
+        <span className="text-gray-500" title="Maximum power draw (all components at full load)">Max Draw</span>
         <span className={`font-mono tabular-nums ${isOverBudget ? 'text-red-400' : 'text-gray-300'}`}
           style={isOverBudget ? { textShadow: '0 0 8px rgba(239,68,68,0.3)' } : undefined}>
           {fmtNum(draw)}
         </span>
       </div>
-      <div className="h-1.5 bg-white/[0.04] rounded-full overflow-hidden">
+      <div className="h-1.5 bg-white/[0.04] rounded-full overflow-hidden relative">
+        {/* Idle draw bar */}
         <div
-          className={`h-full rounded-full transition-all duration-500 ${isOverBudget ? 'bg-red-500' : pct > 80 ? 'bg-amber-500' : 'bg-emerald-500'}`}
-          style={{ width: `${Math.min(pct, 100)}%`, opacity: 0.7 }}
+          className="absolute h-full bg-emerald-500 rounded-full transition-all duration-500"
+          style={{ width: `${Math.min(idlePct, 100)}%`, opacity: 0.5 }}
+        />
+        {/* Max draw bar */}
+        <div
+          className={`absolute h-full rounded-full transition-all duration-500 ${isOverBudget ? 'bg-red-500' : maxPct > 80 ? 'bg-amber-500' : 'bg-emerald-500'}`}
+          style={{ width: `${Math.min(maxPct, 100)}%`, opacity: 0.3 }}
         />
       </div>
-      <div className="text-[10px] text-gray-600 text-right">{pct.toFixed(0)}% used</div>
+      <div className="text-[10px] text-gray-600 text-right">
+        Idle {idlePct.toFixed(0)}% · Max {maxPct.toFixed(0)}%
+      </div>
     </div>
   )
 }
 
 function aggregateStats(stockComponents, overrides) {
-  let power = 0, powerDraw = 0, cooling = 0, thermalOutput = 0
+  let power = 0, powerDraw = 0, powerDrawMin = 0, cooling = 0, thermalOutput = 0
   let shieldHp = 0, shieldRegen = 0, resistPhys = 0, resistEnergy = 0, resistDist = 0, shieldCount = 0
   let dps = 0, ballisticDps = 0, energyDps = 0, alpha = 0
   let qtSpeed = 0, qtRange = 0, qtFuelRate = 0, qtSpool = 0
   let radarRange = 0, radarAngle = 0
 
-  if (!stockComponents) return { power, powerDraw, cooling, thermalOutput, shieldHp, shieldRegen, resistPhys, resistEnergy, resistDist, dps, ballisticDps, energyDps, alpha, qtSpeed, qtRange, qtFuelRate, qtSpool, radarRange, radarAngle }
+  if (!stockComponents) return { power, powerDraw, powerDrawMin, cooling, thermalOutput, shieldHp, shieldRegen, resistPhys, resistEnergy, resistDist, dps, ballisticDps, energyDps, alpha, qtSpeed, qtRange, qtFuelRate, qtSpool, radarRange, radarAngle }
 
   for (const comp of stockComponents) {
     const data = overrides[comp.port_id] || comp
@@ -190,11 +203,12 @@ function aggregateStats(stockComponents, overrides) {
     // Sum power draw and thermal output from ALL non-power components
     if (pt !== 'power') {
       powerDraw += Number(data.power_draw) || 0
+      powerDrawMin += Number(data.power_draw_min) || 0
       thermalOutput += Number(data.thermal_output) || 0
     }
   }
   if (shieldCount > 0) { resistPhys /= shieldCount; resistEnergy /= shieldCount; resistDist /= shieldCount }
-  return { power, powerDraw, cooling, thermalOutput, shieldHp, shieldRegen, resistPhys, resistEnergy, resistDist, dps, ballisticDps, energyDps, alpha, qtSpeed, qtRange, qtFuelRate, qtSpool, radarRange, radarAngle }
+  return { power, powerDraw, powerDrawMin, cooling, thermalOutput, shieldHp, shieldRegen, resistPhys, resistEnergy, resistDist, dps, ballisticDps, energyDps, alpha, qtSpeed, qtRange, qtFuelRate, qtSpool, radarRange, radarAngle }
 }
 
 function fmtNum(v) {

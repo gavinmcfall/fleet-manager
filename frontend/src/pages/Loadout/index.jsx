@@ -139,7 +139,7 @@ export default function Loadout() {
           rounds_per_minute: component.rounds_per_minute,
           quantum_speed: component.quantum_speed, quantum_range: component.quantum_range,
           fuel_rate: component.fuel_rate, spool_time: component.spool_time,
-          radar_range: component.radar_range, power_draw: component.power_draw,
+          radar_range: component.radar_range, power_draw: component.power_draw, power_draw_min: component.power_draw_min,
           thermal_output: component.thermal_output,
           resist_physical: component.resist_physical, resist_energy: component.resist_energy,
           resist_distortion: component.resist_distortion,
