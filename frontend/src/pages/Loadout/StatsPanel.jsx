@@ -1,5 +1,5 @@
 import React, { useMemo } from 'react'
-import { ArrowUp, ArrowDown, Zap, Shield, Crosshair, Thermometer, Gauge } from 'lucide-react'
+import { ArrowUp, ArrowDown, Zap, Shield, Crosshair, Thermometer, Gauge, Weight, Radio } from 'lucide-react'
 
 export default function StatsPanel({ stockComponents, overrides, horizontal }) {
   const stock = useMemo(() => aggregateStats(stockComponents, {}), [stockComponents])
@@ -48,6 +48,13 @@ export default function StatsPanel({ stockComponents, overrides, horizontal }) {
         <StatRow label="Fuel" stock={stock.qtFuelRate} custom={custom.qtFuelRate} hasChanges={hasChanges} invert />
         <StatRow label="Spool" stock={stock.qtSpool} custom={custom.qtSpool} hasChanges={hasChanges} scale={1000} suffix="s" invert />
       </StatsSection>
+
+      {(stock.totalMass > 0 || stock.totalEmSig > 0) && (
+        <StatsSection icon={Radio} title="Signature" color="text-gray-400">
+          <StatRow label="Component Mass" stock={stock.totalMass} custom={custom.totalMass} hasChanges={hasChanges} suffix=" kg" invert />
+          <StatRow label="EM Signature" stock={stock.totalEmSig} custom={custom.totalEmSig} hasChanges={hasChanges} invert />
+        </StatsSection>
+      )}
 
       </div>
     </div>
@@ -176,8 +183,9 @@ function aggregateStats(stockComponents, overrides) {
   let dps = 0, ballisticDps = 0, energyDps = 0, alpha = 0
   let qtSpeed = 0, qtRange = 0, qtFuelRate = 0, qtSpool = 0
   let radarRange = 0, radarAngle = 0
+  let totalMass = 0, totalEmSig = 0
 
-  if (!stockComponents) return { power, powerDraw, powerDrawMin, cooling, thermalOutput, shieldHp, shieldRegen, resistPhys, resistEnergy, resistDist, dps, ballisticDps, energyDps, alpha, qtSpeed, qtRange, qtFuelRate, qtSpool, radarRange, radarAngle }
+  if (!stockComponents) return { power, powerDraw, powerDrawMin, cooling, thermalOutput, shieldHp, shieldRegen, resistPhys, resistEnergy, resistDist, dps, ballisticDps, energyDps, alpha, qtSpeed, qtRange, qtFuelRate, qtSpool, radarRange, radarAngle, totalMass, totalEmSig }
 
   for (const comp of stockComponents) {
     const data = overrides[comp.port_id] || comp
@@ -206,9 +214,12 @@ function aggregateStats(stockComponents, overrides) {
       powerDrawMin += Number(data.power_draw_min) || 0
       thermalOutput += Number(data.thermal_output) || 0
     }
+    // Sum mass and EM signature from ALL components
+    totalMass += Number(data.mass) || 0
+    totalEmSig += Number(data.em_signature) || 0
   }
   if (shieldCount > 0) { resistPhys /= shieldCount; resistEnergy /= shieldCount; resistDist /= shieldCount }
-  return { power, powerDraw, powerDrawMin, cooling, thermalOutput, shieldHp, shieldRegen, resistPhys, resistEnergy, resistDist, dps, ballisticDps, energyDps, alpha, qtSpeed, qtRange, qtFuelRate, qtSpool, radarRange, radarAngle }
+  return { power, powerDraw, powerDrawMin, cooling, thermalOutput, shieldHp, shieldRegen, resistPhys, resistEnergy, resistDist, dps, ballisticDps, energyDps, alpha, qtSpeed, qtRange, qtFuelRate, qtSpool, radarRange, radarAngle, totalMass, totalEmSig }
 }
 
 function fmtNum(v) {

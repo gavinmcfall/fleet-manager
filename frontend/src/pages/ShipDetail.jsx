@@ -100,14 +100,23 @@ const PORT_TYPE_ICON = {
 // ─── Component detail slideout ────────────────────────────────────────────────
 
 /** Stat definitions per port_type. Each entry: [key, label, formatter?] */
+const formatMass = (v) => `${v.toLocaleString(undefined, { maximumFractionDigits: 0 })} kg`
+const formatInt = (v) => v.toLocaleString(undefined, { maximumFractionDigits: 0 })
+const formatCompact = (v) => {
+  if (v >= 1_000_000) return `${(v / 1_000_000).toLocaleString(undefined, { maximumFractionDigits: 1 })}M`
+  if (v >= 100_000) return `${(v / 1_000).toLocaleString(undefined, { maximumFractionDigits: 0 })}K`
+  return v.toLocaleString(undefined, { maximumFractionDigits: 0 })
+}
+
 const DETAIL_STATS = {
   power: [
     ['power_output', 'Power Output', formatPower],
-    ['overpower_performance', 'Overpower Performance'],
-    ['overclock_performance', 'Overclock Performance'],
-    ['overclock_threshold_min', 'Overclock Min'],
-    ['overclock_threshold_max', 'Overclock Max'],
-    ['thermal_output', 'Thermal Output'],
+    ['overheat_temperature', 'Overheat Temp'],
+    ['base_heat_generation', 'Heat Generation'],
+    ['hp', 'HP', formatInt],
+    ['mass', 'Mass', formatMass],
+    ['em_signature', 'EM Signature', formatInt],
+    ['distortion_max', 'Distortion Max', formatInt],
   ],
   shield: [
     ['shield_hp', 'Shield HP', formatHP],
@@ -118,11 +127,17 @@ const DETAIL_STATS = {
     ['resist_energy', 'Energy Resist', formatPercent],
     ['resist_distortion', 'Distortion Resist', formatPercent],
     ['resist_thermal', 'Thermal Resist', formatPercent],
+    ['hp', 'HP', formatInt],
+    ['mass', 'Mass', formatMass],
+    ['em_signature', 'EM Signature', formatInt],
   ],
   cooler: [
     ['cooling_rate', 'Cooling Rate', (v) => `${v.toLocaleString(undefined, { maximumFractionDigits: 0 })}/s`],
-    ['max_temperature', 'Max Temp'],
     ['overheat_temperature', 'Overheat Temp'],
+    ['hp', 'HP', formatInt],
+    ['mass', 'Mass', formatMass],
+    ['em_signature', 'EM Signature', formatInt],
+    ['distortion_max', 'Distortion Max', formatInt],
   ],
   quantum_drive: [
     ['quantum_speed', 'Speed', formatSpeed],
@@ -130,20 +145,26 @@ const DETAIL_STATS = {
     ['fuel_rate', 'Fuel Rate'],
     ['spool_time', 'Spool Time', formatSeconds],
     ['cooldown_time', 'Cooldown', formatSeconds],
-    ['stage1_accel', 'Stage 1 Accel'],
-    ['stage2_accel', 'Stage 2 Accel'],
+    ['stage1_accel', 'Stage 1 Accel', formatCompact],
+    ['stage2_accel', 'Stage 2 Accel', formatCompact],
+    ['hp', 'HP', formatInt],
+    ['mass', 'Mass', formatMass],
+    ['em_signature', 'EM Signature', formatInt],
   ],
   weapon: [
     ['dps', 'DPS', (v) => v.toLocaleString(undefined, { maximumFractionDigits: 1 })],
     ['damage_per_shot', 'Damage / Shot', (v) => v.toLocaleString(undefined, { maximumFractionDigits: 1 })],
     ['damage_type', 'Damage Type'],
     ['rounds_per_minute', 'Fire Rate', (v) => `${v.toLocaleString(undefined, { maximumFractionDigits: 0 })} RPM`],
+    ['effective_range', 'Effective Range', (v) => `${v.toLocaleString(undefined, { maximumFractionDigits: 0 })} m`],
     ['ammo_container_size', 'Ammo Capacity'],
     ['projectile_speed', 'Projectile Speed', (v) => `${v.toLocaleString(undefined, { maximumFractionDigits: 0 })} m/s`],
-    ['effective_range', 'Effective Range', (v) => `${v.toLocaleString(undefined, { maximumFractionDigits: 0 })} m`],
     ['fire_modes', 'Fire Modes'],
     ['heat_per_shot', 'Heat / Shot'],
     ['power_draw', 'Power Draw', formatPower],
+    ['hp', 'HP', formatInt],
+    ['mass', 'Mass', formatMass],
+    ['em_signature', 'EM Signature', formatInt],
   ],
   turret: [
     ['rotation_speed', 'Rotation Speed', (v) => `${v}°/s`],
@@ -152,14 +173,25 @@ const DETAIL_STATS = {
     ['min_yaw', 'Min Yaw', (v) => `${v}°`],
     ['max_yaw', 'Max Yaw', (v) => `${v}°`],
     ['gimbal_type', 'Gimbal Type'],
+    ['hp', 'HP', formatInt],
+    ['mass', 'Mass', formatMass],
   ],
   missile: [
-    ['damage_per_shot', 'Damage', (v) => v.toLocaleString(undefined, { maximumFractionDigits: 1 })],
-    ['damage_type', 'Damage Type'],
+    ['damage', 'Damage', formatInt],
+    ['blast_radius', 'Blast Radius'],
+    ['tracking_signal', 'Tracking'],
+    ['lock_time', 'Lock Time'],
+    ['speed', 'Speed', (v) => `${v.toLocaleString(undefined, { maximumFractionDigits: 0 })} m/s`],
+    ['lock_range', 'Lock Range', (v) => `${v.toLocaleString(undefined, { maximumFractionDigits: 0 })} m`],
+    ['hp', 'HP', formatInt],
+    ['mass', 'Mass', formatMass],
   ],
   sensor: [
     ['radar_range', 'Radar Range', (v) => `${(v / 1000).toLocaleString(undefined, { maximumFractionDigits: 1 })} km`],
-    ['radar_angle', 'Radar Angle', (v) => `${v}°`],
+    ['power_draw', 'Power Draw', formatPower],
+    ['hp', 'HP', formatInt],
+    ['mass', 'Mass', formatMass],
+    ['em_signature', 'EM Signature', formatInt],
   ],
   mining_laser: [
     ['dps', 'DPS', (v) => v.toLocaleString(undefined, { maximumFractionDigits: 1 })],
@@ -172,10 +204,11 @@ const DETAIL_STATS = {
   ],
 }
 
-// Fallback: show all non-null numeric stats not already shown
 const COMMON_STATS = [
   ['power_output', 'Power Output', formatPower],
-  ['thermal_output', 'Thermal Output'],
+  ['hp', 'HP', formatInt],
+  ['mass', 'Mass', formatMass],
+  ['em_signature', 'EM Signature', formatInt],
   ['thrust_force', 'Thrust', (v) => `${v.toLocaleString(undefined, { maximumFractionDigits: 0 })} N`],
   ['fuel_burn_rate', 'Fuel Burn Rate'],
 ]
