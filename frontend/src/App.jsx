@@ -1,6 +1,6 @@
 import React, { useState, useEffect, Suspense, lazy } from 'react'
 import { Routes, Route, NavLink, Navigate, useLocation, useNavigate } from 'react-router-dom'
-import { Rocket, BarChart3, Shield, Upload, RefreshCw, Database, Settings as SettingsIcon, ChevronDown, ChevronRight, ChevronLeft, History, Menu, X, LogOut, LogIn, User, Wrench, Users, Building2, FileText, Search, MapPin, Palette, ShoppingCart, Hammer, Briefcase, Star, Scale, Crosshair, BookOpen, Layers, TrendingUp, Languages, Heart, FlaskConical, SlidersHorizontal, Bookmark, Sparkles, Shirt } from 'lucide-react'
+import { Rocket, BarChart3, Shield, Upload, RefreshCw, Database, Settings as SettingsIcon, ChevronDown, ChevronRight, ChevronLeft, History, Menu, X, LogOut, LogIn, User, Wrench, Users, Building2, FileText, Search, MapPin, Palette, ShoppingCart, Hammer, Briefcase, Star, Scale, Crosshair, BookOpen, Layers, TrendingUp, Languages, Heart, FlaskConical, SlidersHorizontal, Bookmark, Sparkles, Shirt, Zap, Thermometer, Gauge, Radar, Target, Navigation } from 'lucide-react'
 import LoadingState from './components/LoadingState'
 import ErrorBoundary from './components/ErrorBoundary'
 import RequireAuth from './components/RequireAuth'
@@ -113,14 +113,14 @@ const referenceGroup = {
       icon: Layers,
       label: 'Components',
       submenu: [
-        { to: '/components/weapons', label: 'Weapons' },
-        { to: '/components/shields', label: 'Shields' },
-        { to: '/components/coolers', label: 'Coolers' },
-        { to: '/components/power-plants', label: 'Power Plants' },
-        { to: '/components/quantum-drives', label: 'Quantum Drives' },
-        { to: '/components/turrets', label: 'Turrets' },
-        { to: '/components/missiles', label: 'Missiles' },
-        { to: '/components/sensors', label: 'Sensors' },
+        { to: '/components/weapons', icon: Crosshair, label: 'Weapons' },
+        { to: '/components/shields', icon: Shield, label: 'Shields' },
+        { to: '/components/coolers', icon: Thermometer, label: 'Coolers' },
+        { to: '/components/power-plants', icon: Zap, label: 'Power Plants' },
+        { to: '/components/quantum-drives', icon: Navigation, label: 'Quantum Drives' },
+        { to: '/components/turrets', icon: Target, label: 'Turrets' },
+        { to: '/components/missiles', icon: Rocket, label: 'Missiles' },
+        { to: '/components/sensors', icon: Radar, label: 'Sensors' },
       ],
     },
   ],
