@@ -7,7 +7,7 @@ import LoadingState from '../components/LoadingState'
 import ErrorState from '../components/ErrorState'
 import SearchInput from '../components/SearchInput'
 import StatCard from '../components/StatCard'
-import { FACTION_LOGOS, getFactionLogo, GUILD_LABELS, cleanMissionDescription, humanizeFactionSlug, humanizeScopeSlug, humanizeStandingSlug, humanizeComparison, formatRepReward } from '../lib/missionConstants'
+import { FACTION_LOGOS, getFactionLogo, GUILD_LABELS, cleanMissionDescription, humanizeFactionSlug, humanizeScopeSlug, humanizeStandingSlug, humanizeComparison, formatRepReward, formatRepRequirement } from '../lib/missionConstants'
 
 function Pill({ active, onClick, children }) {
   return (
@@ -329,18 +329,20 @@ function ExpandedSection({ entry, prerequisites, repRequirements }) {
                 <span className="text-[10px] font-mono uppercase tracking-wider text-blue-400/70">Reputation Required</span>
               </div>
               <ul className="space-y-1 pl-1">
-                {repReqs.map((r, i) => (
-                  <li key={i} className="text-xs text-gray-300">
-                    <span className="text-blue-400">
-                      {humanizeStandingSlug(r.standing_slug)} {humanizeComparison(r.comparison)}
-                    </span>
-                    <span className="text-gray-500"> with </span>
-                    <span className="text-gray-300">{humanizeFactionSlug(r.faction_slug)}</span>
-                    {r.scope_slug && (
-                      <span className="text-gray-600 ml-1">({humanizeScopeSlug(r.scope_slug)})</span>
-                    )}
-                  </li>
-                ))}
+                {repReqs.map((r, i) => {
+                  const fmt = formatRepRequirement(r)
+                  if (!fmt) return null
+                  return (
+                    <li key={i} className="text-xs text-gray-300">
+                      <span className="text-blue-400">{fmt.standing}</span>
+                      <span className="text-gray-500"> {fmt.cmp} with </span>
+                      <span className="font-medium text-gray-200">{fmt.faction}</span>
+                      {fmt.scope && (
+                        <span className="text-gray-600 ml-1">({fmt.scope})</span>
+                      )}
+                    </li>
+                  )
+                })}
               </ul>
             </div>
           )}

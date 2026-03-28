@@ -4,7 +4,7 @@ import { ArrowLeft, MapPin, FlaskConical, Shield, Users, Building2, ChevronRight
 import { useFactionDetail } from '../hooks/useAPI'
 import LoadingState from '../components/LoadingState'
 import ErrorState from '../components/ErrorState'
-import { FACTION_LOGOS, GUILD_LABELS, RANKS, SYSTEM_COLORS, DIFF_COLORS, DIFF_LABELS, cleanDesc } from '../lib/missionConstants'
+import { FACTION_LOGOS, GUILD_LABELS, RANKS, SYSTEM_COLORS, DIFF_COLORS, DIFF_LABELS, cleanDesc, humanizeFactionSlug, humanizeScopeSlug, humanizeStandingSlug, humanizeComparison, formatRepRequirement } from '../lib/missionConstants'
 
 // Human-friendly descriptions for mission types from contract generators
 const MISSION_TYPE_DESCRIPTIONS = {
@@ -71,99 +71,7 @@ const AREA_LOOT_LOCATIONS = {
   ASDDelving:      { label: 'ASD Facilities', path: '/poi/ASDDelving' },
 }
 
-// Known faction slug → display name mapping for rep reward formatting
-const FACTION_SLUG_NAMES = {
-  bountyhuntersguild: 'Bounty Hunters Guild',
-  citizensforprosperity: 'Citizens for Prosperity',
-  xenothreat: 'XenoThreat',
-  cdf: 'Civilian Defense Force',
-  headhunters: 'Headhunters',
-  bitzeros: 'Bit Zeros',
-  foxwellenforcement: 'Foxwell Enforcement',
-  intersecdefensesolutions: 'InterSec Defense Solutions',
-  northrockservicegroup: 'Northrock Service Group',
-  covalexshipping: 'Covalex',
-  lingfamilyhauling: 'Ling Family Hauling',
-  redwindlinehaul: 'Red Wind Linehaul',
-  vaughn: 'Vaughn',
-  tarpits: 'Tar Pits',
-  eckhartsecurity: 'Eckhart Security',
-  shubininterstellar: 'Shubin Interstellar',
-  klescher: 'Klescher',
-  wildstarracing: 'Wildstar Racing',
-  rayariinc: 'Rayari Inc',
-}
-
-/** Humanize a faction slug: known lookup, then camelCase split, then fallback word split */
-function humanizeFactionSlug(slug) {
-  if (!slug) return ''
-  const lower = slug.toLowerCase()
-  if (FACTION_SLUG_NAMES[lower]) return FACTION_SLUG_NAMES[lower]
-  // Split camelCase: "BountyHuntersGuild" → "Bounty Hunters Guild"
-  const spaced = slug.replace(/([a-z])([A-Z])/g, '$1 $2')
-  if (spaced !== slug) return spaced
-  // Last resort: capitalize first letter
-  return slug.charAt(0).toUpperCase() + slug.slice(1)
-}
-
-/** Known scope slug → display name */
-const SCOPE_SLUG_NAMES = {
-  bounty: 'Bounty',
-  hiredmuscle: 'Hired Muscle',
-  hauling: 'Hauling',
-  courier: 'Courier',
-  delivery: 'Delivery',
-  mining: 'Mining',
-  salvage: 'Salvage',
-  security: 'Security',
-  mercenary: 'Mercenary',
-  assassination: 'Assassination',
-  exploration: 'Exploration',
-}
-
-/** Humanize a scope slug: known lookup, then snake_case/camelCase split + title-case */
-function humanizeScopeSlug(slug) {
-  if (!slug) return ''
-  const lower = slug.toLowerCase()
-  if (SCOPE_SLUG_NAMES[lower]) return SCOPE_SLUG_NAMES[lower]
-  // Split snake_case: "hired_muscle" → "Hired Muscle"
-  return slug.replace(/_/g, ' ').replace(/([a-z])([A-Z])/g, '$1 $2')
-    .split(' ').map(w => w.charAt(0).toUpperCase() + w.slice(1).toLowerCase()).join(' ')
-}
-
-/** Humanize a standing slug: known patterns, then fallback split + title-case */
-function humanizeStandingSlug(slug) {
-  if (!slug) return ''
-  // Handle "rank4", "hauling_rank4" etc.
-  const rankMatch = slug.match(/^(?:(.+)_)?rank(\d+)$/i)
-  if (rankMatch) {
-    const prefix = rankMatch[1] ? humanizeScopeSlug(rankMatch[1]) + ' ' : ''
-    return `${prefix}Rank ${rankMatch[2]}`
-  }
-  // Handle known compound words
-  const STANDING_NAMES = {
-    agent: 'Agent',
-    masteragent: 'Master Agent',
-    senioragent: 'Senior Agent',
-    junioragent: 'Junior Agent',
-    neutral: 'Neutral',
-    hostile: 'Hostile',
-    friendly: 'Friendly',
-  }
-  const lower = slug.toLowerCase()
-  if (STANDING_NAMES[lower]) return STANDING_NAMES[lower]
-  // Fallback: snake_case split, camelCase split, title-case
-  return slug.replace(/_/g, ' ').replace(/([a-z])([A-Z])/g, '$1 $2')
-    .split(' ').map(w => w.charAt(0).toUpperCase() + w.slice(1).toLowerCase()).join(' ')
-}
-
-/** Humanize comparison operator */
-function humanizeComparison(cmp) {
-  const map = { gte: 'or higher', lte: 'or lower', gt: 'above', lt: 'below', eq: 'exactly' }
-  return map[cmp] || cmp
-}
-
-/** Format raw rep_reward strings like "+50bountyhuntersguild" or "+250citizensforprosperity,-100xenothreat" */
+// Local formatRepReward for FactionDetail — uses shared humanizers from missionConstants
 function formatRepReward(raw) {
   if (!raw) return null
   return raw.split(/,\s*/).map(part => {
@@ -488,12 +396,16 @@ function MissionDetailPanel({ mission, type, onBack, prerequisites, repRequireme
                 <span className="text-[10px] font-mono uppercase tracking-wider text-blue-400">Reputation Required</span>
               </div>
               <div className="flex flex-wrap gap-1.5">
-                {missionRepReqs.map((r, i) => (
-                  <span key={i} className="text-[10px] px-2 py-0.5 rounded bg-blue-500/10 text-blue-400 border border-blue-500/20">
-                    {humanizeStandingSlug(r.standing_slug)} {humanizeComparison(r.comparison)} with {humanizeFactionSlug(r.faction_slug)}
-                    {r.scope_slug ? ` (${humanizeScopeSlug(r.scope_slug)})` : ''}
-                  </span>
-                ))}
+                {missionRepReqs.map((r, i) => {
+                  const fmt = formatRepRequirement(r)
+                  if (!fmt) return null
+                  return (
+                    <span key={i} className="text-[10px] px-2 py-0.5 rounded bg-blue-500/10 text-blue-400 border border-blue-500/20">
+                      {fmt.standing} {fmt.cmp} with <span className="font-medium text-blue-300">{fmt.faction}</span>
+                      {fmt.scope ? ` (${fmt.scope})` : ''}
+                    </span>
+                  )
+                })}
               </div>
             </div>
           )}

@@ -265,15 +265,16 @@ export function humanizeScopeSlug(slug) {
 /** Humanize a standing slug: known patterns, then fallback split + title-case */
 export function humanizeStandingSlug(slug) {
   if (!slug) return ''
-  // Handle affinity patterns: "affinity_enemy_005" → "Enemy (-5)", "affinity_friend_003" → "Friendly (+3)"
-  const affinityMatch = slug.match(/^affinity_(enemy|friend|neutral)_?(\d*)$/i)
+  // Handle affinity patterns: "affinity_enemy_005" → "Not Hostile"
+  const affinityMatch = slug.match(/^affinity_(enemy|friend|neutral|ally)_?(\d*)$/i)
   if (affinityMatch) {
     const type = affinityMatch[1].toLowerCase()
-    const level = parseInt(affinityMatch[2]) || 0
-    if (type === 'enemy') return level > 0 ? `Enemy Standing (-${level})` : 'Enemy Standing'
-    if (type === 'friend') return level > 0 ? `Friendly Standing (+${level})` : 'Friendly Standing'
-    return 'Neutral Standing'
+    if (type === 'enemy') return 'Not Hostile'
+    if (type === 'friend' || type === 'ally') return 'Friendly'
+    return 'Neutral'
   }
+  // Handle NPC reliability: "npc_fired_fired" → "Not Fired", "npc_reliability_fireable" → skip
+  if (slug.match(/^npc_/i)) return null
   // Handle "rank4", "hauling_rank4" etc.
   const rankMatch = slug.match(/^(?:(.+)_)?rank(\d+)$/i)
   if (rankMatch) {
@@ -281,16 +282,23 @@ export function humanizeStandingSlug(slug) {
     return `${prefix}Rank ${rankMatch[2]}`
   }
   // Handle "bounty_agent", "bounty_masteragent" etc.
-  const compoundMatch = slug.match(/^(.+)_(agent|masteragent|senioragent|junioragent)$/i)
+  const compoundMatch = slug.match(/^(.+)_(applicant|probation|agent|masteragent|senioragent|junioragent|veteranagent|tracker|advancedtracker|seniortracker|mastertracker)$/i)
   if (compoundMatch) {
-    const AGENT_NAMES = { agent: 'Agent', masteragent: 'Master Agent', senioragent: 'Senior Agent', junioragent: 'Junior Agent' }
-    const scope = humanizeScopeSlug(compoundMatch[1])
-    return `${scope} ${AGENT_NAMES[compoundMatch[2].toLowerCase()] || compoundMatch[2]}`
+    const AGENT_NAMES = {
+      applicant: 'Applicant', probation: 'Probation', agent: 'Agent',
+      masteragent: 'Master Agent', senioragent: 'Senior Agent', junioragent: 'Junior Agent',
+      veteranagent: 'Veteran Agent', tracker: 'Tracker', advancedtracker: 'Advanced Tracker',
+      seniortracker: 'Senior Tracker', mastertracker: 'Master Tracker',
+    }
+    return AGENT_NAMES[compoundMatch[2].toLowerCase()] || compoundMatch[2]
   }
   // Known standalone slugs
   const STANDING_NAMES = {
+    applicant: 'Applicant', probation: 'Probation',
     agent: 'Agent', masteragent: 'Master Agent', senioragent: 'Senior Agent',
-    junioragent: 'Junior Agent', neutral: 'Neutral', hostile: 'Hostile', friendly: 'Friendly',
+    junioragent: 'Junior Agent', veteranagent: 'Veteran Agent',
+    neutral: 'Neutral', hostile: 'Hostile', friendly: 'Friendly',
+    noteligible: 'Not Eligible',
   }
   const lower = slug.toLowerCase()
   if (STANDING_NAMES[lower]) return STANDING_NAMES[lower]
@@ -303,6 +311,21 @@ export function humanizeStandingSlug(slug) {
 export function humanizeComparison(cmp) {
   const map = { gte: 'or higher', lte: 'or lower', gt: 'above', lt: 'below', eq: 'exactly' }
   return map[cmp] || cmp
+}
+
+/** Format a full reputation requirement into a player-friendly string */
+export function formatRepRequirement(r) {
+  const standing = humanizeStandingSlug(r.standing_slug)
+  if (!standing) return null // Skip NPC reliability etc.
+  const faction = humanizeFactionSlug(r.faction_slug)
+  const scope = humanizeScopeSlug(r.scope_slug)
+  const cmp = humanizeComparison(r.comparison)
+  // For affinity scope, don't repeat it — it's the relationship itself
+  const isAffinity = r.scope_slug === 'affinity' || r.standing_slug?.startsWith('affinity_')
+  if (isAffinity) {
+    return { standing, cmp, faction, scope: null }
+  }
+  return { standing, cmp, faction, scope }
 }
 
 // ── Description cleanup ────────────────────────────────────────────────────
