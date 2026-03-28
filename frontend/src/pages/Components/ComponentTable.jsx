@@ -127,7 +127,7 @@ export default function ComponentTable({
         className="overflow-x-auto overflow-y-auto"
         style={{ maxHeight: 'calc(100vh - 120px)' }}
       >
-        <table>
+        <table className="w-full">
           <thead className="sticky top-0 z-20">
             <tr className="bg-sc-panel border-b border-sc-border">
               <th className="w-12 px-3 py-3 text-center bg-sc-panel">
