@@ -46,8 +46,7 @@ const ENHANCEMENTS = [
     bgColor: 'bg-purple-500/10',
     borderColor: 'border-purple-500/30',
     example: '...contract text... Potential Blueprints: R97 Shotgun, Monde Arms Camo',
-    count: '462 contract links',
-    comingSoon: true,
+    count: '450+ contracts',
   },
 ]
 

@@ -402,7 +402,19 @@ export function localizationRoutes() {
           if (override !== undefined) {
             // Emit: original key bytes + '=' + override value + \r\n
             chunks.push(raw.slice(lineStart, eqPos + 1));
-            chunks.push(te.encode(override));
+
+            if (override.startsWith("\0BP_APPEND\0")) {
+              // Append mode: emit original value + appended text
+              const appendText = override.slice("\0BP_APPEND\0".length);
+              // Extract original value bytes (after '=', before line end)
+              let valEnd = lineEnd;
+              if (valEnd > 0 && raw[valEnd - 1] === 0x0D) valEnd--;
+              const origValBytes = raw.slice(eqPos + 1, valEnd);
+              chunks.push(origValBytes);
+              chunks.push(te.encode(appendText));
+            } else {
+              chunks.push(te.encode(override));
+            }
             if (lineEnd > 0 && raw[lineEnd - 1] === 0x0D) {
               chunks.push(new Uint8Array([0x0D]));
             }
@@ -589,10 +601,49 @@ async function buildOverrides(
   }
 
   // Blueprint pools: append blueprint reward lists to contract descriptions
-  // (This enhancement works differently — it modifies description values,
-  //  not item names. It needs access to the base content to append to existing text.
-  //  For now, we skip it in buildOverrides and handle it in the download endpoint
-  //  where we have access to the base file content.)
+  if (config.enhanceBlueprintPools) {
+    // Query: for each unique desc_loc_key with blueprints, get the blueprint names
+    const bpRows = await db
+      .prepare(
+        `SELECT DISTINCT cgc.desc_loc_key, cb.name as blueprint_name
+         FROM contract_generator_blueprint_pools cgbp
+         JOIN contract_generator_contracts cgc ON cgc.id = cgbp.contract_generator_contract_id
+         JOIN crafting_blueprint_reward_pool_items cbri ON cbri.crafting_blueprint_reward_pool_id = cgbp.crafting_blueprint_reward_pool_id
+         JOIN crafting_blueprints cb ON cb.id = cbri.crafting_blueprint_id
+         WHERE cgc.game_version_id = ?
+         AND cgc.desc_loc_key IS NOT NULL AND cgc.desc_loc_key != ''`,
+      )
+      .bind(versionId)
+      .all<{ desc_loc_key: string; blueprint_name: string }>();
+
+    // Group blueprints by desc_loc_key
+    const descKeyBps = new Map<string, string[]>();
+    for (const row of bpRows.results) {
+      const existing = descKeyBps.get(row.desc_loc_key) || [];
+      if (!existing.includes(row.blueprint_name)) {
+        existing.push(row.blueprint_name);
+      }
+      descKeyBps.set(row.desc_loc_key, existing);
+    }
+
+    // Generate overrides: append blueprint list to description
+    // The key may have a ,P suffix in global.ini (variant marker)
+    for (const [descKey, bpNames] of descKeyBps) {
+      // Try both exact key and ,P variant
+      const candidates = [descKey, `${descKey},P`];
+      const matchedKey = candidates.find((k) => !validKeys || validKeys.has(k));
+      if (!matchedKey) continue;
+
+      const bpList = bpNames.map((n) => `- ${n}`).join("\\n");
+      // We can't read the original value from the base file here,
+      // so we use a sentinel that the download endpoint will handle:
+      // prefix with \0BP_APPEND\0 to signal "append to existing value"
+      overrides.push({
+        key: matchedKey,
+        value: `\0BP_APPEND\0\\n\\n<EM4>Potential Blueprints</EM4>\\n${bpList}`,
+      });
+    }
+  }
 
   return overrides;
 }
