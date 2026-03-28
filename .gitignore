@@ -76,3 +76,11 @@ dist/
 e2e/.auth-state.json
 e2e/screenshots/
 e2e/test-results/
+.playwright-mcp/
+
+# Screenshots and mockups
+*.png
+frontend/mockups/
+
+# SQLite
+*.sqlite3

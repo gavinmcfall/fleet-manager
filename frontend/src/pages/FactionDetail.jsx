@@ -4,35 +4,7 @@ import { ArrowLeft, MapPin, FlaskConical, Shield, Users, Building2, ChevronRight
 import { useFactionDetail } from '../hooks/useAPI'
 import LoadingState from '../components/LoadingState'
 import ErrorState from '../components/ErrorState'
-
-// Reuse from Missions.jsx — TODO: extract to shared module
-const FACTION_LOGOS = {
-  "bitzeros": "https://imagedelivery.net/JnUjHiDCDHvj44u4fjoYBg/faction-logo-bitzeros/thumb",
-  "headhunters": "https://imagedelivery.net/JnUjHiDCDHvj44u4fjoYBg/faction-logo-headhunters/thumb",
-  "citizensforprosperity": "https://imagedelivery.net/JnUjHiDCDHvj44u4fjoYBg/faction-logo-cfp/thumb",
-  "bountyhuntersguild": "https://imagedelivery.net/JnUjHiDCDHvj44u4fjoYBg/faction-logo-bountyhuntersguild/thumb",
-  "cdf": "https://imagedelivery.net/JnUjHiDCDHvj44u4fjoYBg/faction-logo-cdf/thumb",
-  "foxwellenforcement": "https://imagedelivery.net/JnUjHiDCDHvj44u4fjoYBg/faction-logo-foxwellenforcement/thumb",
-  "intersecdefensesolutions": "https://imagedelivery.net/JnUjHiDCDHvj44u4fjoYBg/faction-logo-intersec/thumb",
-  "northrockservicegroup": "https://imagedelivery.net/JnUjHiDCDHvj44u4fjoYBg/faction-logo-northrock/thumb",
-  "covalexshipping": "https://imagedelivery.net/JnUjHiDCDHvj44u4fjoYBg/faction-logo-covalex/thumb",
-  "lingfamilyhauling": "https://imagedelivery.net/JnUjHiDCDHvj44u4fjoYBg/faction-logo-lingfamily/thumb",
-  "redwindlinehaul": "https://imagedelivery.net/JnUjHiDCDHvj44u4fjoYBg/faction-logo-redwind/thumb",
-  "vaughn": "https://imagedelivery.net/JnUjHiDCDHvj44u4fjoYBg/faction-logo-vaughn/thumb",
-  "tarpits": "https://imagedelivery.net/JnUjHiDCDHvj44u4fjoYBg/faction-logo-tarpits/thumb",
-  "ruto": "https://imagedelivery.net/JnUjHiDCDHvj44u4fjoYBg/faction-logo-ruto/thumb",
-  "clovusdarneely": "https://imagedelivery.net/JnUjHiDCDHvj44u4fjoYBg/faction-logo-clovusdarneely/thumb",
-  "wallaceklim": "https://imagedelivery.net/JnUjHiDCDHvj44u4fjoYBg/faction-logo-wallaceklim/thumb",
-  "eckhartsecurity": "https://imagedelivery.net/JnUjHiDCDHvj44u4fjoYBg/faction-logo-eckhart/thumb",
-  "twitchgang": "https://imagedelivery.net/JnUjHiDCDHvj44u4fjoYBg/faction-logo-teciapacheco/thumb",
-  "shubininterstellar": "https://imagedelivery.net/JnUjHiDCDHvj44u4fjoYBg/faction-logo-shubin/thumb",
-  "xenothreat": "https://imagedelivery.net/JnUjHiDCDHvj44u4fjoYBg/faction-logo-xenothreat/thumb",
-  "wikelo": "https://imagedelivery.net/JnUjHiDCDHvj44u4fjoYBg/faction-logo-wikelo/thumb",
-  "rayariinc": "https://imagedelivery.net/JnUjHiDCDHvj44u4fjoYBg/faction-logo-rayari/thumb",
-  "wildstarracing": "https://imagedelivery.net/JnUjHiDCDHvj44u4fjoYBg/faction-logo-wildstar/thumb",
-  "klescher": "https://imagedelivery.net/JnUjHiDCDHvj44u4fjoYBg/faction-logo-klescher/thumb",
-  "ftlcourier": "https://imagedelivery.net/JnUjHiDCDHvj44u4fjoYBg/faction-logo-ftlcourier/thumb",
-}
+import { FACTION_LOGOS, GUILD_LABELS, RANKS, SYSTEM_COLORS, DIFF_COLORS, DIFF_LABELS, cleanDesc } from '../lib/missionConstants'
 
 // Human-friendly descriptions for mission types from contract generators
 const MISSION_TYPE_DESCRIPTIONS = {
@@ -70,37 +42,52 @@ const MISSION_TYPE_DESCRIPTIONS = {
   "Resource Gathering": "Gather resources from the environment and deliver them.",
 }
 
-const GUILD_LABELS = {
-  thecouncil_guild: 'The Council', mercenary_guild: 'Mercenary Guild',
-  unitedresourceworkers_guild: 'United Resource Workers', interstellartransport_guild: 'Interstellar Transport',
-  academyofsciences_guild: 'Academy of Sciences', missionproviders: 'Mission Providers',
+// Known faction slug → display name mapping for rep reward formatting
+const FACTION_SLUG_NAMES = {
+  bountyhuntersguild: 'Bounty Hunters Guild',
+  citizensforprosperity: 'Citizens for Prosperity',
+  xenothreat: 'XenoThreat',
+  cdf: 'Civilian Defense Force',
+  headhunters: 'Headhunters',
+  bitzeros: 'Bit Zeros',
+  foxwellenforcement: 'Foxwell Enforcement',
+  intersecdefensesolutions: 'InterSec Defense Solutions',
+  northrockservicegroup: 'Northrock Service Group',
+  covalexshipping: 'Covalex',
+  lingfamilyhauling: 'Ling Family Hauling',
+  redwindlinehaul: 'Red Wind Linehaul',
+  vaughn: 'Vaughn',
+  tarpits: 'Tar Pits',
+  eckhartsecurity: 'Eckhart Security',
+  shubininterstellar: 'Shubin Interstellar',
+  klescher: 'Klescher',
+  wildstarracing: 'Wildstar Racing',
+  rayariinc: 'Rayari Inc',
 }
 
-const SYSTEM_COLORS = {
-  Stanton: 'bg-sc-accent/10 text-sc-accent border-sc-accent/20',
-  Nyx: 'bg-purple-500/10 text-purple-400 border-purple-500/20',
-  Pyro: 'bg-orange-500/10 text-orange-400 border-orange-500/20',
+/** Humanize a faction slug: known lookup, then camelCase split, then fallback word split */
+function humanizeFactionSlug(slug) {
+  if (!slug) return ''
+  const lower = slug.toLowerCase()
+  if (FACTION_SLUG_NAMES[lower]) return FACTION_SLUG_NAMES[lower]
+  // Split camelCase: "BountyHuntersGuild" → "Bounty Hunters Guild"
+  const spaced = slug.replace(/([a-z])([A-Z])/g, '$1 $2')
+  if (spaced !== slug) return spaced
+  // Last resort: capitalize first letter
+  return slug.charAt(0).toUpperCase() + slug.slice(1)
 }
 
-const DIFF_COLORS = {
-  Intro: 'text-gray-400', VeryEasy: 'text-emerald-400', Easy: 'text-green-400',
-  Medium: 'text-amber-400', Hard: 'text-orange-400', VeryHard: 'text-red-400', Super: 'text-purple-400',
-}
-const DIFF_LABELS = { VeryEasy: 'Very Easy', VeryHard: 'Very Hard' }
-
-const RANKS = [
-  { rank: 0, name: 'Neutral', min_rep: 0 },
-  { rank: 1, name: 'Jr. Contractor', min_rep: 800 },
-  { rank: 2, name: 'Contractor', min_rep: 2200 },
-  { rank: 3, name: 'Sr. Contractor', min_rep: 5800 },
-  { rank: 4, name: 'Veteran Contractor', min_rep: 15000 },
-  { rank: 5, name: 'Head Contractor', min_rep: 38000 },
-  { rank: 6, name: 'Elite Contractor', min_rep: 95250 },
-]
-
-function cleanDesc(text) {
-  if (!text) return ''
-  return text.replace(/<[^>]+>/g, '').replace(/^-+$/gm, '').replace(/\n{3,}/g, '\n\n').trim()
+/** Format raw rep_reward strings like "+50bountyhuntersguild" or "+250citizensforprosperity,-100xenothreat" */
+function formatRepReward(raw) {
+  if (!raw) return null
+  return raw.split(/,\s*/).map(part => {
+    const match = part.match(/^([+-]?\d+)\s*(.*)$/)
+    if (!match) return part.trim()
+    const amount = match[1]
+    const slug = match[2].trim()
+    const name = humanizeFactionSlug(slug)
+    return name ? `${amount} ${name}` : amount
+  }).join(', ')
 }
 
 // ── Mission Detail Panel (slides in from right) ──────────────────────
@@ -164,12 +151,12 @@ function MissionDetailPanel({ mission, type, onBack }) {
                               {t.rep_rewards.map((r, ri) => (
                                 <span key={ri} className={r.amount > 0 ? 'text-emerald-400' : 'text-red-400'}>
                                   {r.amount > 0 ? '+' : ''}{r.amount.toLocaleString()}
-                                  <span className="text-gray-600 ml-0.5 text-[9px] font-normal">{r.faction_slug}</span>
+                                  <span className="text-gray-600 ml-0.5 text-[9px] font-normal">{humanizeFactionSlug(r.faction_slug)}</span>
                                 </span>
                               ))}
                             </div>
                           ) : t.rep_reward ? (
-                            <span className="text-emerald-400">+{t.rep_reward}</span>
+                            <span className="text-emerald-400">{formatRepReward(String(t.rep_reward))}</span>
                           ) : '—'}
                         </td>
                         <td className="px-3 py-1.5 text-[10px] text-gray-600 italic">Dynamic</td>

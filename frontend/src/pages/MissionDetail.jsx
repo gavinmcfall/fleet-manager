@@ -4,94 +4,7 @@ import { ArrowLeft, FileText, MapPin, FlaskConical, Shield, Users, Building2, In
 import { useMissionDetail } from '../hooks/useAPI'
 import LoadingState from '../components/LoadingState'
 import ErrorState from '../components/ErrorState'
-
-const FACTION_LOGOS = {
-  "Bit Zeros": "https://imagedelivery.net/JnUjHiDCDHvj44u4fjoYBg/faction-logo-bitzeros/thumb",
-  "Bounty Hunters Guild": "https://imagedelivery.net/JnUjHiDCDHvj44u4fjoYBg/faction-logo-bountyhuntersguild/thumb",
-  "Citizens for Prosperity": "https://imagedelivery.net/JnUjHiDCDHvj44u4fjoYBg/faction-logo-cfp/thumb",
-  "Dead Saints": "https://imagedelivery.net/JnUjHiDCDHvj44u4fjoYBg/faction-logo-headhunters/thumb",
-  "Eckhart Security": "https://imagedelivery.net/JnUjHiDCDHvj44u4fjoYBg/faction-logo-eckhart/thumb",
-  "Foxwell Enforcement": "https://imagedelivery.net/JnUjHiDCDHvj44u4fjoYBg/faction-logo-foxwellenforcement/thumb",
-  "Headhunters": "https://imagedelivery.net/JnUjHiDCDHvj44u4fjoYBg/faction-logo-headhunters/thumb",
-  "Hockrow Agency": "https://imagedelivery.net/JnUjHiDCDHvj44u4fjoYBg/faction-logo-intersec/thumb",
-  "InterSec Defense Solutions": "https://imagedelivery.net/JnUjHiDCDHvj44u4fjoYBg/faction-logo-intersec/thumb",
-  "Northrock Service Group": "https://imagedelivery.net/JnUjHiDCDHvj44u4fjoYBg/faction-logo-northrock/thumb",
-  "Shubin Interstellar": "https://imagedelivery.net/JnUjHiDCDHvj44u4fjoYBg/faction-logo-shubin/thumb",
-  "Vaughn": "https://imagedelivery.net/JnUjHiDCDHvj44u4fjoYBg/faction-logo-vaughn/thumb",
-  "Ruto": "https://imagedelivery.net/JnUjHiDCDHvj44u4fjoYBg/faction-logo-ruto/thumb",
-  "Tar Pits": "https://imagedelivery.net/JnUjHiDCDHvj44u4fjoYBg/faction-logo-tarpits/thumb",
-  "Clovus Darneely": "https://imagedelivery.net/JnUjHiDCDHvj44u4fjoYBg/faction-logo-clovusdarneely/thumb",
-  "Wallace Klim": "https://imagedelivery.net/JnUjHiDCDHvj44u4fjoYBg/faction-logo-wallaceklim/thumb",
-  "Tecia Pacheco": "https://imagedelivery.net/JnUjHiDCDHvj44u4fjoYBg/faction-logo-teciapacheco/thumb",
-  "Ling Family Hauling": "https://imagedelivery.net/JnUjHiDCDHvj44u4fjoYBg/faction-logo-lingfamily/thumb",
-  "Red Wind Linehaul": "https://imagedelivery.net/JnUjHiDCDHvj44u4fjoYBg/faction-logo-redwind/thumb",
-  "Covalex": "https://imagedelivery.net/JnUjHiDCDHvj44u4fjoYBg/faction-logo-covalex/thumb",
-  "Civilian Defense Force": "https://imagedelivery.net/JnUjHiDCDHvj44u4fjoYBg/faction-logo-cdf/thumb",
-  "XenoThreat": "https://imagedelivery.net/JnUjHiDCDHvj44u4fjoYBg/faction-logo-xenothreat/thumb",
-}
-
-const GUILD_LABELS = {
-  thecouncil_guild: 'The Council',
-  mercenary_guild: 'Mercenary Guild',
-  unitedresourceworkers_guild: 'United Resource Workers',
-  interstellartransport_guild: 'Interstellar Transport',
-  academyofsciences_guild: 'Academy of Sciences',
-  imperialsportsfederation_guild: 'Imperial Sports Federation',
-  missionproviders: 'Mission Providers',
-}
-
-// Faction reputation ranks — shared across all factions
-const RANKS = [
-  { rank: 0, name: 'Neutral', min_rep: 0 },
-  { rank: 1, name: 'Jr. Contractor', min_rep: 800 },
-  { rank: 2, name: 'Contractor', min_rep: 2200 },
-  { rank: 3, name: 'Sr. Contractor', min_rep: 5800 },
-  { rank: 4, name: 'Veteran Contractor', min_rep: 15000 },
-  { rank: 5, name: 'Head Contractor', min_rep: 38000 },
-  { rank: 6, name: 'Elite Contractor', min_rep: 95250 },
-]
-
-const SYSTEM_COLORS = {
-  Stanton: 'bg-sc-accent/10 text-sc-accent border-sc-accent/20',
-  Nyx: 'bg-purple-500/10 text-purple-400 border-purple-500/20',
-  Pyro: 'bg-orange-500/10 text-orange-400 border-orange-500/20',
-}
-
-const DIFF_COLORS = {
-  Intro: 'text-gray-400',
-  VeryEasy: 'text-emerald-400',
-  Easy: 'text-green-400',
-  Medium: 'text-amber-400',
-  Hard: 'text-orange-400',
-  VeryHard: 'text-red-400',
-  Super: 'text-purple-400',
-}
-const DIFF_BAR_COLORS = {
-  Intro: 'bg-gray-500/50',
-  VeryEasy: 'bg-emerald-500/60',
-  Easy: 'bg-green-500/60',
-  Medium: 'bg-amber-500/60',
-  Hard: 'bg-orange-500/60',
-  VeryHard: 'bg-red-500/60',
-  Super: 'bg-purple-500/60',
-}
-const DIFF_BAR_GLOW = {
-  Intro: '',
-  VeryEasy: 'shadow-[inset_0_0_8px_rgba(16,185,129,0.3)]',
-  Easy: 'shadow-[inset_0_0_8px_rgba(34,197,94,0.3)]',
-  Medium: 'shadow-[inset_0_0_8px_rgba(245,158,11,0.3)]',
-  Hard: 'shadow-[inset_0_0_8px_rgba(249,115,22,0.3)]',
-  VeryHard: 'shadow-[inset_0_0_8px_rgba(239,68,68,0.3)]',
-  Super: 'shadow-[inset_0_0_8px_rgba(168,85,247,0.3)]',
-}
-const DIFF_LABELS = { VeryEasy: 'Very Easy', VeryHard: 'Very Hard' }
-
-const TYPE_COLORS = {
-  armour: { bg: 'bg-sky-500/15', text: 'text-sky-400', border: 'border-sky-500/30' },
-  weapons: { bg: 'bg-red-500/15', text: 'text-red-400', border: 'border-red-500/30' },
-  ammo: { bg: 'bg-amber-500/15', text: 'text-amber-400', border: 'border-amber-500/30' },
-}
-const TYPE_LABELS = { armour: 'Armour', weapons: 'Weapons', ammo: 'Ammo' }
+import { FACTION_LOGOS, GUILD_LABELS, RANKS, SYSTEM_COLORS, DIFF_COLORS, DIFF_BAR_COLORS, DIFF_BAR_GLOW, DIFF_LABELS, TYPE_COLORS, TYPE_LABELS } from '../lib/missionConstants'
 
 function formatRep(n) {
   if (n >= 1000) return `${(n / 1000).toFixed(n >= 10000 ? 0 : 1)}k`
@@ -155,7 +68,7 @@ export default function MissionDetail() {
       <div className="max-w-4xl mx-auto px-4 py-12 text-center">
         <FileText className="w-12 h-12 mx-auto mb-4 text-gray-600" />
         <h2 className="text-lg font-semibold text-gray-300 mb-2">Mission Not Found</h2>
-        <Link to="/crafting" className="text-sm text-sc-accent hover:text-sc-accent/80 transition-colors">&larr; Back to Crafting</Link>
+        <Link to="/missions?view=factions" className="text-sm text-sc-accent hover:text-sc-accent/80 transition-colors">&larr; Back to Missions</Link>
       </div>
     )
   }
@@ -174,8 +87,8 @@ export default function MissionDetail() {
 
   return (
     <div className="max-w-4xl mx-auto px-4 py-6 space-y-6">
-      <Link to="/crafting" className="inline-flex items-center gap-1.5 text-sm text-gray-500 hover:text-sc-accent transition-colors">
-        <ArrowLeft className="w-4 h-4" /> Crafting
+      <Link to="/missions?view=factions" className="inline-flex items-center gap-1.5 text-sm text-gray-500 hover:text-sc-accent transition-colors">
+        <ArrowLeft className="w-4 h-4" /> Missions
       </Link>
 
       {/* ── Header — logo prominent on left, info on right ── */}

@@ -293,7 +293,8 @@ export default function ComponentPicker({ slug, portId, portType, currentOverrid
                             On {comp.on_ships[0].custom_name || comp.on_ships[0].ship_name}
                           </span>
                         ) : hasBuyShop && cheapestShop?.buy_price ? (
-                          <span className="text-xs font-medium text-emerald-400 tabular-nums">
+                          <span className="text-xs font-medium text-emerald-400 tabular-nums"
+                            title={[cheapestShop.shop_name, cheapestShop.location_label].filter(Boolean).join(', ')}>
                             {Math.round(Number(cheapestShop.buy_price)).toLocaleString()} aUEC
                           </span>
                         ) : hasBuyShop ? (

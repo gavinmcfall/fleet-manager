@@ -1,4 +1,4 @@
-import React, { useState, useMemo, useCallback } from 'react'
+import React, { useState, useMemo, useCallback, useEffect, useRef } from 'react'
 import { Link, useSearchParams } from 'react-router-dom'
 import { ChevronDown, ChevronUp, Package, Users, Crosshair, Shield, Coins, AlertTriangle, FileText, Star, MapPin, FlaskConical, Building2 } from 'lucide-react'
 import { useContracts, useAPI, useMissionGivers } from '../hooks/useAPI'
@@ -7,95 +7,7 @@ import LoadingState from '../components/LoadingState'
 import ErrorState from '../components/ErrorState'
 import SearchInput from '../components/SearchInput'
 import StatCard from '../components/StatCard'
-
-// ── Faction logos from game data (CF Images) ────────────────────────────────
-
-// Faction logos — extracted from game data p4k (DDS→PNG→CF Images)
-const FACTION_LOGOS = {
-  // Factions (from game reputation records)
-  "Bit Zeros": "https://imagedelivery.net/JnUjHiDCDHvj44u4fjoYBg/faction-logo-bitzeros/thumb",
-  "BitZeros": "https://imagedelivery.net/JnUjHiDCDHvj44u4fjoYBg/faction-logo-bitzeros/thumb",
-  "Headhunters": "https://imagedelivery.net/JnUjHiDCDHvj44u4fjoYBg/faction-logo-headhunters/thumb",
-  "Citizens for Prosperity": "https://imagedelivery.net/JnUjHiDCDHvj44u4fjoYBg/faction-logo-cfp/thumb",
-  "CFP": "https://imagedelivery.net/JnUjHiDCDHvj44u4fjoYBg/faction-logo-cfp/thumb",
-  "Bounty Hunters Guild": "https://imagedelivery.net/JnUjHiDCDHvj44u4fjoYBg/faction-logo-bountyhuntersguild/thumb",
-  "Civilian Defense Force": "https://imagedelivery.net/JnUjHiDCDHvj44u4fjoYBg/faction-logo-cdf/thumb",
-  "CDF": "https://imagedelivery.net/JnUjHiDCDHvj44u4fjoYBg/faction-logo-cdf/thumb",
-  "Foxwell Enforcement": "https://imagedelivery.net/JnUjHiDCDHvj44u4fjoYBg/faction-logo-foxwellenforcement/thumb",
-  "InterSec Defense Solutions": "https://imagedelivery.net/JnUjHiDCDHvj44u4fjoYBg/faction-logo-intersec/thumb",
-  "Northrock Service Group": "https://imagedelivery.net/JnUjHiDCDHvj44u4fjoYBg/faction-logo-northrock/thumb",
-  "NorthRock": "https://imagedelivery.net/JnUjHiDCDHvj44u4fjoYBg/faction-logo-northrock/thumb",
-  "Covalex": "https://imagedelivery.net/JnUjHiDCDHvj44u4fjoYBg/faction-logo-covalex/thumb",
-  "Covalex Independent Contractors": "https://imagedelivery.net/JnUjHiDCDHvj44u4fjoYBg/faction-logo-covalex/thumb",
-  "Ling Family Hauling": "https://imagedelivery.net/JnUjHiDCDHvj44u4fjoYBg/faction-logo-lingfamily/thumb",
-  "Red Wind Linehaul": "https://imagedelivery.net/JnUjHiDCDHvj44u4fjoYBg/faction-logo-redwind/thumb",
-  "Vaughn": "https://imagedelivery.net/JnUjHiDCDHvj44u4fjoYBg/faction-logo-vaughn/thumb",
-  "Tar Pits": "https://imagedelivery.net/JnUjHiDCDHvj44u4fjoYBg/faction-logo-tarpits/thumb",
-  "Tarpits": "https://imagedelivery.net/JnUjHiDCDHvj44u4fjoYBg/faction-logo-tarpits/thumb",
-  "XenoThreat": "https://imagedelivery.net/JnUjHiDCDHvj44u4fjoYBg/faction-logo-xenothreat/thumb",
-  "Aciedo Communications": "https://imagedelivery.net/JnUjHiDCDHvj44u4fjoYBg/faction-logo-aciedo/thumb",
-  // NPCs (from game data)
-  "Clovus Darneely": "https://imagedelivery.net/JnUjHiDCDHvj44u4fjoYBg/faction-logo-clovusdarneely/thumb",
-  "Ruto": "https://imagedelivery.net/JnUjHiDCDHvj44u4fjoYBg/faction-logo-ruto/thumb",
-  "Wallace Klim": "https://imagedelivery.net/JnUjHiDCDHvj44u4fjoYBg/faction-logo-wallaceklim/thumb",
-  "Tecia Pacheco": "https://imagedelivery.net/JnUjHiDCDHvj44u4fjoYBg/faction-logo-teciapacheco/thumb",
-  // Corporations (from RSI store captures)
-  "ArcCorp": "https://imagedelivery.net/JnUjHiDCDHvj44u4fjoYBg/27c262c6-92ee-4a28-da94-4f89a346ea00/thumb",
-  "Crusader Industries": "https://imagedelivery.net/JnUjHiDCDHvj44u4fjoYBg/996a1753-fbaf-4f89-b8a8-7170deb19200/thumb",
-  "Crusader Security": "https://imagedelivery.net/JnUjHiDCDHvj44u4fjoYBg/3f935ae0-34db-4cc3-a366-de4525096900/thumb",
-  "Hurston Dynamics": "https://imagedelivery.net/JnUjHiDCDHvj44u4fjoYBg/27339355-f4d7-410f-ae7f-8c9a50e1e800/thumb",
-  "Constantine Hurston": "https://imagedelivery.net/JnUjHiDCDHvj44u4fjoYBg/548b0c5e-0cda-45e5-5106-11f21e82c400/thumb",
-  "microTech": "https://imagedelivery.net/JnUjHiDCDHvj44u4fjoYBg/5174f2e7-4cd2-416c-da33-60c4f6703800/thumb",
-  "Nine Tails": "https://imagedelivery.net/JnUjHiDCDHvj44u4fjoYBg/d1b3c772-6ad1-4f28-9442-4f8eae83fd00/thumb",
-  "Recco Battaglia": "https://imagedelivery.net/JnUjHiDCDHvj44u4fjoYBg/32e468f1-f6eb-4e3f-89ab-34dfbb29fe00/thumb",
-  "Rough & Ready": "https://imagedelivery.net/JnUjHiDCDHvj44u4fjoYBg/3325e026-6f73-40be-1e6d-af1daed26d00/thumb",
-  "Eckhart Security": "https://imagedelivery.net/JnUjHiDCDHvj44u4fjoYBg/faction-logo-eckhart/thumb",
-  "Miles Eckhart": "https://imagedelivery.net/JnUjHiDCDHvj44u4fjoYBg/faction-logo-eckhart/thumb",
-  "Shubin Interstellar": "https://imagedelivery.net/JnUjHiDCDHvj44u4fjoYBg/faction-logo-shubin/thumb",
-  // Stubs — DDS was placeholder (<1KB), using closest match
-  "Klescher Rehabilitation Facilities": "https://imagedelivery.net/JnUjHiDCDHvj44u4fjoYBg/faction-logo-klescher/thumb",
-  "FTL Courier": "https://imagedelivery.net/JnUjHiDCDHvj44u4fjoYBg/faction-logo-ftlcourier/thumb",
-  // Dead Saints, BlacJac, Hockrow Agency, Adagio Holdings — no logo available, falls back to shield icon
-  "Wikelo": "https://imagedelivery.net/JnUjHiDCDHvj44u4fjoYBg/faction-logo-wikelo/thumb",
-  "Wikelo Emporium": "https://imagedelivery.net/JnUjHiDCDHvj44u4fjoYBg/faction-logo-wikelo/thumb",
-  // Factions with SC Wiki sourced logos (no real DDS in p4k)
-  "Rayari Incorporated": "https://imagedelivery.net/JnUjHiDCDHvj44u4fjoYBg/faction-logo-rayari/thumb",
-  "Wildstar Racing": "https://imagedelivery.net/JnUjHiDCDHvj44u4fjoYBg/faction-logo-wildstar/thumb",
-  "Highpoint Wilderness Specialists": "https://imagedelivery.net/JnUjHiDCDHvj44u4fjoYBg/faction-logo-rayari/thumb",
-  // Career rep icons
-  "Courier": "https://imagedelivery.net/JnUjHiDCDHvj44u4fjoYBg/192e600f-3f01-4c30-f237-846fad451e00/thumb",
-  "Bounty": "https://imagedelivery.net/JnUjHiDCDHvj44u4fjoYBg/faction-logo-bountyhuntersguild/thumb",
-  "Bounty Hunting": "https://imagedelivery.net/JnUjHiDCDHvj44u4fjoYBg/faction-logo-bountyhuntersguild/thumb",
-  "Hired Muscle": "https://imagedelivery.net/JnUjHiDCDHvj44u4fjoYBg/faction-logo-intersec/thumb",
-  "Assassination": "https://imagedelivery.net/JnUjHiDCDHvj44u4fjoYBg/faction-logo-vaughn/thumb",
-  "Security": "https://imagedelivery.net/JnUjHiDCDHvj44u4fjoYBg/faction-logo-cdf/thumb",
-  "Mercenary": "https://imagedelivery.net/JnUjHiDCDHvj44u4fjoYBg/faction-logo-intersec/thumb",
-}
-
-// Build a case-insensitive lookup once
-const _logoLookup = Object.fromEntries(
-  Object.entries(FACTION_LOGOS).map(([k, v]) => [k.toLowerCase(), v])
-)
-
-/** Get faction logo URL — case-insensitive, strips parenthetical scopes */
-function getFactionLogo(scopeName) {
-  if (!scopeName) return null
-  const lower = scopeName.toLowerCase()
-  if (_logoLookup[lower]) return _logoLookup[lower]
-  // Strip parenthetical: "Hurston Dynamics (Security)" → "Hurston Dynamics"
-  const base = lower.replace(/\s*\(.*\)$/, '')
-  if (_logoLookup[base]) return _logoLookup[base]
-  // Try first word: "Citizens For Prosperity" → "citizens"
-  const first = base.split(' ')[0]
-  return _logoLookup[first] || null
-}
-
-// ── Shared ──────────────────────────────────────────────────────────────────
-
-function cleanDesc(text) {
-  if (!text) return ''
-  return text.replace(/<[^>]+>/g, '').trim()
-}
+import { FACTION_LOGOS, getFactionLogo, GUILD_LABELS, cleanDesc } from '../lib/missionConstants'
 
 function Pill({ active, onClick, children }) {
   return (
@@ -143,8 +55,8 @@ function parseRequirements(json) {
 
 // ── Unified row ─────────────────────────────────────────────────────────────
 
-function EntryRow({ entry, repFocus }) {
-  const [expanded, setExpanded] = useState(false)
+function EntryRow({ entry, repFocus, isHighlighted, highlightRef }) {
+  const [expanded, setExpanded] = useState(isHighlighted)
   const source = SOURCE_BADGE[entry.source] || SOURCE_BADGE.dynamic
   const reward = entry.reward_amount || 0
   const desc = cleanDesc(entry.description)
@@ -158,7 +70,7 @@ function EntryRow({ entry, repFocus }) {
   }
 
   return (
-    <div className="border-b border-sc-border/30 last:border-0">
+    <div ref={highlightRef} className={`border-b border-sc-border/30 last:border-0 ${isHighlighted ? 'bg-sc-accent/[0.06] ring-1 ring-sc-accent/20 rounded' : ''}`}>
       <button onClick={() => setExpanded(!expanded)} className="w-full text-left px-4 py-3 flex items-center gap-3 hover:bg-white/[0.02] transition-colors">
         <div className="flex-1 min-w-0">
           <span className="text-sm text-gray-200">{entry.title}</span>
@@ -301,13 +213,6 @@ function GiverCard({ giver, count, onClick }) {
 
 // ── Faction cards (contract generators) ────────────────────────────────────
 
-const GUILD_LABELS = {
-  thecouncil_guild: 'The Council', mercenary_guild: 'Mercenary Guild',
-  unitedresourceworkers_guild: 'United Resource Workers', interstellartransport_guild: 'Interstellar Transport',
-  academyofsciences_guild: 'Academy of Sciences', imperialsportsfederation_guild: 'Imperial Sports Federation',
-  missionproviders: 'Mission Providers',
-}
-
 const SYSTEM_PILL_COLORS = {
   Stanton: 'bg-sc-accent/10 text-sc-accent', Nyx: 'bg-purple-500/10 text-purple-400', Pyro: 'bg-orange-500/10 text-orange-400',
 }
@@ -374,6 +279,8 @@ export default function Missions() {
   const typeFilter = searchParams.get('type') || ''
   const giverFilter = searchParams.get('giver') || ''
   const repFilter = searchParams.get('rep') || ''
+  const highlightId = searchParams.get('highlight') || ''
+  const guildFilter = searchParams.get('guild') || ''
 
   const setParam = useCallback((key, val, replace = false) => {
     setSearchParams(prev => {
@@ -402,12 +309,14 @@ export default function Missions() {
     for (const c of (contracts || [])) {
       entries.push({
         id: `c-${c.id}`,
+        contract_id: c.id,
         title: c.title,
         description: c.description,
         source: 'contract',
         category: c.category,
         category_display: c.category,
         giver_display: { wikelo: 'Wikelo', gfs: "Gilly's Flight School", ruto: 'Ruto' }[c.giver_slug] || c.giver_slug,
+        giver_slug: c.giver_slug || null,
         reward_amount: c.reward_amount || 0,
         reward_text: c.reward_text || null,
         reward_currency: c.reward_currency,
@@ -426,12 +335,14 @@ export default function Missions() {
     for (const m of (missionData?.missions || [])) {
       entries.push({
         id: `m-${m.id}`,
+        contract_id: null,
         title: m.title,
         description: m.description,
         source: m.availability || 'dynamic',
         category: m.category,
         category_display: CATEGORY_LABELS[m.category] || m.category,
-        giver_display: m.giver_name || null,
+        giver_display: (m.giver_name && m.giver_name !== 'SENDER NOT FOUND') ? m.giver_name : null,
+        giver_slug: m.giver_slug || null,
         reward_amount: m.reward_amount || 0,
         reward_text: null,
         reward_currency: 'aUEC',
@@ -443,20 +354,58 @@ export default function Missions() {
         notes: null,
         type_slug: m.type_slug,
         rep_summary: m.rep_summary,
+        contract_key: m.contract_key || null,
       })
     }
 
     return entries
   }, [contracts, missionData])
 
+  // Categories + source counts for filters
+  const categories = useMemo(() => {
+    const counts = {}
+    for (const e of allEntries) counts[e.category] = (counts[e.category] || 0) + 1
+    return Object.entries(counts).sort((a, b) => b[1] - a[1])
+  }, [allEntries])
+
+  // Group categories by display label to avoid duplicates like "Delivery" appearing twice
+  const displayCategories = useMemo(() => {
+    const grouped = {}
+    for (const [raw, count] of categories) {
+      const label = CATEGORY_LABELS[raw] || raw
+      if (!grouped[label]) grouped[label] = { label, rawValues: [], count: 0 }
+      grouped[label].rawValues.push(raw)
+      grouped[label].count += count
+    }
+    return Object.values(grouped).sort((a, b) => b.count - a.count)
+  }, [categories])
+
   // Filter
   const filtered = useMemo(() => {
     let items = allEntries
     if (sourceFilter) items = items.filter(e => e.source === sourceFilter)
-    if (categoryFilter) items = items.filter(e => e.category === categoryFilter)
+    if (categoryFilter) {
+      // categoryFilter is a display label — find all raw values that map to it
+      const matchingGroup = displayCategories.find(dc => dc.label === categoryFilter)
+      if (matchingGroup) {
+        const rawSet = new Set(matchingGroup.rawValues)
+        items = items.filter(e => rawSet.has(e.category))
+      } else {
+        // Fallback: try direct match on raw category
+        items = items.filter(e => e.category === categoryFilter)
+      }
+    }
     if (typeFilter) items = items.filter(e => e.type_slug === typeFilter || e.type_slug === ('missiontype-' + typeFilter.replace('missiontype-', '')))
     if (giverFilter) items = items.filter(e => e.giver_display === giverFilter)
     if (repFilter) items = items.filter(e => e.rep_summary && e.rep_summary.includes(repFilter + ':'))
+    if (guildFilter) {
+      const gf = guildFilter.toLowerCase()
+      items = items.filter(e =>
+        (e.giver_display && e.giver_display.toLowerCase().includes(gf)) ||
+        (e.giver_slug && e.giver_slug.toLowerCase().includes(gf)) ||
+        (e.contract_key && e.contract_key.toLowerCase().includes(gf))
+      )
+    }
     if (search.trim()) {
       const q = search.toLowerCase()
       items = items.filter(e =>
@@ -468,14 +417,7 @@ export default function Missions() {
     // Sort: reward descending
     items.sort((a, b) => (b.reward_amount || 0) - (a.reward_amount || 0))
     return items
-  }, [allEntries, sourceFilter, categoryFilter, typeFilter, giverFilter, repFilter, search])
-
-  // Categories + source counts for filters
-  const categories = useMemo(() => {
-    const counts = {}
-    for (const e of allEntries) counts[e.category] = (counts[e.category] || 0) + 1
-    return Object.entries(counts).sort((a, b) => b[1] - a[1])
-  }, [allEntries])
+  }, [allEntries, displayCategories, sourceFilter, categoryFilter, typeFilter, giverFilter, repFilter, guildFilter, search])
 
   const sourceCounts = useMemo(() => {
     const counts = { contract: 0, mission_board: 0, service_beacon: 0, dynamic: 0 }
@@ -543,7 +485,20 @@ export default function Missions() {
     return Object.values(scopes).sort((a, b) => b.missions.length - a.missions.length)
   }, [allEntries])
 
-  const hasActiveFilter = sourceFilter || categoryFilter || typeFilter || giverFilter || repFilter
+  const hasActiveFilter = sourceFilter || categoryFilter || typeFilter || giverFilter || repFilter || guildFilter
+
+  // Highlight: scroll to and auto-expand a specific entry (linked from ArmorSetDetail)
+  const highlightRef = useRef(null)
+  const highlightScrolled = useRef(false)
+  useEffect(() => {
+    if (highlightId && highlightRef.current && !highlightScrolled.current) {
+      highlightScrolled.current = true
+      // Small delay to let DOM settle after render
+      setTimeout(() => {
+        highlightRef.current?.scrollIntoView({ behavior: 'smooth', block: 'center' })
+      }, 100)
+    }
+  }, [highlightId, filtered])
 
   const loading = cLoading || mLoading || gLoading
   const error = cError || mError
@@ -597,8 +552,8 @@ export default function Missions() {
           </select>
           <select value={categoryFilter} onChange={e => setParam('cat', e.target.value)} className="bg-sc-darker border border-sc-border rounded-lg px-3 py-2 text-xs text-gray-300 font-mono focus:outline-none focus:border-sc-accent/40">
             <option value="">All Categories</option>
-            {categories.map(([cat, count]) => (
-              <option key={cat} value={cat}>{CATEGORY_LABELS[cat] || cat} ({count})</option>
+            {displayCategories.map(dc => (
+              <option key={dc.label} value={dc.label}>{dc.label} ({dc.count})</option>
             ))}
           </select>
         </div>
@@ -642,7 +597,13 @@ export default function Missions() {
               <button onClick={() => setParam('rep', '')} className="hover:text-white ml-1">&times;</button>
             </span>
           )}
-          <button onClick={() => setParams({ source: '', cat: '', type: '', giver: '', rep: '' })} className="text-xs text-gray-500 hover:text-gray-300 transition-colors">Clear all</button>
+          {guildFilter && (
+            <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded text-xs bg-sc-accent/10 text-sc-accent border border-sc-accent/20">
+              Guild: {guildFilter}
+              <button onClick={() => setParam('guild', '')} className="hover:text-white ml-1">&times;</button>
+            </span>
+          )}
+          <button onClick={() => setParams({ source: '', cat: '', type: '', giver: '', rep: '', guild: '' })} className="text-xs text-gray-500 hover:text-gray-300 transition-colors">Clear all</button>
         </div>
       )}
 
@@ -729,7 +690,10 @@ export default function Missions() {
             </div>
           ) : (
             <div className="panel overflow-hidden">
-              {filtered.slice(0, 200).map(e => <EntryRow key={e.id} entry={e} repFocus={repFilter || null} />)}
+              {filtered.slice(0, 200).map(e => {
+                const isMatch = highlightId && (e.contract_id === Number(highlightId) || e.id === `c-${highlightId}`)
+                return <EntryRow key={e.id} entry={e} repFocus={repFilter || null} isHighlighted={!!isMatch} highlightRef={isMatch ? highlightRef : undefined} />
+              })}
               {filtered.length > 200 && (
                 <div className="px-4 py-3 text-xs text-gray-600 font-mono text-center border-t border-sc-border/30">
                   Showing 200 of {filtered.length} — refine your search

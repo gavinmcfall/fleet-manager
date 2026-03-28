@@ -271,8 +271,8 @@ function GearBrowser() {
   }, [data, search, activeCategory, activeSub])
 
   return (
-    <div className="flex flex-col h-full" style={{ padding: '1.4vh 1.1vw' }}>
-      <div className="text-[0.72vw] tracking-[0.16vw] uppercase mb-1.5">
+    <div className="flex flex-col h-full" style={{ padding: '0.93vh 0.73vw' }}>
+      <div className="text-[0.72vw] tracking-[0.16vw] uppercase mb-1">
         GEAR<span className="mx-1" style={{ color: 'rgba(192,246,254,0.3)' }}>/</span><span style={{ color: '#00e8ff' }}>BROWSE</span>
         {data?.items && <span className="ml-2" style={{ color: 'rgba(192,246,254,0.3)', fontSize: '0.5vw' }}>{items.length}</span>}
       </div>

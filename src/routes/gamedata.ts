@@ -763,8 +763,9 @@ export function gamedataRoutes<E extends HonoEnv>() {
     const dvjTypes = deltaVersionJoin('mission_types', 'mt', 'uuid', versionId)
     const dvjGivers = deltaVersionJoin('mission_givers', 'mg', 'uuid', versionId)
     const dvjMissions = deltaVersionJoin('missions', 'm', 'uuid', versionId)
+    const vs = versionSub(versionId)
     return cachedJson(c, `gd:missions:${versionId}`, async () => {
-      const [typesResult, giversResult, missionsResult] = await Promise.all([
+      const [typesResult, giversResult, missionsResult, prereqResult, repReqResult] = await Promise.all([
         db.prepare(
           `SELECT mt.* FROM mission_types mt
            ${dvjTypes}
@@ -788,18 +789,63 @@ export function gamedataRoutes<E extends HonoEnv>() {
              m.reward_amount, m.reward_currency, m.is_lawful, m.difficulty,
              m.category, m.subcategory as availability,
              m.location_hint as type_slug,
-             m.reputation_reward_size as rep_summary
+             m.reputation_reward_size as rep_summary,
+             m.rep_fail_summary as rep_fail,
+             m.rep_abandon_summary as rep_abandon,
+             m.time_limit_minutes, m.max_players, m.can_share, m.once_only,
+             m.fail_if_criminal, m.available_in_prison,
+             m.wanted_level_min, m.wanted_level_max,
+             m.buy_in_amount, m.reward_max, m.has_standing_bonus,
+             m.location_ref, m.locality
            FROM missions m
            ${dvjMissions}
            WHERE m.not_for_release = 0
            ORDER BY m.category, m.reward_amount DESC`,
         ).all(),
+        db.prepare(
+          `SELECT mp.mission_id, m_req.uuid as required_uuid, m_req.title as required_title
+           FROM mission_prerequisites mp
+           JOIN missions m_req ON m_req.id = mp.required_mission_id
+           WHERE mp.game_version_id = ${vs}`,
+        ).all(),
+        db.prepare(
+          `SELECT mrr.mission_id, mrr.faction_slug, mrr.scope_slug,
+                  mrr.comparison, mrr.standing_slug
+           FROM mission_reputation_requirements mrr
+           WHERE mrr.game_version_id = ${vs}`,
+        ).all(),
       ])
+
+      // Build prerequisites map: mission_id → array of required missions
+      const prerequisites: Record<number, { uuid: string; title: string }[]> = {}
+      for (const row of prereqResult.results) {
+        const mid = row.mission_id as number
+        if (!prerequisites[mid]) prerequisites[mid] = []
+        prerequisites[mid].push({
+          uuid: row.required_uuid as string,
+          title: row.required_title as string,
+        })
+      }
+
+      // Build rep requirements map: mission_id → array of reputation requirements
+      const rep_requirements: Record<number, { faction_slug: string; scope_slug: string; comparison: string; standing_slug: string }[]> = {}
+      for (const row of repReqResult.results) {
+        const mid = row.mission_id as number
+        if (!rep_requirements[mid]) rep_requirements[mid] = []
+        rep_requirements[mid].push({
+          faction_slug: row.faction_slug as string,
+          scope_slug: row.scope_slug as string,
+          comparison: row.comparison as string,
+          standing_slug: row.standing_slug as string,
+        })
+      }
 
       return {
         types: typesResult.results,
         givers: giversResult.results,
         missions: missionsResult.results,
+        prerequisites,
+        rep_requirements,
       }
     })
   })
@@ -1289,6 +1335,8 @@ export function gamedataRoutes<E extends HonoEnv>() {
       const rows = await db.prepare(
         `SELECT cg.generator_key, cg.display_name, cg.faction_name, cg.guild,
                 cg.mission_type, cg.focus, cg.description, cg.faction_slug,
+                mg.portrait_url as giver_portrait_url,
+                mg.biography as giver_biography,
                 GROUP_CONCAT(DISTINCT cgca.system) as systems_csv,
                 COUNT(DISTINCT rpi.crafting_blueprint_id) as blueprint_count
          FROM contract_generators cg
@@ -1296,10 +1344,15 @@ export function gamedataRoutes<E extends HonoEnv>() {
          LEFT JOIN contract_generator_contracts cgc ON cgc.career_id = cgca.id
          LEFT JOIN contract_generator_blueprint_pools cgbp ON cgbp.contract_generator_contract_id = cgc.id
          LEFT JOIN crafting_blueprint_reward_pool_items rpi ON rpi.crafting_blueprint_reward_pool_id = cgbp.crafting_blueprint_reward_pool_id
+         LEFT JOIN mission_givers mg ON mg.slug = cg.faction_slug
+           AND mg.game_version_id = (
+             SELECT MAX(mg2.game_version_id) FROM mission_givers mg2
+             WHERE mg2.slug = cg.faction_slug AND mg2.game_version_id <= ?
+           )
          WHERE cg.game_version_id <= ?
          GROUP BY cg.id
          ORDER BY blueprint_count DESC, cg.display_name`
-      ).bind(versionId).all()
+      ).bind(versionId, versionId).all()
 
       return rows.results.map(r => ({
         generator_key: r.generator_key,
@@ -1310,6 +1363,8 @@ export function gamedataRoutes<E extends HonoEnv>() {
         mission_type: r.mission_type,
         focus: r.focus || null,
         description: r.description || null,
+        portrait_url: (r.giver_portrait_url as string) || null,
+        biography: (r.giver_biography as string) || null,
         systems: (r.systems_csv as string || "").split(",").filter(Boolean),
         blueprint_count: r.blueprint_count as number,
         has_blueprints: (r.blueprint_count as number) > 0,
@@ -1588,7 +1643,14 @@ export function gamedataRoutes<E extends HonoEnv>() {
       const puMissions = await db.prepare(
         `SELECT m.id, m.title, m.description, m.reward_amount, m.reward_currency,
                 m.is_lawful, m.difficulty, m.category, m.display_name as giver_name,
-                m.reputation_reward_size as rep_summary
+                m.reputation_reward_size as rep_summary,
+                m.rep_fail_summary as rep_fail,
+                m.rep_abandon_summary as rep_abandon,
+                m.time_limit_minutes, m.max_players, m.can_share, m.once_only,
+                m.fail_if_criminal, m.available_in_prison,
+                m.wanted_level_min, m.wanted_level_max,
+                m.buy_in_amount, m.reward_max, m.has_standing_bonus,
+                m.location_ref, m.locality
          FROM missions m
          WHERE m.game_version_id <= ? AND m.removed = 0
          ORDER BY m.reward_amount DESC`
@@ -1600,6 +1662,50 @@ export function gamedataRoutes<E extends HonoEnv>() {
         const mapped = GIVER_SLUG_MAP[(m.giver_name as string || "").toLowerCase()] || gn
         return mapped === slug || gn === slug
       })
+
+      // Get prerequisites and rep requirements for the faction's pu_missions
+      const factionMissionIds = new Set(factionPuMissions.map(m => m.id as number))
+      const fvs = versionSub(versionId)
+      const [factionPrereqResult, factionRepReqResult] = await Promise.all([
+        db.prepare(
+          `SELECT mp.mission_id, m_req.uuid as required_uuid, m_req.title as required_title
+           FROM mission_prerequisites mp
+           JOIN missions m_req ON m_req.id = mp.required_mission_id
+           WHERE mp.game_version_id = ${fvs}`,
+        ).all(),
+        db.prepare(
+          `SELECT mrr.mission_id, mrr.faction_slug, mrr.scope_slug,
+                  mrr.comparison, mrr.standing_slug
+           FROM mission_reputation_requirements mrr
+           WHERE mrr.game_version_id = ${fvs}`,
+        ).all(),
+      ])
+
+      // Build prerequisites map filtered to this faction's missions
+      const factionPrerequisites: Record<number, { uuid: string; title: string }[]> = {}
+      for (const row of factionPrereqResult.results) {
+        const mid = row.mission_id as number
+        if (!factionMissionIds.has(mid)) continue
+        if (!factionPrerequisites[mid]) factionPrerequisites[mid] = []
+        factionPrerequisites[mid].push({
+          uuid: row.required_uuid as string,
+          title: row.required_title as string,
+        })
+      }
+
+      // Build rep requirements map filtered to this faction's missions
+      const factionRepRequirements: Record<number, { faction_slug: string; scope_slug: string; comparison: string; standing_slug: string }[]> = {}
+      for (const row of factionRepReqResult.results) {
+        const mid = row.mission_id as number
+        if (!factionMissionIds.has(mid)) continue
+        if (!factionRepRequirements[mid]) factionRepRequirements[mid] = []
+        factionRepRequirements[mid].push({
+          faction_slug: row.faction_slug as string,
+          scope_slug: row.scope_slug as string,
+          comparison: row.comparison as string,
+          standing_slug: row.standing_slug as string,
+        })
+      }
 
       // Get NPC contracts for this faction
       const SLUG_TO_GIVER_SLUG: Record<string, string> = {
@@ -1614,6 +1720,16 @@ export function gamedataRoutes<E extends HonoEnv>() {
         npcContracts = contractResult.results as Record<string, unknown>[]
       }
 
+      // Look up enriched mission giver data (portrait, bio, etc.)
+      const giverResult = await db.prepare(
+        `SELECT mg.biography, mg.occupation, mg.association, mg.headquarters as giver_headquarters,
+                mg.portrait_url, mg.is_lawful as giver_is_lawful, mg.allies_json, mg.enemies_json
+         FROM mission_givers mg
+         WHERE mg.slug = ? AND mg.game_version_id <= ?
+         ORDER BY mg.game_version_id DESC LIMIT 1`
+      ).bind(slug, versionId).all()
+      const giver = giverResult.results[0] as Record<string, unknown> | undefined
+
       // Build faction info from first generator or pu_mission giver
       const factionInfo = firstGen ? {
         slug,
@@ -1625,6 +1741,13 @@ export function gamedataRoutes<E extends HonoEnv>() {
         focus: firstGen.focus || null,
         headquarters: firstGen.headquarters || null,
         leadership: firstGen.leadership || null,
+        biography: (giver?.biography as string) || null,
+        occupation: (giver?.occupation as string) || null,
+        association: (giver?.association as string) || null,
+        portrait_url: (giver?.portrait_url as string) || null,
+        is_lawful: giver?.giver_is_lawful ?? null,
+        allies_json: (giver?.allies_json as string) || null,
+        enemies_json: (giver?.enemies_json as string) || null,
       } : {
         slug,
         display_name: factionPuMissions[0]?.giver_name || slug,
@@ -1635,6 +1758,13 @@ export function gamedataRoutes<E extends HonoEnv>() {
         focus: null,
         headquarters: null,
         leadership: null,
+        biography: (giver?.biography as string) || null,
+        occupation: (giver?.occupation as string) || null,
+        association: (giver?.association as string) || null,
+        portrait_url: (giver?.portrait_url as string) || null,
+        is_lawful: giver?.giver_is_lawful ?? null,
+        allies_json: (giver?.allies_json as string) || null,
+        enemies_json: (giver?.enemies_json as string) || null,
       }
 
       const allSystems = [...new Set(genData.flatMap(g => (g as { systems: string[] }).systems))]
@@ -1665,6 +1795,21 @@ export function gamedataRoutes<E extends HonoEnv>() {
           difficulty: m.difficulty,
           category: m.category,
           rep_summary: m.rep_summary || null,
+          rep_fail: m.rep_fail || null,
+          rep_abandon: m.rep_abandon || null,
+          time_limit_minutes: m.time_limit_minutes ?? null,
+          max_players: m.max_players ?? null,
+          can_share: m.can_share ?? null,
+          once_only: m.once_only ?? null,
+          fail_if_criminal: m.fail_if_criminal ?? null,
+          available_in_prison: m.available_in_prison ?? null,
+          wanted_level_min: m.wanted_level_min ?? null,
+          wanted_level_max: m.wanted_level_max ?? null,
+          buy_in_amount: m.buy_in_amount ?? null,
+          reward_max: m.reward_max ?? null,
+          has_standing_bonus: m.has_standing_bonus ?? null,
+          location_ref: m.location_ref || null,
+          locality: m.locality || null,
         })),
         contracts: npcContracts.map(c => ({
           id: c.id,
@@ -1675,6 +1820,8 @@ export function gamedataRoutes<E extends HonoEnv>() {
           category: c.category,
           requirements_json: c.requirements_json,
         })),
+        prerequisites: factionPrerequisites,
+        rep_requirements: factionRepRequirements,
       }
     })
   })
