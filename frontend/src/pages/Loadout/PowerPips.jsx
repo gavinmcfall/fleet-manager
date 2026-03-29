@@ -1,5 +1,6 @@
 import React, { useState, useMemo, useCallback } from 'react'
 import { RotateCcw } from 'lucide-react'
+import { POWER_ICONS } from './PowerIcons'
 
 const MODES = ['SCM', 'NAV']
 
@@ -9,15 +10,23 @@ const MODE_OFF = {
   NAV: new Set(['shield', 'weapon']),
 }
 
+// Ordered to match in-game power management: Gun | Engine | Shield | QDrive | Tractor/Mining/Salvage | Radar | Life Support | Cooler
+// Only the utility type present on a given ship is shown (tractor OR mining OR salvage — never all three).
 const SUBSYSTEM_META = {
-  shield:  { label: 'SHD', color: 'text-blue-400',   pipOn: 'bg-emerald-500 border-emerald-500/40' },
-  weapon:  { label: 'WPN', color: 'text-amber-400',  pipOn: 'bg-emerald-500 border-emerald-500/40' },
-  engine:  { label: 'ENG', color: 'text-orange-300',  pipOn: 'bg-emerald-500 border-emerald-500/40' },
-  cooler:  { label: 'CLR', color: 'text-cyan-300',    pipOn: 'bg-emerald-500 border-emerald-500/40' },
-  radar:   { label: 'RAD', color: 'text-green-400',   pipOn: 'bg-emerald-500 border-emerald-500/40' },
-  qdrive:  { label: 'QD',  color: 'text-purple-400',  pipOn: 'bg-purple-500 border-purple-500/40' },
-  lifesup: { label: 'LS',  color: 'text-gray-500',    pipOn: 'bg-gray-500 border-gray-500/40' },
+  weapon:  { color: 'text-amber-400',  pipOn: 'bg-emerald-500 border-emerald-500/40' },
+  engine:  { color: 'text-orange-300',  pipOn: 'bg-emerald-500 border-emerald-500/40' },
+  shield:  { color: 'text-blue-400',   pipOn: 'bg-emerald-500 border-emerald-500/40' },
+  qdrive:  { color: 'text-purple-400',  pipOn: 'bg-purple-500 border-purple-500/40' },
+  tractor: { color: 'text-yellow-400',  pipOn: 'bg-emerald-500 border-emerald-500/40' },
+  mining:  { color: 'text-yellow-400',  pipOn: 'bg-emerald-500 border-emerald-500/40' },
+  salvage: { color: 'text-yellow-400',  pipOn: 'bg-emerald-500 border-emerald-500/40' },
+  radar:   { color: 'text-green-400',   pipOn: 'bg-emerald-500 border-emerald-500/40' },
+  lifesup: { color: 'text-gray-500',    pipOn: 'bg-gray-500 border-gray-500/40' },
+  cooler:  { color: 'text-cyan-300',    pipOn: 'bg-emerald-500 border-emerald-500/40' },
 }
+
+// Canonical ordering — subsystems are pushed in buildSubsystems() in any order, then sorted by this
+const SUBSYSTEM_ORDER = Object.keys(SUBSYSTEM_META)
 
 /**
  * Build subsystem columns from loadout component data.
@@ -65,7 +74,21 @@ function buildSubsystems(components, ship) {
     subs.push({ key: 'qdrive', max: 3, default: 1 })
   }
 
+  // Tractor beam, mining laser, and salvage beam each get their own column (only if present on this ship)
+  if (components?.some(c => c.component_type === 'TractorBeam')) {
+    subs.push({ key: 'tractor', max: 3, default: 1 })
+  }
+  if (components?.some(c => c.component_type === 'WeaponMining' || c.component_type === 'MiningModifier')) {
+    subs.push({ key: 'mining', max: 3, default: 1 })
+  }
+  if (components?.some(c => c.component_type === 'SalvageHead' || c.component_type === 'SalvageModifier')) {
+    subs.push({ key: 'salvage', max: 3, default: 1 })
+  }
+
   subs.push({ key: 'lifesup', max: 2, default: 1 })
+
+  // Sort by canonical game order
+  subs.sort((a, b) => SUBSYSTEM_ORDER.indexOf(a.key) - SUBSYSTEM_ORDER.indexOf(b.key))
 
   return subs
 }
@@ -167,17 +190,18 @@ export default function PowerPips({ components, ship, combat }) {
         })}
       </div>
 
-      {/* Subsystem labels + counts */}
+      {/* Subsystem icons + counts */}
       <div className="flex items-center gap-1.5 px-2">
         {subsystems.map((sub, idx) => {
           const k = sub.instance ? `${sub.key}_${sub.instance}` : sub.key
           const meta = SUBSYSTEM_META[sub.key]
+          const Icon = POWER_ICONS[sub.key]
           const isOff = offSet.has(sub.key)
           const filled = current[k] || 0
           return (
-            <div key={`${k}_${idx}`} className="flex-1 min-w-[26px] text-center">
-              <div className={`text-[9px] uppercase tracking-wider ${isOff ? 'text-gray-700' : meta.color}`}>
-                {meta.label}
+            <div key={`${k}_${idx}`} className="flex-1 min-w-[26px] flex flex-col items-center">
+              <div className={isOff ? 'text-gray-700' : meta.color}>
+                {Icon ? <Icon className="w-3.5 h-3.5" /> : null}
               </div>
               <div className={`font-mono text-[10px] ${isOff ? 'text-gray-700' : meta.color}`}>
                 {isOff ? 'off' : filled}
