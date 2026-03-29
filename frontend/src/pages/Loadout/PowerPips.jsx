@@ -190,21 +190,17 @@ export default function PowerPips({ components, ship, combat }) {
         })}
       </div>
 
-      {/* Subsystem icons + counts */}
+      {/* Subsystem icons */}
       <div className="flex items-center gap-1.5 px-2">
         {subsystems.map((sub, idx) => {
           const k = sub.instance ? `${sub.key}_${sub.instance}` : sub.key
           const meta = SUBSYSTEM_META[sub.key]
           const Icon = POWER_ICONS[sub.key]
           const isOff = offSet.has(sub.key)
-          const filled = current[k] || 0
           return (
-            <div key={`${k}_${idx}`} className="flex-1 min-w-[26px] flex flex-col items-center">
+            <div key={`${k}_${idx}`} className="flex-1 min-w-[26px] flex justify-center">
               <div className={isOff ? 'text-gray-700' : meta.color}>
-                {Icon ? <Icon className="w-3.5 h-3.5" /> : null}
-              </div>
-              <div className={`font-mono text-[10px] ${isOff ? 'text-gray-700' : meta.color}`}>
-                {isOff ? 'off' : filled}
+                {Icon ? <Icon className="w-7 h-7" /> : null}
               </div>
             </div>
           )
