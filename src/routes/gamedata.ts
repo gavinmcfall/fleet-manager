@@ -1293,7 +1293,7 @@ export function gamedataRoutes<E extends HonoEnv>() {
             `SELECT cgbp.contract_generator_contract_id, cgbp.chance,
                     rp.key as pool_key, rp.name as pool_name,
                     rpi.crafting_blueprint_id, cb.name as blueprint_name,
-                    COALESCE(fw.name, fa.name) as item_name,
+                    COALESCE(fw.name, fa.name, fh.name, fam.name) as item_name,
                     cb.type as blueprint_type, cb.sub_type as blueprint_sub_type
              FROM contract_generator_blueprint_pools cgbp
              JOIN crafting_blueprint_reward_pools rp ON rp.id = cgbp.crafting_blueprint_reward_pool_id
@@ -1301,6 +1301,8 @@ export function gamedataRoutes<E extends HonoEnv>() {
              JOIN crafting_blueprints cb ON cb.id = rpi.crafting_blueprint_id
              LEFT JOIN fps_weapons fw ON fw.class_name = REPLACE(cb.tag, 'BP_CRAFT_', '') AND fw.game_version_id = cb.game_version_id
              LEFT JOIN fps_armour fa ON fa.class_name = REPLACE(cb.tag, 'BP_CRAFT_', '') AND fa.game_version_id = cb.game_version_id
+             LEFT JOIN fps_helmets fh ON fh.class_name = REPLACE(cb.tag, 'BP_CRAFT_', '') AND fh.game_version_id = cb.game_version_id
+             LEFT JOIN fps_ammo_types fam ON fam.class_name = REPLACE(cb.tag, 'BP_CRAFT_', '') AND fam.game_version_id = cb.game_version_id
              WHERE cgbp.contract_generator_contract_id IN (${contractIds.join(",")})
                AND cgbp.game_version_id <= ?`
           ).bind(versionId).all()
@@ -1658,7 +1660,7 @@ export function gamedataRoutes<E extends HonoEnv>() {
           `SELECT cgbp.contract_generator_contract_id, cgbp.chance,
                   rp.key as pool_key, rp.name as pool_name,
                   rpi.crafting_blueprint_id, cb.name as blueprint_name,
-                  COALESCE(fw.name, fa.name) as item_name,
+                  COALESCE(fw.name, fa.name, fh.name, fam.name) as item_name,
                   cb.type as blueprint_type, cb.sub_type as blueprint_sub_type
            FROM contract_generator_blueprint_pools cgbp
            JOIN crafting_blueprint_reward_pools rp ON rp.id = cgbp.crafting_blueprint_reward_pool_id
@@ -1666,6 +1668,8 @@ export function gamedataRoutes<E extends HonoEnv>() {
            JOIN crafting_blueprints cb ON cb.id = rpi.crafting_blueprint_id
            LEFT JOIN fps_weapons fw ON fw.class_name = REPLACE(cb.tag, 'BP_CRAFT_', '') AND fw.game_version_id = cb.game_version_id
            LEFT JOIN fps_armour fa ON fa.class_name = REPLACE(cb.tag, 'BP_CRAFT_', '') AND fa.game_version_id = cb.game_version_id
+           LEFT JOIN fps_helmets fh ON fh.class_name = REPLACE(cb.tag, 'BP_CRAFT_', '') AND fh.game_version_id = cb.game_version_id
+           LEFT JOIN fps_ammo_types fam ON fam.class_name = REPLACE(cb.tag, 'BP_CRAFT_', '') AND fam.game_version_id = cb.game_version_id
            WHERE cgbp.contract_generator_contract_id IN (${contractIds.join(",")})
              AND cgbp.game_version_id <= ?`
         ).bind(versionId).all() : { results: [] }
