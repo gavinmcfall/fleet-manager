@@ -110,9 +110,11 @@ export async function purgeByPrefix(
     const list = await kv.list(opts);
     console.log(`[cache] purge list: ${list.keys.length} keys found (prefix=${prefix ?? "all"}, cursor=${!!cursor})`);
 
-    if (list.keys.length > 0) {
-      await Promise.all(list.keys.map((key) => kv.delete(key.name)));
-      deleted += list.keys.length;
+    // Filter out non-cache keys (localization data is persistent, not cache)
+    const cacheKeys = list.keys.filter((key) => !key.name.startsWith("localization:"));
+    if (cacheKeys.length > 0) {
+      await Promise.all(cacheKeys.map((key) => kv.delete(key.name)));
+      deleted += cacheKeys.length;
     }
 
     cursor = list.list_complete ? undefined : list.cursor;
