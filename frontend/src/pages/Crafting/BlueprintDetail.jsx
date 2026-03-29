@@ -136,6 +136,7 @@ export default function BlueprintDetail() {
     return data.blueprints.find(b => String(b.id) === id)
   }, [data, id])
 
+
   if (loading) return <LoadingState fullScreen message="Loading blueprint..." />
   if (error) return <ErrorState message={error} onRetry={refetch} />
   if (!blueprint) {
@@ -235,10 +236,10 @@ export default function BlueprintDetail() {
           <CraftTimeRing seconds={blueprint.craft_time_seconds} />
         </div>
 
-        {/* Acquisition sources */}
-        {blueprint.acquisition && blueprint.acquisition.length > 0 && (
-          <div className="mt-4 pt-4 border-t border-white/[0.06]">
-            <h4 className="text-[10px] uppercase tracking-wider text-gray-500 mb-2">How to Obtain</h4>
+        {/* Acquisition sources — shows mission data when available, fallback message otherwise */}
+        <div className="mt-4 pt-4 border-t border-white/[0.06]">
+          <h4 className="text-[10px] uppercase tracking-wider text-gray-500 mb-2">How to Obtain</h4>
+          {blueprint.acquisition && blueprint.acquisition.length > 0 ? (
             <div className="flex flex-wrap gap-2">
               {blueprint.acquisition.map((src, i) => (
                 <Link
@@ -257,8 +258,12 @@ export default function BlueprintDetail() {
                 </Link>
               ))}
             </div>
-          </div>
-        )}
+          ) : (
+            <p className="text-xs text-gray-500 italic">
+              Blueprint acquisition unknown — may be available at fabricators or from missions not yet documented.
+            </p>
+          )}
+        </div>
       </div>
 
       {/* Tabs */}
