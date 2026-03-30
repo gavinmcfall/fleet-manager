@@ -104,8 +104,15 @@ export function generateAsopOverrides(
       ? `${pos}. ${entry.vehicleName} "${entry.customLabel}"`
       : `${pos}. ${entry.vehicleName}`;
 
+    // Some ships use vehicle_Name (uppercase), others use vehicle_name (lowercase).
+    // Newer ships (Carrack, Paladin, Starlancer) use lowercase. Emit both to cover all ships.
     overrides.push({
       key: `vehicle_Name${entry.className}`,
+      value: fullLabel,
+      original: entry.vehicleName,
+    });
+    overrides.push({
+      key: `vehicle_name${entry.className}`,
       value: fullLabel,
       original: entry.vehicleName,
     });
@@ -118,6 +125,11 @@ export function generateAsopOverrides(
 
     overrides.push({
       key: `vehicle_Name${entry.className}_short`,
+      value: shortLabel,
+      original: short,
+    });
+    overrides.push({
+      key: `vehicle_name${entry.className}_short`,
       value: shortLabel,
       original: short,
     });
