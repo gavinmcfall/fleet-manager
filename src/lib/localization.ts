@@ -104,15 +104,8 @@ export function generateAsopOverrides(
       ? `${pos}. ${entry.vehicleName} "${entry.customLabel}"`
       : `${pos}. ${entry.vehicleName}`;
 
-    // Some ships use vehicle_Name (uppercase), others use vehicle_name (lowercase).
-    // Newer ships (Carrack, Paladin, Starlancer) use lowercase. Emit both to cover all ships.
     overrides.push({
       key: `vehicle_Name${entry.className}`,
-      value: fullLabel,
-      original: entry.vehicleName,
-    });
-    overrides.push({
-      key: `vehicle_name${entry.className}`,
       value: fullLabel,
       original: entry.vehicleName,
     });
@@ -125,11 +118,6 @@ export function generateAsopOverrides(
 
     overrides.push({
       key: `vehicle_Name${entry.className}_short`,
-      value: shortLabel,
-      original: short,
-    });
-    overrides.push({
-      key: `vehicle_name${entry.className}_short`,
       value: shortLabel,
       original: short,
     });
@@ -182,6 +170,15 @@ function formatLabel(
 }
 
 /**
+ * Case-insensitive key resolver. validKeys maps lowercase → original key.
+ * Returns the actual key from global.ini (with correct casing), or undefined.
+ */
+function resolveKey(candidate: string, validKeys?: Map<string, string>): string | undefined {
+  if (!validKeys) return candidate;
+  return validKeys.get(candidate.toLowerCase());
+}
+
+/**
  * Generate item label overrides. Only produces overrides for keys that
  * exist in validKeys (the actual global.ini key set). This prevents
  * phantom keys from colliding with unrelated entries.
@@ -189,14 +186,13 @@ function formatLabel(
 export function generateItemLabels(
   rows: ItemRow[],
   catFormat: CategoryFormat,
-  validKeys?: Set<string>,
+  validKeys?: Map<string, string>,
 ): LabelOverride[] {
   const overrides: LabelOverride[] = [];
   for (const row of rows) {
     if (!row.className) continue;
-    const key = `item_Name${row.className}`;
-    // Only override keys that actually exist in the base file
-    if (validKeys && !validKeys.has(key)) continue;
+    const key = resolveKey(`item_Name${row.className}`, validKeys);
+    if (!key) continue;
     const tag = buildDetailTag(row, catFormat.fields);
     overrides.push({
       key,
@@ -214,14 +210,13 @@ export function generateItemLabels(
 /** Contraband warnings: prefix illegal commodity names with [!] */
 export function generateContrabandWarnings(
   rows: Array<{ className: string; name: string }>,
-  validKeys?: Set<string>,
+  validKeys?: Map<string, string>,
 ): LabelOverride[] {
   const overrides: LabelOverride[] = [];
   for (const row of rows) {
     if (!row.className) continue;
-    // Commodity names use items_commodities_{class_name} key pattern
-    const key = `items_commodities_${row.className}`;
-    if (validKeys && !validKeys.has(key)) continue;
+    const key = resolveKey(`items_commodities_${row.className}`, validKeys);
+    if (!key) continue;
     overrides.push({
       key,
       value: `[!] ${row.name}`,
@@ -253,12 +248,11 @@ const MATERIAL_SHORT_NAMES: Record<string, string> = {
 /** Shorten material/mineable element names */
 export function generateMaterialShortNames(
   rows: Array<{ className: string; name: string }>,
-  validKeys?: Set<string>,
+  validKeys?: Map<string, string>,
 ): LabelOverride[] {
   const overrides: LabelOverride[] = [];
   for (const row of rows) {
     if (!row.className) continue;
-    // Find a matching short name
     let shortened: string | null = null;
     for (const [long, short] of Object.entries(MATERIAL_SHORT_NAMES)) {
       if (row.name.startsWith(long)) {
@@ -268,13 +262,11 @@ export function generateMaterialShortNames(
     }
     if (!shortened) continue;
 
-    // Materials use items_commodities_{class_name} for trade commodities
-    // and potentially item_Name{class_name} for mineable elements
-    const keys = [
+    const candidates = [
       `items_commodities_${row.className}`,
       `item_Name${row.className}`,
     ];
-    const key = keys.find((k) => !validKeys || validKeys.has(k));
+    const key = candidates.map((c) => resolveKey(c, validKeys)).find(Boolean);
     if (!key) continue;
     overrides.push({
       key,

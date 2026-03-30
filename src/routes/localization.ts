@@ -329,7 +329,8 @@ export function localizationRoutes() {
 
     // Extract ASCII keys from the raw bytes for valid-key checking.
     // Keys are always ASCII (before the '=' byte), so this is safe.
-    const validKeys = new Set<string>();
+    // Map is lowercase → original key for case-insensitive lookups.
+    const validKeys = new Map<string, string>();
     {
       let lineStart = 0;
       for (let i = 0; i <= raw.length; i++) {
@@ -342,7 +343,7 @@ export function localizationRoutes() {
               const keyBytes = raw.slice(lineStart, end);
               // Skip BOM at start of file
               const keyStr = String.fromCharCode(...(keyBytes[0] === 0xEF ? keyBytes.slice(3) : keyBytes));
-              validKeys.add(keyStr);
+              validKeys.set(keyStr.toLowerCase(), keyStr);
               break;
             }
           }
@@ -369,15 +370,16 @@ export function localizationRoutes() {
         const content = await kv.get(`localization:pack:${pack.name}:${ver.code}`, "text");
         if (content) {
           const parsed = parseIniOverrides(content);
-          for (const [k, v] of parsed) overrideMap.set(k, v);
+          for (const [k, v] of parsed) overrideMap.set(k.toLowerCase(), v);
         }
       }
     }
 
     // 2. Generate personal overrides (highest priority — overwrites packs)
+    // All overrideMap keys are lowercased for case-insensitive merge.
     const overrideList = await buildOverrides(db, userId, config, validKeys);
     for (const o of overrideList) {
-      overrideMap.set(o.key, o.value);
+      overrideMap.set(o.key.toLowerCase(), o.value);
     }
 
     // Merge: scan raw bytes line by line. For lines with a matching key,
@@ -398,7 +400,7 @@ export function localizationRoutes() {
           while (keyEnd > lineStart && raw[keyEnd - 1] === 0x20) keyEnd--;
           const keyBytes = raw.slice(lineStart, keyEnd);
           const keyStr = String.fromCharCode(...(lineStart === 0 && keyBytes[0] === 0xEF ? keyBytes.slice(3) : keyBytes));
-          const override = overrideMap.get(keyStr);
+          const override = overrideMap.get(keyStr.toLowerCase());
           if (override !== undefined) {
             // Emit: original key bytes + '=' + override value + \r\n
             chunks.push(raw.slice(lineStart, eqPos + 1));
@@ -458,7 +460,7 @@ async function buildOverrides(
   db: D1Database,
   userId: string,
   config: LocalizationConfig,
-  validKeys?: Set<string>,
+  validKeys?: Map<string, string>,
 ): Promise<LabelOverride[]> {
   const versionId = await resolveVersionId(db);
   const overrides: LabelOverride[] = [];
@@ -636,7 +638,9 @@ async function buildOverrides(
     for (const [descKey, bpNames] of descKeyBps) {
       // Try both exact key and ,P variant
       const candidates = [descKey, `${descKey},P`];
-      const matchedKey = candidates.find((k) => !validKeys || validKeys.has(k));
+      const matchedKey = candidates
+        .map((k) => (validKeys ? validKeys.get(k.toLowerCase()) : k))
+        .find(Boolean);
       if (!matchedKey) continue;
 
       const bpList = bpNames.map((n) => `- ${n}`).join("\\n");
