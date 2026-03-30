@@ -115,7 +115,7 @@ export default function Loadout() {
   // Split groups into left (weapons/turrets/missiles/pdc) and right (systems)
   const leftCategories = ['Weapons', 'Turrets', 'Missiles', 'Torpedoes', 'Point Defense']
   const leftGroups = grouped.filter(g => leftCategories.includes(g.label))
-  const rightGroups = grouped.filter(g => !leftCategories.includes(g.label))
+  const rightGroups = grouped.filter(g => !leftCategories.includes(g.label) && g.label !== 'Modules')
 
   const handleSelectComponent = useCallback(async (portId, component) => {
     const stockComp = stockComponents?.find(c => c.port_id === portId)

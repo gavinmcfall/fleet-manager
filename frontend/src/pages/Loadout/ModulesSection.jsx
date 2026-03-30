@@ -1,6 +1,13 @@
 import React, { useState } from 'react'
 import { ChevronDown, ChevronRight, Package, Check } from 'lucide-react'
 
+function formatPortName(raw) {
+  return raw
+    .replace(/^hardpoint_/i, '')
+    .replace(/_/g, ' ')
+    .replace(/\b\w/g, c => c.toUpperCase())
+}
+
 function isModuleOwned(displayName, ownedTitles) {
   if (!ownedTitles?.length || !displayName) return false
   const lower = displayName.toLowerCase()
@@ -15,9 +22,13 @@ export default function ModulesSection({ modules, ownedTitles }) {
 
   if (!modules?.length) return null
 
-  // Group by port_name
+  // Deduplicate by display_name+port_name, then group by port_name
+  const seen = new Set()
   const byPort = new Map()
   for (const m of modules) {
+    const dedup = `${m.port_name}:${m.display_name}`
+    if (seen.has(dedup)) continue
+    seen.add(dedup)
     const port = m.port_name || 'Default'
     if (!byPort.has(port)) byPort.set(port, [])
     byPort.get(port).push(m)
@@ -45,7 +56,7 @@ export default function ModulesSection({ modules, ownedTitles }) {
           {[...byPort.entries()].map(([portName, portModules]) => (
             <div key={portName} className="px-3 py-2">
               <div className="text-[10px] text-gray-600 uppercase tracking-wider mb-1.5 font-hud">
-                {portName.replace(/([a-z])([A-Z])/g, '$1 $2')}
+                {formatPortName(portName)}
               </div>
               <div className="space-y-1">
                 {portModules.map(m => {
