@@ -605,11 +605,16 @@ async function buildOverrides(
     // Query: for each unique desc_loc_key with blueprints, get the blueprint names
     const bpRows = await db
       .prepare(
-        `SELECT DISTINCT cgc.desc_loc_key, cb.name as blueprint_name
+        `SELECT DISTINCT cgc.desc_loc_key,
+                COALESCE(fw.name, fa.name, fh.name, fam.name, cb.name) as blueprint_name
          FROM contract_generator_blueprint_pools cgbp
          JOIN contract_generator_contracts cgc ON cgc.id = cgbp.contract_generator_contract_id
          JOIN crafting_blueprint_reward_pool_items cbri ON cbri.crafting_blueprint_reward_pool_id = cgbp.crafting_blueprint_reward_pool_id
          JOIN crafting_blueprints cb ON cb.id = cbri.crafting_blueprint_id
+         LEFT JOIN fps_weapons fw ON fw.class_name = REPLACE(cb.tag, 'BP_CRAFT_', '') AND fw.game_version_id = cb.game_version_id
+         LEFT JOIN fps_armour fa ON fa.class_name = REPLACE(cb.tag, 'BP_CRAFT_', '') AND fa.game_version_id = cb.game_version_id
+         LEFT JOIN fps_helmets fh ON fh.class_name = REPLACE(cb.tag, 'BP_CRAFT_', '') AND fh.game_version_id = cb.game_version_id
+         LEFT JOIN fps_ammo_types fam ON fam.class_name = REPLACE(cb.tag, 'BP_CRAFT_', '') AND fam.game_version_id = cb.game_version_id
          WHERE cgc.game_version_id = ?
          AND cgc.desc_loc_key IS NOT NULL AND cgc.desc_loc_key != ''`,
       )
