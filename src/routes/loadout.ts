@@ -4,7 +4,7 @@ import { getAuthUser, type HonoEnv } from "../lib/types";
 import { validate } from "../lib/validation";
 import { versionSubquery, deltaVersionJoin, PORT_TYPE_TO_COMPONENT_TYPE, STAT_SORT_KEY } from "../lib/constants";
 import { cachedJson, resolveVersionId, cacheSlug } from "../lib/cache";
-import { getShipLoadout, getShipModules } from "../db/queries";
+import { getShipLoadout, getShipModules, getUserOwnedModuleTitles } from "../db/queries";
 
 // D1 has a 100-parameter limit per prepared statement.
 // Batch an IN-clause query into chunks, merging all results.
@@ -80,6 +80,17 @@ export function loadoutRoutes() {
     return cachedJson(c, `loadout:modules:${versionId}:${cacheSlug(slug)}`, async () => {
       return getShipModules(c.env.DB, slug, versionId);
     });
+  });
+
+  // GET /api/loadout/:slug/modules/owned — user's owned module titles from pledges
+  app.get("/:slug/modules/owned", async (c) => {
+    try {
+      const user = getAuthUser(c);
+      const titles = await getUserOwnedModuleTitles(c.env.DB, user.id);
+      return c.json(titles);
+    } catch {
+      return c.json([]);
+    }
   });
 
   // GET /api/loadout/:slug/compatible?port_id=N&patch=X — all components fitting a port

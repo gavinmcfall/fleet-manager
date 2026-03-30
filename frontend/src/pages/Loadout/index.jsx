@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useMemo, useCallback } from 'react'
 import { useParams, useSearchParams, Link } from 'react-router-dom'
 import { RotateCcw, ShoppingCart, ChevronDown, ChevronRight } from 'lucide-react'
-import { useShip, useLoadoutComponents, useShipModules, useFleetLoadout, useLoadoutCart, saveFleetLoadout, resetFleetLoadout, addToLoadoutCart } from '../../hooks/useAPI'
+import { useShip, useLoadoutComponents, useShipModules, useOwnedModules, useFleetLoadout, useLoadoutCart, saveFleetLoadout, resetFleetLoadout, addToLoadoutCart } from '../../hooks/useAPI'
 import LoadingState from '../../components/LoadingState'
 import ComponentPicker from './ComponentPicker'
 import StatsPanel from './StatsPanel'
@@ -12,6 +12,7 @@ import TurretHeader from './TurretHeader'
 import LockedPort from './LockedPort'
 import DamageBreakdown from './DamageBreakdown'
 import PowerPips from './PowerPips'
+import ModulesSection from './ModulesSection'
 import { PORT_TYPE_ICONS, PORT_CATEGORY_ORDER, getPortCategory, getPrimaryStat, aggregateCombatStats, fmtInt, fmtCompact, fmtDec1, fmtSpeed, getDamageType, DmgShape } from './loadoutHelpers'
 
 export default function Loadout() {
@@ -22,6 +23,7 @@ export default function Loadout() {
   const { data: ship } = useShip(slug)
   const { data: stockComponents, loading: stockLoading, error: stockError } = useLoadoutComponents(slug)
   const { data: modules } = useShipModules(slug)
+  const { data: ownedModules } = useOwnedModules(slug)
   const { data: fleetLoadout, refetch: refetchFleetLoadout } = useFleetLoadout(fleetId)
   const { data: cartData, loading: cartLoading, refetch: refetchCart } = useLoadoutCart()
 
@@ -113,8 +115,7 @@ export default function Loadout() {
   // Split groups into left (weapons/turrets/missiles/pdc) and right (systems)
   const leftCategories = ['Weapons', 'Turrets', 'Missiles', 'Torpedoes', 'Point Defense']
   const leftGroups = grouped.filter(g => leftCategories.includes(g.label))
-  const rightGroups = grouped.filter(g => !leftCategories.includes(g.label) && g.label !== 'Modules')
-  const moduleGroup = grouped.find(g => g.label === 'Modules')
+  const rightGroups = grouped.filter(g => !leftCategories.includes(g.label))
 
   const handleSelectComponent = useCallback(async (portId, component) => {
     const stockComp = stockComponents?.find(c => c.port_id === portId)
@@ -418,18 +419,9 @@ export default function Loadout() {
         </div>
 
         {/* MODULES (full-width) */}
-        {moduleGroup && moduleGroup.items.length > 0 && (
+        {modules?.length > 0 && (
           <div className="mt-4">
-            <SectionCard
-              group={moduleGroup}
-              collapsed={collapsed}
-              setCollapsed={setCollapsed}
-              overrides={overrides}
-              onResetCategory={(portIds) => setOverrides(prev => { const next = { ...prev }; portIds.forEach(id => delete next[id]); return next })}
-                onResetComponent={(portId) => setOverrides(prev => { const next = { ...prev }; delete next[portId]; return next })}
-              onOpenPicker={(portId, portType) => { setPickerPortId(portId); setPickerPortType(portType) }}
-              modules={modules}
-            />
+            <ModulesSection modules={modules} ownedTitles={ownedModules} />
           </div>
         )}
       </div>
@@ -470,7 +462,7 @@ function StatCell({ label, value, format, color, unit, size }) {
   )
 }
 
-function SectionCard({ group, collapsed, setCollapsed, overrides, onResetCategory, onResetComponent, onOpenPicker, onAddToCart, modules, isWeaponSection }) {
+function SectionCard({ group, collapsed, setCollapsed, overrides, onResetCategory, onResetComponent, onOpenPicker, onAddToCart, isWeaponSection }) {
   const isCollapsed = collapsed[group.label]
   const Icon = PORT_TYPE_ICONS[group.portType]
   const categoryOverrides = group.items.filter(i => overrides[i.port_id]).length

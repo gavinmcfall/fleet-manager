@@ -371,6 +371,10 @@ export function useShipModules(slug) {
   return useAPI(slug ? `/loadout/${slug}/modules` : null, { skip: !slug })
 }
 
+export function useOwnedModules(slug) {
+  return useAPI(slug ? `/loadout/${slug}/modules/owned` : null, { skip: !slug })
+}
+
 export function useCompatibleComponents(slug, portId) {
   return useAPI(slug && portId ? `/loadout/${slug}/compatible?port_id=${portId}` : null, { skip: !slug || !portId })
 }

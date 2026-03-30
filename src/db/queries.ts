@@ -435,6 +435,17 @@ export async function getShipModules(db: D1Database, slug: string, versionId?: n
   return result.results as Record<string, unknown>[];
 }
 
+export async function getUserOwnedModuleTitles(db: D1Database, userId: string): Promise<string[]> {
+  const result = await db
+    .prepare(
+      `SELECT DISTINCT title FROM user_pledge_items
+       WHERE user_id = ? AND kind = 'Component' AND LOWER(title) LIKE '%module%'`
+    )
+    .bind(userId)
+    .all<{ title: string }>();
+  return result.results.map((r) => r.title);
+}
+
 // ============================================================
 // Paint Operations
 // ============================================================
