@@ -38,6 +38,37 @@ function parsePledgeCost(raw) {
   return { display: formatted, numeric: num }
 }
 
+/** Get MSRP display from the vehicles table pledge_price (in cents). */
+function getMsrp(entry) {
+  if (entry.pledge_price != null && entry.pledge_price > 0) {
+    const dollars = entry.pledge_price / 100
+    return { display: `$${Math.round(dollars).toLocaleString('en-US')}`, numeric: dollars }
+  }
+  return { display: '-', numeric: 0 }
+}
+
+/** Count how many ships share the same pledge_id in the fleet. */
+function buildPackCounts(fleet) {
+  const counts = new Map()
+  for (const entry of fleet) {
+    if (!entry.pledge_id) continue
+    counts.set(entry.pledge_id, (counts.get(entry.pledge_id) || 0) + 1)
+  }
+  return counts
+}
+
+/** Clean pledge name for display — strip "Standalone Ship(s) - ", "Package - " etc. */
+function cleanPledgeName(name) {
+  if (!name) return null
+  return name
+    .replace(/^Standalone\s+Ships?\s*-\s*/i, '')
+    .replace(/^Package\s*-\s*/i, '')
+    .replace(/^Add-Ons\s*-\s*/i, '')
+    .replace(/^Combo\s*-\s*/i, '')
+    .replace(/^Upgrade\s*-\s*/i, 'CCU: ')
+    .trim()
+}
+
 const VISIBILITY_OPTIONS = [
   { value: 'private', label: 'Private' },
   { value: 'org', label: 'Org' },
@@ -105,11 +136,28 @@ export default function FleetTable() {
 
   const inOrgs = !!(orgsData?.orgs?.length > 0)
 
+  const packFilter = searchParams.get('pack') || 'all'
+
   const sizes = useMemo(() => {
     if (!fleet) return []
     const s = new Set(fleet.map((v) => v.size_label || 'Unknown'))
     return ['all', ...Array.from(s).sort()]
   }, [fleet])
+
+  const packCounts = useMemo(() => fleet ? buildPackCounts(fleet) : new Map(), [fleet])
+
+  const packs = useMemo(() => {
+    if (!fleet) return []
+    const seen = new Map()
+    for (const v of fleet) {
+      if (!v.pledge_id || seen.has(v.pledge_id)) continue
+      const count = packCounts.get(v.pledge_id) || 1
+      if (count > 1) {
+        seen.set(v.pledge_id, cleanPledgeName(v.pledge_name) || `Pack #${v.pledge_id}`)
+      }
+    }
+    return Array.from(seen.entries()).sort((a, b) => a[1].localeCompare(b[1]))
+  }, [fleet, packCounts])
 
   const sorted = useMemo(() => {
     if (!fleet) return []
@@ -122,12 +170,17 @@ export default function FleetTable() {
           v.vehicle_name?.toLowerCase().includes(f) ||
           v.custom_name?.toLowerCase().includes(f) ||
           v.manufacturer_name?.toLowerCase().includes(f) ||
-          v.focus?.toLowerCase().includes(f)
+          v.focus?.toLowerCase().includes(f) ||
+          v.pledge_name?.toLowerCase().includes(f)
       )
     }
 
     if (sizeFilter !== 'all') {
       items = items.filter((v) => (v.size_label || 'Unknown') === sizeFilter)
+    }
+
+    if (packFilter !== 'all') {
+      items = items.filter((v) => v.pledge_id === packFilter)
     }
 
     items.sort((a, b) => {
@@ -137,6 +190,8 @@ export default function FleetTable() {
         case 'size': va = a.size_label || ''; vb = b.size_label || ''; break
         case 'focus': va = a.focus || ''; vb = b.focus || ''; break
         case 'pledge': va = getShipValue(a).numeric; vb = getShipValue(b).numeric; break
+        case 'msrp': va = getMsrp(a).numeric; vb = getMsrp(b).numeric; break
+        case 'pack': va = a.pledge_name || ''; vb = b.pledge_name || ''; break
         default: va = a.vehicle_name; vb = b.vehicle_name
       }
       if (typeof va === 'string') {
@@ -147,7 +202,7 @@ export default function FleetTable() {
     })
 
     return items
-  }, [fleet, filter, sizeFilter, sortKey, sortDir])
+  }, [fleet, filter, sizeFilter, packFilter, sortKey, sortDir])
 
   const toggleSort = (key) => {
     setSearchParams(prev => {
@@ -165,6 +220,7 @@ export default function FleetTable() {
     setSearchParams(prev => {
       prev.delete('filter')
       prev.delete('size')
+      prev.delete('pack')
       return prev
     }, { replace: true })
   }
@@ -192,6 +248,26 @@ export default function FleetTable() {
           options={sizes}
           allLabel="All Sizes"
         />
+        {packs.length > 0 && (
+          <select
+            value={packFilter}
+            onChange={(e) => setSearchParams(prev => { e.target.value === 'all' ? prev.delete('pack') : prev.set('pack', e.target.value); return prev }, { replace: true })}
+            className="px-2.5 py-1.5 text-xs bg-white/[0.04] border border-white/10 rounded-md text-gray-300 focus:border-sc-accent/40 cursor-pointer"
+          >
+            <option value="all">All Packs</option>
+            {packs.map(([id, name]) => (
+              <option key={id} value={id}>{name}</option>
+            ))}
+          </select>
+        )}
+        {packFilter !== 'all' && (
+          <button
+            onClick={() => setSearchParams(prev => { prev.delete('pack'); return prev }, { replace: true })}
+            className="text-xs text-gray-500 hover:text-sc-accent transition-colors"
+          >
+            Clear pack filter
+          </button>
+        )}
       </div>
 
       <div className="panel overflow-hidden">
@@ -204,7 +280,9 @@ export default function FleetTable() {
                   { key: 'vehicle_name', label: 'Ship' },
                   { key: 'size', label: 'Size' },
                   { key: 'focus', label: 'Role' },
-                  { key: 'pledge', label: 'Pledge' },
+                  { key: 'pack', label: 'Pack / Pledge' },
+                  { key: 'pledge', label: 'Pledge Value' },
+                  { key: 'msrp', label: 'MSRP' },
                 ].map(({ key, label }) => (
                   <th
                     key={key}
@@ -228,7 +306,7 @@ export default function FleetTable() {
             <tbody>
               {sorted.length === 0 ? (
                 <tr>
-                  <td colSpan={inOrgs ? 8 : 6} className="py-12">
+                  <td colSpan={inOrgs ? 10 : 8} className="py-12">
                     {fleet && fleet.length === 0 ? (
                       <div className="flex flex-col items-center gap-3 text-center">
                         <Rocket className="w-10 h-10 text-gray-500" />
@@ -295,8 +373,44 @@ export default function FleetTable() {
                       </div>
                     </td>
                     <td className="table-cell text-gray-400">{v.focus || '-'}</td>
+                    <td className="table-cell">
+                      {(() => {
+                        const count = v.pledge_id ? (packCounts.get(v.pledge_id) || 1) : 1
+                        const name = cleanPledgeName(v.pledge_name)
+                        if (count > 1 && name) {
+                          return (
+                            <button
+                              onClick={(e) => { e.stopPropagation(); setSearchParams(prev => { prev.set('pack', v.pledge_id); return prev }) }}
+                              className="text-left text-xs text-sc-accent2 hover:text-sc-accent transition-colors"
+                              title={`Filter to this pack (${count} ships)`}
+                            >
+                              <span className="block truncate max-w-[180px]">{name}</span>
+                              <span className="text-[10px] text-gray-600">{count} ships</span>
+                            </button>
+                          )
+                        }
+                        return <span className="text-xs text-gray-600">{name || '-'}</span>
+                      })()}
+                    </td>
                     <td className="table-cell font-mono text-gray-400">
-                      <PrivacyMask placeholder="$•••" value={getShipValue(v).numeric}>{getShipValue(v).display}</PrivacyMask>
+                      {(() => {
+                        const count = v.pledge_id ? (packCounts.get(v.pledge_id) || 1) : 1
+                        const val = getShipValue(v)
+                        if (count > 1 && val.numeric > 0) {
+                          return (
+                            <PrivacyMask placeholder="$•••" value={val.numeric}>
+                              <span className="text-gray-500" title={`${val.display} pack total shared across ${count} ships`}>
+                                {val.display}
+                                <span className="text-[10px] text-gray-600 ml-1">({count}-ship&nbsp;pack)</span>
+                              </span>
+                            </PrivacyMask>
+                          )
+                        }
+                        return <PrivacyMask placeholder="$•••" value={val.numeric}>{val.display}</PrivacyMask>
+                      })()}
+                    </td>
+                    <td className="table-cell font-mono text-gray-400">
+                      <PrivacyMask placeholder="$•••" value={getMsrp(v).numeric}>{getMsrp(v).display}</PrivacyMask>
                     </td>
                     <td className="table-cell">
                       <StatusBadge status={v.production_status} size="sm" />
