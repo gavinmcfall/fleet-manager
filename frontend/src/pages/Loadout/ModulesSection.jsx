@@ -79,7 +79,7 @@ export default function ModulesSection({ modules, ownedTitles }) {
                       <span className={`flex-1 ${m.is_default ? 'text-gray-200' : 'text-gray-400'}`}>
                         {m.display_name}
                       </span>
-                      {m.is_default && (
+                      {!!m.is_default && (
                         <span className="text-[9px] text-amber-400/70 uppercase tracking-wider font-semibold">Default</span>
                       )}
                       {owned && (
