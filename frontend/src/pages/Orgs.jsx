@@ -63,10 +63,9 @@ function CreateOrgModal({ open, onClose, onCreated }) {
     try {
       const data = await checkOrgVerification()
       if (data.verified) {
-        setMessage(data.message || 'Org verified! You can now remove the key from your charter.')
-        setStep('key-ready')
+        onClose?.()
         onCreated?.()
-        setTimeout(() => navigate(`/orgs/${data.slug}`), 3000)
+        navigate(`/orgs/${data.slug}`)
       } else {
         setMessage(data.message)
         setStep('key-ready')
