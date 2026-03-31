@@ -100,7 +100,8 @@ app.use("*", async (c, next) => {
     "style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; " +
     "font-src 'self' https://fonts.gstatic.com; " +
     "img-src 'self' https://imagedelivery.net https://robertsspaceindustries.com " +
-    "https://media.robertsspaceindustries.com https://cdn.robertsspaceindustries.com https://www.gravatar.com https://www.googletagmanager.com data:; " +
+    "https://media.robertsspaceindustries.com https://cdn.robertsspaceindustries.com " +
+    "https://avatars.githubusercontent.com https://www.gravatar.com https://www.googletagmanager.com data:; " +
     "connect-src 'self' https://www.google-analytics.com https://*.google-analytics.com https://*.analytics.google.com https://www.googletagmanager.com https://static.cloudflareinsights.com; " +
     "frame-ancestors 'none'; base-uri 'self'; form-action 'self' http://localhost:* http://127.0.0.1:*",
   );

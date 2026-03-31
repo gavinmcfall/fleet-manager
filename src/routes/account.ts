@@ -599,7 +599,6 @@ export function accountRoutes() {
       db.prepare("DELETE FROM user_hangar_syncs WHERE user_id = ?").bind(user.id),
       db.prepare("DELETE FROM user_rsi_profiles WHERE user_id = ?").bind(user.id),
       db.prepare("DELETE FROM user_account_snapshots WHERE user_id = ?").bind(user.id),
-      db.prepare("DELETE FROM user_ccu_chains WHERE user_id = ?").bind(user.id),
       db.prepare("DELETE FROM user_named_ships WHERE user_id = ?").bind(user.id),
       // Org verification pending (migration 0125)
       db.prepare("DELETE FROM org_verification_pending WHERE user_id = ?").bind(user.id),
