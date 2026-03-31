@@ -1,4 +1,4 @@
-import React, { useState, useEffect, Suspense, lazy } from 'react'
+import React, { useState, useEffect, useRef, Suspense, lazy } from 'react'
 import { Routes, Route, NavLink, Navigate, useLocation, useNavigate } from 'react-router-dom'
 import { Rocket, BarChart3, Shield, Upload, RefreshCw, Database, Settings as SettingsIcon, ChevronDown, ChevronRight, ChevronLeft, History, Menu, X, LogOut, LogIn, User, Wrench, Users, Building2, FileText, Search, MapPin, Palette, ShoppingCart, Hammer, Briefcase, Scale, Crosshair, BookOpen, Layers, TrendingUp, Languages, Heart, FlaskConical, SlidersHorizontal, Bookmark, Sparkles, Shirt, Zap, Thermometer, Gauge, Radar, Target, Navigation } from 'lucide-react'
 import LoadingState from './components/LoadingState'
@@ -6,7 +6,7 @@ import ErrorBoundary from './components/ErrorBoundary'
 import RequireAuth from './components/RequireAuth'
 import RequireFeature from './components/RequireFeature'
 import useFontPreference from './hooks/useFontPreference'
-import { useStatus } from './hooks/useAPI'
+import { useStatus, usePreferences, setPreferences } from './hooks/useAPI'
 import { authClient, useSession, signOut } from './lib/auth-client'
 import { TimezoneProvider } from './hooks/useTimezone'
 import { GameVersionProvider } from './hooks/useGameVersion'
@@ -660,10 +660,34 @@ export default function App() {
     try { return localStorage.getItem('sidebar-collapsed') === '1' } catch { return false }
   })
 
+  const { data: session } = useSession()
+  const isLoggedIn = !!session?.user
+  const { data: sidebarPrefs, loading: sidebarPrefsLoading } = usePreferences({ skip: !isLoggedIn })
+  const sidebarSynced = useRef(false)
+
+  // Sync sidebar state from API — API wins over localStorage for logged-in users.
+  useEffect(() => {
+    if (sidebarPrefsLoading || !isLoggedIn || sidebarPrefs === null || sidebarSynced.current) return
+    sidebarSynced.current = true
+
+    const apiVal = sidebarPrefs?.sidebarCollapsed
+    if (apiVal !== undefined) {
+      setSidebarCollapsed(apiVal === '1')
+      try { localStorage.setItem('sidebar-collapsed', apiVal) } catch {}
+    } else if (sidebarPrefs) {
+      // No API value yet — migrate localStorage to DB if non-default (collapsed)
+      const local = (() => { try { return localStorage.getItem('sidebar-collapsed') } catch { return null } })()
+      if (local === '1') {
+        setPreferences({ sidebarCollapsed: '1' }).catch(() => {})
+      }
+    }
+  }, [sidebarPrefs, sidebarPrefsLoading, isLoggedIn])
+
   const toggleSidebar = () => {
     setSidebarCollapsed(prev => {
       const next = !prev
       try { localStorage.setItem('sidebar-collapsed', next ? '1' : '0') } catch {}
+      if (isLoggedIn) setPreferences({ sidebarCollapsed: next ? '1' : '0' }).catch(() => {})
       return next
     })
   }
