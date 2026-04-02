@@ -177,22 +177,23 @@ npm run typecheck
 # Staging deploys read from frontend/dist/ (via wrangler.toml [assets] directory).
 npm run build
 
-# Deploy PRODUCTION (requires CLOUDFLARE_API_TOKEN in env)
-source ~/.secrets
-npx wrangler deploy
+# Deploy PRODUCTION — ALWAYS use --env production
+# Running without --env will fail (no top-level bindings — safety net).
+source ~/.secrets && cf-scbridge
+npx wrangler deploy --env production --config wrangler.toml
 
-# Deploy STAGING — MUST build frontend separately AND use --config wrangler.toml
+# Deploy STAGING — MUST build frontend separately
 # wrangler.toml [assets] points to frontend/dist/, NOT dist/client/.
 # The root `npm run build` does NOT update frontend/dist/ — you must build it explicitly.
-source ~/.secrets
+source ~/.secrets && cf-scbridge
 cd frontend && npm run build && cd ..
 npx wrangler deploy --env staging --config wrangler.toml
 
 # Migrations (production)
-source ~/.secrets && npx wrangler d1 migrations apply sc-companion --remote
+source ~/.secrets && cf-scbridge && npx wrangler d1 migrations apply scbridge-production --remote --env production
 
 # Migrations (staging)
-source ~/.secrets && npx wrangler d1 migrations apply sc-companion-staging --remote --env staging
+source ~/.secrets && cf-scbridge && npx wrangler d1 migrations apply scbridge-staging --remote --env staging
 ```
 
 ## Testing (DO NOT SKIP)
@@ -241,13 +242,36 @@ When adding a new feature or fixing a bug:
 
 ## Environments
 
-### Production
+### Cloudflare Accounts
+
+SC Bridge is migrating from Gavin's personal NERDZ account to a dedicated team account.
+
+| Account | ID | Purpose |
+|---------|-----|---------|
+| **NERDZ** (legacy) | `4214879ee537a4840de659aafb7bf201` | Personal projects. SC Bridge resources being migrated off. |
+| **SC Bridge** (new) | `92557ddeffaf43d64db74acf783ec49d` | Dedicated SC Bridge team account. |
+
+**Naming convention (new account):** `scbridge-{environment}` — no version suffixes.
+- D1: `scbridge-production` / `scbridge-staging`
+- R2: `scbridge-avatars-production` / `scbridge-avatars-staging`
+- KV: `scbridge-cache`
+- Workers: `scbridge` / `scbridge-staging`
+
+**Shell profile switcher:** `cf-scbridge` / `cf-nerdz` / `cf-which` functions in `~/.zshrc`.
+Run wrangler from `/tmp` when targeting SC Bridge account (avoids wrangler.toml account_id override).
+
+### Production (NERDZ — current, migrating)
 - **Worker:** `sc-bridge` → `scbridge.app`
 - **D1:** `sc-companion-v2` (`0f2fd623-0a47-492b-aa43-0773cced850b`)
 - **R2:** `sc-bridge-avatars`
 - **Deploy trigger:** push to `main`
 
-### Staging
+### Production (SC Bridge — new)
+- **D1:** `scbridge-production` (`673a1493-df10-4fe2-bc39-e24b649c538f`)
+- **R2:** `scbridge-avatars-production`
+- **KV:** `SC_BRIDGE_CACHE` (`608aaea06e2b4177b7e824a05e680ff3`)
+
+### Staging (NERDZ — current, migrating)
 - **Worker:** `sc-bridge-staging` → `staging.scbridge.app`
 - **D1:** `sc-companion-staging-v2` (`210c084b-6e14-415f-af45-46157e5d53a5`)
 - **R2:** `sc-bridge-avatars-staging`
@@ -255,6 +279,11 @@ When adding a new feature or fixing a bug:
 - **Crons:** disabled (empty array)
 - **RSI sync:** disabled (`RSI_API_ENABLED = "false"`)
 - **Note:** Better Auth tables (`user`, `session`, `account`, etc.) were bootstrapped manually on the staging DB since they're created by Better Auth at runtime, not by migration files. If the staging DB is ever recreated, run the bootstrap SQL before applying migrations.
+
+### Staging (SC Bridge — new)
+- **D1:** `scbridge-staging` (`ba65683b-facd-4c0c-8be0-a9b88565764d`)
+- **R2:** `scbridge-avatars-staging`
+- **KV:** `SC_BRIDGE_CACHE_STAGING` (`c43dfff89ae445a897916dc8e3fa7967`)
 
 ### Staging-Only Deploy Rule (DO NOT BREAK THIS)
 When the user says "push to staging", they mean **staging ONLY** — do NOT push to main.
@@ -268,7 +297,7 @@ The correct workflow for staging-only deploys:
 The `@cloudflare/vite-plugin` generates a redirect config at `.wrangler/deploy/config.json` → `dist/sc_bridge/wrangler.json`. This flattened config does NOT support `--env`. Always use `--config wrangler.toml` for staging deploys.
 
 ## Wrangler Config (`wrangler.toml`)
-- **Account:** NERDZ (`4214879ee537a4840de659aafb7bf201`)
+- **Account:** NERDZ (`4214879ee537a4840de659aafb7bf201`) — will be updated to SC Bridge after migration
 - **Assets dir:** `./frontend/dist` (with `run_worker_first = true`)
 
 ---
