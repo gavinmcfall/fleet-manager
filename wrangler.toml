@@ -75,7 +75,7 @@ preview_urls = false
 [[env.staging.d1_databases]]
 binding = "DB"
 database_name = "scbridge-staging"
-database_id = "8c8f8bb9-f8c4-4cd2-a696-831d094fcb7a"
+database_id = "0efb50f0-96fe-4f9f-9c97-9b4d77b5cb75"
 migrations_dir = "src/db/migrations"
 
 [[env.staging.kv_namespaces]]
@@ -92,7 +92,7 @@ crons = []
 [env.staging.vars]
 RSI_API_ENABLED = "false"
 ENVIRONMENT = "staging"
-BETTER_AUTH_URL = "https://staging.scbridge.app"
+BETTER_AUTH_URL = "https://scbridge-staging.ops-925.workers.dev"
 EMAIL_FROM = "SC Bridge Staging <noreply@scbridge.app>"
 RSI_BASE_URL = "https://robertsspaceindustries.com"
 RSI_RATE_LIMIT = "1.0"
