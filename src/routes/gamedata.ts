@@ -975,7 +975,7 @@ return cachedJson(c, `gd:crafting`, async () => {
       // while deposit-to-location mappings may only exist for older versions.
       // Matching by class_name lets new compositions inherit location data.
       const classNameFilters = `
-        AND rc.class_name NOT LIKE '%test%'
+        rc.class_name NOT LIKE '%test%'
         AND rc.class_name NOT LIKE 'FPS_Composition_%'
         AND rc.class_name NOT LIKE 'GroundVehicle_%'
         AND rc.class_name NOT LIKE 'TestCompositionPreset%'
@@ -987,7 +987,8 @@ return cachedJson(c, `gd:crafting`, async () => {
           .prepare(
             `SELECT rc.class_name, rc.composition_json
              FROM rock_compositions rc
-               ${classNameFilters} ORDER BY rc.id DESC`
+             WHERE ${classNameFilters}
+             ORDER BY rc.id DESC`
           )
           .all(),
         // Deposits with location data (may use earlier version's deposit links)
@@ -998,7 +999,7 @@ return cachedJson(c, `gd:crafting`, async () => {
              FROM mining_location_deposits mld
              JOIN rock_compositions rc ON rc.id = mld.rock_composition_id
              JOIN mining_locations ml ON ml.id = mld.mining_location_id
-               ${classNameFilters}`
+             WHERE ${classNameFilters}`
           )
           .all(),
         db

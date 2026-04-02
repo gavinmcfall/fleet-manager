@@ -143,6 +143,7 @@ function ExpandableCard({ name, icon: Icon, vehicleCount, vehicles, colorClasses
 
 export default function Careers() {
   const { data, loading, error, refetch } = useAPI('/gamedata/careers')
+  const [searchParams, setSearchParams] = useSearchParams()
   const search = searchParams.get('search') || ''
   const setSearch = useCallback((val) => {
     setSearchParams(prev => {
@@ -156,7 +157,6 @@ export default function Careers() {
     }, { replace: true })
   }, [setSearchParams])
   const VALID_TABS = ['careers', 'roles']
-  const [searchParams, setSearchParams] = useSearchParams()
   const tabParam = searchParams.get('tab')
   const activeTab = VALID_TABS.includes(tabParam) ? tabParam : 'careers'
   const setActiveTab = useCallback((t) => {
