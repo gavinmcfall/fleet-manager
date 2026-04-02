@@ -1,20 +1,6 @@
 import { useState, useEffect, useCallback, useSyncExternalStore } from 'react'
 
 const BASE = '/api'
-const VERSION_STORAGE_KEY = 'sc-bridge-active-version'
-
-/** Append ?patch= to a path when user has selected a non-default version */
-function withVersionParam(path) {
-  if (!path) return path
-  try {
-    const selected = localStorage.getItem(VERSION_STORAGE_KEY)
-    if (selected) {
-      const sep = path.includes('?') ? '&' : '?'
-      return `${path}${sep}patch=${encodeURIComponent(selected)}`
-    }
-  } catch { /* localStorage unavailable */ }
-  return path
-}
 
 async function apiFetch(method, path, body) {
   const opts = { method, credentials: 'same-origin' }
@@ -34,7 +20,7 @@ async function apiFetch(method, path, body) {
   return res.json()
 }
 
-const fetchJSON = (path) => apiFetch('GET', withVersionParam(path))
+const fetchJSON = (path) => apiFetch('GET', path)
 const postJSON = (path, body) => apiFetch('POST', path, body)
 const patchJSON = (path, body) => apiFetch('PATCH', path, body)
 const putJSON = (path, body) => apiFetch('PUT', path, body)
@@ -275,26 +261,20 @@ export async function setPrimaryOrg(organizationId) {
 }
 
 // Loot / Item Finder
-// These hooks accept an optional patchCode to query a specific game version.
-// When patchCode changes, the path changes, triggering a re-fetch.
-export function useLoot(patchCode) {
-  const suffix = patchCode ? `?patch=${encodeURIComponent(patchCode)}` : ''
-  return useAPI(`/loot${suffix}`)
+export function useLoot() {
+  return useAPI('/loot')
 }
 
-export function useLootItem(uuid, patchCode) {
-  const suffix = patchCode ? `?patch=${encodeURIComponent(patchCode)}` : ''
-  return useAPI(uuid ? `/loot/${uuid}${suffix}` : null, { skip: !uuid })
+export function useLootItem(uuid) {
+  return useAPI(uuid ? `/loot/${uuid}` : null, { skip: !uuid })
 }
 
-export function useLootLocations(patchCode) {
-  const suffix = patchCode ? `?patch=${encodeURIComponent(patchCode)}` : ''
-  return useAPI(`/loot/locations${suffix}`)
+export function useLootLocations() {
+  return useAPI('/loot/locations')
 }
 
-export function useLootLocationDetail(type, slug, patchCode) {
-  const suffix = patchCode ? `?patch=${encodeURIComponent(patchCode)}` : ''
-  const path = type && slug ? `/loot/locations/${type}/${encodeURIComponent(slug)}${suffix}` : null
+export function useLootLocationDetail(type, slug) {
+  const path = type && slug ? `/loot/locations/${type}/${encodeURIComponent(slug)}` : null
   return useAPI(path, { skip: !type || !slug })
 }
 
@@ -322,14 +302,12 @@ export async function toggleLootWishlist(uuid, isCurrentlyWishlisted) {
   return apiFetch(isCurrentlyWishlisted ? 'DELETE' : 'POST', `/loot/wishlist/${uuid}`)
 }
 
-export function useLocationShops(locationSlug, patchCode) {
-  const suffix = patchCode ? `?patch=${encodeURIComponent(patchCode)}` : ''
-  return useAPI(locationSlug ? `/gamedata/locations/${locationSlug}/shops${suffix}` : null, { skip: !locationSlug })
+export function useLocationShops(locationSlug) {
+  return useAPI(locationSlug ? `/gamedata/locations/${locationSlug}/shops` : null, { skip: !locationSlug })
 }
 
-export function useLootSet(setSlug, patchCode) {
-  const suffix = patchCode ? `?patch=${encodeURIComponent(patchCode)}` : ''
-  return useAPI(setSlug ? `/loot/sets/${setSlug}${suffix}` : null, { skip: !setSlug })
+export function useLootSet(setSlug) {
+  return useAPI(setSlug ? `/loot/sets/${setSlug}` : null, { skip: !setSlug })
 }
 
 export async function deleteAIAnalysis(id) {

@@ -1,7 +1,7 @@
 import { Hono } from "hono";
 import type { HonoEnv } from "../lib/types";
-import { deltaVersionJoin, PORT_TYPE_TO_COMPONENT_TYPE, STAT_SORT_KEY } from "../lib/constants";
-import { cachedJson, resolveVersionId } from "../lib/cache";
+import { PORT_TYPE_TO_COMPONENT_TYPE, STAT_SORT_KEY } from "../lib/constants";
+import { cachedJson } from "../lib/cache";
 
 // Valid URL slugs → port_type keys used in PORT_TYPE_TO_COMPONENT_TYPE
 const VALID_TYPES = new Set([
@@ -11,7 +11,7 @@ const VALID_TYPES = new Set([
 
 /**
  * /api/components/:type — Public reference data for all ship components by type.
- * No auth required. KV-cached per type per version.
+ * No auth required. KV-cached per type.
  */
 export function componentRoutes() {
   const app = new Hono<HonoEnv>();
@@ -22,11 +22,9 @@ export function componentRoutes() {
       return c.json({ error: `Invalid component type. Valid: ${[...VALID_TYPES].join(", ")}` }, 400);
     }
 
-    const patch = c.req.query("patch");
     const db = c.env.DB;
-    const versionId = await resolveVersionId(db, patch);
 
-    return cachedJson(c, `components:${type}:${versionId}`, async () => {
+    return cachedJson(c, `components:${type}`, async () => {
       const componentTypes = PORT_TYPE_TO_COMPONENT_TYPE[type] || [type];
       const typePlaceholders = componentTypes.map(() => "?").join(",");
       const sortKey = componentTypes.map(t => STAT_SORT_KEY[t]).find(Boolean) || "vc.name";
@@ -53,7 +51,6 @@ export function componentRoutes() {
                   vc.base_heat_generation, vc.distortion_max,
                   m.name AS manufacturer_name, m.code AS manufacturer_code
            FROM vehicle_components vc
-           ${deltaVersionJoin('vehicle_components', 'vc', 'uuid', versionId)}
            LEFT JOIN manufacturers m ON m.id = vc.manufacturer_id
            WHERE vc.type IN (${typePlaceholders})
              AND vc.name NOT LIKE '%Template%'

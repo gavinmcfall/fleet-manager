@@ -138,9 +138,9 @@ export async function seedVehicle(
     .prepare(
       `INSERT INTO vehicles (slug, name, focus, size_label, cargo, crew_min, crew_max,
          pledge_price, classification, production_status_id, manufacturer_id,
-         game_version_id, updated_at)
+         updated_at)
        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?,
-         (SELECT id FROM game_versions WHERE is_default = 1), datetime('now'))`
+         datetime('now'))`
     )
     .bind(
       slug,
@@ -315,9 +315,9 @@ export async function seedLootItem(
   await db
     .prepare(
       `INSERT INTO loot_map (uuid, name, type, sub_type, rarity,
-         category, manufacturer_name, game_version_id, updated_at)
+         category, manufacturer_name, updated_at)
        VALUES (?, ?, ?, ?, ?, ?, ?,
-         (SELECT id FROM game_versions WHERE is_default = 1), datetime('now'))`
+         datetime('now'))`
     )
     .bind(
       uuid,

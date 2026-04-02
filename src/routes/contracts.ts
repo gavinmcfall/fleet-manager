@@ -1,8 +1,7 @@
 import { Hono } from "hono"
 import type { HonoEnv } from "../lib/types"
 import { ARMOR_SET_REWARD_MAP } from "../lib/loot-sets"
-import { VEHICLE_VERSION_JOIN, deltaVersionJoin } from "../lib/constants"
-import { cachedJson, resolveVersionId, cacheSlug } from "../lib/cache"
+import { cachedJson, cacheSlug } from "../lib/cache"
 
 /**
  * /api/contracts — Named NPC contract reference data (public, no auth required)
@@ -17,26 +16,14 @@ export function contractRoutes<E extends HonoEnv>() {
     if (giver && giver.length > 100) {
       return c.json({ error: "Invalid filter" }, 400)
     }
-    const patch = c.req.query("patch")
-    const versionId = await resolveVersionId(db, patch)
 
-    const dvjContracts = deltaVersionJoin('contracts', 'c', 'contract_key', versionId)
-    const dvjWeapons = deltaVersionJoin('fps_weapons', 'fw', 'uuid', versionId)
-
-    return cachedJson(c, `contracts:${versionId}:${cacheSlug(giver ?? "all")}`, async () => {
+    return cachedJson(c, `contracts:${cacheSlug(giver ?? "all")}`, async () => {
       let query = `SELECT c.*,
           COALESCE(c.reward_vehicle_slug, v.slug) AS reward_vehicle_slug,
           COALESCE(c.reward_item_uuid, fw.uuid) AS reward_item_uuid
         FROM contracts c
-        ${dvjContracts}
-        LEFT JOIN (
-          SELECT v.* FROM vehicles v
-          ${VEHICLE_VERSION_JOIN}
-        ) v ON v.name = c.reward_text AND c.reward_vehicle_slug IS NULL
-        LEFT JOIN (
-          SELECT fw.* FROM fps_weapons fw
-          ${dvjWeapons}
-        ) fw ON fw.name = c.reward_text AND c.reward_item_uuid IS NULL
+        LEFT JOIN vehicles v ON v.name = c.reward_text AND c.reward_vehicle_slug IS NULL
+        LEFT JOIN fps_weapons fw ON fw.name = c.reward_text AND c.reward_item_uuid IS NULL
         WHERE c.is_active = 1`
       const params: string[] = []
 

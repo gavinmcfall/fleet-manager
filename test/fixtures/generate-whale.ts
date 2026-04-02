@@ -91,12 +91,9 @@ function formatPledgeCost(price: number | null): string {
 async function main() {
   console.log("Querying vehicles from production DB...");
 
-  // Use the game_version_id that actually has vehicles (may differ from is_default
-  // if vehicles haven't been migrated to the latest version yet)
   const sql = `SELECT v.slug, v.name, m.code as manufacturer_code, m.name as manufacturer_name, v.pledge_price, v.size_label
     FROM vehicles v
     LEFT JOIN manufacturers m ON m.id = v.manufacturer_id
-    WHERE v.game_version_id = (SELECT game_version_id FROM vehicles GROUP BY game_version_id ORDER BY COUNT(*) DESC LIMIT 1)
     ORDER BY v.name`;
 
   let rawOutput: string;

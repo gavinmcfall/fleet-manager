@@ -3,7 +3,6 @@
  */
 
 import { compactSlug, slugFromName } from "./slug";
-import { VEHICLE_VERSION_CAP } from "./constants";
 
 // --- Preloaded vehicle map for in-memory slug matching ---
 
@@ -17,12 +16,6 @@ export async function preloadVehicleMap(db: D1Database): Promise<VehicleMap> {
   // Load active vehicles (non-removed)
   const result = await db
     .prepare(`SELECT v.id, v.slug, v.name FROM vehicles v
-      INNER JOIN (
-        SELECT slug, MAX(game_version_id) as latest_gv
-        FROM vehicles
-        WHERE ${VEHICLE_VERSION_CAP}
-        GROUP BY slug
-      ) _vv ON v.slug = _vv.slug AND v.game_version_id = _vv.latest_gv
       WHERE v.removed = 0`)
     .all();
 
@@ -46,12 +39,6 @@ export async function preloadVehicleMap(db: D1Database): Promise<VehicleMap> {
   const removed = await db
     .prepare(`SELECT v.id, v.slug, v.name, rv.id as replacement_id, rv.slug as replacement_slug, rv.name as replacement_name
       FROM vehicles v
-      INNER JOIN (
-        SELECT slug, MAX(game_version_id) as latest_gv
-        FROM vehicles
-        WHERE ${VEHICLE_VERSION_CAP}
-        GROUP BY slug
-      ) _vv ON v.slug = _vv.slug AND v.game_version_id = _vv.latest_gv
       JOIN vehicles rv ON rv.id = v.replaced_by_vehicle_id
       WHERE v.removed = 1 AND v.replaced_by_vehicle_id IS NOT NULL`)
     .all();

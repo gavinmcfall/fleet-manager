@@ -2,7 +2,6 @@ import { Hono } from "hono";
 import { z } from "zod";
 import { getAuthUser, type HonoEnv } from "../lib/types";
 import { validate } from "../lib/validation";
-import { resolveVersionId } from "../lib/cache";
 import {
   type AsopEntry,
   type ItemRow,
@@ -462,7 +461,9 @@ async function buildOverrides(
   config: LocalizationConfig,
   validKeys?: Map<string, string>,
 ): Promise<LabelOverride[]> {
-  const versionId = await resolveVersionId(db);
+  // Get default game version for queries that need version-keyed data
+  const verRow = await db.prepare("SELECT id FROM game_versions WHERE is_default = 1 LIMIT 1").first<{ id: number }>();
+  const versionId = verRow?.id ?? 0;
   const overrides: LabelOverride[] = [];
 
   // ASOP ordering

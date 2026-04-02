@@ -1,13 +1,11 @@
 import { useState } from 'react'
 import { Scale, X, ChevronUp, ChevronDown } from 'lucide-react'
 import { useLootItem } from '../../hooks/useAPI'
-import useGameVersion from '../../hooks/useGameVersion'
 import { effectiveCategory, CATEGORY_LABELS, rarityStyle } from '../../lib/lootDisplay'
 import CompareTable from './CompareTable'
 
 function CompareItemLoader({ uuid, onRemove }) {
-  const { activeCode } = useGameVersion()
-  const { data: item, loading } = useLootItem(uuid, activeCode)
+  const { data: item, loading } = useLootItem(uuid)
   if (loading) return <span className="text-[10px] font-mono text-gray-500 bg-white/[0.06] px-2 py-0.5 rounded border border-white/[0.08] animate-pulse">Loading...</span>
   if (!item) return null
   return (

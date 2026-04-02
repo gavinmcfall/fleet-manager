@@ -2,7 +2,6 @@ import React, { useState, useMemo, useCallback, useEffect } from 'react'
 import { Link, useSearchParams } from 'react-router-dom'
 import { MapPin, Package, ShoppingCart, Swords, ChevronDown, ChevronRight, Store, X } from 'lucide-react'
 import { useLootLocations, useAPI } from '../hooks/useAPI'
-import useGameVersion from '../hooks/useGameVersion'
 import { friendlyLocation, friendlyFaction, getLocationGroup, isTemplateLocation } from '../lib/lootLocations'
 import { friendlyShopName } from '../lib/shopNames'
 import { LOCATION_TREE, assignShopsToTree, countShopsInNode } from '../lib/locationHierarchy'
@@ -261,8 +260,7 @@ function ShopInventoryPanel({ shop, onClose }) {
 const PAGE_SIZE = 30
 
 export default function POI() {
-  const { activeCode } = useGameVersion()
-  const { data, loading, error, refetch } = useLootLocations(activeCode)
+  const { data, loading, error, refetch } = useLootLocations()
   const { data: allShops, loading: shopsLoading } = useAPI('/gamedata/shops')
   const [selectedShop, setSelectedShop] = useState(null)
   const VALID_SECTIONS = ['containers', 'shops', 'npcs']

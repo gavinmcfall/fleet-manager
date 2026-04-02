@@ -12,7 +12,6 @@ import {
   setLootCollectionQuantity, setLootWishlistQuantity,
 } from '../../hooks/useAPI'
 import { useSession } from '../../lib/auth-client'
-import useGameVersion from '../../hooks/useGameVersion'
 import PageHeader from '../../components/PageHeader'
 import LoadingState from '../../components/LoadingState'
 import ErrorState from '../../components/ErrorState'
@@ -123,8 +122,7 @@ export default function LootDB() {
   const { data: session } = useSession()
   const isAuthed = !!session?.user
 
-  const { activeCode } = useGameVersion()
-  const { data: allItems, loading, error, refetch } = useLoot(activeCode)
+  const { data: allItems, loading, error, refetch } = useLoot()
   const { data: collectionIds, refetch: refetchCollection } = useLootCollection(isAuthed)
   const { data: wishlistItems, refetch: refetchWishlist } = useLootWishlist(isAuthed)
 

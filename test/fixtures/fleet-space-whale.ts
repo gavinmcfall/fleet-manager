@@ -1,6 +1,6 @@
 /**
  * Space Whale persona — owns EVERY ship in the database (197 vehicles).
- * One of each unique vehicle (not paints, not removed) from the default game version.
+ * One of each unique vehicle (not paints) from the database.
  * Used for comprehensive testing of fleet features across all ship types.
  *
  * Generated from staging DB query on 2026-03-26.

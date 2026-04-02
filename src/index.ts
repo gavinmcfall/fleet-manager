@@ -30,8 +30,8 @@ import { componentRoutes } from "./routes/components";
 import { blueprintRoutes } from "./routes/blueprints";
 import { validateEncryptionKey } from "./lib/crypto";
 import { logEvent } from "./lib/logger";
-import { VEHICLE_VERSION_JOIN, isTrustedExtension } from "./lib/constants";
-import { cachedJson, resolveVersionId, cacheSlug } from "./lib/cache";
+import { isTrustedExtension } from "./lib/constants";
+import { cachedJson, cacheSlug } from "./lib/cache";
 
 const app = new Hono<HonoEnv>();
 
@@ -317,7 +317,7 @@ app.get("/api/status", async (c) => {
   const user = c.get("user");
 
   const vehicleCount = await db
-    .prepare(`SELECT COUNT(*) as count FROM vehicles v ${VEHICLE_VERSION_JOIN}`)
+    .prepare(`SELECT COUNT(*) as count FROM vehicles v`)
     .first<{ count: number }>();
   const paintCount = await db
     .prepare("SELECT COUNT(*) as count FROM paints WHERE is_base_variant = 0")
@@ -363,10 +363,8 @@ app.get("/api/status", async (c) => {
 app.get("/api/ships/:slug/loadout", async (c) => {
   const slug = c.req.param("slug");
   const db = c.env.DB;
-  const patch = c.req.query("patch");
-  const versionId = await resolveVersionId(db, patch);
-  return cachedJson(c, `ships:loadout:${versionId}:${cacheSlug(slug)}`, () =>
-    getShipLoadout(db, slug, versionId),
+  return cachedJson(c, `ships:loadout:${cacheSlug(slug)}`, () =>
+    getShipLoadout(db, slug),
   );
 });
 
@@ -374,20 +372,16 @@ app.get("/api/ships/:slug/loadout", async (c) => {
 app.get("/api/ships/:slug/salvage", async (c) => {
   const slug = c.req.param("slug");
   const db = c.env.DB;
-  const patch = c.req.query("patch");
-  const versionId = await resolveVersionId(db, patch);
-  return cachedJson(c, `ships:salvage:${versionId}:${cacheSlug(slug)}`, () =>
-    getSalvageForShip(db, slug, versionId),
+  return cachedJson(c, `ships:salvage:${cacheSlug(slug)}`, () =>
+    getSalvageForShip(db, slug),
   );
 });
 
 // All salvageable ships
 app.get("/api/gamedata/salvageable-ships", async (c) => {
   const db = c.env.DB;
-  const patch = c.req.query("patch");
-  const versionId = await resolveVersionId(db, patch);
-  return cachedJson(c, `gd:salvageable-ships:${versionId}`, () =>
-    listSalvageableShips(db, versionId),
+  return cachedJson(c, `gd:salvageable-ships`, () =>
+    listSalvageableShips(db),
   );
 });
 

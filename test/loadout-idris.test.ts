@@ -22,7 +22,6 @@ import { setupTestDatabase } from "./apply-migrations";
 // Seed helpers — builds a representative Idris-P port hierarchy
 // ---------------------------------------------------------------------------
 
-let gameVersionId: number;
 let idrisVehicleId: number;
 
 // Component UUIDs — stable for this test
@@ -62,29 +61,12 @@ async function seedManufacturers(db: D1Database) {
   const stmts = mfrs.map((m) =>
     db
       .prepare(
-        `INSERT OR IGNORE INTO manufacturers (id, uuid, name, slug, code, game_version_id)
-         VALUES (?, ?, ?, ?, ?, ?)`
+        `INSERT OR IGNORE INTO manufacturers (id, uuid, name, slug, code)
+         VALUES (?, ?, ?, ?, ?)`
       )
-      .bind(m.id, `mfr-uuid-${m.id}`, m.name, m.slug, m.code, gameVersionId)
+      .bind(m.id, `mfr-uuid-${m.id}`, m.name, m.slug, m.code)
   );
   await db.batch(stmts);
-}
-
-async function seedGameVersion(db: D1Database): Promise<number> {
-  const existing = await db
-    .prepare("SELECT id FROM game_versions WHERE is_default = 1")
-    .first<{ id: number }>();
-  if (existing) return existing.id;
-
-  await db
-    .prepare(
-      "INSERT INTO game_versions (code, label, is_default, created_at) VALUES ('4.6.0-live', '4.6.0 LIVE', 1, datetime('now'))"
-    )
-    .run();
-  const row = await db
-    .prepare("SELECT id FROM game_versions WHERE is_default = 1")
-    .first<{ id: number }>();
-  return row!.id;
 }
 
 async function seedComponent(
@@ -125,7 +107,7 @@ async function seedComponent(
   await db
     .prepare(
       `INSERT INTO vehicle_components (uuid, name, slug, type, sub_type, size, grade, class,
-       manufacturer_id, game_version_id, removed,
+       manufacturer_id,
        dps, damage_per_shot, damage_type, rounds_per_minute, projectile_speed,
        damage_energy, shield_hp, shield_regen,
        resist_physical, resist_energy, resist_distortion, resist_thermal,
@@ -134,7 +116,7 @@ async function seedComponent(
        radar_range, power_draw, penetration, weapon_range,
        created_at, updated_at)
        VALUES (?, ?, ?, ?, ?, ?, ?, NULL,
-       ?, ?, 0,
+       ?,
        ?, ?, ?, ?, ?,
        ?, ?, ?,
        ?, ?, ?, ?,
@@ -152,7 +134,6 @@ async function seedComponent(
       opts.size,
       opts.grade,
       opts.manufacturer_id,
-      gameVersionId,
       opts.dps ?? null,
       opts.damage_per_shot ?? null,
       opts.damage_type ?? null,
@@ -180,8 +161,8 @@ async function seedComponent(
     .run();
 
   const row = await db
-    .prepare("SELECT id FROM vehicle_components WHERE uuid = ? AND game_version_id = ?")
-    .bind(opts.uuid, gameVersionId)
+    .prepare("SELECT id FROM vehicle_components WHERE uuid = ?")
+    .bind(opts.uuid)
     .first<{ id: number }>();
   return row!.id;
 }
@@ -204,8 +185,8 @@ async function seedPort(
   await db
     .prepare(
       `INSERT INTO vehicle_ports (uuid, vehicle_id, parent_port_id, name, category_label,
-       size_min, size_max, port_type, equipped_item_uuid, editable, game_version_id, removed)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 0)`
+       size_min, size_max, port_type, equipped_item_uuid, editable)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
     )
     .bind(
       opts.uuid,
@@ -217,14 +198,13 @@ async function seedPort(
       opts.size_max,
       opts.port_type ?? null,
       opts.equipped_item_uuid ?? null,
-      opts.editable ?? 1,
-      gameVersionId
+      opts.editable ?? 1
     )
     .run();
 
   const row = await db
-    .prepare("SELECT id FROM vehicle_ports WHERE uuid = ? AND game_version_id = ?")
-    .bind(opts.uuid, gameVersionId)
+    .prepare("SELECT id FROM vehicle_ports WHERE uuid = ?")
+    .bind(opts.uuid)
     .first<{ id: number }>();
   return row!.id;
 }
@@ -236,7 +216,6 @@ async function seedPort(
 describe("Loadout API — Idris-P golden data", () => {
   beforeAll(async () => {
     await setupTestDatabase(env.DB);
-    gameVersionId = await seedGameVersion(env.DB);
     await seedManufacturers(env.DB);
 
     // -----------------------------------------------------------------------
@@ -246,16 +225,15 @@ describe("Loadout API — Idris-P golden data", () => {
       .prepare(
         `INSERT INTO vehicles (slug, name, focus, size_label, cargo, crew_min, crew_max,
          speed_scm, speed_max, fuel_capacity_hydrogen, fuel_capacity_quantum,
-         classification, manufacturer_id, game_version_id, removed, updated_at)
+         classification, manufacturer_id, updated_at)
          VALUES ('idris-p', 'Idris-P', 'Combat', 'capital', 995, 10, 38,
          94, 949, 0, 5,
-         'Combat', ${MFR.aegis}, ${gameVersionId}, 0, datetime('now'))`
+         'Combat', ${MFR.aegis}, datetime('now'))`
       )
       .run();
 
     const vRow = await env.DB
-      .prepare("SELECT id FROM vehicles WHERE slug = 'idris-p' AND game_version_id = ?")
-      .bind(gameVersionId)
+      .prepare("SELECT id FROM vehicles WHERE slug = 'idris-p'")
       .first<{ id: number }>();
     idrisVehicleId = vRow!.id;
 

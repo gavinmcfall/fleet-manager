@@ -2,7 +2,6 @@ import React, { useMemo, useState } from 'react'
 import { useParams, Link, useSearchParams } from 'react-router-dom'
 import { MapPin, ArrowLeft, Store, ChevronDown, ChevronRight } from 'lucide-react'
 import { useLootLocationDetail, useLocationShops } from '../hooks/useAPI'
-import useGameVersion from '../hooks/useGameVersion'
 import { friendlyLocation, friendlyFaction, getLocationGroup, LOCATION_SLUG_MAP } from '../lib/lootLocations'
 import { friendlyShopName } from '../lib/shopNames'
 import PageHeader from '../components/PageHeader'
@@ -113,13 +112,12 @@ export default function POIDetail() {
   const apiType = type === 'shop' ? 'shop' : type === 'npc' ? 'npc' : 'container'
   const decodedSlug = slug ? decodeURIComponent(slug) : ''
 
-  const { activeCode } = useGameVersion()
-  const { data, loading, error, refetch } = useLootLocationDetail(apiType, decodedSlug, activeCode)
+  const { data, loading, error, refetch } = useLootLocationDetail(apiType, decodedSlug)
   const items = data?.items || []
 
   // Shop data bridge: map container slug → star_map_locations slug
   const locationSlug = apiType === 'container' ? LOCATION_SLUG_MAP[decodedSlug] : null
-  const { data: shopData } = useLocationShops(locationSlug, activeCode)
+  const { data: shopData } = useLocationShops(locationSlug)
 
   // Resolve display names
   const locationName = apiType === 'shop'

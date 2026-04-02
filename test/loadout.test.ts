@@ -23,7 +23,6 @@ import { setupTestDatabase } from "./apply-migrations";
 // Seed helpers local to this file — builds the Asgard's full port hierarchy
 // ---------------------------------------------------------------------------
 
-let gameVersionId: number;
 let asgardVehicleId: number;
 
 // Component UUIDs — stable for this test
@@ -67,30 +66,12 @@ async function seedManufacturers(db: D1Database) {
   const stmts = mfrs.map((m) =>
     db
       .prepare(
-        `INSERT OR IGNORE INTO manufacturers (id, uuid, name, slug, code, game_version_id)
-         VALUES (?, ?, ?, ?, ?, ?)`
+        `INSERT OR IGNORE INTO manufacturers (id, uuid, name, slug, code)
+         VALUES (?, ?, ?, ?, ?)`
       )
-      .bind(m.id, `mfr-uuid-${m.id}`, m.name, m.slug, m.code, gameVersionId)
+      .bind(m.id, `mfr-uuid-${m.id}`, m.name, m.slug, m.code)
   );
   await db.batch(stmts);
-}
-
-async function seedGameVersion(db: D1Database): Promise<number> {
-  // Check if a default version already exists from migrations
-  const existing = await db
-    .prepare("SELECT id FROM game_versions WHERE is_default = 1")
-    .first<{ id: number }>();
-  if (existing) return existing.id;
-
-  await db
-    .prepare(
-      "INSERT INTO game_versions (code, label, is_default, created_at) VALUES ('4.6.0-live', '4.6.0 LIVE', 1, datetime('now'))"
-    )
-    .run();
-  const row = await db
-    .prepare("SELECT id FROM game_versions WHERE is_default = 1")
-    .first<{ id: number }>();
-  return row!.id;
 }
 
 async function seedComponent(
@@ -131,7 +112,7 @@ async function seedComponent(
   await db
     .prepare(
       `INSERT INTO vehicle_components (uuid, name, slug, type, sub_type, size, grade, class,
-       manufacturer_id, game_version_id, removed,
+       manufacturer_id,
        dps, damage_per_shot, damage_type, rounds_per_minute, projectile_speed,
        damage_energy, shield_hp, shield_regen,
        resist_physical, resist_energy, resist_distortion, resist_thermal,
@@ -140,7 +121,7 @@ async function seedComponent(
        radar_range, power_draw, penetration, weapon_range,
        created_at, updated_at)
        VALUES (?, ?, ?, ?, ?, ?, ?, NULL,
-       ?, ?, 0,
+       ?,
        ?, ?, ?, ?, ?,
        ?, ?, ?,
        ?, ?, ?, ?,
@@ -158,7 +139,6 @@ async function seedComponent(
       opts.size,
       opts.grade,
       opts.manufacturer_id,
-      gameVersionId,
       opts.dps ?? null,
       opts.damage_per_shot ?? null,
       opts.damage_type ?? null,
@@ -186,8 +166,8 @@ async function seedComponent(
     .run();
 
   const row = await db
-    .prepare("SELECT id FROM vehicle_components WHERE uuid = ? AND game_version_id = ?")
-    .bind(opts.uuid, gameVersionId)
+    .prepare("SELECT id FROM vehicle_components WHERE uuid = ?")
+    .bind(opts.uuid)
     .first<{ id: number }>();
   return row!.id;
 }
@@ -210,8 +190,8 @@ async function seedPort(
   await db
     .prepare(
       `INSERT INTO vehicle_ports (uuid, vehicle_id, parent_port_id, name, category_label,
-       size_min, size_max, port_type, equipped_item_uuid, editable, game_version_id, removed)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 0)`
+       size_min, size_max, port_type, equipped_item_uuid, editable)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
     )
     .bind(
       opts.uuid,
@@ -223,14 +203,13 @@ async function seedPort(
       opts.size_max,
       opts.port_type ?? null,
       opts.equipped_item_uuid ?? null,
-      opts.editable ?? 1,
-      gameVersionId
+      opts.editable ?? 1
     )
     .run();
 
   const row = await db
-    .prepare("SELECT id FROM vehicle_ports WHERE uuid = ? AND game_version_id = ?")
-    .bind(opts.uuid, gameVersionId)
+    .prepare("SELECT id FROM vehicle_ports WHERE uuid = ?")
+    .bind(opts.uuid)
     .first<{ id: number }>();
   return row!.id;
 }
@@ -242,7 +221,6 @@ async function seedPort(
 describe("Loadout API — Asgard golden data", () => {
   beforeAll(async () => {
     await setupTestDatabase(env.DB);
-    gameVersionId = await seedGameVersion(env.DB);
     await seedManufacturers(env.DB);
 
     // -----------------------------------------------------------------------
@@ -252,16 +230,15 @@ describe("Loadout API — Asgard golden data", () => {
       .prepare(
         `INSERT INTO vehicles (slug, name, focus, size_label, cargo, crew_min, crew_max,
          speed_scm, speed_max, fuel_capacity_hydrogen, fuel_capacity_quantum,
-         classification, manufacturer_id, game_version_id, removed, updated_at)
+         classification, manufacturer_id, updated_at)
          VALUES ('asgard', 'Asgard', 'Combat', 'medium', 180, 1, 1,
          203, 1075, 97.5, 1.85,
-         'Combat', ${MFR.anvil}, ${gameVersionId}, 0, datetime('now'))`
+         'Combat', ${MFR.anvil}, datetime('now'))`
       )
       .run();
 
     const vRow = await env.DB
-      .prepare("SELECT id FROM vehicles WHERE slug = 'asgard' AND game_version_id = ?")
-      .bind(gameVersionId)
+      .prepare("SELECT id FROM vehicles WHERE slug = 'asgard'")
       .first<{ id: number }>();
     asgardVehicleId = vRow!.id;
 
@@ -1008,7 +985,6 @@ describe("Loadout API — Carrack Expedition golden data", () => {
   beforeAll(async () => {
     // Each describe block gets its own isolated D1 database — must set up from scratch.
     await setupTestDatabase(env.DB);
-    gameVersionId = await seedGameVersion(env.DB);
     await seedManufacturers(env.DB);
 
     const db = env.DB;
@@ -1023,10 +999,10 @@ describe("Loadout API — Carrack Expedition golden data", () => {
     const mfrStmts = extraMfrs.map((m) =>
       db
         .prepare(
-          `INSERT OR IGNORE INTO manufacturers (id, uuid, name, slug, code, game_version_id)
-           VALUES (?, ?, ?, ?, ?, ?)`
+          `INSERT OR IGNORE INTO manufacturers (id, uuid, name, slug, code)
+           VALUES (?, ?, ?, ?, ?)`
         )
-        .bind(m.id, `mfr-uuid-${m.id}`, m.name, m.slug, m.code, gameVersionId)
+        .bind(m.id, `mfr-uuid-${m.id}`, m.name, m.slug, m.code)
     );
     await db.batch(mfrStmts);
 
@@ -1037,16 +1013,15 @@ describe("Loadout API — Carrack Expedition golden data", () => {
       .prepare(
         `INSERT INTO vehicles (slug, name, focus, size_label, cargo, crew_min, crew_max,
          speed_scm, speed_max, fuel_capacity_hydrogen, fuel_capacity_quantum,
-         classification, manufacturer_id, game_version_id, removed, updated_at)
+         classification, manufacturer_id, updated_at)
          VALUES ('carrack-expedition', 'Carrack Expedition', 'Exploration', 'large', 456, 1, 6,
          96, 950, 135, 3.6,
-         'Exploration', ${CARRACK_MFR.anvil}, ${gameVersionId}, 0, datetime('now'))`
+         'Exploration', ${CARRACK_MFR.anvil}, datetime('now'))`
       )
       .run();
 
     const vRow = await db
-      .prepare("SELECT id FROM vehicles WHERE slug = 'carrack-expedition' AND game_version_id = ?")
-      .bind(gameVersionId)
+      .prepare("SELECT id FROM vehicles WHERE slug = 'carrack-expedition'")
       .first<{ id: number }>();
     carrackVehicleId = vRow!.id;
 
@@ -1741,7 +1716,6 @@ describe("Loadout API — Hermes golden data (tractor beam regression)", () => {
   beforeAll(async () => {
     // Each describe block gets its own isolated D1 database — must set up from scratch.
     await setupTestDatabase(env.DB);
-    gameVersionId = await seedGameVersion(env.DB);
     await seedManufacturers(env.DB);
 
     // Seed additional manufacturers for Hermes
@@ -1755,10 +1729,10 @@ describe("Loadout API — Hermes golden data (tractor beam regression)", () => {
     const mfrStmts = mfrs.map((m) =>
       env.DB
         .prepare(
-          `INSERT OR IGNORE INTO manufacturers (id, uuid, name, slug, code, game_version_id)
-           VALUES (?, ?, ?, ?, ?, ?)`
+          `INSERT OR IGNORE INTO manufacturers (id, uuid, name, slug, code)
+           VALUES (?, ?, ?, ?, ?)`
         )
-        .bind(m.id, `mfr-uuid-${m.id}`, m.name, m.slug, m.code, gameVersionId)
+        .bind(m.id, `mfr-uuid-${m.id}`, m.name, m.slug, m.code)
     );
     await env.DB.batch(mfrStmts);
 
@@ -1769,16 +1743,15 @@ describe("Loadout API — Hermes golden data (tractor beam regression)", () => {
       .prepare(
         `INSERT INTO vehicles (slug, name, focus, size_label, cargo, crew_min, crew_max,
          speed_scm, speed_max, fuel_capacity_hydrogen, fuel_capacity_quantum,
-         classification, manufacturer_id, game_version_id, removed, updated_at)
+         classification, manufacturer_id, updated_at)
          VALUES ('hermes', 'Hermes', 'Pathfinder', 'medium', 48, 1, 2,
          210, 1170, 82.5, 1.5,
-         'Multi', ${HERMES_MFR.aegisDyn}, ${gameVersionId}, 0, datetime('now'))`
+         'Multi', ${HERMES_MFR.aegisDyn}, datetime('now'))`
       )
       .run();
 
     const vRow = await env.DB
-      .prepare("SELECT id FROM vehicles WHERE slug = 'hermes' AND game_version_id = ?")
-      .bind(gameVersionId)
+      .prepare("SELECT id FROM vehicles WHERE slug = 'hermes'")
       .first<{ id: number }>();
     hermesVehicleId = vRow!.id;
 
@@ -2283,7 +2256,6 @@ const MOLE_MFR = {
 describe("Loadout API — mining laser compatible components", () => {
   beforeAll(async () => {
     await setupTestDatabase(env.DB);
-    gameVersionId = await seedGameVersion(env.DB);
 
     // Seed manufacturers
     const mfrs = [
@@ -2294,10 +2266,10 @@ describe("Loadout API — mining laser compatible components", () => {
     const mfrStmts = mfrs.map((m) =>
       env.DB
         .prepare(
-          `INSERT OR IGNORE INTO manufacturers (id, uuid, name, slug, code, game_version_id)
-           VALUES (?, ?, ?, ?, ?, ?)`
+          `INSERT OR IGNORE INTO manufacturers (id, uuid, name, slug, code)
+           VALUES (?, ?, ?, ?, ?)`
         )
-        .bind(m.id, `mfr-uuid-${m.id}`, m.name, m.slug, m.code, gameVersionId)
+        .bind(m.id, `mfr-uuid-${m.id}`, m.name, m.slug, m.code)
     );
     await env.DB.batch(mfrStmts);
 
@@ -2306,16 +2278,15 @@ describe("Loadout API — mining laser compatible components", () => {
       .prepare(
         `INSERT INTO vehicles (slug, name, focus, size_label, cargo, crew_min, crew_max,
          speed_scm, speed_max, fuel_capacity_hydrogen, fuel_capacity_quantum,
-         classification, manufacturer_id, game_version_id, removed, updated_at)
+         classification, manufacturer_id, updated_at)
          VALUES ('mole', 'MOLE', 'Mining', 'medium', 0, 1, 4,
          75, 800, 50.0, 1.0,
-         'Industrial', ${MOLE_MFR.argo}, ${gameVersionId}, 0, datetime('now'))`
+         'Industrial', ${MOLE_MFR.argo}, datetime('now'))`
       )
       .run();
 
     const vRow = await env.DB
-      .prepare("SELECT id FROM vehicles WHERE slug = 'mole' AND game_version_id = ?")
-      .bind(gameVersionId)
+      .prepare("SELECT id FROM vehicles WHERE slug = 'mole'")
       .first<{ id: number }>();
     moleVehicleId = vRow!.id;
 
@@ -2402,7 +2373,6 @@ const PERSEUS_MFR = {
 describe("Loadout API — torpedo storage exclusion", () => {
   beforeAll(async () => {
     await setupTestDatabase(env.DB);
-    gameVersionId = await seedGameVersion(env.DB);
 
     const mfrs = [
       { id: PERSEUS_MFR.rsi, name: "RSI", code: "RSI", slug: "rsi" },
@@ -2411,10 +2381,10 @@ describe("Loadout API — torpedo storage exclusion", () => {
     const mfrStmts = mfrs.map((m) =>
       env.DB
         .prepare(
-          `INSERT OR IGNORE INTO manufacturers (id, uuid, name, slug, code, game_version_id)
-           VALUES (?, ?, ?, ?, ?, ?)`
+          `INSERT OR IGNORE INTO manufacturers (id, uuid, name, slug, code)
+           VALUES (?, ?, ?, ?, ?)`
         )
-        .bind(m.id, `mfr-uuid-${m.id}`, m.name, m.slug, m.code, gameVersionId)
+        .bind(m.id, `mfr-uuid-${m.id}`, m.name, m.slug, m.code)
     );
     await env.DB.batch(mfrStmts);
 
@@ -2423,16 +2393,15 @@ describe("Loadout API — torpedo storage exclusion", () => {
       .prepare(
         `INSERT INTO vehicles (slug, name, focus, size_label, cargo, crew_min, crew_max,
          speed_scm, speed_max, fuel_capacity_hydrogen, fuel_capacity_quantum,
-         classification, manufacturer_id, game_version_id, removed, updated_at)
+         classification, manufacturer_id, updated_at)
          VALUES ('perseus', 'Perseus', 'Gunship', 'large', 64, 4, 6,
          165, 950, 90.0, 2.0,
-         'Combat', ${PERSEUS_MFR.rsi}, ${gameVersionId}, 0, datetime('now'))`
+         'Combat', ${PERSEUS_MFR.rsi}, datetime('now'))`
       )
       .run();
 
     const vRow = await env.DB
-      .prepare("SELECT id FROM vehicles WHERE slug = 'perseus' AND game_version_id = ?")
-      .bind(gameVersionId)
+      .prepare("SELECT id FROM vehicles WHERE slug = 'perseus'")
       .first<{ id: number }>();
     perseusVehicleId = vRow!.id;
 

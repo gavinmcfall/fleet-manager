@@ -14,13 +14,10 @@ describe("User Blueprints API", () => {
     sessionToken = user.sessionToken;
     userId = user.userId;
 
-    // Seed a game version + crafting blueprint for FK references
+    // Seed a crafting blueprint for FK references
     await env.DB.prepare(
-      `INSERT OR IGNORE INTO game_versions (id, code, is_default) VALUES (1, '4.7.0-live', 1)`
-    ).run();
-    await env.DB.prepare(
-      `INSERT INTO crafting_blueprints (uuid, tag, name, type, sub_type, craft_time_seconds, game_version_id)
-       VALUES ('test-bp-uuid', 'BP_TEST', 'Test Blueprint', 'weapons', 'rifle', 120, 1)`
+      `INSERT INTO crafting_blueprints (uuid, tag, name, type, sub_type, craft_time_seconds)
+       VALUES ('test-bp-uuid', 'BP_TEST', 'Test Blueprint', 'weapons', 'rifle', 120)`
     ).run();
     const bpRow = await env.DB.prepare(
       "SELECT id FROM crafting_blueprints WHERE uuid = 'test-bp-uuid'"

@@ -7,51 +7,45 @@ import { createTestUser, authHeaders } from "./helpers";
  * Seed trade commodity data: commodities, shops, and shop_inventory linking them.
  */
 async function seedTradeData(db: D1Database) {
-  // Ensure a default game version exists
-  const gv = await db
-    .prepare("SELECT id FROM game_versions WHERE is_default = 1")
-    .first<{ id: number }>();
-  const gvId = gv!.id;
-
   // Insert trade commodities
   await db.batch([
     db.prepare(
-      `INSERT INTO trade_commodities (uuid, name, slug, class_name, category, type_name, subtype_name, is_raw, boxable, scu_per_unit, description, game_version_id)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
+      `INSERT INTO trade_commodities (uuid, name, slug, class_name, category, type_name, subtype_name, is_raw, boxable, scu_per_unit, description)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
     ).bind(
       "aaaa-1111", "Agricium", "agricium", "Agricium", "metals",
-      "Metal", "Agricium", 0, 1, 0.01, "A rare metal used in advanced electronics.", gvId
+      "Metal", "Agricium", 0, 1, 0.01, "A rare metal used in advanced electronics."
     ),
     db.prepare(
-      `INSERT INTO trade_commodities (uuid, name, slug, class_name, category, type_name, subtype_name, is_raw, boxable, scu_per_unit, description, game_version_id)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
+      `INSERT INTO trade_commodities (uuid, name, slug, class_name, category, type_name, subtype_name, is_raw, boxable, scu_per_unit, description)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
     ).bind(
       "bbbb-2222", "Hydrogen", "hydrogen", "Hydrogen", "gas",
-      "Gas", "Hydrogen", 0, 0, 0.01, "A common element used for fuel.", gvId
+      "Gas", "Hydrogen", 0, 0, 0.01, "A common element used for fuel."
     ),
     db.prepare(
-      `INSERT INTO trade_commodities (uuid, name, slug, class_name, category, type_name, subtype_name, is_raw, boxable, scu_per_unit, description, game_version_id)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
+      `INSERT INTO trade_commodities (uuid, name, slug, class_name, category, type_name, subtype_name, is_raw, boxable, scu_per_unit, description)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
     ).bind(
       "cccc-3333", "WiDoW", "widow", "WiDoW", "vice",
-      "Vice", "WiDoW", 0, 1, 0.01, "A highly illegal narcotic.", gvId
+      "Vice", "WiDoW", 0, 1, 0.01, "A highly illegal narcotic."
     ),
   ]);
 
   // Insert shops (admin type = commodity trading terminals)
   await db.batch([
     db.prepare(
-      `INSERT INTO shops (uuid, name, slug, shop_type, is_event, location_label, game_version_id)
-       VALUES (?, ?, ?, ?, ?, ?, ?)`
-    ).bind("shop-1", "Inv Admin Area18", "inv-admin-area18", "admin", 0, "Area18", gvId),
+      `INSERT INTO shops (uuid, name, slug, shop_type, is_event, location_label)
+       VALUES (?, ?, ?, ?, ?, ?)`
+    ).bind("shop-1", "Inv Admin Area18", "inv-admin-area18", "admin", 0, "Area18"),
     db.prepare(
-      `INSERT INTO shops (uuid, name, slug, shop_type, is_event, location_label, game_version_id)
-       VALUES (?, ?, ?, ?, ?, ?, ?)`
-    ).bind("shop-2", "Inv Admin NewBabbage", "inv-admin-newbabbage", "admin", 0, "New Babbage", gvId),
+      `INSERT INTO shops (uuid, name, slug, shop_type, is_event, location_label)
+       VALUES (?, ?, ?, ?, ?, ?)`
+    ).bind("shop-2", "Inv Admin NewBabbage", "inv-admin-newbabbage", "admin", 0, "New Babbage"),
     db.prepare(
-      `INSERT INTO shops (uuid, name, slug, shop_type, is_event, location_label, game_version_id)
-       VALUES (?, ?, ?, ?, ?, ?, ?)`
-    ).bind("shop-3", "Inv Admin GrimHEX", "inv-admin-grimhex", "admin", 0, "Grim HEX", gvId),
+      `INSERT INTO shops (uuid, name, slug, shop_type, is_event, location_label)
+       VALUES (?, ?, ?, ?, ?, ?)`
+    ).bind("shop-3", "Inv Admin GrimHEX", "inv-admin-grimhex", "admin", 0, "Grim HEX"),
   ]);
 
   // Get shop IDs
@@ -64,29 +58,29 @@ async function seedTradeData(db: D1Database) {
   await db.batch([
     // Agricium: sold at Area18 and New Babbage (different prices = dynamic pricing evidence)
     db.prepare(
-      `INSERT INTO shop_inventory (shop_id, item_uuid, item_name, buy_price, sell_price, base_inventory, max_inventory, game_version_id)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?)`
-    ).bind(shopArea18, "aaaa-1111", "Agricium", 0, 25.447, 17757.62, 500000, gvId),
+      `INSERT INTO shop_inventory (shop_id, item_uuid, item_name, buy_price, sell_price, base_inventory, max_inventory)
+       VALUES (?, ?, ?, ?, ?, ?, ?)`
+    ).bind(shopArea18, "aaaa-1111", "Agricium", 0, 25.447, 17757.62, 500000),
     db.prepare(
-      `INSERT INTO shop_inventory (shop_id, item_uuid, item_name, buy_price, sell_price, base_inventory, max_inventory, game_version_id)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?)`
-    ).bind(shopNewBabbage, "aaaa-1111", "Agricium", 0, 25.342, 99483.86, 600000, gvId),
+      `INSERT INTO shop_inventory (shop_id, item_uuid, item_name, buy_price, sell_price, base_inventory, max_inventory)
+       VALUES (?, ?, ?, ?, ?, ?, ?)`
+    ).bind(shopNewBabbage, "aaaa-1111", "Agricium", 0, 25.342, 99483.86, 600000),
 
     // Hydrogen: buyable at Area18, sellable at Grim HEX
     db.prepare(
-      `INSERT INTO shop_inventory (shop_id, item_uuid, item_name, buy_price, sell_price, base_inventory, max_inventory, game_version_id)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?)`
-    ).bind(shopArea18, "bbbb-2222", "Hydrogen", 1.25, 0, 500000, 1000000, gvId),
+      `INSERT INTO shop_inventory (shop_id, item_uuid, item_name, buy_price, sell_price, base_inventory, max_inventory)
+       VALUES (?, ?, ?, ?, ?, ?, ?)`
+    ).bind(shopArea18, "bbbb-2222", "Hydrogen", 1.25, 0, 500000, 1000000),
     db.prepare(
-      `INSERT INTO shop_inventory (shop_id, item_uuid, item_name, buy_price, sell_price, base_inventory, max_inventory, game_version_id)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?)`
-    ).bind(shopGrimHEX, "bbbb-2222", "Hydrogen", 0, 1.18, 200000, 800000, gvId),
+      `INSERT INTO shop_inventory (shop_id, item_uuid, item_name, buy_price, sell_price, base_inventory, max_inventory)
+       VALUES (?, ?, ?, ?, ?, ?, ?)`
+    ).bind(shopGrimHEX, "bbbb-2222", "Hydrogen", 0, 1.18, 200000, 800000),
 
     // WiDoW: buyable at Grim HEX only (illegal)
     db.prepare(
-      `INSERT INTO shop_inventory (shop_id, item_uuid, item_name, buy_price, sell_price, base_inventory, max_inventory, game_version_id)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?)`
-    ).bind(shopGrimHEX, "cccc-3333", "WiDoW", 24.5, 0, 5000, 20000, gvId),
+      `INSERT INTO shop_inventory (shop_id, item_uuid, item_name, buy_price, sell_price, base_inventory, max_inventory)
+       VALUES (?, ?, ?, ?, ?, ?, ?)`
+    ).bind(shopGrimHEX, "cccc-3333", "WiDoW", 24.5, 0, 5000, 20000),
   ]);
 }
 

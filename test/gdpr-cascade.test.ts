@@ -161,9 +161,9 @@ describe("GDPR — User Deletion Cascade", () => {
       // user_loot_collection (need a loot item)
       await db
         .prepare(
-          `INSERT INTO loot_map (uuid, name, type, sub_type, game_version_id, updated_at)
+          `INSERT INTO loot_map (uuid, name, type, sub_type, updated_at)
            VALUES ('loot-uuid-1', 'Test Loot', 'Weapon', 'Pistol',
-             (SELECT id FROM game_versions WHERE is_default = 1), datetime('now'))`
+             datetime('now'))`
         )
         .run();
       const lootRow = await db
@@ -385,9 +385,8 @@ describe("GDPR — User Deletion Cascade", () => {
       // user_fleet_loadout (migration 0141) — need vehicle_ports and vehicle_components
       await db
         .prepare(
-          `INSERT INTO vehicle_components (uuid, name, type, game_version_id)
-           VALUES ('gdpr-comp-1', 'Test Component', 'PowerPlant',
-             (SELECT id FROM game_versions WHERE is_default = 1))`
+          `INSERT INTO vehicle_components (uuid, name, type)
+           VALUES ('gdpr-comp-1', 'Test Component', 'PowerPlant')`
         )
         .run();
       const compRow = await db
@@ -395,8 +394,8 @@ describe("GDPR — User Deletion Cascade", () => {
         .first<{ id: number }>();
       await db
         .prepare(
-          `INSERT INTO vehicle_ports (uuid, vehicle_id, name, game_version_id)
-           VALUES ('gdpr-port-1', ?, 'power_plant', (SELECT id FROM game_versions WHERE is_default = 1))`
+          `INSERT INTO vehicle_ports (uuid, vehicle_id, name)
+           VALUES ('gdpr-port-1', ?, 'power_plant')`
         )
         .bind(vehicleId)
         .run();
@@ -427,9 +426,8 @@ describe("GDPR — User Deletion Cascade", () => {
       // user_blueprints (migration 0146) — need a crafting_blueprints row
       await db
         .prepare(
-          `INSERT INTO crafting_blueprints (uuid, tag, name, type, sub_type, game_version_id)
-           VALUES ('gdpr-bp-1', 'test.bp', 'Test Blueprint', 'Crafting', 'Assembly',
-             (SELECT id FROM game_versions WHERE is_default = 1))`
+          `INSERT INTO crafting_blueprints (uuid, tag, name, type, sub_type)
+           VALUES ('gdpr-bp-1', 'test.bp', 'Test Blueprint', 'Crafting', 'Assembly')`
         )
         .run();
       const bpRow = await db

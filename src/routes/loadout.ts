@@ -2,8 +2,8 @@ import { Hono } from "hono";
 import { z } from "zod";
 import { getAuthUser, type HonoEnv } from "../lib/types";
 import { validate } from "../lib/validation";
-import { versionSubquery, deltaVersionJoin, PORT_TYPE_TO_COMPONENT_TYPE, STAT_SORT_KEY } from "../lib/constants";
-import { cachedJson, resolveVersionId, cacheSlug } from "../lib/cache";
+import { PORT_TYPE_TO_COMPONENT_TYPE, STAT_SORT_KEY } from "../lib/constants";
+import { cachedJson, cacheSlug } from "../lib/cache";
 import { getShipLoadout, getShipModules, getUserOwnedModuleTitles } from "../db/queries";
 
 // D1 has a 100-parameter limit per prepared statement.
@@ -65,20 +65,16 @@ export function loadoutRoutes() {
   // GET /api/loadout/:slug/components — full loadout (stock) for any ship
   app.get("/:slug/components", async (c) => {
     const slug = c.req.param("slug");
-    const patch = c.req.query("patch");
-    const versionId = await resolveVersionId(c.env.DB, patch);
-    return cachedJson(c, `loadout:components:${versionId}:${cacheSlug(slug)}`, async () => {
-      return getShipLoadout(c.env.DB, slug, versionId);
+    return cachedJson(c, `loadout:components:${cacheSlug(slug)}`, async () => {
+      return getShipLoadout(c.env.DB, slug);
     });
   });
 
   // GET /api/loadout/:slug/modules — available modules for module ports
   app.get("/:slug/modules", async (c) => {
     const slug = c.req.param("slug");
-    const patch = c.req.query("patch");
-    const versionId = await resolveVersionId(c.env.DB, patch);
-    return cachedJson(c, `loadout:modules:${versionId}:${cacheSlug(slug)}`, async () => {
-      return getShipModules(c.env.DB, slug, versionId);
+    return cachedJson(c, `loadout:modules:${cacheSlug(slug)}`, async () => {
+      return getShipModules(c.env.DB, slug);
     });
   });
 
@@ -97,22 +93,16 @@ export function loadoutRoutes() {
   app.get("/:slug/compatible", async (c) => {
     const db = c.env.DB;
     const portIdStr = c.req.query("port_id");
-    const patch = c.req.query("patch");
 
     if (!portIdStr) return c.json({ error: "port_id required" }, 400);
     const portId = parseInt(portIdStr, 10);
     if (isNaN(portId)) return c.json({ error: "port_id must be a number" }, 400);
 
-    const versionId = await resolveVersionId(db, patch);
-    const vq = versionSubquery(versionId);
-
     // Get port info (type + size range)
-    const dvjPorts = deltaVersionJoin('vehicle_ports', 'vp', 'uuid', versionId);
     const port = await db
       .prepare(
         `SELECT vp.port_type, vp.size_min, vp.size_max, vp.equipped_item_uuid
          FROM vehicle_ports vp
-         ${dvjPorts}
          WHERE vp.id = ?`,
       )
       .bind(portId)
@@ -170,8 +160,8 @@ export function loadoutRoutes() {
     let resolvedComponentType: string | null = null;
     if (port.equipped_item_uuid) {
       const equipped = await db
-        .prepare(`SELECT type FROM vehicle_components WHERE uuid = ? AND game_version_id = (SELECT MAX(game_version_id) FROM vehicle_components WHERE uuid = ? AND game_version_id <= ${vq})`)
-        .bind(port.equipped_item_uuid, port.equipped_item_uuid)
+        .prepare(`SELECT type FROM vehicle_components WHERE uuid = ?`)
+        .bind(port.equipped_item_uuid)
         .first<{ type: string }>();
       resolvedComponentType = equipped?.type || null;
     }
@@ -196,13 +186,10 @@ export function loadoutRoutes() {
                   ELSE p.size_max END as child_size_max
            FROM vehicle_ports p
            LEFT JOIN vehicle_components mount ON mount.uuid = p.equipped_item_uuid
-             AND mount.game_version_id = (SELECT MAX(game_version_id) FROM vehicle_components WHERE uuid = p.equipped_item_uuid AND game_version_id <= ${vq})
-           LEFT JOIN vehicle_ports child ON child.parent_port_id = p.id AND child.game_version_id = p.game_version_id
+           LEFT JOIN vehicle_ports child ON child.parent_port_id = p.id
            LEFT JOIN vehicle_components childcomp ON childcomp.uuid = child.equipped_item_uuid
-             AND childcomp.game_version_id = (SELECT MAX(game_version_id) FROM vehicle_components WHERE uuid = child.equipped_item_uuid AND game_version_id <= ${vq})
-           LEFT JOIN vehicle_ports grandchild ON grandchild.parent_port_id = child.id AND grandchild.game_version_id = child.game_version_id
+           LEFT JOIN vehicle_ports grandchild ON grandchild.parent_port_id = child.id
            LEFT JOIN vehicle_components gccomp ON gccomp.uuid = grandchild.equipped_item_uuid
-             AND gccomp.game_version_id = (SELECT MAX(game_version_id) FROM vehicle_components WHERE uuid = grandchild.equipped_item_uuid AND game_version_id <= ${vq})
            WHERE p.id = ?
            ORDER BY CASE WHEN gccomp.type IS NOT NULL THEN 0 WHEN childcomp.type IS NOT NULL THEN 1 ELSE 2 END
            LIMIT 1`
@@ -251,7 +238,6 @@ export function loadoutRoutes() {
                 vc.base_heat_generation, vc.distortion_max,
                 m.name AS manufacturer_name, m.code AS manufacturer_code
          FROM vehicle_components vc
-         ${deltaVersionJoin('vehicle_components', 'vc', 'uuid', versionId)}
          LEFT JOIN manufacturers m ON m.id = vc.manufacturer_id
          WHERE vc.type IN (${typePlaceholders})
            ${resolvedSizeMin === 0 && resolvedSizeMax === 0 ? "" : "AND vc.size BETWEEN ? AND ?"}
@@ -362,8 +348,8 @@ export function loadoutRoutes() {
         .prepare(
           `SELECT COALESCE(grandchild.equipped_item_uuid, child.equipped_item_uuid, p.equipped_item_uuid) AS deep_uuid
            FROM vehicle_ports p
-           LEFT JOIN vehicle_ports child ON child.parent_port_id = p.id AND child.game_version_id = p.game_version_id
-           LEFT JOIN vehicle_ports grandchild ON grandchild.parent_port_id = child.id AND grandchild.game_version_id = child.game_version_id
+           LEFT JOIN vehicle_ports child ON child.parent_port_id = p.id
+           LEFT JOIN vehicle_ports grandchild ON grandchild.parent_port_id = child.id
            WHERE p.id = ?
            ORDER BY CASE WHEN grandchild.equipped_item_uuid IS NOT NULL THEN 0
                          WHEN child.equipped_item_uuid IS NOT NULL THEN 1 ELSE 2 END
@@ -647,9 +633,6 @@ export function loadoutRoutes() {
   app.post("/cart/optimize", async (c) => {
     const user = getAuthUser(c);
     const db = c.env.DB;
-    const patch = c.req.query("patch");
-    const versionId = await resolveVersionId(db, patch);
-    const vq = versionSubquery(versionId);
 
     // Get all cart items
     const cartItems = await db
@@ -674,10 +657,8 @@ export function loadoutRoutes() {
         `SELECT si.item_uuid, s.id AS shop_id
          FROM shop_inventory si
          JOIN shops s ON s.id = si.shop_id
-         ${deltaVersionJoin('shops', 's', 'uuid', versionId)}
          WHERE si.item_uuid IN (${ph})
-           AND si.buy_price IS NOT NULL
-           AND si.game_version_id <= ${vq}`,
+           AND si.buy_price IS NOT NULL`,
     );
     const shopAvail = { results: shopAvailRows };
 

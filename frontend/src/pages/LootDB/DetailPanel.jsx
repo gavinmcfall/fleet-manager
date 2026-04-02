@@ -1,7 +1,6 @@
 import { X, ShoppingCart, Package, FileText, Plus, Bookmark, BookmarkPlus, ExternalLink } from 'lucide-react'
 import { Link } from 'react-router-dom'
 import { useLootItem } from '../../hooks/useAPI'
-import useGameVersion from '../../hooks/useGameVersion'
 import { rarityStyle, CATEGORY_BADGE_STYLES, CATEGORY_LABELS, RESISTANCE_KEYS, effectiveCategory } from '../../lib/lootDisplay'
 import LoadingState from '../../components/LoadingState'
 import LocationSection from './LocationSection'
@@ -255,8 +254,7 @@ const EFFECT_LABELS = {
 }
 
 export default function DetailPanel({ uuid, manufacturerName, collectionQty, onSetCollectionQty, wishlisted, onToggleWishlist, isAuthed, onClose }) {
-  const { activeCode } = useGameVersion()
-  const { data: item, loading } = useLootItem(uuid, activeCode)
+  const { data: item, loading } = useLootItem(uuid)
 
   if (!uuid) return null
 

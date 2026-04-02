@@ -9,10 +9,7 @@ import useFontPreference from './hooks/useFontPreference'
 import { useStatus, usePreferences, setPreferences } from './hooks/useAPI'
 import { authClient, useSession, signOut } from './lib/auth-client'
 import { TimezoneProvider } from './hooks/useTimezone'
-import { GameVersionProvider } from './hooks/useGameVersion'
 import { PrivacyModeProvider } from './hooks/usePrivacyMode'
-import { formatVersionLabel, formatVersionFull } from './lib/gameVersion'
-import useGameVersion from './hooks/useGameVersion'
 
 import Dashboard from './pages/Dashboard'
 import Login from './pages/Login'
@@ -87,7 +84,6 @@ const gameDataGroup = {
       to: '/crafting',
       icon: FlaskConical,
       label: 'Crafting',
-      minVersion: '4.7',
       submenu: [
         { to: '/crafting', icon: FlaskConical, label: 'Blueprints' },
         { to: '/crafting/sim', icon: SlidersHorizontal, label: 'Quality Sim' },
@@ -167,23 +163,7 @@ const superAdminNavItems = [
   { to: '/users', icon: Users, label: 'Users' },
 ]
 
-function meetsMinVersion(minVersion, activeCode) {
-  if (!minVersion) return true
-  if (!activeCode) return true // show by default if version unknown
-  // Compare major.minor from "4.7.0-ptu.12345" against "4.7"
-  const match = activeCode.match(/^(\d+\.\d+)/)
-  if (!match) return true
-  const actual = match[1].split('.').map(Number)
-  const required = minVersion.split('.').map(Number)
-  for (let i = 0; i < required.length; i++) {
-    if ((actual[i] || 0) > required[i]) return true
-    if ((actual[i] || 0) < required[i]) return false
-  }
-  return true
-}
-
-function filterNavItem(item, activeCode, isLoggedIn, features) {
-  if (!meetsMinVersion(item.minVersion, activeCode)) return null
+function filterNavItem(item, isLoggedIn, features) {
   if (item.auth && !isLoggedIn) return null
   if (item.featureFlag && !features?.[item.featureFlag]) return null
   if (item.submenu) {
@@ -193,23 +173,23 @@ function filterNavItem(item, activeCode, isLoggedIn, features) {
   return item
 }
 
-function filterNav(items, activeCode, isLoggedIn, features) {
+function filterNav(items, isLoggedIn, features) {
   return items
     .map(item => {
       if (item.items) {
         const filtered = item.items
-          .map(child => filterNavItem(child, activeCode, isLoggedIn, features))
+          .map(child => filterNavItem(child, isLoggedIn, features))
           .filter(Boolean)
         return filtered.length > 0 ? { ...item, items: filtered } : null
       }
-      return filterNavItem(item, activeCode, isLoggedIn, features)
+      return filterNavItem(item, isLoggedIn, features)
     })
     .filter(Boolean)
 }
 
-function getNavItems(role, isLoggedIn, activeCode, features) {
-  if (!isLoggedIn) return filterNav([...publicNavItems], activeCode, false, features)
-  const items = filterNav([...authNavItems], activeCode, true, features)
+function getNavItems(role, isLoggedIn, features) {
+  if (!isLoggedIn) return filterNav([...publicNavItems], false, features)
+  const items = filterNav([...authNavItems], true, features)
   if (role === 'admin' || role === 'super_admin') {
     items.push(...adminNavItems)
   }
@@ -217,73 +197,6 @@ function getNavItems(role, isLoggedIn, activeCode, features) {
     items.push(...superAdminNavItems)
   }
   return items
-}
-
-function VersionSelector() {
-  const { versions, activeCode, activeVersion, defaultVersion, isPreview, setActiveVersion, loading } = useGameVersion()
-  const [open, setOpen] = useState(false)
-
-  useEffect(() => {
-    if (!open) return
-    const handleEsc = (e) => { if (e.key === 'Escape') setOpen(false) }
-    document.addEventListener('keydown', handleEsc)
-    return () => document.removeEventListener('keydown', handleEsc)
-  }, [open])
-
-  if (loading || !activeCode) return null
-
-  const label = formatVersionLabel(activeCode, activeVersion?.channel)
-
-  return (
-    <div className="relative">
-      <button
-        onClick={() => setOpen(!open)}
-        className={`text-[10px] font-mono mt-1 tracking-wider flex items-center gap-1 transition-colors ${
-          isPreview
-            ? 'text-amber-400 bg-amber-400/10 border border-amber-400/30 rounded px-1.5 py-0.5'
-            : 'text-gray-500 hover:text-gray-300'
-        }`}
-      >
-        {isPreview && <span className="w-1.5 h-1.5 rounded-full bg-amber-400 animate-pulse" />}
-        {label}
-        <ChevronDown className="w-3 h-3" />
-      </button>
-      {open && (
-        <>
-          <div className="fixed inset-0 z-40" onClick={() => setOpen(false)} />
-          <div className="absolute left-0 top-full mt-1 z-50 bg-gray-800 border border-gray-700 rounded-lg shadow-xl py-1 min-w-[200px]">
-            {versions.map(v => {
-              const vLabel = v.channel === 'LIVE' ? formatVersionLabel(v.code, v.channel) : formatVersionFull(v.code, v.channel, v.build_number)
-              const isDefault = v.code === defaultVersion?.code
-              const isActive = v.code === activeCode
-              return (
-                <button
-                  key={v.code}
-                  onClick={() => { setActiveVersion(isDefault ? null : v.code); setOpen(false) }}
-                  className={`w-full text-left px-3 py-2 text-xs font-mono flex items-center justify-between gap-3 transition-colors ${
-                    isActive ? 'bg-sc-accent/10 text-sc-accent' : 'text-gray-400 hover:bg-gray-700 hover:text-gray-200'
-                  }`}
-                >
-                  <span>{vLabel}</span>
-                  <div className="flex items-center gap-1.5">
-                    {v.channel === 'PTU' && (
-                      <span className="text-[9px] px-1 py-0.5 rounded bg-amber-500/20 text-amber-400 uppercase">PTU</span>
-                    )}
-                    {v.channel === 'EPTU' && (
-                      <span className="text-[9px] px-1 py-0.5 rounded bg-purple-500/20 text-purple-400 uppercase">EPTU</span>
-                    )}
-                    {isDefault && (
-                      <span className="text-[9px] px-1 py-0.5 rounded bg-emerald-500/20 text-emerald-400">LIVE</span>
-                    )}
-                  </div>
-                </button>
-              )
-            })}
-          </div>
-        </>
-      )}
-    </div>
-  )
 }
 
 function renderNavItem(item, location, expandedMenu, setExpandedMenu, onNavClick) {
@@ -364,10 +277,9 @@ function SidebarContent({ expandedMenu, setExpandedMenu, onNavClick }) {
   const { data: session } = useSession()
   const isLoggedIn = !!session?.user
   const userRole = session?.user?.role || 'user'
-  const { activeCode } = useGameVersion()
 
   const { data: status } = useStatus()
-  const navItems = getNavItems(userRole, isLoggedIn, activeCode, status?.features)
+  const navItems = getNavItems(userRole, isLoggedIn, status?.features)
 
   // Auto-expand the group containing the current route on initial load.
   // Includes implicit routes that aren't sidebar items but belong to a group.
@@ -414,7 +326,6 @@ function SidebarContent({ expandedMenu, setExpandedMenu, onNavClick }) {
           SC BRIDGE
         </h1>
         <p className="text-xs font-mono text-gray-500 mt-1 tracking-widest">STAR CITIZEN COMPANION</p>
-        <VersionSelector />
       </div>
       <div className="flex flex-col gap-0.5 p-2 flex-1 overflow-y-auto" role="list">
         {navItems.map((item) => {
@@ -550,7 +461,7 @@ function CollapsedSidebar({ onExpand }) {
   const isLoggedIn = !!session?.user
   const userRole = session?.user?.role || 'user'
   const { data: status } = useStatus()
-  const navItems = getNavItems(userRole, isLoggedIn, undefined, status?.features)
+  const navItems = getNavItems(userRole, isLoggedIn, status?.features)
 
   return (
     <>
@@ -695,7 +606,6 @@ export default function App() {
   return (
     <TimezoneProvider>
     <PrivacyModeProvider>
-    <GameVersionProvider>
     <Routes>
       {/* Public auth routes — no sidebar */}
       <Route path="/login" element={<Login />} />
@@ -851,7 +761,6 @@ export default function App() {
         }
       />
     </Routes>
-    </GameVersionProvider>
     </PrivacyModeProvider>
     </TimezoneProvider>
   )

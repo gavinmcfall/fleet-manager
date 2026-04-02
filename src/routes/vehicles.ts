@@ -1,7 +1,6 @@
 import { Hono } from "hono";
 import type { Env } from "../lib/types";
-import { vehicleVersionJoin } from "../lib/constants";
-import { cachedJson, resolveVersionId, cacheSlug } from "../lib/cache";
+import { cachedJson, cacheSlug } from "../lib/cache";
 
 /**
  * /api/ships/* — Ship reference database (all vehicles in the game)
@@ -12,9 +11,7 @@ export function vehicleRoutes<E extends { Bindings: Env }>() {
   // GET /api/ships — list all vehicles
   routes.get("/", async (c) => {
     const db = c.env.DB;
-    const patch = c.req.query("patch");
-    const versionId = await resolveVersionId(db, patch);
-    return cachedJson(c,`ships:list:${versionId}`, async () => {
+    return cachedJson(c,`ships:list`, async () => {
       const result = await db
         .prepare(
           `SELECT v.id, v.uuid, v.slug, v.name, v.class_name,
@@ -27,7 +24,6 @@ export function vehicleRoutes<E extends { Bindings: Env }>() {
             CASE WHEN v.parent_vehicle_id IS NOT NULL AND pps.key IS NOT NULL
               THEN pps.key ELSE ps.key END as production_status
           FROM vehicles v
-          ${vehicleVersionJoin(versionId)}
           LEFT JOIN manufacturers m ON m.id = v.manufacturer_id
           LEFT JOIN production_statuses ps ON ps.id = v.production_status_id
           LEFT JOIN vehicles pv ON pv.id = v.parent_vehicle_id
@@ -44,9 +40,7 @@ export function vehicleRoutes<E extends { Bindings: Env }>() {
   routes.get("/:slug", async (c) => {
     const slug = c.req.param("slug");
     const db = c.env.DB;
-    const patch = c.req.query("patch");
-    const versionId = await resolveVersionId(db, patch);
-    return cachedJson(c,`ships:detail:${versionId}:${cacheSlug(slug)}`, async () => {
+    return cachedJson(c,`ships:detail:${cacheSlug(slug)}`, async () => {
       const vehicle = await db
         .prepare(
           `SELECT v.id, v.uuid, v.slug, v.name, v.class_name,
@@ -69,7 +63,6 @@ export function vehicleRoutes<E extends { Bindings: Env }>() {
             CASE WHEN v.parent_vehicle_id IS NOT NULL AND pps.key IS NOT NULL
               THEN pps.key ELSE ps.key END as production_status
           FROM vehicles v
-          ${vehicleVersionJoin(versionId)}
           LEFT JOIN manufacturers m ON m.id = v.manufacturer_id
           LEFT JOIN production_statuses ps ON ps.id = v.production_status_id
           LEFT JOIN vehicles pv ON pv.id = v.parent_vehicle_id

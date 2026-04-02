@@ -19,7 +19,7 @@ import {
   getLootSetBySlug,
 } from "../db/queries";
 import { validate } from "../lib/validation";
-import { cachedJson, resolveVersionId, cacheSlug } from "../lib/cache";
+import { cachedJson, cacheSlug } from "../lib/cache";
 
 // Auth middleware — reused for collection and wishlist sub-paths
 async function requireUser(c: Context<HonoEnv>, next: Next): Promise<Response | void> {
@@ -34,12 +34,9 @@ export function lootRoutes() {
   const app = new Hono<HonoEnv>();
 
   // GET /api/loot — all items (public), no JSON blobs
-  // ?patch=4.7.0-live.XXXXXXX to browse a specific patch; defaults to is_default patch
   app.get("/", async (c) => {
-    const patch = c.req.query("patch");
-    const versionId = await resolveVersionId(c.env.DB, patch);
-    return cachedJson(c, `loot:items:${versionId}`, () =>
-      getLootItems(c.env.DB, versionId),
+    return cachedJson(c, `loot:items`, () =>
+      getLootItems(c.env.DB),
     );
   });
 
@@ -169,10 +166,8 @@ export function lootRoutes() {
 
   // GET /api/loot/locations — lightweight summary for POI directory (public)
   app.get("/locations", async (c) => {
-    const patch = c.req.query("patch");
-    const versionId = await resolveVersionId(c.env.DB, patch);
-    return cachedJson(c, `loot:loc-summary:${versionId}`, () =>
-      getLootLocationSummary(c.env.DB, versionId),
+    return cachedJson(c, `loot:loc-summary`, () =>
+      getLootLocationSummary(c.env.DB),
     );
   });
 
@@ -189,19 +184,15 @@ export function lootRoutes() {
       return c.json({ error: "Invalid location type" }, 400);
     }
     const slug = decodeURIComponent(c.req.param("slug"));
-    const patch = c.req.query("patch");
-    const versionId = await resolveVersionId(c.env.DB, patch);
-    return cachedJson(c, `loot:loc-detail:${versionId}:${type}:${cacheSlug(slug)}`, () =>
-      getLootLocationDetail(c.env.DB, type as "container" | "shop" | "npc" | "contract", slug, versionId),
+    return cachedJson(c, `loot:loc-detail:${type}:${cacheSlug(slug)}`, () =>
+      getLootLocationDetail(c.env.DB, type as "container" | "shop" | "npc" | "contract", slug),
     );
   });
 
   // GET /api/loot/sets — list all armor sets (public)
   app.get("/sets", async (c) => {
-    const patch = c.req.query("patch");
-    const versionId = await resolveVersionId(c.env.DB, patch);
-    return cachedJson(c, `loot:sets:${versionId}`, () =>
-      getLootSets(c.env.DB, versionId),
+    return cachedJson(c, `loot:sets`, () =>
+      getLootSets(c.env.DB),
     );
   });
 
@@ -209,10 +200,8 @@ export function lootRoutes() {
   app.get("/sets/:setSlug", async (c) => {
     const setSlug = c.req.param("setSlug");
     if (setSlug.length > 200) return c.json({ error: "Not found" }, 404);
-    const patch = c.req.query("patch");
-    const versionId = await resolveVersionId(c.env.DB, patch);
-    return cachedJson(c, `loot:set-detail:${versionId}:${cacheSlug(setSlug)}`, async () => {
-      const set = await getLootSetBySlug(c.env.DB, setSlug, versionId);
+    return cachedJson(c, `loot:set-detail:${cacheSlug(setSlug)}`, async () => {
+      const set = await getLootSetBySlug(c.env.DB, setSlug);
       if (!set) return null;
 
       const rewardTexts = SET_SLUG_REWARD_TEXTS[setSlug];
@@ -231,15 +220,12 @@ export function lootRoutes() {
   });
 
   // GET /api/loot/:uuid — full detail + location data (public)
-  // ?patch=4.7.0-live.XXXXXXX to browse a specific patch; defaults to is_default patch
   // Must be last to avoid matching /collection and /wishlist
   app.get("/:uuid", async (c) => {
     const uuid = c.req.param("uuid");
     if (uuid.length > 50) return c.json({ error: "Not found" }, 404);
-    const patch = c.req.query("patch");
-    const versionId = await resolveVersionId(c.env.DB, patch);
-    return cachedJson(c, `loot:detail:${versionId}:${cacheSlug(uuid)}`, () =>
-      getLootByUuid(c.env.DB, uuid, versionId),
+    return cachedJson(c, `loot:detail:${cacheSlug(uuid)}`, () =>
+      getLootByUuid(c.env.DB, uuid),
     );
   });
 

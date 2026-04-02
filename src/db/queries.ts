@@ -14,7 +14,6 @@ import type {
   AIAnalysis,
 } from "../lib/types";
 import { extractSetName, makeSetSlug } from "../lib/loot-sets";
-import { VEHICLE_VERSION_JOIN, vehicleVersionCap, versionSubquery, deltaVersionJoin, deltaVersionId } from "../lib/constants";
 
 // --- Loot summary stats (category-aware card display) ---
 // LEFT JOINs to detail tables for key stats shown on item cards.
@@ -59,7 +58,7 @@ const LOOT_SUMMARY_COLS = `
 // Each flag is 1 if the JSON column contains actual data, 0 otherwise.
 const LOOT_HAS_FLAGS = `
         EXISTS(SELECT 1 FROM loot_item_locations lil WHERE lil.loot_map_id = lm.id AND lil.source_type = 'container') as has_containers,
-        EXISTS(SELECT 1 FROM shop_inventory si WHERE si.item_uuid = lm.uuid AND si.game_version_id = lm.game_version_id AND (si.buy_price > 0 OR si.sell_price > 0)) as has_shops,
+        EXISTS(SELECT 1 FROM shop_inventory si WHERE si.item_uuid = lm.uuid AND (si.buy_price > 0 OR si.sell_price > 0)) as has_shops,
         EXISTS(SELECT 1 FROM loot_item_locations lil WHERE lil.loot_map_id = lm.id AND lil.source_type = 'npc') as has_npcs,
         EXISTS(SELECT 1 FROM loot_item_locations lil WHERE lil.loot_map_id = lm.id AND lil.source_type = 'contract') as has_contracts`;
 
@@ -85,7 +84,6 @@ export async function getAllVehicles(db: D1Database): Promise<Vehicle[]> {
         m.name as manufacturer_name, m.code as manufacturer_code,
         ps.key as production_status
       FROM vehicles v
-      ${VEHICLE_VERSION_JOIN}
       LEFT JOIN manufacturers m ON m.id = v.manufacturer_id
       LEFT JOIN production_statuses ps ON ps.id = v.production_status_id
       ORDER BY v.name`,
@@ -106,7 +104,6 @@ export async function getVehicleBySlug(db: D1Database, slug: string): Promise<Ve
         m.name as manufacturer_name, m.code as manufacturer_code,
         ps.key as production_status
       FROM vehicles v
-      ${VEHICLE_VERSION_JOIN}
       LEFT JOIN manufacturers m ON m.id = v.manufacturer_id
       LEFT JOIN production_statuses ps ON ps.id = v.production_status_id
       WHERE v.slug = ?`,
@@ -117,13 +114,13 @@ export async function getVehicleBySlug(db: D1Database, slug: string): Promise<Ve
 }
 
 export async function getVehicleCount(db: D1Database): Promise<number> {
-  const row = await db.prepare(`SELECT COUNT(*) as count FROM vehicles v ${VEHICLE_VERSION_JOIN}`).first<{ count: number }>();
+  const row = await db.prepare(`SELECT COUNT(*) as count FROM vehicles v`).first<{ count: number }>();
   return row?.count ?? 0;
 }
 
 export async function getVehicleIDBySlug(db: D1Database, slug: string): Promise<number | null> {
   const row = await db
-    .prepare(`SELECT v.id FROM vehicles v ${VEHICLE_VERSION_JOIN} WHERE v.slug = ? LIMIT 1`)
+    .prepare(`SELECT v.id FROM vehicles v WHERE v.slug = ? LIMIT 1`)
     .bind(slug)
     .first<{ id: number }>();
   return row?.id ?? null;
@@ -132,7 +129,7 @@ export async function getVehicleIDBySlug(db: D1Database, slug: string): Promise<
 export async function getAllVehicleNameSlugs(
   db: D1Database,
 ): Promise<Array<{ name: string; slug: string }>> {
-  const result = await db.prepare(`SELECT v.name, v.slug FROM vehicles v ${VEHICLE_VERSION_JOIN} ORDER BY v.name`).all();
+  const result = await db.prepare(`SELECT v.name, v.slug FROM vehicles v ORDER BY v.name`).all();
   return result.results as Array<{ name: string; slug: string }>;
 }
 
@@ -177,7 +174,7 @@ export async function findVehicleIDsBySlugLike(
   pattern: string,
 ): Promise<number[]> {
   const result = await db
-    .prepare(`SELECT v.id FROM vehicles v ${VEHICLE_VERSION_JOIN} WHERE v.slug LIKE ?`)
+    .prepare(`SELECT v.id FROM vehicles v WHERE v.slug LIKE ?`)
     .bind(pattern)
     .all();
   return result.results.map((r) => (r as { id: number }).id);
@@ -188,7 +185,7 @@ export async function findVehicleIDsBySlugPrefix(
   prefix: string,
 ): Promise<number[]> {
   const result = await db
-    .prepare(`SELECT v.id FROM vehicles v ${VEHICLE_VERSION_JOIN} WHERE v.slug LIKE ?`)
+    .prepare(`SELECT v.id FROM vehicles v WHERE v.slug LIKE ?`)
     .bind(prefix + "%")
     .all();
   return result.results.map((r) => (r as { id: number }).id);
@@ -199,7 +196,7 @@ export async function findVehicleIDsByNameContains(
   term: string,
 ): Promise<number[]> {
   const result = await db
-    .prepare(`SELECT v.id FROM vehicles v ${VEHICLE_VERSION_JOIN} WHERE LOWER(v.name) LIKE ?`)
+    .prepare(`SELECT v.id FROM vehicles v WHERE LOWER(v.name) LIKE ?`)
     .bind("%" + term.toLowerCase() + "%")
     .all();
   return result.results.map((r) => (r as { id: number }).id);
@@ -209,7 +206,7 @@ export async function findVehicleIDsByNameContains(
 // Port Operations
 // ============================================================
 
-export async function getShipLoadout(db: D1Database, slug: string, versionId?: number): Promise<Record<string, unknown>[]> {
+export async function getShipLoadout(db: D1Database, slug: string): Promise<Record<string, unknown>[]> {
   // Resolve the full weapon hierarchy for each top-level port.
   // Ships can have 1-3 levels: Port → [Gimbal →] [Turret →] WeaponGun.
   // We walk down the tree to find the deepest actual weapon, and return it
@@ -220,7 +217,6 @@ export async function getShipLoadout(db: D1Database, slug: string, versionId?: n
   // 2. deepest_weapon: recursive walk from each top-level port to find the
   //    deepest WeaponGun (or any real component) at the leaf
   // 3. Main SELECT: top-level ports with mount + weapon resolved
-  const vq = versionSubquery(versionId);
 
   // Use a recursive CTE to find the deepest "real" component (WeaponGun, Shield, etc.)
   // for each top-level port, walking through any number of intermediate levels
@@ -229,7 +225,6 @@ export async function getShipLoadout(db: D1Database, slug: string, versionId?: n
     .prepare(
       `WITH ship_ports AS (
         SELECT vp.* FROM vehicle_ports vp
-        ${deltaVersionJoin('vehicle_ports', 'vp', 'uuid', versionId)}
         WHERE vp.vehicle_id IN (SELECT v.id FROM vehicles v WHERE v.slug = ?)
       ),
       -- Walk from each returned port down to its deepest child with a real component.
@@ -286,7 +281,6 @@ export async function getShipLoadout(db: D1Database, slug: string, versionId?: n
           ) AS rn
         FROM port_tree pt
         JOIN vehicle_components vc ON vc.uuid = pt.equipped_item_uuid
-          AND vc.game_version_id = (SELECT MAX(game_version_id) FROM vehicle_components WHERE uuid = pt.equipped_item_uuid AND game_version_id <= ${vq})
         LEFT JOIN manufacturers m ON m.id = vc.manufacturer_id
         WHERE vc.type NOT IN ('Display', 'SeatDashboard', 'Seat', 'SeatAccess')
       ),
@@ -295,7 +289,6 @@ export async function getShipLoadout(db: D1Database, slug: string, versionId?: n
         SELECT pt.root_id, COUNT(*) AS cnt
         FROM port_tree pt
         JOIN vehicle_components vc ON vc.uuid = pt.equipped_item_uuid
-          AND vc.game_version_id = (SELECT MAX(game_version_id) FROM vehicle_components WHERE uuid = pt.equipped_item_uuid AND game_version_id <= ${vq})
         WHERE vc.type IN ('WeaponGun', 'Missile') AND pt.depth > 0
         GROUP BY pt.root_id
       ),
@@ -370,7 +363,6 @@ export async function getShipLoadout(db: D1Database, slug: string, versionId?: n
         COALESCE(mc.cnt, 0) AS missile_count
       FROM ship_ports p
       LEFT JOIN vehicle_components mount ON mount.uuid = p.equipped_item_uuid
-        AND mount.game_version_id = (SELECT MAX(game_version_id) FROM vehicle_components WHERE uuid = p.equipped_item_uuid AND game_version_id <= ${vq})
       LEFT JOIN manufacturers mm ON mm.id = mount.manufacturer_id
       LEFT JOIN deepest d ON d.root_id = p.id AND d.rn = 1
       LEFT JOIN weapon_count wc ON wc.root_id = p.id
@@ -420,13 +412,12 @@ export async function getShipLoadout(db: D1Database, slug: string, versionId?: n
   return result.results as Record<string, unknown>[];
 }
 
-export async function getShipModules(db: D1Database, slug: string, versionId?: number): Promise<Record<string, unknown>[]> {
+export async function getShipModules(db: D1Database, slug: string): Promise<Record<string, unknown>[]> {
   const result = await db
     .prepare(
       `SELECT vm.id, vm.uuid, vm.port_name, vm.class_name, vm.display_name,
               vm.size, vm.is_default, vm.has_loadout
        FROM vehicle_modules vm
-       ${deltaVersionJoin('vehicle_modules', 'vm', 'uuid', versionId)}
        WHERE vm.vehicle_id IN (SELECT v.id FROM vehicles v WHERE v.slug = ?)
        ORDER BY vm.port_name, vm.is_default DESC, vm.display_name`
     )
@@ -936,51 +927,20 @@ export interface CollectionEntry {
 }
 
 export async function getGameVersions(db: D1Database): Promise<{ code: string; channel: string; is_default: number; released_at: string; build_number: string | null }[]> {
-  // Show: the default version, and PTU/EPTU versions that have game data
   const result = await db
-    .prepare(`SELECT gv.code, gv.channel, gv.is_default, gv.released_at, gv.build_number
-      FROM game_versions gv
-      WHERE gv.is_default = 1
-        OR (gv.channel IN ('PTU', 'EPTU') AND (
-          EXISTS (SELECT 1 FROM loot_map lm WHERE lm.game_version_id = gv.id)
-          OR EXISTS (SELECT 1 FROM crafting_blueprints cb WHERE cb.game_version_id = gv.id)
-        ))
-      ORDER BY gv.id DESC`)
+    .prepare(`SELECT code, channel, is_default, released_at, build_number FROM game_versions ORDER BY id DESC`)
     .all<{ code: string; channel: string; is_default: number; released_at: string; build_number: string | null }>();
   return result.results;
 }
 
-/**
- * Generates SQL fragments for "latest as of" version resolution.
- *
- * Instead of requiring every item to have a row for the target version,
- * this resolves the most recent row per uuid at or before the target version.
- * Items unchanged since an earlier patch are still returned.
- *
- * Returns { join, where, bind } where:
- *   - join: INNER JOIN clause to append after FROM loot_map lm
- *   - where: version part of WHERE (always 'lm.removed = 0')
- *   - params: bind parameters to spread (empty array — version resolved inline)
- */
-function latestAsOf(versionId?: number): { join: string; where: string; params: unknown[] } {
-  return {
-    join: deltaVersionJoin("loot_map", "lm", "uuid", versionId),
-    where: `lm.removed = 0`,
-    params: [],  // version resolved inline by deltaVersionJoin
-  };
-}
-
-export async function getLootItems(db: D1Database, versionId?: number): Promise<LootItem[]> {
-  const lv = latestAsOf(versionId);
+export async function getLootItems(db: D1Database): Promise<LootItem[]> {
   const sql = `SELECT lm.id, lm.uuid, lm.name, lm.type, lm.sub_type, lm.rarity,
         lm.category, lm.manufacturer_name,
         ${LOOT_HAS_FLAGS},
         ${LOOT_SUMMARY_COLS}
       FROM loot_map lm
-      ${lv.join}
       ${LOOT_SUMMARY_JOINS}
-      WHERE ${lv.where}
-        AND lm.name NOT IN ('<= PLACEHOLDER =>')
+      WHERE lm.name NOT IN ('<= PLACEHOLDER =>')
         AND lm.name NOT LIKE 'EntityClassDefinition.%'
         AND lm.type IS NOT NULL AND lm.type != ''
         AND lm.type NOT IN (
@@ -990,29 +950,22 @@ export async function getLootItems(db: D1Database, versionId?: number): Promise<
           'Currency','MobiGlas'
         )
       ORDER BY lm.name ASC`;
-  const result = await db.prepare(sql).bind(...lv.params).all();
+  const result = await db.prepare(sql).all();
   return result.results as unknown as LootItem[];
 }
 
-export async function getLootByUuid(db: D1Database, uuid: string, versionId?: number): Promise<Record<string, unknown> | null> {
-  const lv = latestAsOf(versionId);
+export async function getLootByUuid(db: D1Database, uuid: string): Promise<Record<string, unknown> | null> {
   const sql = `SELECT lm.*
       FROM loot_map lm
-      ${lv.join}
-      WHERE lm.uuid = ? AND ${lv.where}`;
-  const row = await db.prepare(sql).bind(...lv.params, uuid).first();
+      WHERE lm.uuid = ?`;
+  const row = await db.prepare(sql).bind(uuid).first();
   if (!row) return null;
-
-  // Delta-aware version subqueries for child/junction table lookups
-  const consumableEffectsVer = deltaVersionId("consumable_effects", versionId);
-  const shopInventoryVer = deltaVersionId("shop_inventory", versionId);
 
   // Fetch linked item details based on which FK is set
   const item = row as Record<string, unknown>;
   let details: Record<string, unknown> | null = null;
 
   if (item.fps_weapon_id) {
-    const dvjAmmo = deltaVersionJoin('fps_ammo_types', 'fa', 'uuid', versionId);
     details = await db
       .prepare(`SELECT fw.name, fw.sub_type as type, fw.size, fw.description,
         fw.rounds_per_minute, fw.fire_modes, fw.burst_count, fw.ammo_capacity,
@@ -1021,11 +974,8 @@ export async function getLootByUuid(db: D1Database, uuid: string, versionId?: nu
         COALESCE(fa.display_name, fa.name) as magazine_name, fa.magazine_capacity as magazine_size,
         mag_lm.uuid as magazine_loot_uuid
         FROM fps_weapons fw
-        LEFT JOIN (
-          SELECT fa.* FROM fps_ammo_types fa
-          ${dvjAmmo}
-        ) fa ON fa.uuid = fw.magazine_uuid
-        LEFT JOIN loot_map mag_lm ON mag_lm.uuid = fw.magazine_uuid AND mag_lm.removed = 0
+        LEFT JOIN fps_ammo_types fa ON fa.uuid = fw.magazine_uuid
+        LEFT JOIN loot_map mag_lm ON mag_lm.uuid = fw.magazine_uuid
         WHERE fw.id = ?`)
       .bind(item.fps_weapon_id)
       .first() as Record<string, unknown> | null;
@@ -1071,7 +1021,7 @@ export async function getLootByUuid(db: D1Database, uuid: string, versionId?: nu
       .first() as Record<string, unknown> | null;
     if (details?.uuid) {
       const effects = await db
-        .prepare(`SELECT effect_key, magnitude, duration_seconds FROM consumable_effects WHERE consumable_uuid = ? AND game_version_id = ${consumableEffectsVer}`)
+        .prepare(`SELECT effect_key, magnitude, duration_seconds FROM consumable_effects WHERE consumable_uuid = ?`)
         .bind(details.uuid as string)
         .all();
       (details as Record<string, unknown>).effects = effects.results;
@@ -1081,9 +1031,8 @@ export async function getLootByUuid(db: D1Database, uuid: string, versionId?: nu
 
   // Fallback: magazines have no FK from loot_map — match by UUID to fps_ammo_types
   if (!details && item.sub_type === 'Magazine') {
-    const dvjAmmoFallback = deltaVersionJoin('fps_ammo_types', 'fa', 'uuid', versionId);
     details = await db
-      .prepare(`SELECT COALESCE(fa.display_name, fa.name) as name, fa.caliber, fa.damage_per_round, fa.damage_type, fa.projectile_speed, fa.magazine_capacity FROM fps_ammo_types fa ${dvjAmmoFallback} WHERE fa.uuid = ?`)
+      .prepare(`SELECT COALESCE(fa.display_name, fa.name) as name, fa.caliber, fa.damage_per_round, fa.damage_type, fa.projectile_speed, fa.magazine_capacity FROM fps_ammo_types fa WHERE fa.uuid = ?`)
       .bind(uuid)
       .first() as Record<string, unknown> | null;
   }
@@ -1092,7 +1041,7 @@ export async function getLootByUuid(db: D1Database, uuid: string, versionId?: nu
   // (medical pens exist in consumable_effects but not in the consumables table)
   if (!details?.effects && (item.type === 'FPS_Consumable' || item.category === 'Consumable')) {
     const effects = await db
-      .prepare(`SELECT effect_key, magnitude, duration_seconds FROM consumable_effects WHERE consumable_uuid = ? AND game_version_id = ${consumableEffectsVer}`)
+      .prepare(`SELECT effect_key, magnitude, duration_seconds FROM consumable_effects WHERE consumable_uuid = ?`)
       .bind(uuid)
       .all();
     if (effects.results.length > 0) {
@@ -1148,7 +1097,6 @@ export async function getLootByUuid(db: D1Database, uuid: string, versionId?: nu
     FROM shop_inventory si
     JOIN shops s ON s.id = si.shop_id
     WHERE si.item_uuid = ?
-      AND si.game_version_id = ${shopInventoryVer}
       AND (si.buy_price > 0 OR si.sell_price > 0)
     ORDER BY s.location_label, s.name
   `).bind(uuid).all();
@@ -1170,13 +1118,11 @@ export async function getLootByUuid(db: D1Database, uuid: string, versionId?: nu
   const className = item.class_name as string;
   if (className) {
     const itemName = className.replace(/^EntityClassDefinition\./, '');
-    const dvjNpcLoadouts = deltaVersionJoin('npc_loadouts', 'nl', 'file_path', versionId);
     const npcLoadouts = await db.prepare(`
       SELECT nl.loadout_name, nf.name as faction_name, nf.code as faction_code,
              nli.port_name, nli.tag
       FROM npc_loadout_items nli
       JOIN npc_loadouts nl ON nl.id = nli.loadout_id
-      ${dvjNpcLoadouts}
       JOIN npc_factions nf ON nf.id = nl.faction_id
       WHERE nli.item_name = ?
       ORDER BY nf.name, nl.loadout_name
@@ -1323,18 +1269,14 @@ export interface LootSetDetail {
 
 export async function getLootSets(
   db: D1Database,
-  versionId?: number
 ): Promise<LootSetSummary[]> {
-  const lv = latestAsOf(versionId);
   const sql = `SELECT lm.id, lm.uuid, lm.name, lm.category, lm.manufacturer_name
     FROM loot_map lm
-    ${lv.join}
-    WHERE ${lv.where}
-      AND lm.category IN ('armour', 'helmet', 'undersuit')
+    WHERE lm.category IN ('armour', 'helmet', 'undersuit')
       AND lm.name NOT IN ('<= PLACEHOLDER =>')
       AND lm.type IS NOT NULL AND lm.type != ''
     ORDER BY lm.name ASC`;
-  const result = await db.prepare(sql).bind(...lv.params).all();
+  const result = await db.prepare(sql).all();
 
   const groups = new Map<
     string,
@@ -1372,19 +1314,15 @@ export async function getLootSets(
 export async function getLootSetBySlug(
   db: D1Database,
   setSlug: string,
-  versionId?: number
 ): Promise<LootSetDetail | null> {
-  const lv = latestAsOf(versionId);
   const sql = `SELECT lm.*,
       ${LOOT_HAS_FLAGS}
     FROM loot_map lm
-    ${lv.join}
-    WHERE ${lv.where}
-      AND lm.category IN ('armour', 'helmet', 'undersuit')
+    WHERE lm.category IN ('armour', 'helmet', 'undersuit')
       AND lm.name NOT IN ('<= PLACEHOLDER =>')
       AND lm.type IS NOT NULL AND lm.type != ''
     ORDER BY lm.name ASC`;
-  const result = await db.prepare(sql).bind(...lv.params).all();
+  const result = await db.prepare(sql).all();
 
   // Filter to matching set pieces
   const matchingItems: Record<string, unknown>[] = [];
@@ -1653,9 +1591,8 @@ interface LootLocationSummaryResult {
   npcs: LocationSummary[];
 }
 
-/** Shared loot exclusion filters (non-version, applied in WHERE). */
-const LOOT_EXCLUSION_FILTER = `lm.removed = 0
-  AND lm.name NOT IN ('<= PLACEHOLDER =>')
+/** Shared loot exclusion filters (applied in WHERE). */
+const LOOT_EXCLUSION_FILTER = `lm.name NOT IN ('<= PLACEHOLDER =>')
   AND lm.name NOT LIKE 'EntityClassDefinition.%'
   AND lm.type IS NOT NULL AND lm.type != ''
   AND lm.type NOT IN (
@@ -1671,9 +1608,7 @@ const LOOT_EXCLUSION_FILTER = `lm.removed = 0
  * Returns location keys + item counts + rarity distributions.
  * Uses indexed loot_item_locations junction table — no JSON parsing.
  */
-export async function getLootLocationSummary(db: D1Database, versionId?: number): Promise<LootLocationSummaryResult> {
-  const lilVer = deltaVersionId("loot_item_locations", versionId);
-
+export async function getLootLocationSummary(db: D1Database): Promise<LootLocationSummaryResult> {
   const sql = `SELECT lil.source_type, lil.location_key as key,
       COUNT(DISTINCT lil.loot_map_id) as itemCount,
       SUM(CASE WHEN COALESCE(lm.rarity, 'Common') = 'Common' THEN 1 ELSE 0 END) as r_Common,
@@ -1683,8 +1618,7 @@ export async function getLootLocationSummary(db: D1Database, versionId?: number)
       SUM(CASE WHEN lm.rarity = 'Legendary' THEN 1 ELSE 0 END) as r_Legendary
     FROM loot_item_locations lil
     JOIN loot_map lm ON lm.id = lil.loot_map_id
-    WHERE lil.game_version_id = ${lilVer}
-      AND lil.location_key != ''
+    WHERE lil.location_key != ''
       AND ${LOOT_EXCLUSION_FILTER}
     GROUP BY lil.source_type, lil.location_key`;
 
@@ -1742,7 +1676,6 @@ export async function getLootLocationDetail(
   db: D1Database,
   locType: "container" | "shop" | "npc" | "contract",
   slug: string,
-  versionId?: number,
 ): Promise<LocationDetailResult> {
   const sourceType = locType; // 'container', 'shop', 'npc' — matches junction table values
 
@@ -1754,15 +1687,12 @@ export async function getLootLocationDetail(
       ? ", lil.buy_price"
     : ", lil.probability, lil.slot";
 
-  const lilVer = deltaVersionId("loot_item_locations", versionId);
-
   const sql = `SELECT DISTINCT
       lm.uuid, lm.name, lm.type, lm.sub_type, lm.rarity, lm.category
       ${extraCols}
     FROM loot_item_locations lil
     JOIN loot_map lm ON lm.id = lil.loot_map_id
-    WHERE lil.game_version_id = ${lilVer}
-      AND lil.source_type = ?
+    WHERE lil.source_type = ?
       AND lil.location_key = ?
       AND ${LOOT_EXCLUSION_FILTER}
     ORDER BY lm.name`;
@@ -1853,14 +1783,13 @@ export async function setVehicleCFImagesID(
 export async function getSalvageForShip(
   db: D1Database,
   slug: string,
-  versionId?: number,
 ): Promise<Record<string, unknown> | null> {
   const { results: variants } = await db
     .prepare(
       `SELECT ss.id, ss.entity_name, ss.variant_type
        FROM salvageable_ships ss
        JOIN vehicles v ON v.id = ss.base_vehicle_id
-       WHERE v.slug = ? AND v.${vehicleVersionCap(versionId)}
+       WHERE v.slug = ?
        ORDER BY ss.variant_type`,
     )
     .bind(slug)
@@ -1876,7 +1805,6 @@ export async function getSalvageForShip(
  */
 export async function listSalvageableShips(
   db: D1Database,
-  versionId?: number,
 ): Promise<Record<string, unknown>[]> {
   const { results } = await db
     .prepare(
@@ -1887,7 +1815,7 @@ export async function listSalvageableShips(
          COUNT(ss.id) as variant_count,
          GROUP_CONCAT(DISTINCT ss.variant_type) as variant_types
        FROM salvageable_ships ss
-       JOIN vehicles v ON v.id = ss.base_vehicle_id AND v.${vehicleVersionCap(versionId)}
+       JOIN vehicles v ON v.id = ss.base_vehicle_id
        LEFT JOIN manufacturers m ON m.id = v.manufacturer_id
        WHERE ss.base_vehicle_id IS NOT NULL
        GROUP BY v.id

@@ -6,21 +6,16 @@ import { setupTestDatabase } from "./apply-migrations";
  * Seed contract generator data: generator → career → contract → blueprint pool link
  */
 async function seedMissionData(db: D1Database) {
-  const gv = await db
-    .prepare("SELECT id FROM game_versions WHERE is_default = 1")
-    .first<{ id: number }>();
-  const gvId = gv!.id;
-
   // Crafting blueprint + reward pool
   await db.batch([
     db.prepare(
-      `INSERT INTO crafting_blueprints (uuid, tag, name, type, sub_type, craft_time_seconds, game_version_id)
-       VALUES ('bp-uuid-1', 'BP_TEST_RIFLE', 'Test Rifle', 'weapons', 'rifle', 120, ?)`
-    ).bind(gvId),
+      `INSERT INTO crafting_blueprints (uuid, tag, name, type, sub_type, craft_time_seconds)
+       VALUES ('bp-uuid-1', 'BP_TEST_RIFLE', 'Test Rifle', 'weapons', 'rifle', 120)`
+    ),
     db.prepare(
-      `INSERT INTO crafting_blueprints (uuid, tag, name, type, sub_type, craft_time_seconds, game_version_id)
-       VALUES ('bp-uuid-2', 'BP_TEST_ARMOUR', 'Test Armour', 'armour', 'combat', 200, ?)`
-    ).bind(gvId),
+      `INSERT INTO crafting_blueprints (uuid, tag, name, type, sub_type, craft_time_seconds)
+       VALUES ('bp-uuid-2', 'BP_TEST_ARMOUR', 'Test Armour', 'armour', 'combat', 200)`
+    ),
   ]);
 
   const bp1 = await db
@@ -33,10 +28,9 @@ async function seedMissionData(db: D1Database) {
   // Reward pool with 2 blueprints
   await db
     .prepare(
-      `INSERT INTO crafting_blueprint_reward_pools (key, name, game_version_id)
-       VALUES ('bp_missionreward_test_pool', 'BP_MISSIONREWARD_TEST_POOL', ?)`
+      `INSERT INTO crafting_blueprint_reward_pools (key, name)
+       VALUES ('bp_missionreward_test_pool', 'BP_MISSIONREWARD_TEST_POOL')`
     )
-    .bind(gvId)
     .run();
 
   const pool = await db
@@ -63,10 +57,9 @@ async function seedMissionData(db: D1Database) {
   // Contract generator
   await db
     .prepare(
-      `INSERT INTO contract_generators (generator_key, display_name, faction_name, guild, mission_type, game_version_id)
-       VALUES ('test_recoveritem', 'Test Faction', 'Test Faction', 'mercenary_guild', 'Recovery', ?)`
+      `INSERT INTO contract_generators (generator_key, display_name, faction_name, guild, mission_type)
+       VALUES ('test_recoveritem', 'Test Faction', 'Test Faction', 'mercenary_guild', 'Recovery')`
     )
-    .bind(gvId)
     .run();
 
   const gen = await db
@@ -78,10 +71,10 @@ async function seedMissionData(db: D1Database) {
   // Career (Stanton)
   await db
     .prepare(
-      `INSERT INTO contract_generator_careers (contract_generator_id, debug_name, system, game_version_id)
-       VALUES (?, 'Test_Recovery_Stanton_Career', 'Stanton', ?)`
+      `INSERT INTO contract_generator_careers (contract_generator_id, debug_name, system)
+       VALUES (?, 'Test_Recovery_Stanton_Career', 'Stanton')`
     )
-    .bind(gen!.id, gvId)
+    .bind(gen!.id)
     .run();
 
   const career = await db
@@ -94,16 +87,16 @@ async function seedMissionData(db: D1Database) {
   await db.batch([
     db
       .prepare(
-        `INSERT INTO contract_generator_contracts (career_id, uuid, debug_name, difficulty, template, min_standing, max_standing, game_version_id)
-         VALUES (?, 'contract-uuid-easy', 'Test_Recovery_Stanton_Easy', 'Easy', 'courier_goto', 'rank1', 'rank3', ?)`
+        `INSERT INTO contract_generator_contracts (career_id, uuid, debug_name, difficulty, template, min_standing, max_standing)
+         VALUES (?, 'contract-uuid-easy', 'Test_Recovery_Stanton_Easy', 'Easy', 'courier_goto', 'rank1', 'rank3')`
       )
-      .bind(career!.id, gvId),
+      .bind(career!.id),
     db
       .prepare(
-        `INSERT INTO contract_generator_contracts (career_id, uuid, debug_name, difficulty, template, min_standing, max_standing, game_version_id)
-         VALUES (?, 'contract-uuid-hard', 'Test_Recovery_Stanton_Hard', 'Hard', 'courier_goto', 'rank3', 'rank6', ?)`
+        `INSERT INTO contract_generator_contracts (career_id, uuid, debug_name, difficulty, template, min_standing, max_standing)
+         VALUES (?, 'contract-uuid-hard', 'Test_Recovery_Stanton_Hard', 'Hard', 'courier_goto', 'rank3', 'rank6')`
       )
-      .bind(career!.id, gvId),
+      .bind(career!.id),
   ]);
 
   const contractEasy = await db
@@ -121,16 +114,16 @@ async function seedMissionData(db: D1Database) {
   await db.batch([
     db
       .prepare(
-        `INSERT INTO contract_generator_blueprint_pools (contract_generator_contract_id, crafting_blueprint_reward_pool_id, chance, game_version_id)
-         VALUES (?, ?, 1.0, ?)`
+        `INSERT INTO contract_generator_blueprint_pools (contract_generator_contract_id, crafting_blueprint_reward_pool_id, chance)
+         VALUES (?, ?, 1.0)`
       )
-      .bind(contractEasy!.id, pool!.id, gvId),
+      .bind(contractEasy!.id, pool!.id),
     db
       .prepare(
-        `INSERT INTO contract_generator_blueprint_pools (contract_generator_contract_id, crafting_blueprint_reward_pool_id, chance, game_version_id)
-         VALUES (?, ?, 1.0, ?)`
+        `INSERT INTO contract_generator_blueprint_pools (contract_generator_contract_id, crafting_blueprint_reward_pool_id, chance)
+         VALUES (?, ?, 1.0)`
       )
-      .bind(contractHard!.id, pool!.id, gvId),
+      .bind(contractHard!.id, pool!.id),
   ]);
 }
 

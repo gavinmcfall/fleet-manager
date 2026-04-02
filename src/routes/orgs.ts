@@ -3,7 +3,6 @@ import { z } from "zod";
 import type { HonoEnv, UserFleetEntry, Vehicle } from "../lib/types";
 import { validate } from "../lib/validation";
 import { analyzeFleet } from "./analysis";
-import { VEHICLE_VERSION_JOIN } from "../lib/constants";
 import { scrapeRsiOrg } from "../lib/rsi-org-scraper";
 import { opsRoutes } from "./ops";
 
@@ -679,7 +678,6 @@ export function orgRoutes() {
         `SELECT v.id, v.slug, v.name, v.focus, v.size_label, v.classification,
           ps.key as production_status
         FROM vehicles v
-        ${VEHICLE_VERSION_JOIN}
         LEFT JOIN production_statuses ps ON ps.id = v.production_status_id
         WHERE v.removed = 0
         ORDER BY v.name`,

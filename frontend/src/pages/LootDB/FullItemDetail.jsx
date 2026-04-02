@@ -2,7 +2,6 @@ import { useParams, Link, useNavigate } from 'react-router-dom'
 import { ArrowLeft, ShoppingCart, Package, Swords, FileText, Bookmark, BookmarkPlus, Plus, Check } from 'lucide-react'
 import { useLootItem, useLootCollection, useLootWishlist, toggleLootWishlist, setLootCollectionQuantity } from '../../hooks/useAPI'
 import { useSession } from '../../lib/auth-client'
-import useGameVersion from '../../hooks/useGameVersion'
 import { rarityStyle, CATEGORY_BADGE_STYLES, CATEGORY_LABELS, effectiveCategory } from '../../lib/lootDisplay'
 import PageHeader from '../../components/PageHeader'
 import LoadingState from '../../components/LoadingState'
@@ -107,8 +106,7 @@ function StatGroup({ label, stats, det }) {
 export default function FullItemDetail() {
   const { uuid } = useParams()
   const navigate = useNavigate()
-  const { activeCode } = useGameVersion()
-  const { data: item, loading, error } = useLootItem(uuid, activeCode)
+  const { data: item, loading, error } = useLootItem(uuid)
   const { data: session } = useSession()
   const isAuthed = !!session?.user
   const { data: collectionIds, refetch: refetchCollection } = useLootCollection(isAuthed)

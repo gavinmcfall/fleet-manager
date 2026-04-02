@@ -1,7 +1,6 @@
 import { useParams, Link } from 'react-router-dom'
 import { ArrowLeft, Shield, FileText } from 'lucide-react'
 import { useLootSet, useLootCollection, setLootCollectionQuantity } from '../hooks/useAPI'
-import useGameVersion from '../hooks/useGameVersion'
 import { useSession } from '../lib/auth-client'
 import PageHeader from '../components/PageHeader'
 import LoadingState from '../components/LoadingState'
@@ -166,11 +165,10 @@ function PieceLocations({ pieces }) {
 
 export default function ArmorSetDetail() {
   const { setSlug } = useParams()
-  const { activeCode } = useGameVersion()
   const { data: session } = useSession()
   const isAuthed = !!session?.user
 
-  const { data: set, loading, error, refetch } = useLootSet(setSlug, activeCode)
+  const { data: set, loading, error, refetch } = useLootSet(setSlug)
   const { data: collection, refetch: refetchCollection } = useLootCollection(isAuthed)
 
   const collectionMap = {}

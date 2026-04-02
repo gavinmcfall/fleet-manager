@@ -6,7 +6,7 @@ import { loadInsuranceTypes } from "../db/queries";
 import { logEvent } from "../lib/logger";
 import { logUserChange } from "../lib/change-history";
 import { validate, HangarXplorImportSchema, HangarSyncPayloadSchema, SYNC_ANOMALY_THRESHOLDS } from "../lib/validation";
-import { VEHICLE_VERSION_CAP, isTrustedExtension } from "../lib/constants";
+import { isTrustedExtension } from "../lib/constants";
 import {
   preloadVehicleMap,
   findVehicleSlugLocal,
@@ -122,7 +122,7 @@ export function importRoutes() {
           .prepare(
             `INSERT INTO user_fleet (user_id, vehicle_id, insurance_type_id, warbond, is_loaner,
               pledge_id, pledge_name, pledge_cost, pledge_date, custom_name, imported_at)
-            VALUES (?, (SELECT id FROM vehicles WHERE slug = ? AND ${VEHICLE_VERSION_CAP} ORDER BY game_version_id DESC LIMIT 1), ?, ?, ?,
+            VALUES (?, (SELECT id FROM vehicles WHERE slug = ? LIMIT 1), ?, ?, ?,
               ?, ?, ?, ?, ?, datetime('now'))`,
           )
           .bind(
@@ -318,7 +318,7 @@ export function importRoutes() {
             .prepare(
               `INSERT INTO user_fleet (user_id, vehicle_id, insurance_type_id, warbond, is_loaner,
                 pledge_id, pledge_name, pledge_cost, pledge_date, custom_name, imported_at)
-              VALUES (?, (SELECT id FROM vehicles WHERE slug = ? AND ${VEHICLE_VERSION_CAP} ORDER BY game_version_id DESC LIMIT 1), ?, ?, ?,
+              VALUES (?, (SELECT id FROM vehicles WHERE slug = ? LIMIT 1), ?, ?, ?,
                 ?, ?, ?, ?, ?, datetime('now'))`,
             )
             .bind(
@@ -397,7 +397,7 @@ export function importRoutes() {
           .prepare(
             `INSERT INTO image_captures (url, source, vehicle_id, vehicle_slug, title, kind)
             VALUES (?, 'hangar_sync',
-              CASE WHEN ? IS NOT NULL THEN (SELECT id FROM vehicles WHERE slug = ? AND ${VEHICLE_VERSION_CAP} ORDER BY game_version_id DESC LIMIT 1) ELSE NULL END,
+              CASE WHEN ? IS NOT NULL THEN (SELECT id FROM vehicles WHERE slug = ? LIMIT 1) ELSE NULL END,
               ?, ?, ?)
             ON CONFLICT(url) DO UPDATE SET
               last_seen = datetime('now'),

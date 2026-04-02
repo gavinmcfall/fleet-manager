@@ -13,28 +13,6 @@ interface CacheableContext {
 }
 
 /**
- * Resolve the effective game version ID for cache keying.
- * Cheap indexed lookup on a tiny table (~10 rows).
- */
-export async function resolveVersionId(
-  db: D1Database,
-  patchCode?: string,
-): Promise<number> {
-  if (patchCode) {
-    const row = await db
-      .prepare("SELECT id FROM game_versions WHERE code = ?")
-      .bind(patchCode)
-      .first<{ id: number }>();
-    if (row) return row.id;
-    // Unknown code (e.g. stale PTU code after consolidation) — fall back to default
-  }
-  const defaultRow = await db
-    .prepare("SELECT id FROM game_versions WHERE is_default = 1")
-    .first<{ id: number }>();
-  return defaultRow?.id ?? -1;
-}
-
-/**
  * Read-through cache for JSON responses.
  *
  * - On cache HIT: returns KV value directly (no DB query)
