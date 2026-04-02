@@ -75,7 +75,7 @@ preview_urls = false
 [[env.staging.d1_databases]]
 binding = "DB"
 database_name = "scbridge-staging"
-database_id = "ba65683b-facd-4c0c-8be0-a9b88565764d"
+database_id = "8c8f8bb9-f8c4-4cd2-a696-831d094fcb7a"
 migrations_dir = "src/db/migrations"
 
 [[env.staging.kv_namespaces]]

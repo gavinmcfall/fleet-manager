@@ -281,7 +281,7 @@ Run wrangler from `/tmp` when targeting SC Bridge account (avoids wrangler.toml 
 - **Note:** Better Auth tables (`user`, `session`, `account`, etc.) were bootstrapped manually on the staging DB since they're created by Better Auth at runtime, not by migration files. If the staging DB is ever recreated, run the bootstrap SQL before applying migrations.
 
 ### Staging (SC Bridge — new)
-- **D1:** `scbridge-staging` (`ba65683b-facd-4c0c-8be0-a9b88565764d`)
+- **D1:** `scbridge-staging` (`8c8f8bb9-f8c4-4cd2-a696-831d094fcb7a`)
 - **R2:** `scbridge-avatars-staging`
 - **KV:** `SC_BRIDGE_CACHE_STAGING` (`c43dfff89ae445a897916dc8e3fa7967`)
 
