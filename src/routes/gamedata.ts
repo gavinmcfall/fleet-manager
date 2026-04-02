@@ -789,7 +789,7 @@ return cachedJson(c, `gd:crafting`, async () => {
            ORDER BY cb.type, cb.sub_type, cb.name`
         ).all(),
         db.prepare(
-          `SELECT cbs.id, cbs.crafting_blueprint_id, cbs.slot_index, cbs.name,
+          `SELECT cbs.id, cbs.crafting_blueprint_id, cbs.slot_index, cbs.slot_name AS name,
                   cbs.resource_name, cbs.quantity, cbs.min_quality
            FROM crafting_blueprint_slots cbs
            JOIN crafting_blueprints cb ON cb.id = cbs.crafting_blueprint_id
@@ -1005,7 +1005,7 @@ return cachedJson(c, `gd:crafting`, async () => {
           .prepare(
             `SELECT name, min_quality, max_quality, mean, stddev
              FROM mining_quality_distributions
-               AND (name LIKE '%ShipMineable%' OR name LIKE '%Mineable%' OR name LIKE '%GroundMineable%')`
+             WHERE (name LIKE '%ShipMineable%' OR name LIKE '%Mineable%' OR name LIKE '%GroundMineable%')`
           )
           .all(),
       ])
