@@ -101,12 +101,12 @@ export function loadoutRoutes() {
     // Get port info (type + size range)
     const port = await db
       .prepare(
-        `SELECT vp.port_type, vp.size_min, vp.size_max, vp.equipped_item_uuid
+        `SELECT vp.port_type, vp.min_size, vp.max_size, vp.equipped_item_uuid
          FROM vehicle_ports vp
          WHERE vp.id = ?`,
       )
       .bind(portId)
-      .first<{ port_type: string; size_min: number; size_max: number; equipped_item_uuid: string | null }>();
+      .first<{ port_type: string; min_size: number; max_size: number; equipped_item_uuid: string | null }>();
 
     if (!port) return c.json({ error: "Port not found" }, 404);
 
@@ -115,10 +115,10 @@ export function loadoutRoutes() {
     let resolvedPortType = port.port_type;
     if (!resolvedPortType) {
       const portInfo = await db
-        .prepare("SELECT name FROM vehicle_ports WHERE id = ?")
+        .prepare("SELECT port_name FROM vehicle_ports WHERE id = ?")
         .bind(portId)
-        .first<{ name: string }>();
-      const pn = (portInfo?.name || "").toLowerCase();
+        .first<{ port_name: string }>();
+      const pn = (portInfo?.port_name || "").toLowerCase();
       if (pn.includes("turret")) resolvedPortType = "turret";
       else if (pn.includes("weapon") || pn.includes("gun")) resolvedPortType = "weapon";
       else if (pn.includes("missile")) resolvedPortType = "missile";
@@ -126,12 +126,12 @@ export function loadoutRoutes() {
 
     // Ports with size 0-0 are structural mounts (turret housings, fixed brackets)
     // that aren't player-swappable — return empty with explanation
-    if (port.size_min === 0 && port.size_max === 0) {
+    if (port.min_size === 0 && port.max_size === 0) {
       return c.json({
         port_id: portId,
         port_type: resolvedPortType,
-        size_min: 0,
-        size_max: 0,
+        min_size: 0,
+        max_size: 0,
         stock_uuid: port.equipped_item_uuid,
         components: [],
         note: "This is a fixed mount — swap components on the child weapon ports instead",
@@ -169,21 +169,21 @@ export function loadoutRoutes() {
     // If the direct item is a turret/housing, walk the port tree to find the deepest
     // child's component_type AND size range. The user is swapping the child, not the housing.
     const directComponentType = resolvedComponentType;
-    let resolvedSizeMin = port.size_min;
-    let resolvedSizeMax = port.size_max;
+    let resolvedSizeMin = port.min_size;
+    let resolvedSizeMax = port.max_size;
     if (!resolvedComponentType || resolvedComponentType === "UtilityTurret" || resolvedComponentType === "TurretBase" || resolvedComponentType === "Turret") {
       const loadoutRow = await db
-        .prepare(`SELECT component_type, child_size_min, child_size_max FROM (${
+        .prepare(`SELECT component_type, child_min_size, child_max_size FROM (${
           `SELECT
              CASE WHEN gccomp.type IS NOT NULL THEN gccomp.type
                   WHEN childcomp.type IS NOT NULL THEN childcomp.type
                   ELSE mount.type END as component_type,
-             CASE WHEN grandchild.id IS NOT NULL THEN grandchild.size_min
-                  WHEN child.id IS NOT NULL THEN child.size_min
-                  ELSE p.size_min END as child_size_min,
-             CASE WHEN grandchild.id IS NOT NULL THEN grandchild.size_max
-                  WHEN child.id IS NOT NULL THEN child.size_max
-                  ELSE p.size_max END as child_size_max
+             CASE WHEN grandchild.id IS NOT NULL THEN grandchild.min_size
+                  WHEN child.id IS NOT NULL THEN child.min_size
+                  ELSE p.min_size END as child_min_size,
+             CASE WHEN grandchild.id IS NOT NULL THEN grandchild.max_size
+                  WHEN child.id IS NOT NULL THEN child.max_size
+                  ELSE p.max_size END as child_max_size
            FROM vehicle_ports p
            LEFT JOIN vehicle_components mount ON mount.uuid = p.equipped_item_uuid
            LEFT JOIN vehicle_ports child ON child.parent_port_id = p.id
@@ -195,12 +195,12 @@ export function loadoutRoutes() {
            LIMIT 1`
         }) sub`)
         .bind(portId)
-        .first<{ component_type: string; child_size_min: number; child_size_max: number }>();
+        .first<{ component_type: string; child_min_size: number; child_max_size: number }>();
       if (loadoutRow?.component_type) {
         resolvedComponentType = loadoutRow.component_type;
         // Use the child port's size range instead of the turret housing size
-        if (loadoutRow.child_size_min != null) resolvedSizeMin = loadoutRow.child_size_min;
-        if (loadoutRow.child_size_max != null) resolvedSizeMax = loadoutRow.child_size_max;
+        if (loadoutRow.child_min_size != null) resolvedSizeMin = loadoutRow.child_min_size;
+        if (loadoutRow.child_max_size != null) resolvedSizeMax = loadoutRow.child_max_size;
       }
     }
 
@@ -372,8 +372,8 @@ export function loadoutRoutes() {
     return c.json({
       port_id: portId,
       port_type: port.port_type,
-      size_min: resolvedSizeMin,
-      size_max: resolvedSizeMax,
+      min_size: resolvedSizeMin,
+      max_size: resolvedSizeMax,
       stock_uuid: stockUuid,
       components: enriched,
     });

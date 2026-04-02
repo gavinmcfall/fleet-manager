@@ -296,18 +296,18 @@ export async function getShipLoadout(db: D1Database, slug: string): Promise<Reco
       missile_count AS (
         SELECT sp.parent_port_id AS rack_id, COUNT(*) AS cnt
         FROM ship_ports sp
-        WHERE sp.name LIKE 'missile_%_attach'
+        WHERE sp.port_name LIKE 'missile_%_attach'
           AND sp.parent_port_id IS NOT NULL
         GROUP BY sp.parent_port_id
       )
       SELECT
         p.id AS port_id,
         p.parent_port_id,
-        p.name AS port_name,
+        p.port_name AS port_name,
         p.category_label,
         p.port_type,
-        p.size_min,
-        p.size_max,
+        p.min_size AS size_min,
+        p.max_size AS size_max,
         p.editable,
         mount.name AS mount_name,
         mount.type AS mount_type,
@@ -392,11 +392,11 @@ export async function getShipLoadout(db: D1Database, slug: string): Promise<Reco
           OR (p.equipped_item_uuid IS NOT NULL AND mount.uuid IS NULL)
         )
         -- Exclude individual missile slots (keep the rack)
-        AND p.name NOT LIKE 'missile_%_attach'
+        AND p.port_name NOT LIKE 'missile_%_attach'
         -- Exclude individual torpedo storage slots (keep the rack)
-        AND p.name NOT LIKE 'hardpoint_torpedo_storage_%'
+        AND p.port_name NOT LIKE 'hardpoint_torpedo_storage_%'
         -- Exclude access/hatch mechanism ports
-        AND p.name NOT LIKE '%_access'
+        AND p.port_name NOT LIKE '%_access'
       ORDER BY
         CASE p.category_label
           WHEN 'Weapons' THEN 1 WHEN 'Turrets' THEN 2 WHEN 'Missiles' THEN 3
@@ -404,7 +404,7 @@ export async function getShipLoadout(db: D1Database, slug: string): Promise<Reco
           WHEN 'Quantum Drive' THEN 7 WHEN 'Jump Drive' THEN 8
           WHEN 'Countermeasures' THEN 9 WHEN 'Sensors' THEN 10
           WHEN 'Modules' THEN 11 ELSE 20 END,
-        p.size_max DESC, p.name`,
+        p.max_size DESC, p.port_name`,
     )
     .bind(slug)
     .all();

@@ -51,6 +51,7 @@ app.onError((err, c) => {
   return c.json({ error: "Internal Server Error" }, 500);
 });
 
+
 // Validate ENCRYPTION_KEY on first request per isolate (fail fast)
 let encryptionKeyValidated = false;
 app.use("*", async (c, next) => {
