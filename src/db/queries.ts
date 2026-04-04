@@ -961,8 +961,8 @@ export async function getLootItems(db: D1Database): Promise<LootItem[]> {
       ${LOOT_SUMMARY_JOINS}
       WHERE lm.name NOT IN ('<= PLACEHOLDER =>')
         AND lm.name NOT LIKE 'EntityClassDefinition.%'
-        AND lm.type IS NOT NULL AND lm.type != ''
-        AND lm.type NOT IN (
+        AND (lm.type IS NOT NULL AND lm.type != '' OR lm.category IS NOT NULL)
+        AND COALESCE(lm.type, '') NOT IN (
           'NOITEM_Vehicle','UNDEFINED',
           'Char_Skin_Color','Char_Head_Hair','Char_Hair_Color',
           'Char_Head_Eyes','Char_Body','Char_Head_Eyelash',
