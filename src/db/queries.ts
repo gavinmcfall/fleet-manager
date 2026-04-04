@@ -256,19 +256,19 @@ export async function getShipLoadout(db: D1Database, slug: string): Promise<Reco
         SELECT
           pt.root_id,
           vc.name, vc.type, vc.sub_type, vc.size, vc.grade, vc.class,
-          vc.dps, vc.damage_per_shot, vc.damage_type, vc.rounds_per_minute,
-          vc.projectile_speed, vc.effective_range, vc.heat_per_shot,
-          vc.ammo_container_size, vc.power_draw, vc.power_draw_min, vc.fire_modes,
-          vc.shield_hp, vc.shield_regen, vc.resist_physical, vc.resist_energy,
-          vc.resist_distortion, vc.resist_thermal, vc.regen_delay, vc.downed_regen_delay,
-          vc.power_output, vc.overpower_performance, vc.overclock_performance,
-          vc.thermal_output, vc.cooling_rate, vc.max_temperature, vc.overheat_temperature,
-          vc.quantum_speed, vc.quantum_range, vc.fuel_rate, vc.spool_time,
-          vc.radar_range, vc.radar_angle, vc.rotation_speed,
-          vc.damage_physical, vc.damage_energy, vc.damage_distortion, vc.damage_thermal,
-          vc.penetration, vc.weapon_range,
-          vc.resist_physical_min, vc.resist_energy_min, vc.resist_distortion_min, vc.resist_thermal_min,
-          vc.absorb_physical_min, vc.absorb_physical_max,
+          cw.dps, cw.damage_per_shot, cw.damage_type, cw.rounds_per_minute,
+          cw.projectile_speed, cw.effective_range, cw.heat_per_shot,
+          cw.ammo_container_size, vc.power_draw, vc.power_draw_min, cw.fire_modes,
+          cs.shield_hp, cs.shield_regen, cs.resist_physical, cs.resist_energy,
+          cs.resist_distortion, cs.resist_thermal, cs.regen_delay, cs.downed_regen_delay,
+          cp.power_output, cp.overpower_performance, cp.overclock_performance,
+          vc.thermal_output, cc.cooling_rate, cc.max_temperature, cc.overheat_temperature,
+          cq.quantum_speed, cq.quantum_range, cq.fuel_rate, cq.spool_time,
+          cr.radar_range, cr.radar_angle, ct.rotation_speed,
+          cw.damage_physical, cw.damage_energy, cw.damage_distortion, cw.damage_thermal,
+          cw.penetration, cw.weapon_range,
+          cs.resist_physical_min, cs.resist_energy_min, cs.resist_distortion_min, cs.resist_thermal_min,
+          cs.absorb_physical_min, cs.absorb_physical_max,
           m.name AS manufacturer_name,
           pt.depth,
           ROW_NUMBER() OVER (PARTITION BY pt.root_id ORDER BY
@@ -282,6 +282,13 @@ export async function getShipLoadout(db: D1Database, slug: string): Promise<Reco
         FROM port_tree pt
         JOIN vehicle_components vc ON vc.uuid = pt.equipped_item_uuid
         LEFT JOIN manufacturers m ON m.id = vc.manufacturer_id
+        LEFT JOIN component_powerplants cp ON cp.component_id = vc.id
+        LEFT JOIN component_coolers cc ON cc.component_id = vc.id
+        LEFT JOIN component_shields cs ON cs.component_id = vc.id
+        LEFT JOIN component_quantum_drives cq ON cq.component_id = vc.id
+        LEFT JOIN component_weapons cw ON cw.component_id = vc.id
+        LEFT JOIN component_turrets ct ON ct.component_id = vc.id
+        LEFT JOIN component_radar cr ON cr.component_id = vc.id
         WHERE vc.type NOT IN ('Display', 'SeatDashboard', 'Seat', 'SeatAccess')
       ),
       -- Count real weapons under each root (for turrets: how many guns)
@@ -317,53 +324,60 @@ export async function getShipLoadout(db: D1Database, slug: string): Promise<Reco
         COALESCE(d.sub_type, mount.sub_type) AS sub_type,
         COALESCE(d.size, mount.size) AS component_size,
         COALESCE(d.grade, mount.grade) AS grade,
-        COALESCE(d.dps, mount.dps) AS dps,
-        COALESCE(d.damage_per_shot, mount.damage_per_shot) AS damage_per_shot,
-        COALESCE(d.damage_type, mount.damage_type) AS damage_type,
-        COALESCE(d.rounds_per_minute, mount.rounds_per_minute) AS rounds_per_minute,
-        COALESCE(d.projectile_speed, mount.projectile_speed) AS projectile_speed,
-        COALESCE(d.effective_range, mount.effective_range) AS effective_range,
-        COALESCE(d.ammo_container_size, mount.ammo_container_size) AS ammo_container_size,
-        COALESCE(d.shield_hp, mount.shield_hp) AS shield_hp,
-        COALESCE(d.shield_regen, mount.shield_regen) AS shield_regen,
-        COALESCE(d.resist_physical, mount.resist_physical) AS resist_physical,
-        COALESCE(d.resist_energy, mount.resist_energy) AS resist_energy,
-        COALESCE(d.resist_distortion, mount.resist_distortion) AS resist_distortion,
-        COALESCE(d.resist_thermal, mount.resist_thermal) AS resist_thermal,
-        COALESCE(d.regen_delay, mount.regen_delay) AS regen_delay,
-        COALESCE(d.downed_regen_delay, mount.downed_regen_delay) AS downed_regen_delay,
-        COALESCE(d.power_output, mount.power_output) AS power_output,
-        COALESCE(d.overpower_performance, mount.overpower_performance) AS overpower_performance,
-        COALESCE(d.overclock_performance, mount.overclock_performance) AS overclock_performance,
+        COALESCE(d.dps, mw.dps) AS dps,
+        COALESCE(d.damage_per_shot, mw.damage_per_shot) AS damage_per_shot,
+        COALESCE(d.damage_type, mw.damage_type) AS damage_type,
+        COALESCE(d.rounds_per_minute, mw.rounds_per_minute) AS rounds_per_minute,
+        COALESCE(d.projectile_speed, mw.projectile_speed) AS projectile_speed,
+        COALESCE(d.effective_range, mw.effective_range) AS effective_range,
+        COALESCE(d.ammo_container_size, mw.ammo_container_size) AS ammo_container_size,
+        COALESCE(d.shield_hp, ms.shield_hp) AS shield_hp,
+        COALESCE(d.shield_regen, ms.shield_regen) AS shield_regen,
+        COALESCE(d.resist_physical, ms.resist_physical) AS resist_physical,
+        COALESCE(d.resist_energy, ms.resist_energy) AS resist_energy,
+        COALESCE(d.resist_distortion, ms.resist_distortion) AS resist_distortion,
+        COALESCE(d.resist_thermal, ms.resist_thermal) AS resist_thermal,
+        COALESCE(d.regen_delay, ms.regen_delay) AS regen_delay,
+        COALESCE(d.downed_regen_delay, ms.downed_regen_delay) AS downed_regen_delay,
+        COALESCE(d.power_output, mp.power_output) AS power_output,
+        COALESCE(d.overpower_performance, mp.overpower_performance) AS overpower_performance,
+        COALESCE(d.overclock_performance, mp.overclock_performance) AS overclock_performance,
         COALESCE(d.thermal_output, mount.thermal_output) AS thermal_output,
-        COALESCE(d.cooling_rate, mount.cooling_rate) AS cooling_rate,
-        COALESCE(d.quantum_speed, mount.quantum_speed) AS quantum_speed,
-        COALESCE(d.quantum_range, mount.quantum_range) AS quantum_range,
-        COALESCE(d.fuel_rate, mount.fuel_rate) AS fuel_rate,
-        COALESCE(d.spool_time, mount.spool_time) AS spool_time,
-        COALESCE(d.radar_range, mount.radar_range) AS radar_range,
-        COALESCE(d.radar_angle, mount.radar_angle) AS radar_angle,
+        COALESCE(d.cooling_rate, mc2.cooling_rate) AS cooling_rate,
+        COALESCE(d.quantum_speed, mq.quantum_speed) AS quantum_speed,
+        COALESCE(d.quantum_range, mq.quantum_range) AS quantum_range,
+        COALESCE(d.fuel_rate, mq.fuel_rate) AS fuel_rate,
+        COALESCE(d.spool_time, mq.spool_time) AS spool_time,
+        COALESCE(d.radar_range, mr.radar_range) AS radar_range,
+        COALESCE(d.radar_angle, mr.radar_angle) AS radar_angle,
         COALESCE(d.power_draw, mount.power_draw) AS power_draw,
         COALESCE(d.power_draw_min, mount.power_draw_min) AS power_draw_min,
-        COALESCE(d.rotation_speed, mount.rotation_speed) AS rotation_speed,
-        COALESCE(d.damage_physical, mount.damage_physical, 0) AS damage_physical,
-        COALESCE(d.damage_energy, mount.damage_energy, 0) AS damage_energy,
-        COALESCE(d.damage_distortion, mount.damage_distortion, 0) AS damage_distortion,
-        COALESCE(d.damage_thermal, mount.damage_thermal, 0) AS damage_thermal,
-        COALESCE(d.penetration, mount.penetration, 0) AS penetration,
-        COALESCE(d.weapon_range, mount.weapon_range, 0) AS weapon_range,
-        COALESCE(d.resist_physical_min, mount.resist_physical_min) AS resist_physical_min,
-        COALESCE(d.resist_energy_min, mount.resist_energy_min) AS resist_energy_min,
-        COALESCE(d.resist_distortion_min, mount.resist_distortion_min) AS resist_distortion_min,
-        COALESCE(d.resist_thermal_min, mount.resist_thermal_min) AS resist_thermal_min,
-        COALESCE(d.absorb_physical_min, mount.absorb_physical_min) AS absorb_physical_min,
-        COALESCE(d.absorb_physical_max, mount.absorb_physical_max) AS absorb_physical_max,
+        COALESCE(d.rotation_speed, mt.rotation_speed) AS rotation_speed,
+        COALESCE(d.damage_physical, mw.damage_physical, 0) AS damage_physical,
+        COALESCE(d.damage_energy, mw.damage_energy, 0) AS damage_energy,
+        COALESCE(d.damage_distortion, mw.damage_distortion, 0) AS damage_distortion,
+        COALESCE(d.damage_thermal, mw.damage_thermal, 0) AS damage_thermal,
+        COALESCE(d.penetration, mw.penetration, 0) AS penetration,
+        COALESCE(d.weapon_range, mw.weapon_range, 0) AS weapon_range,
+        COALESCE(d.resist_physical_min, ms.resist_physical_min) AS resist_physical_min,
+        COALESCE(d.resist_energy_min, ms.resist_energy_min) AS resist_energy_min,
+        COALESCE(d.resist_distortion_min, ms.resist_distortion_min) AS resist_distortion_min,
+        COALESCE(d.resist_thermal_min, ms.resist_thermal_min) AS resist_thermal_min,
+        COALESCE(d.absorb_physical_min, ms.absorb_physical_min) AS absorb_physical_min,
+        COALESCE(d.absorb_physical_max, ms.absorb_physical_max) AS absorb_physical_max,
         COALESCE(d.manufacturer_name, mm.name) AS manufacturer_name,
         COALESCE(wc.cnt, 0) AS weapon_count,
         COALESCE(mc.cnt, 0) AS missile_count
       FROM ship_ports p
       LEFT JOIN vehicle_components mount ON mount.uuid = p.equipped_item_uuid
       LEFT JOIN manufacturers mm ON mm.id = mount.manufacturer_id
+      LEFT JOIN component_powerplants mp ON mp.component_id = mount.id
+      LEFT JOIN component_coolers mc2 ON mc2.component_id = mount.id
+      LEFT JOIN component_shields ms ON ms.component_id = mount.id
+      LEFT JOIN component_quantum_drives mq ON mq.component_id = mount.id
+      LEFT JOIN component_weapons mw ON mw.component_id = mount.id
+      LEFT JOIN component_turrets mt ON mt.component_id = mount.id
+      LEFT JOIN component_radar mr ON mr.component_id = mount.id
       LEFT JOIN deepest d ON d.root_id = p.id AND d.rn = 1
       LEFT JOIN weapon_count wc ON wc.root_id = p.id
       LEFT JOIN missile_count mc ON mc.rack_id = p.id
@@ -1062,7 +1076,32 @@ export async function getLootByUuid(db: D1Database, uuid: string): Promise<Recor
       .first() as Record<string, unknown> | null;
   } else if (item.vehicle_component_id) {
     details = await db
-      .prepare("SELECT name, type, sub_type, size, grade, description, power_output, overpower_performance, overclock_performance, overclock_threshold_min, overclock_threshold_max, thermal_output, cooling_rate, max_temperature, overheat_temperature, shield_hp, shield_regen, resist_physical, resist_energy, resist_distortion, resist_thermal, regen_delay, downed_regen_delay, quantum_speed, quantum_range, fuel_rate, spool_time, cooldown_time, calibration_rate, engage_speed, stage1_accel, stage2_accel, rounds_per_minute, ammo_container_size, damage_per_shot, damage_type, projectile_speed, effective_range, dps, heat_per_shot, power_draw, fire_modes, rotation_speed, min_pitch, max_pitch, min_yaw, max_yaw, gimbal_type, thrust_force, fuel_burn_rate, radar_range, radar_angle, qed_range, qed_strength FROM vehicle_components WHERE id = ?")
+      .prepare(`SELECT vc.name, vc.type, vc.sub_type, vc.size, vc.grade, vc.description,
+        vc.power_draw, vc.thermal_output,
+        cp.power_output, cp.overpower_performance, cp.overclock_performance,
+        cp.overclock_threshold_min, cp.overclock_threshold_max,
+        cc.cooling_rate, cc.max_temperature, cc.overheat_temperature,
+        cs.shield_hp, cs.shield_regen, cs.resist_physical, cs.resist_energy,
+        cs.resist_distortion, cs.resist_thermal, cs.regen_delay, cs.downed_regen_delay,
+        cq.quantum_speed, cq.quantum_range, cq.fuel_rate, cq.spool_time, cq.cooldown_time,
+        cq.calibration_rate, cq.engage_speed, cq.stage1_accel, cq.stage2_accel,
+        cw.rounds_per_minute, cw.ammo_container_size, cw.damage_per_shot, cw.damage_type,
+        cw.projectile_speed, cw.effective_range, cw.dps, cw.heat_per_shot, cw.fire_modes,
+        ct.rotation_speed, ct.min_pitch, ct.max_pitch, ct.min_yaw, ct.max_yaw, ct.gimbal_type,
+        cth.thrust_force, cth.fuel_burn_rate,
+        cr.radar_range, cr.radar_angle,
+        ce.qed_range, ce.qed_strength
+      FROM vehicle_components vc
+      LEFT JOIN component_powerplants cp ON cp.component_id = vc.id
+      LEFT JOIN component_coolers cc ON cc.component_id = vc.id
+      LEFT JOIN component_shields cs ON cs.component_id = vc.id
+      LEFT JOIN component_quantum_drives cq ON cq.component_id = vc.id
+      LEFT JOIN component_weapons cw ON cw.component_id = vc.id
+      LEFT JOIN component_turrets ct ON ct.component_id = vc.id
+      LEFT JOIN component_thrusters cth ON cth.component_id = vc.id
+      LEFT JOIN component_radar cr ON cr.component_id = vc.id
+      LEFT JOIN component_qed ce ON ce.component_id = vc.id
+      WHERE vc.id = ?`)
       .bind(item.vehicle_component_id)
       .first() as Record<string, unknown> | null;
   } else if (item.ship_missile_id) {
