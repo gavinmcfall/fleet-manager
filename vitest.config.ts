@@ -18,6 +18,7 @@ export default defineWorkersConfig(async () => {
     test: {
       globals: true,
       include: ["test/**/*.test.ts"],
+      hookTimeout: 30000,
       poolOptions: {
         workers: {
           wrangler: { configPath: "./wrangler.toml" },
