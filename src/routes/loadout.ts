@@ -101,7 +101,7 @@ export function loadoutRoutes() {
     // Get port info (type + size range)
     const port = await db
       .prepare(
-        `SELECT vp.port_type, vp.min_size, vp.max_size, vp.equipped_item_uuid
+        `SELECT vp.port_type, COALESCE(vp.min_size, vp.size_min) as min_size, COALESCE(vp.max_size, vp.size_max) as max_size, vp.equipped_item_uuid
          FROM vehicle_ports vp
          WHERE vp.id = ?`,
       )
@@ -115,7 +115,7 @@ export function loadoutRoutes() {
     let resolvedPortType = port.port_type;
     if (!resolvedPortType) {
       const portInfo = await db
-        .prepare("SELECT port_name FROM vehicle_ports WHERE id = ?")
+        .prepare("SELECT COALESCE(port_name, name) as port_name FROM vehicle_ports WHERE id = ?")
         .bind(portId)
         .first<{ port_name: string }>();
       const pn = (portInfo?.port_name || "").toLowerCase();
@@ -178,12 +178,12 @@ export function loadoutRoutes() {
              CASE WHEN gccomp.type IS NOT NULL THEN gccomp.type
                   WHEN childcomp.type IS NOT NULL THEN childcomp.type
                   ELSE mount.type END as component_type,
-             CASE WHEN grandchild.id IS NOT NULL THEN grandchild.min_size
-                  WHEN child.id IS NOT NULL THEN child.min_size
-                  ELSE p.min_size END as child_min_size,
-             CASE WHEN grandchild.id IS NOT NULL THEN grandchild.max_size
-                  WHEN child.id IS NOT NULL THEN child.max_size
-                  ELSE p.max_size END as child_max_size
+             CASE WHEN grandchild.id IS NOT NULL THEN COALESCE(grandchild.min_size, grandchild.size_min)
+                  WHEN child.id IS NOT NULL THEN COALESCE(child.min_size, child.size_min)
+                  ELSE COALESCE(p.min_size, p.size_min) END as child_min_size,
+             CASE WHEN grandchild.id IS NOT NULL THEN COALESCE(grandchild.max_size, grandchild.size_max)
+                  WHEN child.id IS NOT NULL THEN COALESCE(child.max_size, child.size_max)
+                  ELSE COALESCE(p.max_size, p.size_max) END as child_max_size
            FROM vehicle_ports p
            LEFT JOIN vehicle_components mount ON mount.uuid = p.equipped_item_uuid
            LEFT JOIN vehicle_ports child ON child.parent_port_id = p.id

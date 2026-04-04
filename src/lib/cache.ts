@@ -7,7 +7,7 @@ export function cacheSlug(value: string): string {
 
 /** Minimal context shape needed by cachedJson — accepts both HonoEnv and generic route contexts */
 interface CacheableContext {
-  env: { SC_BRIDGE_CACHE: KVNamespace };
+  env: { SC_BRIDGE_CACHE: KVNamespace; ENVIRONMENT?: string };
   executionCtx: { waitUntil(promise: Promise<unknown>): void };
   json(data: unknown, status?: number): Response;
 }
@@ -29,6 +29,20 @@ export async function cachedJson<T>(
   const kv = c.env.SC_BRIDGE_CACHE;
   const ttl = options?.ttl ?? DEFAULT_TTL;
   const cacheControl = options?.cacheControl ?? "public, s-maxage=0, max-age=300";
+
+  // Skip cache in test environment — KV persists across test files and caches
+  // stale empty results before data is seeded
+  if (c.env.ENVIRONMENT === "test") {
+    const data = await dataFn();
+    if (data === null || data === undefined) {
+      return c.json({ error: "Not found" }, 404);
+    }
+    const body = JSON.stringify(data);
+    return new Response(body, {
+      status: 200,
+      headers: { "Content-Type": "application/json", "X-Cache": "BYPASS" },
+    });
+  }
 
   // Attempt cache read
   const cached = await kv.get(cacheKey);

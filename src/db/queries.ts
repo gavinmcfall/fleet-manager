@@ -308,14 +308,14 @@ export async function getShipLoadout(db: D1Database, slug: string): Promise<Reco
       missile_count AS (
         SELECT sp.parent_port_id AS rack_id, COUNT(*) AS cnt
         FROM ship_ports sp
-        WHERE sp.port_name LIKE 'missile_%_attach'
+        WHERE COALESCE(sp.port_name, sp.name, '') LIKE 'missile_%_attach'
           AND sp.parent_port_id IS NOT NULL
         GROUP BY sp.parent_port_id
       )
       SELECT
         p.id AS port_id,
         p.parent_port_id,
-        p.port_name AS port_name,
+        COALESCE(p.port_name, p.name) AS port_name,
         p.category_label,
         p.port_type,
         p.min_size AS size_min,
@@ -411,11 +411,11 @@ export async function getShipLoadout(db: D1Database, slug: string): Promise<Reco
           OR (p.equipped_item_uuid IS NOT NULL AND mount.uuid IS NULL)
         )
         -- Exclude individual missile slots (keep the rack)
-        AND p.port_name NOT LIKE 'missile_%_attach'
+        AND COALESCE(p.port_name, p.name, '') NOT LIKE 'missile_%_attach'
         -- Exclude individual torpedo storage slots (keep the rack)
-        AND p.port_name NOT LIKE 'hardpoint_torpedo_storage_%'
+        AND COALESCE(p.port_name, p.name, '') NOT LIKE 'hardpoint_torpedo_storage_%'
         -- Exclude access/hatch mechanism ports
-        AND p.port_name NOT LIKE '%_access'
+        AND COALESCE(p.port_name, p.name, '') NOT LIKE '%_access'
       ORDER BY
         CASE p.category_label
           WHEN 'Weapons' THEN 1 WHEN 'Turrets' THEN 2 WHEN 'Missiles' THEN 3
