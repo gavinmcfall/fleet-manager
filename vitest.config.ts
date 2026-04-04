@@ -22,6 +22,7 @@ export default defineWorkersConfig(async () => {
         workers: {
           wrangler: { configPath: "./wrangler.toml" },
           miniflare: {
+            kvNamespaces: ["SC_BRIDGE_CACHE"],
             bindings: {
               TEST_MIGRATIONS: migrations,
               ENVIRONMENT: "test",

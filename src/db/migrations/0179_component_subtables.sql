@@ -256,13 +256,13 @@ INSERT INTO vehicle_components_new (
   id, uuid, name, slug, class_name, manufacturer_id, type, sub_type, size, grade,
   description, game_version_id, raw_data, created_at, updated_at, class,
   component_class, em_signature, mass, hp, power_draw, power_draw_min,
-  thermal_output, base_heat_generation, distortion_max, removed, manufacturer_code
+  thermal_output, base_heat_generation, distortion_max, removed
 )
 SELECT
   id, uuid, name, slug, class_name, manufacturer_id, type, sub_type, size, grade,
   description, game_version_id, raw_data, created_at, updated_at, class,
   component_class, em_signature, mass, hp, power_draw, power_draw_min,
-  thermal_output, base_heat_generation, distortion_max, removed, manufacturer_code
+  thermal_output, base_heat_generation, distortion_max, removed
 FROM vehicle_components;
 
 DROP TABLE vehicle_components;

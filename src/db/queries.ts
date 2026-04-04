@@ -28,18 +28,23 @@ const LOOT_SUMMARY_JOINS = `
         LEFT JOIN fps_utilities _fu ON _fu.id = lm.fps_utility_id
         LEFT JOIN fps_carryables _fca ON _fca.id = lm.fps_carryable_id
         LEFT JOIN vehicle_components _vc ON _vc.id = lm.vehicle_component_id
+        LEFT JOIN component_weapons _vcw ON _vcw.component_id = _vc.id
+        LEFT JOIN component_powerplants _vcp ON _vcp.component_id = _vc.id
+        LEFT JOIN component_coolers _vcc ON _vcc.component_id = _vc.id
+        LEFT JOIN component_shields _vcs ON _vcs.component_id = _vc.id
+        LEFT JOIN component_quantum_drives _vcq ON _vcq.component_id = _vc.id
         LEFT JOIN ship_missiles _sm ON _sm.id = lm.ship_missile_id`;
 
 const LOOT_SUMMARY_COLS = `
-        COALESCE(_fw.dps, _vc.dps) as dps,
-        COALESCE(_fw.damage_type, _fm.damage_type, _vc.damage_type) as damage_type,
+        COALESCE(_fw.dps, _vcw.dps) as dps,
+        COALESCE(_fw.damage_type, _fm.damage_type, _vcw.damage_type) as damage_type,
         COALESCE(_fa.resist_physical, _fh.resist_physical, _fcl.resist_physical) as resist_physical,
         COALESCE(_fa.resist_energy, _fh.resist_energy, _fcl.resist_energy) as resist_energy,
         COALESCE(_fa.resist_distortion, _fh.resist_distortion, _fcl.resist_distortion) as resist_distortion,
         _fh.atmosphere_capacity,
         _vc.size as comp_size, _vc.grade as comp_grade,
-        _vc.power_output, _vc.cooling_rate, _vc.shield_hp, _vc.shield_regen,
-        _vc.quantum_speed, _vc.quantum_range,
+        _vcp.power_output, _vcc.cooling_rate, _vcs.shield_hp, _vcs.shield_regen,
+        _vcq.quantum_speed, _vcq.quantum_range,
         _sm.tracking_signal, _sm.damage as missile_damage, _sm.lock_time, _sm.speed as missile_speed,
         _fcl.storage_capacity, _fcl.temperature_range_min, _fcl.temperature_range_max,
         _fat.zoom_scale, _fat.damage_multiplier, _fat.sound_radius_multiplier,

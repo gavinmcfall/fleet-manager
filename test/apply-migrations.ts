@@ -12,7 +12,7 @@ import { env, applyD1Migrations } from "cloudflare:test";
 // Column names use camelCase matching Better Auth's SQLite convention.
 // Each statement on one line — D1 exec() in miniflare splits on newlines.
 const BETTER_AUTH_STATEMENTS = [
-  `CREATE TABLE IF NOT EXISTS "user" (id TEXT PRIMARY KEY NOT NULL, name TEXT NOT NULL, email TEXT NOT NULL UNIQUE, emailVerified INTEGER NOT NULL DEFAULT 0, image TEXT, createdAt TEXT NOT NULL, updatedAt TEXT NOT NULL, role TEXT DEFAULT 'user', banned INTEGER DEFAULT 0, banReason TEXT, banExpires TEXT, twoFactorEnabled INTEGER DEFAULT 0)`,
+  `CREATE TABLE IF NOT EXISTS "user" (id TEXT PRIMARY KEY NOT NULL, name TEXT NOT NULL, email TEXT NOT NULL UNIQUE, emailVerified INTEGER NOT NULL DEFAULT 0, image TEXT, createdAt TEXT NOT NULL, updatedAt TEXT NOT NULL, role TEXT DEFAULT 'user', banned INTEGER DEFAULT 0, banReason TEXT, banExpires TEXT)`,
   `CREATE TABLE IF NOT EXISTS "session" (id TEXT PRIMARY KEY NOT NULL, expiresAt TEXT NOT NULL, token TEXT NOT NULL UNIQUE, createdAt TEXT NOT NULL, updatedAt TEXT NOT NULL, ipAddress TEXT, userAgent TEXT, userId TEXT NOT NULL REFERENCES "user"(id), impersonatedBy TEXT, activeOrganizationId TEXT)`,
   `CREATE TABLE IF NOT EXISTS "account" (id TEXT PRIMARY KEY NOT NULL, accountId TEXT NOT NULL, providerId TEXT NOT NULL, userId TEXT NOT NULL REFERENCES "user"(id), accessToken TEXT, refreshToken TEXT, idToken TEXT, accessTokenExpiresAt TEXT, refreshTokenExpiresAt TEXT, scope TEXT, password TEXT, createdAt TEXT NOT NULL, updatedAt TEXT NOT NULL)`,
   `CREATE TABLE IF NOT EXISTS "verification" (id TEXT PRIMARY KEY NOT NULL, identifier TEXT NOT NULL, value TEXT NOT NULL, expiresAt TEXT NOT NULL, createdAt TEXT, updatedAt TEXT)`,
@@ -28,4 +28,16 @@ const BETTER_AUTH_STATEMENTS = [
 export async function setupTestDatabase(db: D1Database): Promise<void> {
   await db.batch(BETTER_AUTH_STATEMENTS.map((sql) => db.prepare(sql)));
   await applyD1Migrations(db, env.TEST_MIGRATIONS);
+
+  // Seed a default game version — required by all versioned tables (game_version_id NOT NULL)
+  await db
+    .prepare(
+      `INSERT OR IGNORE INTO game_versions (uuid, code, channel, is_default, released_at)
+       VALUES ('test-0000-0000-0000-000000000001', '4.0.0-test', 'LIVE', 1, '2026-01-01')`
+    )
+    .run();
+
 }
+
+/** Game version ID for test fixtures. Always 1 in a fresh test DB. */
+export const TEST_GAME_VERSION_ID = 1;

@@ -40,14 +40,14 @@ export const PORT_TYPE_TO_COMPONENT_TYPE: Record<string, string[]> = {
 
 // --- Stat sort keys per component type ---
 export const STAT_SORT_KEY: Record<string, string> = {
-  PowerPlant: "vc.power_output",
-  Cooler: "vc.cooling_rate",
-  Shield: "vc.shield_hp",
-  QuantumDrive: "vc.quantum_speed",
-  WeaponGun: "vc.dps",
-  Radar: "vc.radar_range",
-  MissileLauncher: "vc.damage",
-  TurretBase: "vc.dps",
-  Turret: "vc.dps",
-  QuantumInterdictionGenerator: "vc.qed_range",
+  PowerPlant: "cp.power_output",
+  Cooler: "cc.cooling_rate",
+  Shield: "cs.shield_hp",
+  QuantumDrive: "cq.quantum_speed",
+  WeaponGun: "cw.dps",
+  Radar: "cr.radar_range",
+  MissileLauncher: "cm.damage",
+  TurretBase: "cw.dps",
+  Turret: "cw.dps",
+  QuantumInterdictionGenerator: "ce.qed_range",
 };

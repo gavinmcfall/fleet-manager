@@ -144,8 +144,7 @@ ALTER TABLE [fps_weapons] ADD COLUMN [projectile_lifetime] REAL;
 ALTER TABLE [fps_weapons] ADD COLUMN [time_to_cooling_starts] REAL;
 ALTER TABLE [fps_weapons] ADD COLUMN [tool_type] TEXT;
 
--- invitation
-ALTER TABLE [invitation] ADD COLUMN [status] TEXT;
+-- invitation: status already in BA bootstrap — skipped
 
 -- law_infractions
 ALTER TABLE [law_infractions] ADD COLUMN [cool_off_seconds] REAL;
@@ -227,8 +226,7 @@ ALTER TABLE [reputation_standings] ADD COLUMN [description] TEXT;
 ALTER TABLE [salvageable_ships] ADD COLUMN [base_class_name] TEXT;
 ALTER TABLE [salvageable_ships] ADD COLUMN [uuid] TEXT;
 
--- session
-ALTER TABLE [session] ADD COLUMN [activeOrganizationId] TEXT;
+-- session: activeOrganizationId already in BA bootstrap — skipped
 
 -- ship_missiles
 ALTER TABLE [ship_missiles] ADD COLUMN [manufacturer_code] TEXT;
@@ -244,20 +242,7 @@ ALTER TABLE [user_pledge_upgrades] ADD COLUMN [name] TEXT;
 ALTER TABLE [user_pledge_upgrades] ADD COLUMN [rsi_pledge_id] INTEGER;
 ALTER TABLE [user_pledge_upgrades] ADD COLUMN [synced_at] TEXT;
 
--- vehicle_components
-ALTER TABLE [vehicle_components] ADD COLUMN [can_loot] INTEGER;
-ALTER TABLE [vehicle_components] ADD COLUMN [capacity] REAL;
-ALTER TABLE [vehicle_components] ADD COLUMN [charge_time] REAL;
-ALTER TABLE [vehicle_components] ADD COLUMN [decay_ratio] REAL;
-ALTER TABLE [vehicle_components] ADD COLUMN [grid_height] INTEGER;
-ALTER TABLE [vehicle_components] ADD COLUMN [grid_width] INTEGER;
-ALTER TABLE [vehicle_components] ADD COLUMN [interdiction_effect_time] REAL;
-ALTER TABLE [vehicle_components] ADD COLUMN [inventory_volume] REAL;
-ALTER TABLE [vehicle_components] ADD COLUMN [loot_rarity] TEXT;
-ALTER TABLE [vehicle_components] ADD COLUMN [manufacturer_code] TEXT;
-ALTER TABLE [vehicle_components] ADD COLUMN [max_calibration_requirement] REAL;
-ALTER TABLE [vehicle_components] ADD COLUMN [min_calibration_requirement] REAL;
-ALTER TABLE [vehicle_components] ADD COLUMN [mining_throttle_speed] REAL;
+-- vehicle_components: skipped — columns handled by migration 0179 (component split)
 
 -- vehicle_images
 ALTER TABLE [vehicle_images] ADD COLUMN [rsi_cdn_new] TEXT;
@@ -359,7 +344,7 @@ ALTER TABLE [star_map_locations] ADD COLUMN data_source TEXT;
 ALTER TABLE [star_systems] ADD COLUMN data_source TEXT;
 ALTER TABLE [trade_commodities] ADD COLUMN data_source TEXT;
 ALTER TABLE [vehicle_careers] ADD COLUMN data_source TEXT;
-ALTER TABLE [vehicle_components] ADD COLUMN data_source TEXT;
+-- vehicle_components data_source: skipped — handled by 0179
 ALTER TABLE [vehicle_modules] ADD COLUMN data_source TEXT;
 ALTER TABLE [vehicle_ports] ADD COLUMN data_source TEXT;
 ALTER TABLE [vehicle_roles] ADD COLUMN data_source TEXT;

@@ -17,6 +17,15 @@ directory = "./frontend/dist"
 not_found_handling = "single-page-application"
 run_worker_first = true
 
+# ── Test/Local D1 binding (required for vitest-pool-workers) ──
+# This is never used for deployment (always use --env production or --env staging).
+# It exists solely so miniflare can create a local D1 binding for tests.
+[[d1_databases]]
+binding = "DB"
+database_name = "scbridge-test"
+database_id = "00000000-0000-0000-0000-000000000000"
+migrations_dir = "src/db/migrations"
+
 # ── Production Environment ──
 [env.production]
 name = "scbridge"

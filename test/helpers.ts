@@ -4,6 +4,7 @@
  * Inserts directly into Better Auth's user/session tables to create
  * authenticated test contexts without going through the auth flow.
  */
+import { TEST_GAME_VERSION_ID } from "./apply-migrations";
 
 interface TestUser {
   userId: string;
@@ -138,8 +139,8 @@ export async function seedVehicle(
     .prepare(
       `INSERT INTO vehicles (slug, name, focus, size_label, cargo, crew_min, crew_max,
          pledge_price, classification, production_status_id, manufacturer_id,
-         updated_at)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?,
+         game_version_id, updated_at)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?,
          datetime('now'))`
     )
     .bind(
@@ -153,7 +154,8 @@ export async function seedVehicle(
       overrides?.pledge_price ?? 100,
       overrides?.classification ?? "Combat",
       overrides?.production_status_id ?? 1, // flight_ready
-      overrides?.manufacturer_id ?? null
+      overrides?.manufacturer_id ?? null,
+      TEST_GAME_VERSION_ID
     )
     .run();
 
@@ -315,8 +317,8 @@ export async function seedLootItem(
   await db
     .prepare(
       `INSERT INTO loot_map (uuid, name, type, sub_type, rarity,
-         category, manufacturer_name, updated_at)
-       VALUES (?, ?, ?, ?, ?, ?, ?,
+         category, manufacturer_name, game_version_id, updated_at)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?,
          datetime('now'))`
     )
     .bind(
@@ -326,7 +328,8 @@ export async function seedLootItem(
       overrides?.sub_type ?? "Pistol",
       overrides?.rarity ?? "Rare",
       overrides?.category ?? "weapon",
-      overrides?.manufacturer_name ?? null
+      overrides?.manufacturer_name ?? null,
+      TEST_GAME_VERSION_ID
     )
     .run();
 

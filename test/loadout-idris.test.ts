@@ -16,7 +16,7 @@
  */
 import { describe, it, expect, beforeAll } from "vitest";
 import { SELF, env } from "cloudflare:test";
-import { setupTestDatabase } from "./apply-migrations";
+import { setupTestDatabase, TEST_GAME_VERSION_ID } from "./apply-migrations";
 
 // ---------------------------------------------------------------------------
 // Seed helpers — builds a representative Idris-P port hierarchy
@@ -61,10 +61,10 @@ async function seedManufacturers(db: D1Database) {
   const stmts = mfrs.map((m) =>
     db
       .prepare(
-        `INSERT OR IGNORE INTO manufacturers (id, uuid, name, slug, code)
-         VALUES (?, ?, ?, ?, ?)`
+        `INSERT OR IGNORE INTO manufacturers (id, uuid, name, slug, code, game_version_id)
+         VALUES (?, ?, ?, ?, ?, ?)`
       )
-      .bind(m.id, `mfr-uuid-${m.id}`, m.name, m.slug, m.code)
+      .bind(m.id, `mfr-uuid-${m.id}`, m.name, m.slug, m.code, TEST_GAME_VERSION_ID)
   );
   await db.batch(stmts);
 }
@@ -104,24 +104,13 @@ async function seedComponent(
     weapon_range?: number;
   }
 ): Promise<number> {
+  // Base table — only columns that remain after migration 0179
   await db
     .prepare(
       `INSERT INTO vehicle_components (uuid, name, slug, type, sub_type, size, grade, class,
-       manufacturer_id,
-       dps, damage_per_shot, damage_type, rounds_per_minute, projectile_speed,
-       damage_energy, shield_hp, shield_regen,
-       resist_physical, resist_energy, resist_distortion, resist_thermal,
-       power_output, thermal_output, cooling_rate,
-       quantum_speed, quantum_range, fuel_rate, spool_time,
-       radar_range, power_draw, penetration, weapon_range,
+       manufacturer_id, thermal_output, power_draw, game_version_id,
        created_at, updated_at)
        VALUES (?, ?, ?, ?, ?, ?, ?, NULL,
-       ?,
-       ?, ?, ?, ?, ?,
-       ?, ?, ?,
-       ?, ?, ?, ?,
-       ?, ?, ?,
-       ?, ?, ?, ?,
        ?, ?, ?, ?,
        datetime('now'), datetime('now'))`
     )
@@ -134,29 +123,9 @@ async function seedComponent(
       opts.size,
       opts.grade,
       opts.manufacturer_id,
-      opts.dps ?? null,
-      opts.damage_per_shot ?? null,
-      opts.damage_type ?? null,
-      opts.rounds_per_minute ?? null,
-      opts.projectile_speed ?? null,
-      opts.damage_energy ?? null,
-      opts.shield_hp ?? null,
-      opts.shield_regen ?? null,
-      opts.resist_physical ?? null,
-      opts.resist_energy ?? null,
-      opts.resist_distortion ?? null,
-      opts.resist_thermal ?? null,
-      opts.power_output ?? null,
       opts.thermal_output ?? null,
-      opts.cooling_rate ?? null,
-      opts.quantum_speed ?? null,
-      opts.quantum_range ?? null,
-      opts.fuel_rate ?? null,
-      opts.spool_time ?? null,
-      opts.radar_range ?? null,
       opts.power_draw ?? null,
-      opts.penetration ?? null,
-      opts.weapon_range ?? null
+      TEST_GAME_VERSION_ID
     )
     .run();
 
@@ -164,7 +133,86 @@ async function seedComponent(
     .prepare("SELECT id FROM vehicle_components WHERE uuid = ?")
     .bind(opts.uuid)
     .first<{ id: number }>();
-  return row!.id;
+  const componentId = row!.id;
+
+  // Insert into the appropriate sub-table based on provided stat values
+  if (opts.dps != null || opts.damage_per_shot != null || opts.rounds_per_minute != null || opts.penetration != null || opts.weapon_range != null) {
+    await db
+      .prepare(
+        `INSERT INTO component_weapons (component_id, game_version_id, dps, damage_per_shot, damage_type,
+         rounds_per_minute, projectile_speed, damage_energy, penetration, weapon_range)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
+      )
+      .bind(
+        componentId, TEST_GAME_VERSION_ID,
+        opts.dps ?? null, opts.damage_per_shot ?? null, opts.damage_type ?? null,
+        opts.rounds_per_minute ?? null, opts.projectile_speed ?? null,
+        opts.damage_energy ?? null, opts.penetration ?? null, opts.weapon_range ?? null
+      )
+      .run();
+  }
+
+  if (opts.shield_hp != null || opts.shield_regen != null) {
+    await db
+      .prepare(
+        `INSERT INTO component_shields (component_id, game_version_id, shield_hp, shield_regen,
+         resist_physical, resist_energy, resist_distortion, resist_thermal)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?)`
+      )
+      .bind(
+        componentId, TEST_GAME_VERSION_ID,
+        opts.shield_hp ?? null, opts.shield_regen ?? null,
+        opts.resist_physical ?? null, opts.resist_energy ?? null,
+        opts.resist_distortion ?? null, opts.resist_thermal ?? null
+      )
+      .run();
+  }
+
+  if (opts.power_output != null) {
+    await db
+      .prepare(
+        `INSERT INTO component_powerplants (component_id, game_version_id, power_output)
+         VALUES (?, ?, ?)`
+      )
+      .bind(componentId, TEST_GAME_VERSION_ID, opts.power_output)
+      .run();
+  }
+
+  if (opts.cooling_rate != null) {
+    await db
+      .prepare(
+        `INSERT INTO component_coolers (component_id, game_version_id, cooling_rate)
+         VALUES (?, ?, ?)`
+      )
+      .bind(componentId, TEST_GAME_VERSION_ID, opts.cooling_rate)
+      .run();
+  }
+
+  if (opts.quantum_speed != null || opts.quantum_range != null || opts.fuel_rate != null || opts.spool_time != null) {
+    await db
+      .prepare(
+        `INSERT INTO component_quantum_drives (component_id, game_version_id, quantum_speed, quantum_range, fuel_rate, spool_time)
+         VALUES (?, ?, ?, ?, ?, ?)`
+      )
+      .bind(
+        componentId, TEST_GAME_VERSION_ID,
+        opts.quantum_speed ?? null, opts.quantum_range ?? null,
+        opts.fuel_rate ?? null, opts.spool_time ?? null
+      )
+      .run();
+  }
+
+  if (opts.radar_range != null) {
+    await db
+      .prepare(
+        `INSERT INTO component_radar (component_id, game_version_id, radar_range)
+         VALUES (?, ?, ?)`
+      )
+      .bind(componentId, TEST_GAME_VERSION_ID, opts.radar_range)
+      .run();
+  }
+
+  return componentId;
 }
 
 async function seedPort(
@@ -185,8 +233,8 @@ async function seedPort(
   await db
     .prepare(
       `INSERT INTO vehicle_ports (uuid, vehicle_id, parent_port_id, name, category_label,
-       size_min, size_max, port_type, equipped_item_uuid, editable)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
+       size_min, size_max, port_type, equipped_item_uuid, editable, game_version_id)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
     )
     .bind(
       opts.uuid,
@@ -198,7 +246,8 @@ async function seedPort(
       opts.size_max,
       opts.port_type ?? null,
       opts.equipped_item_uuid ?? null,
-      opts.editable ?? 1
+      opts.editable ?? 1,
+      TEST_GAME_VERSION_ID
     )
     .run();
 
@@ -225,10 +274,10 @@ describe("Loadout API — Idris-P golden data", () => {
       .prepare(
         `INSERT INTO vehicles (slug, name, focus, size_label, cargo, crew_min, crew_max,
          speed_scm, speed_max, fuel_capacity_hydrogen, fuel_capacity_quantum,
-         classification, manufacturer_id, updated_at)
+         classification, manufacturer_id, game_version_id, updated_at)
          VALUES ('idris-p', 'Idris-P', 'Combat', 'capital', 995, 10, 38,
          94, 949, 0, 5,
-         'Combat', ${MFR.aegis}, datetime('now'))`
+         'Combat', ${MFR.aegis}, ${TEST_GAME_VERSION_ID}, datetime('now'))`
       )
       .run();
 

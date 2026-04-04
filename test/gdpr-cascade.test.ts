@@ -1,6 +1,6 @@
 import { describe, it, expect, beforeAll } from "vitest";
 import { env } from "cloudflare:test";
-import { setupTestDatabase } from "./apply-migrations";
+import { setupTestDatabase, TEST_GAME_VERSION_ID } from "./apply-migrations";
 import { createTestUser, createAdminUser, seedVehicle } from "./helpers";
 
 /**
@@ -161,8 +161,8 @@ describe("GDPR — User Deletion Cascade", () => {
       // user_loot_collection (need a loot item)
       await db
         .prepare(
-          `INSERT INTO loot_map (uuid, name, type, sub_type, updated_at)
-           VALUES ('loot-uuid-1', 'Test Loot', 'Weapon', 'Pistol',
+          `INSERT INTO loot_map (uuid, name, type, sub_type, game_version_id, updated_at)
+           VALUES ('loot-uuid-1', 'Test Loot', 'Weapon', 'Pistol', ${TEST_GAME_VERSION_ID},
              datetime('now'))`
         )
         .run();
@@ -385,8 +385,8 @@ describe("GDPR — User Deletion Cascade", () => {
       // user_fleet_loadout (migration 0141) — need vehicle_ports and vehicle_components
       await db
         .prepare(
-          `INSERT INTO vehicle_components (uuid, name, type)
-           VALUES ('gdpr-comp-1', 'Test Component', 'PowerPlant')`
+          `INSERT INTO vehicle_components (uuid, name, type, game_version_id)
+           VALUES ('gdpr-comp-1', 'Test Component', 'PowerPlant', ${TEST_GAME_VERSION_ID})`
         )
         .run();
       const compRow = await db
@@ -394,8 +394,8 @@ describe("GDPR — User Deletion Cascade", () => {
         .first<{ id: number }>();
       await db
         .prepare(
-          `INSERT INTO vehicle_ports (uuid, vehicle_id, name)
-           VALUES ('gdpr-port-1', ?, 'power_plant')`
+          `INSERT INTO vehicle_ports (uuid, vehicle_id, name, game_version_id)
+           VALUES ('gdpr-port-1', ?, 'power_plant', ${TEST_GAME_VERSION_ID})`
         )
         .bind(vehicleId)
         .run();
