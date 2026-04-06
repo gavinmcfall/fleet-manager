@@ -189,6 +189,9 @@ function InsuranceRow({ ship }) {
         <span className="w-10 flex items-center justify-center shrink-0">
           {!!ship.warbond && <span className="badge badge-warbond">WB</span>}
         </span>
+        <span className="w-20 text-right text-xs font-mono text-gray-500">
+          {ship.claim_time != null ? `${ship.claim_time}m` : ''}
+        </span>
         <span className="w-24 shrink-0">
           <InsuranceBadge isLifetime={ship.is_lifetime} label={ship.insurance_label || (ship.is_lifetime ? 'LTI' : 'Standard')} />
         </span>

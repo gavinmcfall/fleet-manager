@@ -597,6 +597,14 @@ function OverviewTab({ ship, isAuthed }) {
             <SpecRow label="QT Fuel" value={ship.fuel_capacity_quantum != null ? `${ship.fuel_capacity_quantum} SCU` : null} />
             <SpecRow label="Main Thrusters" value={ship.thruster_count_main != null ? String(ship.thruster_count_main) : null} />
             <SpecRow label="Maneuvering Thrusters" value={ship.thruster_count_maneuvering != null ? String(ship.thruster_count_maneuvering) : null} />
+            {/* Signatures */}
+            <SpecRow label="IR Signature" value={ship.ir_signature != null ? ship.ir_signature.toFixed(2) : null} />
+            <SpecRow label="EM Signature" value={ship.em_signature != null ? ship.em_signature.toFixed(2) : null} />
+            <SpecRow label="Cross-Section" value={ship.cross_section_x != null ? `${ship.cross_section_x} × ${ship.cross_section_y} × ${ship.cross_section_z} m` : null} />
+            {/* Insurance */}
+            <SpecRow label="Claim Time" value={ship.claim_time != null ? `${ship.claim_time} min` : null} />
+            <SpecRow label="Expedited Claim" value={ship.expedited_claim_time != null ? `${ship.expedited_claim_time} min` : null} />
+            <SpecRow label="Expedite Cost" value={ship.expedited_claim_cost != null ? `${ship.expedited_claim_cost.toLocaleString()} aUEC` : null} />
           </div>
         </div>
 
@@ -1007,8 +1015,10 @@ function PerformanceTab({ ship }) {
   const hasSpeed = ship.speed_scm || ship.speed_max || ship.boost_speed_back
   const hasManeuvering = ship.angular_velocity_pitch != null || ship.angular_velocity_yaw != null || ship.angular_velocity_roll != null
   const hasPropulsion = ship.fuel_capacity_hydrogen || ship.fuel_capacity_quantum || ship.thruster_count_main || ship.thruster_count_maneuvering
+  const hasSignatures = ship.ir_signature != null || ship.em_signature != null || ship.cross_section_x != null
+  const hasClaim = ship.claim_time != null
 
-  if (!hasSpeed && !hasManeuvering && !hasPropulsion) {
+  if (!hasSpeed && !hasManeuvering && !hasPropulsion && !hasSignatures && !hasClaim) {
     return (
       <div className="text-center py-16 text-gray-500">
         <Zap className="w-10 h-10 mx-auto mb-3 text-gray-600" />
@@ -1054,6 +1064,24 @@ function PerformanceTab({ ship }) {
             <SpecRow label="QT Fuel" value={ship.fuel_capacity_quantum != null ? `${ship.fuel_capacity_quantum} SCU` : null} />
             <SpecRow label="Main Thrusters" value={ship.thruster_count_main != null ? String(ship.thruster_count_main) : null} />
             <SpecRow label="Maneuvering Thrusters" value={ship.thruster_count_maneuvering != null ? String(ship.thruster_count_maneuvering) : null} />
+          </div>
+        )}
+
+        {hasSignatures && (
+          <div className="px-5 py-4 space-y-0">
+            <p className="text-xs font-mono text-gray-600 uppercase tracking-widest mb-3">Signatures</p>
+            <SpecRow label="IR Signature" value={ship.ir_signature != null ? ship.ir_signature.toFixed(2) : null} />
+            <SpecRow label="EM Signature" value={ship.em_signature != null ? ship.em_signature.toFixed(2) : null} />
+            <SpecRow label="Cross-Section (X × Y × Z)" value={ship.cross_section_x != null ? `${ship.cross_section_x} × ${ship.cross_section_y} × ${ship.cross_section_z} m` : null} />
+          </div>
+        )}
+
+        {hasClaim && (
+          <div className="px-5 py-4 space-y-0">
+            <p className="text-xs font-mono text-gray-600 uppercase tracking-widest mb-3">Insurance Claim</p>
+            <SpecRow label="Standard Claim" value={ship.claim_time != null ? `${ship.claim_time} min` : null} />
+            <SpecRow label="Expedited Claim" value={ship.expedited_claim_time != null ? `${ship.expedited_claim_time} min` : null} />
+            <SpecRow label="Expedite Cost" value={ship.expedited_claim_cost != null ? `${ship.expedited_claim_cost.toLocaleString()} aUEC` : null} />
           </div>
         )}
       </div>

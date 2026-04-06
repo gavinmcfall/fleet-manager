@@ -1116,15 +1116,65 @@ export async function getLootByUuid(db: D1Database, uuid: string): Promise<Recor
       .first() as Record<string, unknown> | null;
   }
 
-  // Fetch locations from junction table
+  // Fallback: undersuit without FK — match by UUID to fps_armour (undersuits are extracted as armour)
+  if (!details && item.category === 'undersuit') {
+    details = await db
+      .prepare("SELECT name, sub_type as type, size, grade, description, resist_physical, resist_energy, resist_distortion, resist_thermal, resist_biochemical, resist_stun, ir_emission, em_emission, item_port_count FROM fps_armour WHERE uuid = ?")
+      .bind(uuid)
+      .first() as Record<string, unknown> | null;
+  }
+
+  // Fallback: prop without FK — try props table, then build from loot_map itself
+  if (!details && item.category === 'prop') {
+    details = await db
+      .prepare("SELECT name, type, sub_type, description FROM props WHERE uuid = ?")
+      .bind(uuid)
+      .first() as Record<string, unknown> | null;
+    if (!details) {
+      // Decorative props (playerdeco_*) — no stat table, create minimal detail from loot_map
+      details = { name: item.name as string, type: 'Decoration', description: item.description as string || null };
+    }
+  }
+
+  // Fallback: paint without FK — paints don't have stat tables
+  if (!details && item.category === 'paint') {
+    details = { name: item.name as string, type: 'Paint', description: item.description as string || null };
+  }
+
+  // Fallback: ship_weapon/ship_component items without FK — match by UUID to vehicle_components
+  if (!details && (item.category === 'ship_weapon' || item.category === 'ship_component')) {
+    details = await db
+      .prepare(`SELECT vc.name, vc.type, vc.sub_type, vc.size, vc.grade, vc.description,
+        vc.power_draw, vc.thermal_output,
+        cw.rounds_per_minute, cw.ammo_container_size, cw.damage_per_shot, cw.damage_type,
+        cw.projectile_speed, cw.effective_range, cw.dps, cw.heat_per_shot, cw.fire_modes,
+        cs.shield_hp, cs.shield_regen, cs.resist_physical, cs.resist_energy,
+        cp.power_output, cq.quantum_speed, cq.quantum_range
+      FROM vehicle_components vc
+      LEFT JOIN component_weapons cw ON cw.component_id = vc.id
+      LEFT JOIN component_shields cs ON cs.component_id = vc.id
+      LEFT JOIN component_powerplants cp ON cp.component_id = vc.id
+      LEFT JOIN component_quantum_drives cq ON cq.component_id = vc.id
+      WHERE vc.uuid = ?`)
+      .bind(uuid)
+      .first() as Record<string, unknown> | null;
+  }
+
+  // Fetch locations from junction table, resolving UUIDs to display names
   const locations = await db.prepare(`
-    SELECT source_type, location_key, location_tag, container_type,
-      per_container, per_roll, rolls, loot_table,
-      buy_price, sell_price,
-      actor, faction, slot, probability, spawn_locations,
-      contract_name, guild, reward_type, amount, weight
-    FROM loot_item_locations WHERE loot_map_id = ?
-    ORDER BY source_type, location_key
+    SELECT lil.source_type, lil.location_key, lil.location_tag, lil.container_type,
+      lil.per_container, lil.per_roll, lil.rolls, lil.loot_table,
+      lil.buy_price, lil.sell_price,
+      lil.actor, lil.faction, lil.slot, lil.probability, lil.spawn_locations,
+      lil.contract_name, lil.guild, lil.reward_type, lil.amount, lil.weight,
+      COALESCE(s.name, sml.name, nl.loadout_name, lil.location_key) as location_name,
+      s.slug as shop_slug, s.location_label as shop_location
+    FROM loot_item_locations lil
+    LEFT JOIN shops s ON lil.source_type = 'shop' AND s.uuid = lil.location_key
+    LEFT JOIN star_map_locations sml ON lil.source_type = 'container' AND sml.uuid = lil.location_key
+    LEFT JOIN npc_loadouts nl ON lil.source_type = 'npc' AND nl.uuid = lil.location_key
+    WHERE lil.loot_map_id = ?
+    ORDER BY lil.source_type, location_name
   `).bind(item.id).all();
 
   const locationsByType: Record<string, Record<string, unknown>[]> = { containers: [], shops: [], npcs: [], contracts: [] };
@@ -1318,7 +1368,7 @@ export async function getLootSets(
     FROM loot_map lm
     WHERE lm.category IN ('armour', 'helmet', 'undersuit')
       AND lm.name NOT IN ('<= PLACEHOLDER =>')
-      AND lm.type IS NOT NULL AND lm.type != ''
+      AND lm.category IS NOT NULL AND lm.category != ''
     ORDER BY lm.name ASC`;
   const result = await db.prepare(sql).all();
 
@@ -1364,7 +1414,7 @@ export async function getLootSetBySlug(
     FROM loot_map lm
     WHERE lm.category IN ('armour', 'helmet', 'undersuit')
       AND lm.name NOT IN ('<= PLACEHOLDER =>')
-      AND lm.type IS NOT NULL AND lm.type != ''
+      AND lm.category IS NOT NULL AND lm.category != ''
     ORDER BY lm.name ASC`;
   const result = await db.prepare(sql).all();
 
@@ -1638,13 +1688,7 @@ interface LootLocationSummaryResult {
 /** Shared loot exclusion filters (applied in WHERE). */
 const LOOT_EXCLUSION_FILTER = `lm.name NOT IN ('<= PLACEHOLDER =>')
   AND lm.name NOT LIKE 'EntityClassDefinition.%'
-  AND lm.type IS NOT NULL AND lm.type != ''
-  AND lm.type NOT IN (
-    'NOITEM_Vehicle','UNDEFINED',
-    'Char_Skin_Color','Char_Head_Hair','Char_Hair_Color',
-    'Char_Head_Eyes','Char_Body','Char_Head_Eyelash',
-    'Currency','MobiGlas'
-  )`;
+  AND lm.category IS NOT NULL AND lm.category != ''`;
 
 
 /**

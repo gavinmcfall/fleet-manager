@@ -595,7 +595,6 @@ return cachedJson(c, `gd:loc-shops:${cacheSlug(slug)}`, async () => {
            
            WHERE nl.visible_item_count > 0
            GROUP BY f.id
-           HAVING item_count > 0
            ORDER BY f.name`,
         )
         .all()
@@ -714,9 +713,16 @@ return cachedJson(c, `gd:missions`, async () => {
            ORDER BY mg.name`,
         ).all(),
         db.prepare(
-          `SELECT m.id, m.title, m.display_name as giver_name, m.description,
-             m.reward_amount, m.reward_currency, m.is_lawful, m.difficulty,
-             m.category, m.subcategory as availability,
+          `SELECT m.id, m.uuid, m.slug,
+             COALESCE(m.title, m.name) as title,
+             COALESCE(m.display_name, m.mission_giver) as giver_name,
+             m.description,
+             COALESCE(NULLIF(m.reward_amount, 0), m.reward_min, 0) as reward_amount,
+             m.reward_currency,
+             COALESCE(m.is_lawful, m.lawful, 0) as is_lawful,
+             m.difficulty,
+             COALESCE(m.category, m.mission_type) as category,
+             m.subcategory as availability,
              m.location_hint as type_slug,
              m.reputation_reward_size as rep_summary,
              m.rep_fail_summary as rep_fail,
@@ -727,12 +733,11 @@ return cachedJson(c, `gd:missions`, async () => {
              m.buy_in_amount, m.reward_max, m.has_standing_bonus,
              m.location_ref, m.locality
            FROM missions m
-           
-           WHERE m.not_for_release = 0
-           ORDER BY m.category, m.reward_amount DESC`,
+           WHERE COALESCE(m.not_for_release, 0) = 0
+           ORDER BY COALESCE(m.category, m.mission_type), COALESCE(m.reward_amount, m.reward_min, 0) DESC`,
         ).all(),
         db.prepare(
-          `SELECT mp.mission_id, m_req.uuid as required_uuid, m_req.title as required_title
+          `SELECT mp.mission_id, m_req.uuid as required_uuid, COALESCE(m_req.title, m_req.name) as required_title
            FROM mission_prerequisites mp
            JOIN missions m_req ON m_req.id = mp.required_mission_id`,
         ).all(),
@@ -1628,8 +1633,11 @@ return cachedJson(c, `gd:fps-gear`, async () => {
 
       // Get pu_missions for this faction (by giver_name → slug matching)
       const puMissions = await db.prepare(
-        `SELECT m.id, m.title, m.description, m.reward_amount, m.reward_currency,
-                m.is_lawful, m.difficulty, m.category, m.display_name as giver_name,
+        `SELECT m.id, COALESCE(m.title, m.name) as title, m.description,
+                COALESCE(NULLIF(m.reward_amount, 0), m.reward_min, 0) as reward_amount, m.reward_currency,
+                COALESCE(m.is_lawful, m.lawful, 0) as is_lawful, m.difficulty,
+                COALESCE(m.category, m.mission_type) as category,
+                COALESCE(m.display_name, m.mission_giver) as giver_name,
                 m.reputation_reward_size as rep_summary,
                 m.rep_fail_summary as rep_fail,
                 m.rep_abandon_summary as rep_abandon,
@@ -1653,7 +1661,7 @@ return cachedJson(c, `gd:fps-gear`, async () => {
       const factionMissionIds = new Set(factionPuMissions.map(m => m.id as number))
       const [factionPrereqResult, factionRepReqResult] = await Promise.all([
         db.prepare(
-          `SELECT mp.mission_id, m_req.uuid as required_uuid, m_req.title as required_title
+          `SELECT mp.mission_id, m_req.uuid as required_uuid, COALESCE(m_req.title, m_req.name) as required_title
            FROM mission_prerequisites mp
            JOIN missions m_req ON m_req.id = mp.required_mission_id`,
         ).all(),

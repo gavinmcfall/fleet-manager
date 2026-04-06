@@ -140,6 +140,7 @@ async function getFleetList(
         COALESCE(rv.pledge_price, v.pledge_price) as pledge_price,
         COALESCE(rv.speed_scm, v.speed_scm) as speed_scm,
         COALESCE(rv.classification, v.classification) as classification,
+        v.claim_time, v.expedited_claim_time, v.expedited_claim_cost,
         COALESCE(rm.name, m.name) as manufacturer_name,
         COALESCE(rm.code, m.code) as manufacturer_code,
         it.label as insurance_label, it.duration_months, it.is_lifetime,

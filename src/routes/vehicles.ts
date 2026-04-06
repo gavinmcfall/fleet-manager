@@ -59,6 +59,8 @@ export function vehicleRoutes<E extends { Bindings: Env }>() {
             v.armor_signal_ir, v.armor_signal_em, v.armor_signal_cs,
             v.weapon_pool_size, v.shield_pool_max,
             v.cross_section_x, v.cross_section_y, v.cross_section_z,
+            v.ir_signature, v.em_signature,
+            v.claim_time, v.expedited_claim_time, v.expedited_claim_cost,
             m.name as manufacturer_name, m.code as manufacturer_code,
             CASE WHEN v.parent_vehicle_id IS NOT NULL AND pps.key IS NOT NULL
               THEN pps.key ELSE ps.key END as production_status

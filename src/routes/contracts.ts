@@ -19,11 +19,9 @@ export function contractRoutes<E extends HonoEnv>() {
 
     return cachedJson(c, `contracts:${cacheSlug(giver ?? "all")}`, async () => {
       let query = `SELECT c.*,
-          COALESCE(c.reward_vehicle_slug, v.slug) AS reward_vehicle_slug,
-          COALESCE(c.reward_item_uuid, fw.uuid) AS reward_item_uuid
+          COALESCE(c.reward_vehicle_slug, v.slug) AS reward_vehicle_slug
         FROM contracts c
         LEFT JOIN vehicles v ON v.name = c.reward_text AND c.reward_vehicle_slug IS NULL
-        LEFT JOIN fps_weapons fw ON fw.name = c.reward_text AND c.reward_item_uuid IS NULL
         WHERE c.is_active = 1`
       const params: string[] = []
 
@@ -38,7 +36,7 @@ export function contractRoutes<E extends HonoEnv>() {
 
       // Attach armor set slugs for rewards that match known sets
       for (const row of results as Record<string, unknown>[]) {
-        if (!row.reward_vehicle_slug && !row.reward_item_uuid && row.reward_text) {
+        if (!row.reward_vehicle_slug && row.reward_text) {
           const setSlug = ARMOR_SET_REWARD_MAP[row.reward_text as string]
           if (setSlug) row.reward_set_slug = setSlug
         }
