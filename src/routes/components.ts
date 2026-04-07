@@ -27,7 +27,10 @@ export function componentRoutes() {
     return cachedJson(c, `components:${type}`, async () => {
       const componentTypes = PORT_TYPE_TO_COMPONENT_TYPE[type] || [type];
       const typePlaceholders = componentTypes.map(() => "?").join(",");
-      const sortKey = componentTypes.map(t => STAT_SORT_KEY[t]).find(Boolean) || "vc.name";
+      // STAT_SORT_KEY uses sub-table aliases (cp., cw., etc.) for loadout joins.
+      // This route queries vehicle_components directly, so remap to vc.
+      const rawSort = componentTypes.map(t => STAT_SORT_KEY[t]).find(Boolean) || "vc.name";
+      const sortKey = rawSort.replace(/^[a-z]+\./, "vc.");
 
       const rows = await db
         .prepare(
