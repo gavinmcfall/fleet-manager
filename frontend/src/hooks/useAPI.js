@@ -10,8 +10,14 @@ async function apiFetch(method, path, body) {
   }
   const res = await fetch(`${BASE}${path}`, opts)
   if (res.status === 401) {
-    window.location.href = '/login'
-    throw new Error('Session expired')
+    // Only redirect if user had an active session (session expired).
+    // Unauthenticated visitors on public pages should not be redirected —
+    // the 401 is expected for user-specific endpoints called by layout components.
+    const hasSession = document.cookie.includes('better-auth.session_token')
+    if (hasSession) {
+      window.location.href = '/login'
+    }
+    throw new Error('Unauthorized')
   }
   if (!res.ok) {
     const err = await res.json().catch(() => ({ error: res.statusText }))
