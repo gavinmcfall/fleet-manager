@@ -473,6 +473,22 @@ async function runScheduledSync(cron: string, env: Env): Promise<void> {
       await syncProductionStatuses(env.DB);
       break;
     }
+    case "0 */2 * * *": {
+      console.log("[cron] UEX commodity price sync");
+      logEvent("cron_trigger", { schedule: cron, task: "uex_commodities" });
+      const { syncUexPrices } = await import("./lib/uex");
+      const result = await syncUexPrices(env.DB, "commodities");
+      console.log(`[cron] UEX sync done: ${result.commodities} commodities, ${result.errors.length} errors`);
+      break;
+    }
+    case "30 5 * * *": {
+      console.log("[cron] UEX item price sync");
+      logEvent("cron_trigger", { schedule: cron, task: "uex_items" });
+      const { syncUexPrices: syncUexItemPrices } = await import("./lib/uex");
+      const result = await syncUexItemPrices(env.DB, "items");
+      console.log(`[cron] UEX sync done: ${result.items} items, ${result.errors.length} errors`);
+      break;
+    }
     default:
       console.warn(`[cron] Unknown schedule: ${cron}`);
   }

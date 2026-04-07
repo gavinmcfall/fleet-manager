@@ -51,6 +51,8 @@ crons = [
   "30 3 * * *",  # session cleanup
   "45 3 * * *",  # RSI API images (ships + paints)
   "0 4 * * *",   # Fleetyards production status sync
+  "0 */2 * * *", # UEX commodity prices (every 2h)
+  "30 5 * * *",  # UEX item prices (daily)
 ]
 
 [env.production.vars]

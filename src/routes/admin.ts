@@ -292,6 +292,21 @@ export function adminRoutes() {
   });
 
   /**
+   * POST /api/admin/uex/sync
+   *
+   * Manually trigger UEX price sync. Optional body: { type: "commodities" | "items" | "all" }
+   * Returns { ok, commodities, items, errors }
+   */
+  routes.post("/uex/sync", async (c) => {
+    const { syncUexPrices } = await import("../lib/uex");
+    const body = await c.req.json().catch(() => ({})) as { type?: string };
+    const type = (body.type === "commodities" || body.type === "items") ? body.type : "all";
+    const result = await syncUexPrices(c.env.DB, type);
+    console.log(`[admin] UEX sync: ${result.commodities} commodities, ${result.items} items, ${result.errors.length} errors`);
+    return c.json({ ok: true, ...result });
+  });
+
+  /**
    * PUT /api/admin/localization/global-ini
    *
    * Upload base global.ini for a game version. Stored in KV for the
