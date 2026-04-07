@@ -390,6 +390,25 @@ export function importRoutes() {
       console.warn(`[hangar-sync] Skipped ${skippedPaints.length} unmatched paints: ${JSON.stringify(skippedPaints.slice(0, 20))}`);
     }
 
+    // --- Auto-inherit default paints for owned vehicles ---
+    // For each vehicle in the user's fleet, if the vehicle has a default paint
+    // (is_default_for_vehicle = 1 in paint_vehicles), add it to user_paints.
+    // INSERT OR IGNORE ensures we don't duplicate paints the user already owns.
+    const defaultPaintResult = await db
+      .prepare(
+        `INSERT OR IGNORE INTO user_paints (user_id, paint_id, pledge_id, pledge_name, is_buyback, synced_at)
+        SELECT DISTINCT ?, pv.paint_id, '', 'Default Paint', 0, datetime('now')
+        FROM user_fleet uf
+        JOIN paint_vehicles pv ON pv.vehicle_id = uf.vehicle_id AND pv.is_default_for_vehicle = 1
+        WHERE uf.user_id = ?`,
+      )
+      .bind(userID, userID)
+      .run();
+    const defaultPaintsAdded = defaultPaintResult.meta?.changes ?? 0;
+    if (defaultPaintsAdded > 0) {
+      console.log(`[hangar-sync] Auto-inherited ${defaultPaintsAdded} default paints for ${userID}`);
+    }
+
     // --- Capture ALL image URLs for CDN review ---
     if (imageCaptures.length > 0) {
       const capStmts = imageCaptures.map((cap) =>
