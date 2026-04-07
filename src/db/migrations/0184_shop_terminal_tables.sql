@@ -72,8 +72,9 @@ CREATE TABLE unlinked_sources (
   created_at TEXT DEFAULT (datetime('now'))
 );
 
--- Migrate existing data: create one terminal per shop
-INSERT INTO terminals (uuid, shop_id, shop_name_key, terminal_type, game_version_id)
+-- Migrate existing data: one terminal per unique shop name (latest version wins)
+-- OR IGNORE handles multi-version shops (same name in 4.6.0 + 4.7.0)
+INSERT OR IGNORE INTO terminals (uuid, shop_id, shop_name_key, terminal_type, game_version_id)
 SELECT
   s.uuid,
   s.id,
@@ -84,10 +85,12 @@ SELECT
     ELSE 'item'
   END,
   s.game_version_id
-FROM shops s;
+FROM shops s
+ORDER BY s.game_version_id DESC;
 
 -- Migrate shop_inventory rows to terminal_inventory
-INSERT INTO terminal_inventory (terminal_id, item_uuid, item_type, item_name,
+-- Join through shop name to handle multi-version data
+INSERT OR IGNORE INTO terminal_inventory (terminal_id, item_uuid, item_type, item_name,
   base_buy_price, base_sell_price, base_inventory, max_inventory, game_version_id)
 SELECT
   t.id,
@@ -104,4 +107,5 @@ SELECT
   si.max_inventory,
   si.game_version_id
 FROM shop_inventory si
-JOIN terminals t ON t.shop_id = si.shop_id;
+JOIN shops s ON s.id = si.shop_id
+JOIN terminals t ON t.shop_name_key = s.name;

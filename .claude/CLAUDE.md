@@ -152,7 +152,8 @@ in this repo** — create them in the tools repo instead.
 - **`createAuth(env)` is cached per isolate** via WeakMap — do not call unconditionally per request.
 - **org_visibility values**: `'public' | 'org' | 'officers' | 'private'` (DEFAULT `'private'`). Org profiles, stats, fleet, and analysis are all members-only (non-members get 404). Future RSI verification flow for org ownership claims.
 - **Shop location_label**: denormalized TEXT column on `shops` table (not FK). Handles template shops, removed locations like Port Olisar. Set via extraction script.
-- **Trade commodities**: `trade_commodities.uuid` matches `shop_inventory.item_uuid` for admin shops. Prices are base defaults — in-game values are dynamic based on supply/demand.
+- **Three-layer shop model (0184-0185)**: `shops` (franchise-at-location, ShopNode UUID) → `terminals` (kiosks, linked by `shop_name_key`) → `terminal_inventory` (items with base + latest prices). Replaces flat `shop_inventory`. `price_observations` (append-only history) and `unlinked_sources` (unknown shops from community sources) created for Phase 2 community pricing. API response shapes unchanged via COALESCE aliasing.
+- **Trade commodities**: `trade_commodities.uuid` matches `terminal_inventory.item_uuid` for admin shop terminals. Prices are base defaults — in-game values are dynamic based on supply/demand.
 - **stats_json fully eliminated**: All stat data migrated to typed columns. 0075–0092 handled 8 FPS/vehicle tables. 0097–0099 handled remaining 3 tables (mineable_elements, law_infractions, consumables). Zero `stats_json` columns remain in the schema. Extraction scripts output individual columns, not JSON blobs.
 - **New FPS tables (0085–0087)**: `fps_melee` (knives), `fps_carryables` (carryable items), `fps_ammo_types` (ammo/magazine types). All version-keyed.
 - **New mission/rep tables (0088–0091)**: `missions` (2,559 pu_missions), `reputation_perks`, `reputation_reward_tiers`, `mission_type_givers` (junction). Awaiting extraction scripts for population.
@@ -330,7 +331,7 @@ have caused bugs before or are easy to get wrong.
 - Never skip numbers. Never rename an applied migration file.
 - **Never ALTER a PK or UNIQUE constraint in-place** — create new table, copy data, drop old.
 - Index naming: `idx_{table}_{column}` — e.g., `idx_loot_map_type`
-- Current last migration: **0182_weapon_rack_variant_support.sql**
+- Current last migration: **0185_drop_shop_inventory.sql**
 
 ### Out-of-Band Columns
 Previously these columns were applied via `wrangler d1 execute` outside migration files.
