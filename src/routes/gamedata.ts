@@ -8,8 +8,8 @@ const SHOP_DISPLAY_NAME_EXPR = `COALESCE(s.display_name, REPLACE(REPLACE(REPLACE
 /** Build the inventory query for a set of shop IDs */
 function buildInventoryQuery(placeholders: string): string {
   return `SELECT t.shop_id, ti.item_uuid, ti.item_name,
-       COALESCE(ti.latest_buy_price, ti.base_buy_price) as buy_price,
-       COALESCE(ti.latest_sell_price, ti.base_sell_price) as sell_price,
+       ti.latest_buy_price as buy_price,
+       ti.latest_sell_price as sell_price,
        ti.base_inventory, ti.max_inventory,
        COALESCE(fi.name, tc.name, v.name, ti.item_name) as resolved_name,
        CASE
@@ -367,8 +367,8 @@ const [
       const { results } = await db
         .prepare(
           `SELECT ti.item_uuid, ti.item_name,
-             COALESCE(ti.latest_buy_price, ti.base_buy_price) as buy_price,
-             COALESCE(ti.latest_sell_price, ti.base_sell_price) as sell_price,
+             ti.latest_buy_price as buy_price,
+             ti.latest_sell_price as sell_price,
              ti.base_inventory, ti.max_inventory,
              COALESCE(fi.name, v.name, ti.item_name) as resolved_name
            FROM terminal_inventory ti
@@ -378,7 +378,7 @@ const [
            LEFT JOIN vehicles v ON v.uuid = ti.item_uuid
            WHERE s.slug = ?
            ORDER BY COALESCE(fi.name, v.name, ti.item_name),
-                    COALESCE(ti.latest_buy_price, ti.base_buy_price) DESC`,
+                    ti.latest_buy_price DESC`,
         )
         .bind(slug)
         .all()
@@ -402,8 +402,8 @@ return cachedJson(c, `gd:trade`, async () => {
         db
           .prepare(
             `SELECT ti.item_uuid,
-               COALESCE(ti.latest_buy_price, ti.base_buy_price) as buy_price,
-               COALESCE(ti.latest_sell_price, ti.base_sell_price) as sell_price,
+               ti.latest_buy_price as buy_price,
+               ti.latest_sell_price as sell_price,
                ti.base_inventory, ti.max_inventory,
                s.name as shop_name, s.slug as shop_slug,
                ${SHOP_DISPLAY_NAME_EXPR} as shop_display_name,

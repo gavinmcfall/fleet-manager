@@ -39,17 +39,17 @@ async function seedShopData(db: D1Database) {
   // Insert terminal_inventory
   await db.batch([
     db.prepare(
-      `INSERT INTO terminal_inventory (terminal_id, item_uuid, item_name, base_buy_price, base_sell_price, base_inventory, max_inventory, game_version_id)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?)`
-    ).bind(termWeapons, "item-1111", "P4-AR Ballistic Rifle", 5600, 0, 10, 50, TEST_GAME_VERSION_ID),
+      `INSERT INTO terminal_inventory (terminal_id, item_uuid, item_name, latest_buy_price, latest_sell_price, latest_source, latest_observed_at, base_inventory, max_inventory, game_version_id)
+       VALUES (?, ?, ?, ?, ?, 'uex', datetime('now'), ?, ?, ?)`
+    ).bind(termWeapons, "item-1111", "P4-AR Ballistic Rifle", 5600, null, 10, 50, TEST_GAME_VERSION_ID),
     db.prepare(
-      `INSERT INTO terminal_inventory (terminal_id, item_uuid, item_name, base_buy_price, base_sell_price, base_inventory, max_inventory, game_version_id)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?)`
-    ).bind(termWeapons, "item-2222", "FS-9 LMG", 8200, 0, 5, 20, TEST_GAME_VERSION_ID),
+      `INSERT INTO terminal_inventory (terminal_id, item_uuid, item_name, latest_buy_price, latest_sell_price, latest_source, latest_observed_at, base_inventory, max_inventory, game_version_id)
+       VALUES (?, ?, ?, ?, ?, 'uex', datetime('now'), ?, ?, ?)`
+    ).bind(termWeapons, "item-2222", "FS-9 LMG", 8200, null, 5, 20, TEST_GAME_VERSION_ID),
     db.prepare(
-      `INSERT INTO terminal_inventory (terminal_id, item_uuid, item_name, base_buy_price, base_sell_price, base_inventory, max_inventory, game_version_id)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?)`
-    ).bind(termClothing, "item-3333", "Odyssey II Flight Suit", 1200, 300, 20, 100, TEST_GAME_VERSION_ID),
+      `INSERT INTO terminal_inventory (terminal_id, item_uuid, item_name, latest_buy_price, latest_sell_price, latest_source, latest_observed_at, base_inventory, max_inventory, game_version_id)
+       VALUES (?, ?, ?, ?, ?, 'uex', datetime('now'), ?, ?, ?)`
+    ).bind(termClothing, "item-3333", "Odyssey II Flight Suit", 1200, 300, 5, 20, TEST_GAME_VERSION_ID),
   ]);
 }
 
