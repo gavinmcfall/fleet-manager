@@ -82,6 +82,52 @@ async function seedTradeData(db: D1Database) {
        VALUES (?, ?, ?, ?, ?, ?, ?, ${TEST_GAME_VERSION_ID})`
     ).bind(shopGrimHEX, "cccc-3333", "WiDoW", 24.5, 0, 5000, 20000),
   ]);
+
+  // Seed terminals (one per shop, matching migration pattern)
+  await db.batch([
+    db.prepare(
+      `INSERT INTO terminals (uuid, shop_id, shop_name_key, terminal_type, game_version_id)
+       VALUES (?, ?, ?, ?, ?)`
+    ).bind("shop-1", shopArea18, "Inv_Admin_Area18", "commodity", TEST_GAME_VERSION_ID),
+    db.prepare(
+      `INSERT INTO terminals (uuid, shop_id, shop_name_key, terminal_type, game_version_id)
+       VALUES (?, ?, ?, ?, ?)`
+    ).bind("shop-2", shopNewBabbage, "Inv_Admin_NewBabbage", "commodity", TEST_GAME_VERSION_ID),
+    db.prepare(
+      `INSERT INTO terminals (uuid, shop_id, shop_name_key, terminal_type, game_version_id)
+       VALUES (?, ?, ?, ?, ?)`
+    ).bind("shop-3", shopGrimHEX, "Inv_Admin_GrimHEX", "commodity", TEST_GAME_VERSION_ID),
+  ]);
+
+  // Get terminal IDs
+  const terminals = await db.prepare("SELECT id, uuid FROM terminals ORDER BY id").all();
+  const termArea18 = terminals.results[0].id as number;
+  const termNewBabbage = terminals.results[1].id as number;
+  const termGrimHEX = terminals.results[2].id as number;
+
+  // Seed terminal_inventory (mirrors shop_inventory data above)
+  await db.batch([
+    db.prepare(
+      `INSERT INTO terminal_inventory (terminal_id, item_uuid, item_name, base_buy_price, base_sell_price, base_inventory, max_inventory, game_version_id)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?)`
+    ).bind(termArea18, "aaaa-1111", "Agricium", 0, 25.447, 17757.62, 500000, TEST_GAME_VERSION_ID),
+    db.prepare(
+      `INSERT INTO terminal_inventory (terminal_id, item_uuid, item_name, base_buy_price, base_sell_price, base_inventory, max_inventory, game_version_id)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?)`
+    ).bind(termNewBabbage, "aaaa-1111", "Agricium", 0, 25.342, 99483.86, 600000, TEST_GAME_VERSION_ID),
+    db.prepare(
+      `INSERT INTO terminal_inventory (terminal_id, item_uuid, item_name, base_buy_price, base_sell_price, base_inventory, max_inventory, game_version_id)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?)`
+    ).bind(termArea18, "bbbb-2222", "Hydrogen", 1.25, 0, 500000, 1000000, TEST_GAME_VERSION_ID),
+    db.prepare(
+      `INSERT INTO terminal_inventory (terminal_id, item_uuid, item_name, base_buy_price, base_sell_price, base_inventory, max_inventory, game_version_id)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?)`
+    ).bind(termGrimHEX, "bbbb-2222", "Hydrogen", 0, 1.18, 200000, 800000, TEST_GAME_VERSION_ID),
+    db.prepare(
+      `INSERT INTO terminal_inventory (terminal_id, item_uuid, item_name, base_buy_price, base_sell_price, base_inventory, max_inventory, game_version_id)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?)`
+    ).bind(termGrimHEX, "cccc-3333", "WiDoW", 24.5, 0, 5000, 20000, TEST_GAME_VERSION_ID),
+  ]);
 }
 
 describe("GET /api/gamedata/trade", () => {
