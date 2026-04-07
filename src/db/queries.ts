@@ -1180,7 +1180,9 @@ export async function getLootByUuid(db: D1Database, uuid: string): Promise<Recor
   const locationsByType: Record<string, Record<string, unknown>[]> = { containers: [], shops: [], npcs: [], contracts: [] };
   for (const loc of locations.results) {
     const r = loc as Record<string, unknown>;
-    const key = (r.source_type as string) + 's'; // container→containers
+    const st = r.source_type as string;
+    if (st === 'shop') continue; // Shop data comes from terminal_inventory enrichment below
+    const key = st + 's';
     if (locationsByType[key]) locationsByType[key].push(r);
   }
 

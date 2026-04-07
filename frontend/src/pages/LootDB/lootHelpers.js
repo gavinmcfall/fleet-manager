@@ -42,9 +42,24 @@ export const PAGE_SIZE_LIST = 100
 export function resolveLocationEntry(entry, type) {
   if (typeof entry === 'string') return { label: entry, detail: null, probability: null }
   if (type === 'shops') {
-    // Junction table uses location_key; legacy used shop/name
-    const rawShopKey = entry.location_key || entry.shop || entry.name || ''
-    return { label: friendlyShopName(rawShopKey), detail: 'Price unknown', probability: null, rawKey: rawShopKey, shopKey: true }
+    // Enrichment query provides shop_name + buy_price/sell_price;
+    // loot_item_locations fallback uses location_key (UUID/slug)
+    const rawShopKey = entry.shop_slug || entry.location_key || entry.shop || entry.name || ''
+    const label = entry.shop_name || entry.location_label || friendlyShopName(rawShopKey)
+
+    // Build price detail from actual data
+    let detail = 'Price unknown'
+    const buy = entry.buy_price
+    const sell = entry.sell_price
+    if (buy && sell) {
+      detail = `Buy: ${Number(buy).toLocaleString()} · Sell: ${Number(sell).toLocaleString()} aUEC`
+    } else if (buy) {
+      detail = `Buy: ${Number(buy).toLocaleString()} aUEC`
+    } else if (sell) {
+      detail = `Sell: ${Number(sell).toLocaleString()} aUEC`
+    }
+
+    return { label, detail, probability: null, rawKey: rawShopKey, shopKey: true }
   }
   if (type === 'npcs') {
     // Junction table: location_key=faction, actor, slot, probability, spawn_locations
