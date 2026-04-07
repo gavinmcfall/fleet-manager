@@ -63,7 +63,7 @@ const LOOT_SUMMARY_COLS = `
 // Each flag is 1 if the JSON column contains actual data, 0 otherwise.
 const LOOT_HAS_FLAGS = `
         EXISTS(SELECT 1 FROM loot_item_locations lil WHERE lil.loot_map_id = lm.id AND lil.source_type = 'container') as has_containers,
-        EXISTS(SELECT 1 FROM shop_inventory si WHERE si.item_uuid = lm.uuid AND (si.buy_price > 0 OR si.sell_price > 0)) as has_shops,
+        EXISTS(SELECT 1 FROM terminal_inventory ti WHERE ti.item_uuid = lm.uuid AND (ti.base_buy_price > 0 OR ti.base_sell_price > 0)) as has_shops,
         EXISTS(SELECT 1 FROM loot_item_locations lil WHERE lil.loot_map_id = lm.id AND lil.source_type = 'npc') as has_npcs,
         EXISTS(SELECT 1 FROM loot_item_locations lil WHERE lil.loot_map_id = lm.id AND lil.source_type = 'contract') as has_contracts`;
 
@@ -1186,12 +1186,16 @@ export async function getLootByUuid(db: D1Database, uuid: string): Promise<Recor
 
   // Enrich with shop availability — which shops sell this item and at what price
   const shopAvailability = await db.prepare(`
-    SELECT si.buy_price, si.sell_price, s.name AS shop_name, s.slug AS shop_slug,
+    SELECT COALESCE(ti.latest_buy_price, ti.base_buy_price) AS buy_price,
+           COALESCE(ti.latest_sell_price, ti.base_sell_price) AS sell_price,
+           s.name AS shop_name, s.slug AS shop_slug,
            s.location_label, s.display_name
-    FROM shop_inventory si
-    JOIN shops s ON s.id = si.shop_id
-    WHERE si.item_uuid = ?
-      AND (si.buy_price > 0 OR si.sell_price > 0)
+    FROM terminal_inventory ti
+    JOIN terminals t ON t.id = ti.terminal_id
+    JOIN shops s ON s.id = t.shop_id
+    WHERE ti.item_uuid = ?
+      AND (COALESCE(ti.latest_buy_price, ti.base_buy_price, 0) > 0
+        OR COALESCE(ti.latest_sell_price, ti.base_sell_price, 0) > 0)
     ORDER BY s.location_label, s.name
   `).bind(uuid).all();
 

@@ -7,21 +7,24 @@ const SHOP_DISPLAY_NAME_EXPR = `COALESCE(s.display_name, REPLACE(REPLACE(REPLACE
 
 /** Build the inventory query for a set of shop IDs */
 function buildInventoryQuery(placeholders: string): string {
-  return `SELECT si.shop_id, si.item_uuid, si.item_name, si.buy_price, si.sell_price,
-       si.base_inventory, si.max_inventory,
-       COALESCE(fi.name, tc.name, v.name, si.item_name) as resolved_name,
+  return `SELECT t.shop_id, ti.item_uuid, ti.item_name,
+       COALESCE(ti.latest_buy_price, ti.base_buy_price) as buy_price,
+       COALESCE(ti.latest_sell_price, ti.base_sell_price) as sell_price,
+       ti.base_inventory, ti.max_inventory,
+       COALESCE(fi.name, tc.name, v.name, ti.item_name) as resolved_name,
        CASE
          WHEN fi.id IS NOT NULL THEN 'gear'
          WHEN tc.id IS NOT NULL THEN 'commodity'
          WHEN v.id IS NOT NULL THEN 'vehicle'
          ELSE 'other'
        END as item_category
-     FROM shop_inventory si
-     LEFT JOIN loot_map fi ON fi.uuid = si.item_uuid
-     LEFT JOIN trade_commodities tc ON tc.uuid = si.item_uuid
-     LEFT JOIN vehicles v ON v.uuid = si.item_uuid
-     WHERE si.shop_id IN (${placeholders})
-     ORDER BY COALESCE(fi.name, tc.name, v.name, si.item_name)`
+     FROM terminal_inventory ti
+     JOIN terminals t ON t.id = ti.terminal_id
+     LEFT JOIN loot_map fi ON fi.uuid = ti.item_uuid
+     LEFT JOIN trade_commodities tc ON tc.uuid = ti.item_uuid
+     LEFT JOIN vehicles v ON v.uuid = ti.item_uuid
+     WHERE t.shop_id IN (${placeholders})
+     ORDER BY COALESCE(fi.name, tc.name, v.name, ti.item_name)`
 }
 
 /** Nest inventory items under their shops with cleaned display names */
@@ -336,7 +339,7 @@ const [
         .prepare(
           `SELECT s.*,
              ${SHOP_DISPLAY_NAME_EXPR} as display_name,
-             (SELECT COUNT(*) FROM shop_inventory si WHERE si.shop_id = s.id) as item_count,
+             (SELECT COUNT(*) FROM terminal_inventory ti JOIN terminals t ON t.id = ti.terminal_id WHERE t.shop_id = s.id) as item_count,
              s.location_label as location_name
            FROM shops s
            
@@ -363,15 +366,19 @@ const [
     return cachedJson(c, `gd:shop-inv:${cacheSlug(slug)}`, async () => {
       const { results } = await db
         .prepare(
-          `SELECT si.*,
-             COALESCE(fi.name, v.name, si.item_name) as resolved_name
-           FROM shop_inventory si
-           LEFT JOIN loot_map fi ON fi.uuid = si.item_uuid
-           LEFT JOIN vehicles v ON v.uuid = si.item_uuid
-           JOIN shops s ON s.id = si.shop_id
-           
+          `SELECT ti.item_uuid, ti.item_name,
+             COALESCE(ti.latest_buy_price, ti.base_buy_price) as buy_price,
+             COALESCE(ti.latest_sell_price, ti.base_sell_price) as sell_price,
+             ti.base_inventory, ti.max_inventory,
+             COALESCE(fi.name, v.name, ti.item_name) as resolved_name
+           FROM terminal_inventory ti
+           JOIN terminals t ON t.id = ti.terminal_id
+           JOIN shops s ON s.id = t.shop_id
+           LEFT JOIN loot_map fi ON fi.uuid = ti.item_uuid
+           LEFT JOIN vehicles v ON v.uuid = ti.item_uuid
            WHERE s.slug = ?
-           ORDER BY COALESCE(fi.name, v.name, si.item_name), si.buy_price DESC`,
+           ORDER BY COALESCE(fi.name, v.name, ti.item_name),
+                    COALESCE(ti.latest_buy_price, ti.base_buy_price) DESC`,
         )
         .bind(slug)
         .all()
@@ -394,15 +401,17 @@ return cachedJson(c, `gd:trade`, async () => {
           .all(),
         db
           .prepare(
-            `SELECT si.item_uuid, si.buy_price, si.sell_price,
-               si.base_inventory, si.max_inventory,
+            `SELECT ti.item_uuid,
+               COALESCE(ti.latest_buy_price, ti.base_buy_price) as buy_price,
+               COALESCE(ti.latest_sell_price, ti.base_sell_price) as sell_price,
+               ti.base_inventory, ti.max_inventory,
                s.name as shop_name, s.slug as shop_slug,
                ${SHOP_DISPLAY_NAME_EXPR} as shop_display_name,
                s.location_label
-             FROM shop_inventory si
-             JOIN shops s ON s.id = si.shop_id
-             
-             JOIN trade_commodities tc ON tc.uuid = si.item_uuid
+             FROM terminal_inventory ti
+             JOIN terminals t ON t.id = ti.terminal_id
+             JOIN shops s ON s.id = t.shop_id
+             JOIN trade_commodities tc ON tc.uuid = ti.item_uuid
              WHERE s.shop_type = 'admin'
              ORDER BY s.location_label, s.name`,
           )

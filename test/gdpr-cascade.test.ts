@@ -105,6 +105,8 @@ const USER_TABLES_NO_CASCADE = [
   "companion_combat_events",
   "companion_social_events",
   "companion_system_events",
+  // Market data — user_id NULLed on account deletion, observations kept
+  "price_observations",
 ] as const;
 
 describe("GDPR — User Deletion Cascade", () => {
