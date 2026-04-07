@@ -54,36 +54,7 @@ async function seedTradeData(db: D1Database) {
   const shopNewBabbage = shops.results[1].id as number;
   const shopGrimHEX = shops.results[2].id as number;
 
-  // Insert shop_inventory linking commodities to shops with buy/sell prices
-  await db.batch([
-    // Agricium: sold at Area18 and New Babbage (different prices = dynamic pricing evidence)
-    db.prepare(
-      `INSERT INTO shop_inventory (shop_id, item_uuid, item_name, buy_price, sell_price, base_inventory, max_inventory, game_version_id)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ${TEST_GAME_VERSION_ID})`
-    ).bind(shopArea18, "aaaa-1111", "Agricium", 0, 25.447, 17757.62, 500000),
-    db.prepare(
-      `INSERT INTO shop_inventory (shop_id, item_uuid, item_name, buy_price, sell_price, base_inventory, max_inventory, game_version_id)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ${TEST_GAME_VERSION_ID})`
-    ).bind(shopNewBabbage, "aaaa-1111", "Agricium", 0, 25.342, 99483.86, 600000),
-
-    // Hydrogen: buyable at Area18, sellable at Grim HEX
-    db.prepare(
-      `INSERT INTO shop_inventory (shop_id, item_uuid, item_name, buy_price, sell_price, base_inventory, max_inventory, game_version_id)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ${TEST_GAME_VERSION_ID})`
-    ).bind(shopArea18, "bbbb-2222", "Hydrogen", 1.25, 0, 500000, 1000000),
-    db.prepare(
-      `INSERT INTO shop_inventory (shop_id, item_uuid, item_name, buy_price, sell_price, base_inventory, max_inventory, game_version_id)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ${TEST_GAME_VERSION_ID})`
-    ).bind(shopGrimHEX, "bbbb-2222", "Hydrogen", 0, 1.18, 200000, 800000),
-
-    // WiDoW: buyable at Grim HEX only (illegal)
-    db.prepare(
-      `INSERT INTO shop_inventory (shop_id, item_uuid, item_name, buy_price, sell_price, base_inventory, max_inventory, game_version_id)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ${TEST_GAME_VERSION_ID})`
-    ).bind(shopGrimHEX, "cccc-3333", "WiDoW", 24.5, 0, 5000, 20000),
-  ]);
-
-  // Seed terminals (one per shop, matching migration pattern)
+  // Seed terminals (one per shop)
   await db.batch([
     db.prepare(
       `INSERT INTO terminals (uuid, shop_id, shop_name_key, terminal_type, game_version_id)
