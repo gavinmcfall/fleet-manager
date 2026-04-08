@@ -477,7 +477,7 @@ async function runScheduledSync(cron: string, env: Env): Promise<void> {
       console.log("[cron] UEX commodity price sync");
       logEvent("cron_trigger", { schedule: cron, task: "uex_commodities" });
       const { syncUexPrices } = await import("./lib/uex");
-      const result = await syncUexPrices(env.DB, "commodities");
+      const result = await syncUexPrices(env.DB, "commodities", env.SC_BRIDGE_CACHE);
       console.log(`[cron] UEX sync done: ${result.commodities} commodities, ${result.errors.length} errors`);
       break;
     }
@@ -485,7 +485,7 @@ async function runScheduledSync(cron: string, env: Env): Promise<void> {
       console.log("[cron] UEX item price sync");
       logEvent("cron_trigger", { schedule: cron, task: "uex_items" });
       const { syncUexPrices: syncUexItemPrices } = await import("./lib/uex");
-      const result = await syncUexItemPrices(env.DB, "items");
+      const result = await syncUexItemPrices(env.DB, "items", env.SC_BRIDGE_CACHE);
       console.log(`[cron] UEX sync done: ${result.items} items, ${result.errors.length} errors`);
       break;
     }

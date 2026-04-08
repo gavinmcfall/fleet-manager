@@ -54,6 +54,7 @@ export interface SyncResult {
 export async function syncUexPrices(
   db: D1Database,
   type: "commodities" | "items" | "all" = "all",
+  kv?: KVNamespace,
 ): Promise<SyncResult> {
   const result: SyncResult = { commodities: 0, items: 0, errors: [] };
 
@@ -89,6 +90,20 @@ export async function syncUexPrices(
     }
   } catch (e) {
     result.errors.push(`Item sync failed: ${e instanceof Error ? e.message : String(e)}`);
+  }
+
+  // Purge KV cache for shop/loot/trade endpoints so fresh prices are served
+  if (kv && (result.commodities > 0 || result.items > 0)) {
+    try {
+      const { purgeByPrefix } = await import("./cache");
+      await purgeByPrefix(kv, "loot:");
+      await purgeByPrefix(kv, "gd:shops");
+      await purgeByPrefix(kv, "gd:shop-inv:");
+      await purgeByPrefix(kv, "gd:trade");
+      console.log("[uex] KV cache purged for loot/shop/trade prefixes");
+    } catch (e) {
+      result.errors.push(`KV purge failed: ${e instanceof Error ? e.message : String(e)}`);
+    }
   }
 
   return result;

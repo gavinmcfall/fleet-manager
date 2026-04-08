@@ -301,7 +301,7 @@ export function adminRoutes() {
     const { syncUexPrices } = await import("../lib/uex");
     const body = await c.req.json().catch(() => ({})) as { type?: string };
     const type = (body.type === "commodities" || body.type === "items") ? body.type : "all";
-    const result = await syncUexPrices(c.env.DB, type);
+    const result = await syncUexPrices(c.env.DB, type, c.env.SC_BRIDGE_CACHE);
     console.log(`[admin] UEX sync: ${result.commodities} commodities, ${result.items} items, ${result.errors.length} errors`);
     return c.json({ ok: true, ...result });
   });
