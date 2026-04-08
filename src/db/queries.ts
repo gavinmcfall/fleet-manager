@@ -1188,6 +1188,8 @@ export async function getLootByUuid(db: D1Database, uuid: string): Promise<Recor
 
   // Enrich with shop availability — only community-reported prices (UEX)
   // Game-file base prices are unreliable and should not surface in the UI
+  // Also check variant UUIDs (e.g., turret vs non-turret versions of same weapon)
+  const itemName = item.name as string;
   const shopAvailability = await db.prepare(`
     SELECT ti.latest_buy_price AS buy_price,
            ti.latest_sell_price AS sell_price,
@@ -1196,11 +1198,11 @@ export async function getLootByUuid(db: D1Database, uuid: string): Promise<Recor
     FROM terminal_inventory ti
     JOIN terminals t ON t.id = ti.terminal_id
     JOIN shops s ON s.id = t.shop_id
-    WHERE ti.item_uuid = ?
+    WHERE ti.item_uuid IN (SELECT uuid FROM loot_map WHERE name = ?)
       AND ti.latest_source IS NOT NULL
       AND (ti.latest_buy_price > 0 OR ti.latest_sell_price > 0)
     ORDER BY s.location_label, s.name
-  `).bind(uuid).all();
+  `).bind(itemName).all();
 
   for (const shop of shopAvailability.results) {
     const r = shop as Record<string, unknown>;
