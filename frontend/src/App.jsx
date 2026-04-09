@@ -6,6 +6,7 @@ import ErrorBoundary from './components/ErrorBoundary'
 import RequireAuth from './components/RequireAuth'
 import RequireFeature from './components/RequireFeature'
 import useFontPreference from './hooks/useFontPreference'
+import useUxVariant from './hooks/useUxVariant'
 import { useStatus, usePreferences, setPreferences } from './hooks/useAPI'
 import { authClient, useSession, signOut } from './lib/auth-client'
 import { TimezoneProvider } from './hooks/useTimezone'
@@ -54,6 +55,7 @@ const MiningElementDetail = lazy(() => import('./pages/Mining/ElementDetail'))
 const MiningLocationDetail = lazy(() => import('./pages/Mining/LocationDetail'))
 const MiningEquipmentDetail = lazy(() => import('./pages/Mining/EquipmentDetail'))
 const Crafting = lazy(() => import('./pages/Crafting'))
+const CraftingV2 = lazy(() => import('./pages/Crafting/v2'))
 const BlueprintDetail = lazy(() => import('./pages/Crafting/BlueprintDetail'))
 const QualitySimPage = lazy(() => import('./pages/Crafting/QualitySimPage'))
 const SavedBlueprints = lazy(() => import('./pages/Crafting/SavedBlueprints'))
@@ -68,6 +70,16 @@ const Components = lazy(() => import('./pages/Components'))
 const FpsLoadout = lazy(() => import('./pages/FpsLoadout'))
 const About = lazy(() => import('./pages/About'))
 const NotFound = lazy(() => import('./pages/NotFound'))
+
+/**
+ * Picks Crafting v1 or Crafting v2 based on useUxVariant.
+ * Mounted at /crafting in the router. The surrounding Suspense
+ * wrapper at the route level covers either lazy child.
+ */
+function CraftingRouter() {
+  const variant = useUxVariant()
+  return variant === 'v2' ? <CraftingV2 /> : <Crafting />
+}
 
 // Game Data and Reference are public — visible to all users
 const gameDataGroup = {
@@ -721,7 +733,7 @@ export default function App() {
                       <Route path="/mining/element/:id" element={<MiningElementDetail />} />
                       <Route path="/mining/location/:id" element={<MiningLocationDetail />} />
                       <Route path="/mining/:type/:id" element={<MiningEquipmentDetail />} />
-                      <Route path="/crafting" element={<Suspense fallback={<LoadingState fullScreen />}><Crafting /></Suspense>} />
+                      <Route path="/crafting" element={<Suspense fallback={<LoadingState fullScreen />}><CraftingRouter /></Suspense>} />
                       <Route path="/crafting/sim" element={<Suspense fallback={<LoadingState fullScreen />}><QualitySimPage /></Suspense>} />
                       <Route path="/crafting/saved" element={<RequireAuth><Suspense fallback={<LoadingState fullScreen />}><SavedBlueprints /></Suspense></RequireAuth>} />
                       <Route path="/missions/faction/:slug" element={<Suspense fallback={<LoadingState fullScreen />}><FactionDetail /></Suspense>} />
