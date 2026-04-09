@@ -1767,6 +1767,7 @@ interface LocationItem {
   perContainer?: number;
   containerType?: string;
   buyPrice?: number;
+  sellPrice?: number;
   probability?: number;
   slot?: string;
 }
@@ -1780,14 +1781,18 @@ export async function getLootLocationDetail(
   locType: "container" | "shop" | "npc" | "contract",
   slug: string,
 ): Promise<LocationDetailResult> {
-  const sourceType = locType; // 'container', 'shop', 'npc' — matches junction table values
+  // Shops use the three-layer model (shops → terminals → terminal_inventory)
+  // rather than loot_item_locations, matching the loot detail enrichment pattern
+  if (locType === "shop") {
+    return getShopLocationDetail(db, slug);
+  }
+
+  const sourceType = locType; // 'container', 'npc', 'contract' — matches junction table values
 
   // Source-specific columns from junction table
   const extraCols =
     locType === "container"
       ? ", lil.per_container, lil.container_type"
-    : locType === "shop"
-      ? ", lil.buy_price"
     : ", lil.probability, lil.slot";
 
   const sql = `SELECT DISTINCT
@@ -1809,7 +1814,6 @@ export async function getLootLocationDetail(
     category: string;
     per_container?: number | null;
     container_type?: string | null;
-    buy_price?: number | null;
     probability?: number | null;
     slot?: string | null;
   }>();
@@ -1831,13 +1835,63 @@ export async function getLootLocationDetail(
     if (locType === "container") {
       if (row.per_container != null) item.perContainer = row.per_container;
       if (row.container_type != null) item.containerType = row.container_type;
-    } else if (locType === "shop") {
-      if (row.buy_price != null) item.buyPrice = row.buy_price;
     } else {
       if (row.probability != null) item.probability = row.probability;
       if (row.slot != null) item.slot = row.slot;
     }
     items.push(item);
+  }
+
+  return { items };
+}
+
+/** Shop POI detail — queries terminal_inventory via the three-layer shop model.
+ *  Matches by slug first; falls back to name for shops without slugs. */
+async function getShopLocationDetail(
+  db: D1Database,
+  slug: string,
+): Promise<LocationDetailResult> {
+  const sql = `SELECT DISTINCT
+      COALESCE(lm.uuid, ti.item_uuid) as uuid,
+      COALESCE(lm.name, ti.item_name) as name,
+      lm.type, lm.sub_type, lm.rarity, lm.category,
+      ti.latest_buy_price as buy_price, ti.latest_sell_price as sell_price
+    FROM terminal_inventory ti
+    JOIN terminals t ON t.id = ti.terminal_id
+    JOIN shops s ON s.id = t.shop_id
+    LEFT JOIN loot_map lm ON lm.uuid = ti.item_uuid
+    WHERE (s.slug = ? OR s.name = ?)
+      AND ti.latest_source IS NOT NULL
+      AND (ti.latest_buy_price > 0 OR ti.latest_sell_price > 0)
+    ORDER BY COALESCE(lm.name, ti.item_name)`;
+
+  const result = await db.prepare(sql).bind(slug, slug).all<{
+    uuid: string;
+    name: string;
+    type: string | null;
+    sub_type: string | null;
+    rarity: string | null;
+    category: string | null;
+    buy_price: number | null;
+    sell_price: number | null;
+  }>();
+
+  const items: LocationItem[] = [];
+  const seen = new Set<string>();
+
+  for (const row of result.results) {
+    if (seen.has(row.uuid)) continue;
+    seen.add(row.uuid);
+    items.push({
+      uuid: row.uuid,
+      name: row.name,
+      type: row.type,
+      sub_type: row.sub_type,
+      rarity: row.rarity,
+      category: row.category || "unknown",
+      buyPrice: row.buy_price ?? undefined,
+      sellPrice: row.sell_price ?? undefined,
+    });
   }
 
   return { items };

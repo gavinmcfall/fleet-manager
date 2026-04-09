@@ -302,7 +302,12 @@ export default function POIDetail() {
                   )}
                   {item.buyPrice != null && (
                     <span className="text-[10px] font-mono text-gray-500 shrink-0">
-                      {Math.round(item.buyPrice).toLocaleString()} aUEC
+                      Buy: {Math.round(item.buyPrice).toLocaleString()} aUEC
+                    </span>
+                  )}
+                  {item.sellPrice != null && (
+                    <span className="text-[10px] font-mono text-gray-500 shrink-0">
+                      Sell: {Math.round(item.sellPrice).toLocaleString()} aUEC
                     </span>
                   )}
                 </Link>

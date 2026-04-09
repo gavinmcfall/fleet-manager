@@ -59,7 +59,8 @@ export function resolveLocationEntry(entry, type) {
       detail = `Sell: ${Number(sell).toLocaleString()} aUEC`
     }
 
-    return { label, detail, probability: null, rawKey: rawShopKey, shopKey: true }
+    const locationLabel = entry.location_label || entry.shop_location || null
+    return { label, detail, probability: null, rawKey: rawShopKey, shopKey: true, locationLabel }
   }
   if (type === 'npcs') {
     // Junction table: location_key=faction, actor, slot, probability, spawn_locations

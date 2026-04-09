@@ -2,6 +2,7 @@ import { Link } from 'react-router-dom'
 import { getLocationGroup } from '../../lib/lootLocations'
 import { formatActorName } from '../../lib/npcNames'
 import { resolveLocationEntry } from './lootHelpers'
+import { LOCATION_TREE, assignShopsToTree } from '../../lib/locationHierarchy'
 
 // ── Spawn template → container location_key mapping ─────────────────────
 // Maps spawn template prefixes to the container location_key they correspond to.
@@ -318,7 +319,42 @@ export default function LocationSection({ label, icon: Icon, data, type, npcData
   // NPCs are rendered inside the containers section via npcData prop — skip standalone rendering
   if (type === 'npcs') return null
 
-  // Default flat rendering (shops, contracts)
+  // Shops: hierarchical grouping by star system / planet / location
+  if (type === 'shops') {
+    // Map rows to objects compatible with assignShopsToTree (needs location_name)
+    const shopObjects = rows.map(row => ({ ...row, location_name: row.locationLabel }))
+    const { tree, unmatched } = assignShopsToTree(LOCATION_TREE, shopObjects)
+
+    return (
+      <div>
+        <div className="flex items-center gap-1.5 mb-2">
+          <Icon className="w-3.5 h-3.5 text-gray-400" />
+          <span className="text-[10px] font-display uppercase tracking-wider text-gray-400">{label}</span>
+        </div>
+        <div className="space-y-1">
+          {tree.map(node => (
+            <ShopTreeSection key={node.name} node={node} depth={0} />
+          ))}
+          {unmatched.length > 0 && (
+            <div>
+              <p className="text-[10px] font-display uppercase tracking-wider text-gray-500 mb-1 pl-2">Other</p>
+              <div className="space-y-1">
+                {unmatched.map((row, i) => (
+                  <LocationRow
+                    key={i}
+                    row={row}
+                    linkTo={row.rawKey ? `/poi/shop/${encodeURIComponent(row.rawKey)}` : undefined}
+                  />
+                ))}
+              </div>
+            </div>
+          )}
+        </div>
+      </div>
+    )
+  }
+
+  // Default flat rendering (contracts)
   return (
     <div>
       <div className="flex items-center gap-1.5 mb-2">
@@ -331,9 +367,7 @@ export default function LocationSection({ label, icon: Icon, data, type, npcData
             key={i}
             row={row}
             linkTo={
-              row.shopKey && row.rawKey ? `/poi/shop/${encodeURIComponent(row.rawKey)}`
-              : row.npcKey && row.rawKey ? `/poi/npc/${encodeURIComponent(row.rawKey)}`
-              : row.contractKey && row.contractRef ? `/missions?view=all&guild=${encodeURIComponent(row.contractRef)}`
+              row.contractKey && row.contractRef ? `/missions?view=all&guild=${encodeURIComponent(row.contractRef)}`
               : row.contractKey ? '/missions'
               : undefined
             }
@@ -342,4 +376,55 @@ export default function LocationSection({ label, icon: Icon, data, type, npcData
       </div>
     </div>
   )
+}
+
+/** Recursive tree node for shops — only renders branches with shops */
+function ShopTreeSection({ node, depth }) {
+  const hasShops = node.shops?.length > 0
+  const hasChildren = node.children?.length > 0
+
+  // Count total shops in this subtree
+  let total = node.shops?.length || 0
+  if (node.children) {
+    for (const child of node.children) {
+      total += countNodeShops(child)
+    }
+  }
+  if (total === 0) return null
+
+  const indentStyle = depth > 0 ? { marginLeft: `${depth * 0.75}rem` } : undefined
+
+  return (
+    <div style={indentStyle}>
+      <p className={`text-[10px] font-display uppercase tracking-wider mb-1 pl-2 ${
+        depth === 0 ? 'text-gray-400 font-semibold' : 'text-gray-500'
+      }`}>
+        {node.name}
+      </p>
+      {hasShops && (
+        <div className="space-y-1">
+          {node.shops.map((row, i) => (
+            <LocationRow
+              key={i}
+              row={row}
+              linkTo={row.rawKey ? `/poi/shop/${encodeURIComponent(row.rawKey)}` : undefined}
+            />
+          ))}
+        </div>
+      )}
+      {hasChildren && node.children.map(child => (
+        <ShopTreeSection key={child.name} node={child} depth={depth + 1} />
+      ))}
+    </div>
+  )
+}
+
+function countNodeShops(node) {
+  let count = node.shops?.length || 0
+  if (node.children) {
+    for (const child of node.children) {
+      count += countNodeShops(child)
+    }
+  }
+  return count
 }
