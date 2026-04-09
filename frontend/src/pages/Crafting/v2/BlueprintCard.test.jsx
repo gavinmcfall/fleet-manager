@@ -51,8 +51,9 @@ describe('BlueprintCard', () => {
 
   it('renders the type and sub-type labels', () => {
     render(<BlueprintCard blueprint={WEAPON_BP} />)
-    expect(screen.getByText(/Weapon/i)).toBeInTheDocument()
-    expect(screen.getByText(/Rifle/i)).toBeInTheDocument()
+    // Precise match against the combined meta-row span ("Weapon · rifle")
+    // — not broadly /Rifle/ which would also match the h3 name "Behring P8-AR Battle Rifle"
+    expect(screen.getByText(/Weapon.*rifle/i)).toBeInTheDocument()
   })
 
   it('invokes the fav, sim, and compare callbacks when buttons are clicked', async () => {

@@ -68,14 +68,7 @@ export default function BlueprintCard({
         {/* Meta row */}
         <div className="flex items-center justify-between mb-2 font-mono text-[10px] uppercase tracking-[0.05em] text-[var(--text-muted)]">
           <span className={`font-semibold ${TYPE_TEXT[type] || ''}`}>
-            <span>{TYPE_LABEL[type] || type}</span>
-            {' · '}
-            <span
-              aria-label={subType ? subType.charAt(0).toUpperCase() + subType.slice(1) : ''}
-              title={subType ? subType.charAt(0).toUpperCase() + subType.slice(1) : ''}
-              data-label={subType ? subType.charAt(0).toUpperCase() + subType.slice(1) : ''}
-              className="before:content-[attr(data-label)]"
-            />
+            {TYPE_LABEL[type] || type} · {subType}
           </span>
           <span className="flex items-center gap-1.5">
             <Clock className="w-2.5 h-2.5 opacity-70" />
