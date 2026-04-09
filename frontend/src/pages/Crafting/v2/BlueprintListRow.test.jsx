@@ -33,7 +33,7 @@ describe('BlueprintListRow', () => {
 
   it('renders the formatted craft time', () => {
     render(<BlueprintListRow blueprint={BP} />)
-    expect(screen.getByText('4:30')).toBeInTheDocument()
+    expect(screen.getByText('4m 30s')).toBeInTheDocument()
   })
 
   it('invokes onCompare when compare action is clicked', async () => {

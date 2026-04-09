@@ -1,19 +1,7 @@
 import React from 'react'
 import { Star, SlidersHorizontal, Repeat, Clock } from 'lucide-react'
 import { resolveStats } from './statConfig'
-
-/**
- * Format seconds as M:SS (e.g. 270 → "4:30"). Used in the list row
- * for compact display. The v1 craftingUtils formatTime outputs "4m 30s"
- * which is used in card view; this colon form is the list-view convention.
- */
-function formatTime(seconds) {
-  if (!seconds) return '—'
-  if (seconds < 60) return `0:${String(seconds).padStart(2, '0')}`
-  const m = Math.floor(seconds / 60)
-  const s = seconds % 60
-  return `${m}:${String(s).padStart(2, '0')}`
-}
+import { formatTime } from '../craftingUtils'
 
 const GRID_TEMPLATE =
   '4px 32px minmax(140px, 1fr) 68px 68px 68px 68px 68px 68px 96px 108px'
