@@ -126,7 +126,8 @@ export const shipNameMap: Record<string, string> = {
   "argo mole carbon edition": "mole carbon",
   "argo mole talus edition": "mole talus",
   "caterpillar best in show edition 2949": "caterpillar 2949 best in show edition",
-  "cutlass black best in show edition 2949": "cutlass black 2949 best in show edition",
+  // DB has "Drake Cutlass 2949 Best In Show Edition" (no "Black" in middle)
+  "cutlass black best in show edition 2949": "cutlass 2949 best in show edition",
   "hammerhead best in show edition 2949": "hammerhead 2949 best in show edition",
   "reclaimer best in show edition 2949": "reclaimer 2949 best in show edition",
   "valkyrie liberator edition": "valkyrie liberator",
