@@ -129,6 +129,7 @@ export const shipNameMap: Record<string, string> = {
   "cutlass black best in show edition 2949": "cutlass black 2949 best in show edition",
   "hammerhead best in show edition 2949": "hammerhead 2949 best in show edition",
   "reclaimer best in show edition 2949": "reclaimer 2949 best in show edition",
+  "valkyrie liberator edition": "valkyrie liberator",
   "gladius pirate edition": "gladius pirate",
   "caterpillar pirate edition": "caterpillar pirate",
   "f7c-m super hornet heartseeker mk i": "f7c-m hornet heartseeker mk i",
@@ -403,6 +404,319 @@ export async function syncShipImages(
   }
 }
 
+// --- Ship matrix sync (production status) ---
+//
+// RSI publishes a public JSON endpoint at /ship-matrix/index listing every
+// pledgeable ship with its current production_status ("flight-ready" or
+// "in-concept"). This is the authoritative live source — it reflects store
+// updates within hours, unlike p4k/DataCore which only changes on patch day.
+//
+// Our DB stores production_status as an FK to production_statuses which uses
+// underscore keys (flight_ready, in_concept). The ship-matrix API uses hyphens.
+
+interface ShipMatrixShip {
+  id: number;
+  name: string;
+  production_status: string;
+  chassis_id: number;
+}
+
+interface ShipMatrixResponse {
+  success: number;
+  data: ShipMatrixShip[];
+}
+
+const SHIP_MATRIX_URL = "https://robertsspaceindustries.com/ship-matrix/index";
+
+/** Map RSI's status values to our production_statuses.key values. */
+function normalizeProductionStatus(rsi: string | null | undefined): string | null {
+  if (!rsi) return null;
+  const lower = rsi.toLowerCase().trim();
+  if (lower === "flight-ready") return "flight_ready";
+  if (lower === "in-concept") return "in_concept";
+  if (lower === "in-production") return "in_production";
+  return null;
+}
+
+/**
+ * Manufacturer prefixes we strip from DB vehicle names before matching against
+ * the ship-matrix API. Ordered longest-first so "Origin Jumpworks" matches
+ * before "Origin". Everything is lowercased for comparison.
+ */
+const MANUFACTURER_PREFIXES = [
+  // Multi-word manufacturers first (longest match wins)
+  "origin jumpworks",
+  "drake interplanetary",
+  "anvil aerospace",
+  "roberts space industries",
+  "consolidated outland",
+  "crusader industries",
+  "argo astronautics",
+  "kruger intergalactic",
+  "greycat industrial",
+  "banu souli",
+  // Single-word manufacturers
+  "origin",
+  "anvil",
+  "drake",
+  "aegis",
+  "misc",
+  "mirai",
+  "crusader",
+  "argo",
+  "tumbril",
+  "esperia",
+  "atls",
+  "kruger",
+  "greycat",
+  "aopoa",
+  "rsi",
+  "c.o.",
+  "banu",
+  "gatac",
+  "grey's",
+];
+
+/** Strip the leading manufacturer word(s) from a vehicle name. Returns the
+ * stripped name (lowercased) + the original name lowercased. */
+function stripManufacturerPrefix(name: string): string {
+  const lower = name.toLowerCase().replace(/\s+/g, " ").trim();
+  for (const prefix of MANUFACTURER_PREFIXES) {
+    if (lower.startsWith(prefix + " ")) {
+      return lower.substring(prefix.length + 1).trim();
+    }
+  }
+  return lower;
+}
+
+/**
+ * Fetch the live ship-matrix and update vehicles.production_status_id.
+ * Also maintains is_pledgeable: ships found in the matrix are pledgeable (1),
+ * ships not found are non-pledgeable variants or mission props (0).
+ *
+ * Matching strategy:
+ *   1. Apply shipNameMap to the RSI name (e.g. "600i Explorer" → "600i")
+ *   2. Direct match against DB name (lowercased)
+ *   3. Build a "prefix-stripped" index of DB names (e.g. "RSI Aurora Mk I MR" → "aurora mk i mr")
+ *      and match against that
+ */
+export async function syncShipProductionStatus(db: D1Database): Promise<void> {
+  const syncID = await insertSyncHistory(
+    db,
+    SYNC_SOURCE.RSI_API,
+    "production_status",
+    "running",
+  );
+
+  try {
+    console.log("[rsi] Ship production status sync starting");
+
+    // Fetch ship-matrix
+    const resp = await fetch(SHIP_MATRIX_URL, {
+      headers: {
+        "User-Agent": USER_AGENT,
+        Accept: "application/json",
+      },
+    });
+    if (!resp.ok) {
+      throw new Error(`Ship matrix fetch failed: HTTP ${resp.status}`);
+    }
+    const payload = (await resp.json()) as ShipMatrixResponse;
+    if (payload.success !== 1 || !Array.isArray(payload.data)) {
+      throw new Error("Ship matrix returned invalid payload");
+    }
+    const rsiShips = payload.data;
+    console.log(`[rsi] Fetched ${rsiShips.length} ships from ship-matrix`);
+
+    // Load all DB vehicles (latest game version) for matching.
+    // We need more than just name/slug — we need the id to UPDATE.
+    const { results: dbVehicles } = await db
+      .prepare(
+        `SELECT v.id, v.name, v.slug
+           FROM vehicles v
+          WHERE v.removed = 0
+            AND v.game_version_id = (SELECT id FROM game_versions WHERE is_default = 1)`,
+      )
+      .all<{ id: number; name: string; slug: string }>();
+
+    // Build lookup indexes.
+    // 1. Direct name match (full lowercase name → id)
+    const directNameToId = new Map<string, number>();
+    // 2. Prefix-stripped name match (bare name → [ids])
+    const strippedNameToIds = new Map<string, number[]>();
+    // 3. Slug match (slug → id) for final fallback
+    const slugToId = new Map<string, number>();
+
+    for (const v of dbVehicles) {
+      const fullLower = v.name.toLowerCase().replace(/\s+/g, " ").trim();
+      directNameToId.set(fullLower, v.id);
+
+      const stripped = stripManufacturerPrefix(v.name);
+      if (stripped !== fullLower) {
+        const existing = strippedNameToIds.get(stripped);
+        if (existing) {
+          existing.push(v.id);
+        } else {
+          strippedNameToIds.set(stripped, [v.id]);
+        }
+      }
+
+      if (v.slug) slugToId.set(v.slug.toLowerCase(), v.id);
+    }
+
+    // Look up production_status IDs
+    const { results: statusRows } = await db
+      .prepare(`SELECT id, key FROM production_statuses`)
+      .all<{ id: number; key: string }>();
+    const statusKeyToId = new Map<string, number>();
+    for (const s of statusRows) statusKeyToId.set(s.key, s.id);
+
+    // Match ships and collect updates
+    const matchedIds = new Set<number>();
+    const updates: Array<{ id: number; statusId: number }> = [];
+    let unmatched = 0;
+    const unmatchedNames: string[] = [];
+
+    for (const ship of rsiShips) {
+      const shipName = (ship.name || "").trim();
+      if (!shipName) continue;
+
+      const normalizedStatus = normalizeProductionStatus(ship.production_status);
+      if (!normalizedStatus) {
+        console.log(
+          `[rsi] Skipping ${shipName}: unknown status ${ship.production_status}`,
+        );
+        continue;
+      }
+      const statusId = statusKeyToId.get(normalizedStatus);
+      if (!statusId) {
+        console.log(
+          `[rsi] Skipping ${shipName}: no production_statuses row for ${normalizedStatus}`,
+        );
+        continue;
+      }
+
+      // Try each matching strategy in order
+      const lower = shipName.toLowerCase().replace(/\s+/g, " ").trim();
+      let dbId: number | undefined;
+
+      // 1. shipNameMap override (handles "600i explorer" → "600i" etc.)
+      const mapped = shipNameMap[lower];
+      if (mapped) {
+        dbId = directNameToId.get(mapped);
+        if (!dbId) {
+          const stripIds = strippedNameToIds.get(mapped);
+          if (stripIds && stripIds.length === 1) dbId = stripIds[0];
+        }
+      }
+
+      // 2. Direct full-name match (rare — RSI names usually don't have manufacturer prefix)
+      if (!dbId) dbId = directNameToId.get(lower);
+
+      // 3. Prefix-stripped match (most common path)
+      if (!dbId) {
+        const stripIds = strippedNameToIds.get(lower);
+        if (stripIds && stripIds.length === 1) {
+          dbId = stripIds[0];
+        } else if (stripIds && stripIds.length > 1) {
+          console.log(
+            `[rsi] Ambiguous stripped-name match for ${shipName}: ${stripIds.length} candidates`,
+          );
+        }
+      }
+
+      if (!dbId) {
+        unmatched++;
+        if (unmatchedNames.length < 20) unmatchedNames.push(shipName);
+        continue;
+      }
+
+      matchedIds.add(dbId);
+      updates.push({ id: dbId, statusId });
+    }
+
+    console.log(
+      `[rsi] Matched ${updates.length}/${rsiShips.length} ship-matrix entries to DB`,
+    );
+    if (unmatched > 0) {
+      console.log(`[rsi] Unmatched RSI ships (${unmatched}): ${unmatchedNames.join(", ")}`);
+    }
+
+    // Apply updates in batches. Also mark everything in the DB as pledgeable=1
+    // if the column exists (migration may not be applied yet) — we do this in
+    // the same batch by including an is_pledgeable update via COALESCE so it's
+    // a no-op if the column is missing. Actually simpler: use two passes and
+    // tolerate errors on the is_pledgeable path.
+    const statements: D1PreparedStatement[] = [];
+    for (const u of updates) {
+      statements.push(
+        db
+          .prepare(
+            `UPDATE vehicles SET production_status_id = ? WHERE id = ?`,
+          )
+          .bind(u.statusId, u.id),
+      );
+    }
+
+    // is_pledgeable: set 1 for matched ships, 0 for unmatched in-game variants.
+    // We only touch vehicles in the latest game version. Non-matched ones with
+    // UUID (came from p4k) get is_pledgeable=0. NULL-UUID concept ships that
+    // didn't match are either mis-named or removed from store — we leave them
+    // alone (their existing value wins).
+    let pledgeableErrors = 0;
+    try {
+      const matchedIdList = [...matchedIds];
+      if (matchedIdList.length > 0) {
+        // Set pledgeable=1 for the matched ones
+        const placeholders = matchedIdList.map(() => "?").join(",");
+        statements.push(
+          db
+            .prepare(
+              `UPDATE vehicles SET is_pledgeable = 1 WHERE id IN (${placeholders})`,
+            )
+            .bind(...matchedIdList),
+        );
+        // Set pledgeable=0 for everything else in the latest version that has a UUID
+        // (i.e. came from p4k — so it's a real in-game entity) and wasn't matched.
+        statements.push(
+          db
+            .prepare(
+              `UPDATE vehicles SET is_pledgeable = 0
+                 WHERE removed = 0
+                   AND uuid IS NOT NULL AND uuid != ''
+                   AND game_version_id = (SELECT id FROM game_versions WHERE is_default = 1)
+                   AND id NOT IN (${placeholders})`,
+            )
+            .bind(...matchedIdList),
+        );
+      }
+    } catch (err) {
+      // is_pledgeable column may not exist yet — count and continue
+      pledgeableErrors++;
+      console.log(`[rsi] is_pledgeable update skipped: ${err}`);
+    }
+
+    // Execute in chunks (D1 batch has a statement limit)
+    const chunks = chunkArray(statements, 50);
+    for (const chunk of chunks) {
+      await db.batch(chunk);
+    }
+
+    const detail = `matched=${updates.length} unmatched=${unmatched} fetched=${rsiShips.length}`;
+    await updateSyncHistory(db, syncID, "success", updates.length, detail);
+    console.log(`[rsi] Ship production status sync complete: ${detail}`);
+    logEvent("sync_rsi_production_status", {
+      fetched: rsiShips.length,
+      matched: updates.length,
+      unmatched,
+      pledgeable_errors: pledgeableErrors,
+    });
+  } catch (err) {
+    await updateSyncHistory(db, syncID, "error", 0, String(err));
+    throw err;
+  }
+}
+
 // --- Combined sync (ships only — paint images are manual upload) ---
 
 export async function syncAll(
@@ -411,4 +725,5 @@ export async function syncAll(
   rateLimitMs: number,
 ): Promise<void> {
   await syncShipImages(db, baseURL, rateLimitMs);
+  await syncShipProductionStatus(db);
 }

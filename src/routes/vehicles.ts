@@ -9,9 +9,17 @@ export function vehicleRoutes<E extends { Bindings: Env }>() {
   const routes = new Hono<E>();
 
   // GET /api/ships — list all vehicles
+  // Query params:
+  //   ?pledgeable=1   — only ships currently available on the RSI pledge store
+  //                    (excludes in-game-only variants like PYAM Exec, Best In
+  //                     Show editions, mission-reward variants, etc.)
   routes.get("/", async (c) => {
     const db = c.env.DB;
-    return cachedJson(c,`ships:list`, async () => {
+    const pledgeableOnly = c.req.query("pledgeable") === "1";
+    const cacheKey = pledgeableOnly ? `ships:list:pledgeable` : `ships:list`;
+    return cachedJson(c, cacheKey, async () => {
+      const whereClauses = ["v.is_paint_variant = 0", "v.removed = 0"];
+      if (pledgeableOnly) whereClauses.push("v.is_pledgeable = 1");
       const result = await db
         .prepare(
           `SELECT v.id, v.uuid, v.slug, v.name, v.class_name,
@@ -20,6 +28,7 @@ export function vehicleRoutes<E extends { Bindings: Env }>() {
             v.crew_min, v.crew_max, v.speed_scm, v.pledge_price, v.on_sale,
             v.image_url, v.image_url_small, v.image_url_medium, v.image_url_large,
             v.pledge_url, v.price_auec, v.acquisition_type, v.acquisition_source_name,
+            v.is_pledgeable,
             m.name as manufacturer_name, m.code as manufacturer_code,
             CASE WHEN v.parent_vehicle_id IS NOT NULL AND pps.key IS NOT NULL
               THEN pps.key ELSE ps.key END as production_status
@@ -28,7 +37,7 @@ export function vehicleRoutes<E extends { Bindings: Env }>() {
           LEFT JOIN production_statuses ps ON ps.id = v.production_status_id
           LEFT JOIN vehicles pv ON pv.id = v.parent_vehicle_id
           LEFT JOIN production_statuses pps ON pps.id = pv.production_status_id
-          WHERE v.is_paint_variant = 0 AND v.removed = 0
+          WHERE ${whereClauses.join(" AND ")}
           ORDER BY v.name`,
         )
         .all();
@@ -50,6 +59,7 @@ export function vehicleRoutes<E extends { Bindings: Env }>() {
             v.vehicle_inventory, v.pledge_price, v.on_sale,
             v.image_url, v.image_url_small, v.image_url_medium, v.image_url_large,
             v.pledge_url, v.price_auec, v.acquisition_type, v.acquisition_source_name,
+            v.is_pledgeable,
             v.boost_speed_back, v.angular_velocity_pitch, v.angular_velocity_yaw,
             v.angular_velocity_roll, v.fuel_capacity_hydrogen, v.fuel_capacity_quantum,
             v.thruster_count_main, v.thruster_count_maneuvering,

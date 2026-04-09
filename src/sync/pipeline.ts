@@ -7,7 +7,7 @@
  * Workers are single-threaded per invocation, so no sync mutex needed.
  */
 
-import { syncAll as syncRSI } from "./rsi";
+import { syncAll as syncRSI, syncShipProductionStatus } from "./rsi";
 import { getVehicleCount } from "../db/queries";
 import type { Env } from "../lib/types";
 import { logEvent } from "../lib/logger";
@@ -33,6 +33,28 @@ export async function triggerRSISync(env: Env): Promise<string> {
     throw err;
   }
   return "RSI API sync complete";
+}
+
+// Ship production status sync — fetches the live /ship-matrix/index JSON to
+// update vehicles.production_status_id + is_pledgeable. This is a lightweight
+// single-request sync against a public endpoint (no auth, no rate limiting
+// concerns) so it is NOT gated on RSI_API_ENABLED — it's safe to run on
+// staging and production regardless of the image-sync toggle.
+export async function triggerShipProductionStatusSync(env: Env): Promise<string> {
+  console.log("[pipeline] Ship production status sync triggered");
+  logEvent("sync_start", { source: "rsi_production_status" });
+  const start = Date.now();
+  try {
+    await syncShipProductionStatus(env.DB);
+    logEvent("sync_complete", {
+      source: "rsi_production_status",
+      duration_s: (Date.now() - start) / 1000,
+    });
+  } catch (err) {
+    logEvent("sync_error", { source: "rsi_production_status", error: String(err) });
+    throw err;
+  }
+  return "Ship production status sync complete";
 }
 
 // --- Full sync pipeline ---

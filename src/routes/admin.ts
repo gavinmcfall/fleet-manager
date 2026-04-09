@@ -307,6 +307,21 @@ export function adminRoutes() {
   });
 
   /**
+   * POST /api/admin/rsi/ship-status
+   *
+   * Fetch the public RSI ship-matrix (/ship-matrix/index) and update each
+   * vehicle's production_status_id + is_pledgeable flag. Lightweight — single
+   * HTTP request against a public endpoint, no auth required, no rate limiting.
+   * Returns { ok: true, message } immediately; the sync runs synchronously
+   * inside the request because it's small (~250 ships).
+   */
+  routes.post("/rsi/ship-status", async (c) => {
+    const { triggerShipProductionStatusSync } = await import("../sync/pipeline");
+    const result = await triggerShipProductionStatusSync(c.env);
+    return c.json({ ok: true, message: result });
+  });
+
+  /**
    * PUT /api/admin/localization/global-ini
    *
    * Upload base global.ini for a game version. Stored in KV for the
