@@ -1,3 +1,4 @@
+@import './styles/tokens.css';
 @tailwind base;
 @tailwind components;
 @tailwind utilities;
@@ -41,18 +42,32 @@
   }
 
   ::-webkit-scrollbar {
-    width: 6px;
-    height: 6px;
+    width: var(--scrollbar-width);
+    height: var(--scrollbar-width);
   }
   ::-webkit-scrollbar-track {
-    background: #0d1b2a;
+    background: var(--scrollbar-track);
+    border-radius: var(--radius-sm);
   }
   ::-webkit-scrollbar-thumb {
-    background: #2a4a6b;
-    border-radius: 3px;
+    background: var(--scrollbar-thumb);
+    border-radius: var(--radius-sm);
+    border: 1px solid rgba(255, 255, 255, 0.03);
   }
   ::-webkit-scrollbar-thumb:hover {
-    background: #2a5080;
+    background: var(--scrollbar-thumb-hover);
+  }
+  ::-webkit-scrollbar-thumb:active {
+    background: var(--scrollbar-thumb-active);
+  }
+  ::-webkit-scrollbar-corner {
+    background: transparent;
+  }
+
+  /* Firefox */
+  * {
+    scrollbar-width: thin;
+    scrollbar-color: var(--scrollbar-thumb) var(--scrollbar-track);
   }
 }
 

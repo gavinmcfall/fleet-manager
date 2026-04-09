@@ -1,0 +1,118 @@
+/* tokens.css — Design language foundation (dark mode).
+ * Extracted from the Crafting v2 spec (tools/docs/design/crafting-v2-design-language.md).
+ * Future light and colorblind modes will define parallel :root[data-theme="..."] blocks.
+ */
+
+:root {
+  /* Base palette */
+  --sc-dark:        #0d1b2a;
+  --sc-darker:      #09131f;
+  --sc-panel:       #132238;
+  --sc-border:      #2a4a6b;
+  --sc-accent:      #22d3ee;
+  --sc-accent2:     #5b9bd5;
+  --sc-warn:        #f5a623;
+  --sc-danger:      #ef4444;
+  --sc-success:     #2ec4b6;
+  --sc-lti:         #a78bfa;
+  --sc-melt:        #f0c674;
+
+  /* Type color channel — maps blueprint type to visual identity */
+  --type-weapon:    var(--sc-warn);
+  --type-armour:    var(--sc-lti);
+  --type-ammo:      var(--sc-success);
+
+  /* Surface tokens */
+  --surface-page:        linear-gradient(180deg, #09131f 0%, #0d1b2a 40%, #0f1e30 100%);
+  --surface-card:        rgba(255, 255, 255, 0.03);
+  --surface-card-border: rgba(255, 255, 255, 0.06);
+  --surface-card-hover:  rgba(255, 255, 255, 0.015);
+  --surface-list:        rgba(255, 255, 255, 0.02);
+  --surface-list-border: rgba(255, 255, 255, 0.05);
+  --surface-header:      rgba(9, 19, 31, 0.98);
+  --surface-inset:       rgba(0, 0, 0, 0.2);
+
+  /* Text hierarchy */
+  --text-primary:   #ffffff;
+  --text-secondary: #e5e7eb;
+  --text-tertiary:  #9ca3af;
+  --text-muted:     #6b7280;
+  --text-subtle:    #4b5563;
+
+  /* Selected state (compare-selected rows and cards) */
+  --selected-border: rgba(34, 211, 238, 0.55);
+  --selected-bar:    inset 3px 0 0 var(--sc-accent);
+  --selected-bg:     rgba(34, 211, 238, 0.04);
+  --selected-glow:   0 0 24px rgba(34, 211, 238, 0.12);
+
+  /* Hover state */
+  --hover-border:   rgba(34, 211, 238, 0.3);
+  --hover-bg:       rgba(34, 211, 238, 0.06);
+
+  /* Separators */
+  --separator:        rgba(255, 255, 255, 0.1);
+  --separator-subtle: rgba(255, 255, 255, 0.04);
+
+  /* Spacing scale (pixel values) */
+  --space-1: 2px;
+  --space-2: 4px;
+  --space-3: 6px;
+  --space-4: 8px;
+  --space-5: 10px;
+  --space-6: 12px;
+  --space-7: 14px;
+  --space-8: 16px;
+  --space-10: 20px;
+  --space-12: 24px;
+  --space-16: 32px;
+  --space-20: 40px;
+
+  /* Typography scale */
+  --text-9:  9px;
+  --text-10: 10px;
+  --text-11: 11px;
+  --text-12: 12px;
+  --text-13: 13px;
+  --text-15: 0.9375rem;
+  --text-30: 1.875rem;
+
+  --weight-regular:  400;
+  --weight-medium:   500;
+  --weight-semibold: 600;
+  --weight-bold:     700;
+
+  --tracking-label:   0.05em;
+  --tracking-eyebrow: 0.1em;
+  --tracking-hero:    0.3em;
+
+  /* Radius */
+  --radius-sm:   4px;
+  --radius-md:   5px;
+  --radius-lg:   0.5rem;
+  --radius-xl:   0.625rem;
+  --radius-2xl:  0.75rem;
+  --radius-pill: 999px;
+
+  /* Motion */
+  --motion-fast:    150ms ease;
+  --motion-normal:  200ms ease;
+  --motion-slow:    300ms ease;
+
+  /* Elevation */
+  --elevation-card:    0 8px 24px rgba(0, 0, 0, 0.3);
+  --elevation-hover:   0 12px 32px rgba(0, 0, 0, 0.4), 0 0 0 1px rgba(34, 211, 238, 0.08);
+  --elevation-modal:   0 20px 40px rgba(0, 0, 0, 0.5);
+  --elevation-sticky:  0 4px 12px rgba(0, 0, 0, 0.3);
+
+  /* Scrollbar */
+  --scrollbar-width:        8px;
+  --scrollbar-track:        rgba(13, 27, 42, 0.4);
+  --scrollbar-thumb:        rgba(91, 155, 213, 0.25);
+  --scrollbar-thumb-hover:  rgba(34, 211, 238, 0.4);
+  --scrollbar-thumb-active: rgba(34, 211, 238, 0.6);
+}
+
+/* Global default: tabular figures so numeric columns align cleanly. */
+body {
+  font-variant-numeric: tabular-nums;
+}
