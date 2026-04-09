@@ -40,10 +40,13 @@ export default function BlueprintListView({
   const sort = useSortState('craft', 'desc')
   const statConfig = STAT_CONFIG[activeType]
 
+  // Deps use the primitives sort.column and sort.direction rather than the
+  // whole sort object — the object identity is new each render (plain object
+  // literal from useSortState), which would defeat memoization entirely.
   const sortedBlueprints = useMemo(() => {
     const selector = buildSelector(sort.column, statConfig)
     return sort.applySort(blueprints, selector)
-  }, [blueprints, sort, statConfig])
+  }, [blueprints, sort.column, sort.direction, sort.applySort, statConfig])
 
   const inCompare = (bp) => compareItems.some(i => i.id === bp.id)
 
