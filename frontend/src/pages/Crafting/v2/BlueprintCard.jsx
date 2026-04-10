@@ -60,7 +60,7 @@ export default function BlueprintCard({
       <div className="flex flex-col gap-[12px] px-[14px] pt-[14px] pb-[12px]">
 
         {/* mockup: .meta-row { font-size: 9px; tracking: 0.05em; color: text-muted } */}
-        <div className="flex items-center justify-between font-mono text-[9px] uppercase tracking-[0.05em] text-[var(--text-muted)]">
+        <div className="flex items-center justify-between font-mono text-[9px] leading-none uppercase tracking-[0.05em] text-[var(--text-muted)]">
           {/* mockup: .type-label { color: text-tertiary } .dim { color: text-muted } */}
           <span className="font-semibold text-[var(--text-tertiary)]">
             {TYPE_LABEL[type] || type} <span className="text-[var(--text-muted)]">· {subType}</span>
@@ -161,7 +161,7 @@ function ActionButton({ icon, label, onClick, active = false, activeTint, divide
     <button
       type="button"
       onClick={onClick}
-      className={`inline-flex items-center justify-center gap-[6px] py-[10px] px-2 font-mono text-[10px] uppercase tracking-[0.05em] transition-colors duration-150 cursor-pointer ${colorCls} ${divider ? 'border-r border-[var(--separator-subtle)]' : ''}`}
+      className={`inline-flex items-center justify-center gap-[6px] py-[10px] px-2 font-mono text-[10px] leading-none uppercase tracking-[0.05em] transition-colors duration-150 cursor-pointer ${colorCls} ${divider ? 'border-r border-[var(--separator-subtle)]' : ''}`}
       {...rest}
     >
       {icon}
