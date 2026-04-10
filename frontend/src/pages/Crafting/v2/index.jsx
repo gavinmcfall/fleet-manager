@@ -93,7 +93,7 @@ export default function CraftingV2() {
           <p className="text-[var(--text-muted)]">No blueprints for this type.</p>
         </div>
       ) : view === 'grid' ? (
-        <div className="grid gap-5 grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
+        <div className="grid gap-5 grid-cols-1 sm:grid-cols-2 lg:grid-cols-3">
           {blueprints.map(bp => (
             <BlueprintCard
               key={bp.id}
