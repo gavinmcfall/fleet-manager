@@ -50,6 +50,27 @@ export function formatTime(seconds) {
   return s > 0 ? `${m}m ${s}s` : `${m}m`
 }
 
+/**
+ * Format craft time as mm:ss for Crafting v2 (spec §5.1 meta row).
+ *
+ * Distinct from `formatTime` above, which outputs "4m 30s" and is still
+ * used by all v1 Crafting pages — DO NOT modify `formatTime` itself or
+ * the v1 pages will break.
+ *
+ * Examples:
+ *   formatCraftTime(270)  → "4:30"
+ *   formatCraftTime(240)  → "4:00"
+ *   formatCraftTime(65)   → "1:05"
+ *   formatCraftTime(0)    → "0:00"  (valid: blueprint with no craft time)
+ *   formatCraftTime(null) → "—"
+ */
+export function formatCraftTime(seconds) {
+  if (seconds == null) return '—'
+  const m = Math.floor(seconds / 60)
+  const s = seconds % 60
+  return `${m}:${String(s).padStart(2, '0')}`
+}
+
 // Deterministic color from resource name → HSL hue
 export function resourceHue(name) {
   let hash = 0
