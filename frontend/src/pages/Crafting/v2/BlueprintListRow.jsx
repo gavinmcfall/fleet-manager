@@ -1,7 +1,7 @@
 import React from 'react'
 import { Star, SlidersHorizontal, Repeat, Clock } from 'lucide-react'
 import { resolveStats } from './statConfig'
-import { formatTime } from '../craftingUtils'
+import { formatCraftTime } from '../craftingUtils'
 
 const GRID_TEMPLATE =
   '4px 32px minmax(140px, 1fr) 68px 68px 68px 68px 68px 68px 96px 108px'
@@ -84,7 +84,7 @@ export default function BlueprintListRow({
       {/* Craft time */}
       <div className="flex items-center justify-end pl-6 pr-[10px] py-3 min-w-0 font-mono text-[12px] text-[var(--text-tertiary)] gap-[6px]">
         <Clock className="w-[11px] h-[11px] opacity-60" />
-        {formatTime(blueprint.craft_time_seconds)}
+        {formatCraftTime(blueprint.craft_time_seconds)}
       </div>
 
       {/* Actions */}

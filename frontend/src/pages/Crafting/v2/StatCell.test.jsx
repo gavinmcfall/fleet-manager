@@ -32,4 +32,25 @@ describe('StatCell', () => {
     expect(screen.getByText('650')).toBeInTheDocument()
     expect(screen.queryByText('→')).not.toBeInTheDocument()
   })
+
+  it('renders static stats as base + unit with no arrow and no max', () => {
+    // Range for weapons is static — no crafting-quality modifier exists.
+    // StatCell must not render a `→ —` placeholder for static stats.
+    render(<StatCell label="Range" base={35} max={null} unit="m" isStatic={true} />)
+    expect(screen.getByText('Range')).toBeInTheDocument()
+    expect(screen.getByText('35')).toBeInTheDocument()
+    expect(screen.getByText('m')).toBeInTheDocument()
+    expect(screen.queryByText('→')).not.toBeInTheDocument()
+    expect(screen.queryByText('—')).not.toBeInTheDocument()
+  })
+
+  it('renders `base → —` when max is missing on a non-static stat', () => {
+    // Distinct from the isStatic case: here the max is SUPPOSED to exist
+    // but isn't populated. The em dash surfaces the missing data so it
+    // doesn't get silently hidden by a fallback.
+    render(<StatCell label="DPS" base={412} max={null} unit="dmg/s" />)
+    expect(screen.getByText('412')).toBeInTheDocument()
+    expect(screen.getByText('→')).toBeInTheDocument()
+    expect(screen.getByText('—')).toBeInTheDocument()
+  })
 })

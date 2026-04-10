@@ -2,15 +2,25 @@
  * Per-type stat configuration for the Crafting v2 blueprint card and list view.
  *
  * Each entry:
- *   - label:  Short display name for the sub-column header (capitalized)
- *   - groupLabel: What appears in the grouped header row of the list view
- *   - unit:   Short unit suffix (not used in list view — lives in groupLabel)
- *   - basePath: dotted path into blueprint.base_stats for the base value
- *   - maxPath:  dotted path into blueprint.base_stats for the max value
- *              (fallbacks gracefully if the data isn't there)
+ *   - label:    Short display name for the sub-column header (capitalized)
+ *   - unit:     Short unit suffix (grid card only — list view omits)
+ *   - basePath: Dotted path into blueprint.base_stats for the base value
+ *   - maxPath:  Dotted path for the max value, or null for static stats
+ *               (stats that don't scale with crafting quality — see isStatic)
+ *   - isStatic: true = this stat has no crafting-quality modifier, max is
+ *               always null by design, and the UI should render the base
+ *               value without a `→ max` arrow. Use for weapon range (no
+ *               weapon_range modifier in craftingUtils.STAT_INFO) and
+ *               ammo velocity (no modifier exists).
  *
  * When new blueprint types are added, extend this config; every component
  * reads from here so there is a single source of truth.
+ *
+ * IMPORTANT: NEVER add a silent fallback like `max ?? base` to resolveStats.
+ * If a max value is missing it should surface in the UI as `base → —`, not
+ * be concealed as `base === max` which collapses to a single-value display
+ * and hides architectural gaps. See feedback_silent_fallback_hides_bugs
+ * in memory for the full incident writeup.
  */
 
 export const STAT_CONFIG = {
@@ -20,7 +30,7 @@ export const STAT_CONFIG = {
     stats: [
       { key: 'dps',   label: 'DPS',   unit: 'dmg/s', basePath: 'dps',                maxPath: 'dps_max' },
       { key: 'rpm',   label: 'RPM',   unit: 'rpm',   basePath: 'rounds_per_minute',  maxPath: 'rounds_per_minute_max' },
-      { key: 'range', label: 'Range', unit: 'm',     basePath: 'range_m',            maxPath: 'range_m_max' },
+      { key: 'range', label: 'Range', unit: 'm',     basePath: 'effective_range',    maxPath: null, isStatic: true },
     ],
   },
   armour: {
@@ -38,7 +48,7 @@ export const STAT_CONFIG = {
     stats: [
       { key: 'damage',      label: 'DMG', unit: '',    basePath: 'damage',      maxPath: 'damage_max' },
       { key: 'penetration', label: 'PEN', unit: '',    basePath: 'penetration', maxPath: 'penetration_max' },
-      { key: 'velocity',    label: 'VEL', unit: 'm/s', basePath: 'velocity',    maxPath: 'velocity_max' },
+      { key: 'velocity',    label: 'VEL', unit: 'm/s', basePath: 'velocity',    maxPath: null, isStatic: true },
     ],
   },
 }
@@ -63,7 +73,12 @@ export function readStat(blueprint, path) {
 
 /**
  * Resolve the three configured stats for a blueprint, returning an array of
- * { key, label, unit, base, max } tuples. Missing values become null.
+ * { key, label, unit, base, max, isStatic } tuples.
+ *
+ * - Missing values become null (NO fallback from max to base — see the
+ *   silent-fallback note on STAT_CONFIG above).
+ * - Static stats (isStatic: true) always have max === null and should be
+ *   rendered by StatCell without an arrow.
  */
 export function resolveStats(blueprint) {
   const type = blueprint?.type
@@ -75,6 +90,7 @@ export function resolveStats(blueprint) {
     label: stat.label,
     unit: stat.unit,
     base: readStat(blueprint, stat.basePath),
-    max: readStat(blueprint, stat.maxPath) ?? readStat(blueprint, stat.basePath),
+    max: stat.maxPath ? readStat(blueprint, stat.maxPath) : null,
+    isStatic: stat.isStatic === true,
   }))
 }

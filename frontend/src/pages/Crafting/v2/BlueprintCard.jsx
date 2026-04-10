@@ -1,15 +1,18 @@
 import React from 'react'
-import { Star, SlidersHorizontal, Repeat, Clock, Layers } from 'lucide-react'
+import { Star, SlidersHorizontal, Repeat, Clock } from 'lucide-react'
 import StatCell from './StatCell'
 import { resolveStats } from './statConfig'
-import { formatTime } from '../craftingUtils'
+import { formatCraftTime } from '../craftingUtils'
 
 const TYPE_LABEL = { weapons: 'Weapon', armour: 'Armour', ammo: 'Ammo' }
 
+// Solid type-color strip + glow, per spec §3.6 and the v2 reference mockup.
+// Previous gradient (`bg-gradient-to-r from-X to-rgba(X, 0.3)`) was an
+// implementation flourish that drifted from the spec and the mockup.
 const STRIP_CLASS = {
-  weapons: 'bg-gradient-to-r from-[var(--type-weapon)] to-[rgba(245,166,35,0.3)]',
-  armour:  'bg-gradient-to-r from-[var(--type-armour)] to-[rgba(167,139,250,0.3)]',
-  ammo:    'bg-gradient-to-r from-[var(--type-ammo)]   to-[rgba(46,196,182,0.3)]',
+  weapons: 'bg-[var(--type-weapon)] shadow-[0_0_8px_var(--type-weapon)]',
+  armour:  'bg-[var(--type-armour)] shadow-[0_0_8px_var(--type-armour)]',
+  ammo:    'bg-[var(--type-ammo)]   shadow-[0_0_8px_var(--type-ammo)]',
 }
 
 const TYPE_TEXT = {
@@ -65,17 +68,16 @@ export default function BlueprintCard({
 
       {/* Body */}
       <div className="px-4 pt-[14px] pb-[10px]">
-        {/* Meta row */}
+        {/* Meta row — spec §5.1 format: `⏱ 4:30 · 4 slots`  */}
         <div className="flex items-center justify-between mb-2 font-mono text-[10px] uppercase tracking-[0.05em] text-[var(--text-muted)]">
           <span className={`font-semibold ${TYPE_TEXT[type] || ''}`}>
             {TYPE_LABEL[type] || type} · {subType}
           </span>
           <span className="flex items-center gap-1.5">
             <Clock className="w-2.5 h-2.5 opacity-70" />
-            {formatTime(blueprint.craft_time_seconds)}
+            {formatCraftTime(blueprint.craft_time_seconds)}
             <span className="text-[var(--text-subtle)] mx-1">·</span>
-            <Layers className="w-2.5 h-2.5 opacity-70" />
-            {blueprint.slots?.length || 0}
+            {blueprint.slots?.length || 0} slots
           </span>
         </div>
 
@@ -93,28 +95,30 @@ export default function BlueprintCard({
               base={stat.base}
               max={stat.max}
               unit={stat.unit}
+              isStatic={stat.isStatic}
             />
           ))}
         </div>
 
-        {/* Resource dots */}
-        <div className="flex items-center justify-between text-[10px] text-[var(--text-muted)]">
-          <span className="font-mono uppercase tracking-[0.05em]">Mats</span>
-          <div className="flex items-center gap-1">
-            {resourceNames.slice(0, 5).map((name, i) => (
+        {/* Resource row — coloured dot + name per resource. Per-resource
+            colour grouping lands in a follow-up batch (5-6 logical groups);
+            current palette is position-based as an interim placeholder. */}
+        <div className="flex items-center gap-x-3 gap-y-1 flex-wrap text-[10px] text-[var(--text-muted)]">
+          {resourceNames.slice(0, 5).map((name, i) => (
+            <span key={name} className="inline-flex items-center gap-1.5">
               <span
-                key={name}
                 title={name}
-                className="w-2 h-2 rounded-full"
+                className="w-1.5 h-1.5 rounded-full flex-shrink-0"
                 style={{ backgroundColor: colorForResource(name, i) }}
               />
-            ))}
-            {resourceNames.length > 5 && (
-              <span className="ml-0.5 text-[9px] font-mono text-[var(--text-subtle)]">
-                +{resourceNames.length - 5}
-              </span>
-            )}
-          </div>
+              <span className="font-mono uppercase tracking-[0.05em]">{name}</span>
+            </span>
+          ))}
+          {resourceNames.length > 5 && (
+            <span className="text-[9px] font-mono text-[var(--text-subtle)]">
+              +{resourceNames.length - 5}
+            </span>
+          )}
         </div>
       </div>
 

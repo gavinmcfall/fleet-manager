@@ -12,18 +12,31 @@ const BP = {
   slots: [{ resource_name: 'Beryl' }, { resource_name: 'Tin' }],
   base_stats: {
     item_name: 'Behring P8-AR Battle Rifle',
+    // dps_max / rounds_per_minute_max are FABRICATED for unit testing
+    // — the real API doesn't return them yet (computed from crafting
+    // modifiers in a follow-up batch).
     dps: 412, dps_max: 618,
     rounds_per_minute: 650, rounds_per_minute_max: 780,
-    range_m: 35, range_m_max: 52,
+    // effective_range is the real API field name. Range is static —
+    // no crafting-quality modifier exists — so it has no max value.
+    effective_range: 35,
   },
 }
 
 describe('BlueprintListRow', () => {
-  it('renders all six stat numbers', () => {
+  it('renders DPS, RPM, and Range base values plus the DPS/RPM max values', () => {
     render(<BlueprintListRow blueprint={BP} />)
-    ;['412', '618', '650', '780', '35', '52'].forEach(n =>
+    ;['412', '618', '650', '780', '35'].forEach(n =>
       expect(screen.getByText(n)).toBeInTheDocument()
     )
+  })
+
+  it('renders Range max cell as an em dash (static stat, no max)', () => {
+    render(<BlueprintListRow blueprint={BP} />)
+    // With range as a static stat the max cell gets null → StatNumCell
+    // renders an em dash. Only ONE em dash is expected in the row.
+    const dashes = screen.getAllByText('—')
+    expect(dashes.length).toBe(1)
   })
 
   it('renders the blueprint name', () => {
@@ -31,9 +44,12 @@ describe('BlueprintListRow', () => {
     expect(screen.getByText('Behring P8-AR Battle Rifle')).toBeInTheDocument()
   })
 
-  it('renders the formatted craft time', () => {
+  it('renders the formatted craft time as mm:ss', () => {
     render(<BlueprintListRow blueprint={BP} />)
-    expect(screen.getByText('4m 30s')).toBeInTheDocument()
+    // 270 seconds → "4:30" via formatCraftTime (the v2 helper that
+    // replaced the legacy formatTime which output "4m 30s").
+    const row = screen.getByRole('row')
+    expect(row.textContent).toMatch(/4:30/)
   })
 
   it('invokes onCompare when compare action is clicked', async () => {

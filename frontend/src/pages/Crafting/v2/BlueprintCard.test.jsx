@@ -16,12 +16,19 @@ const WEAPON_BP = {
   ],
   base_stats: {
     item_name: 'Behring P8-AR Battle Rifle',
+    // NOTE: These `_max` fields are FABRICATED for unit testing the
+    // rendering logic. The real /api/gamedata/crafting endpoint does NOT
+    // return them — max values get computed from crafting_slot_modifiers
+    // in a later batch (computeMaxStats helper). These fixtures simulate
+    // the post-computation shape so the card render tests are stable.
     dps: 412,
     dps_max: 618,
     rounds_per_minute: 650,
     rounds_per_minute_max: 780,
-    range_m: 35,
-    range_m_max: 52,
+    // Range uses the real API field name (effective_range, not range_m)
+    // and has no _max because weapon range is static — no crafting
+    // modifier affects it. See statConfig.js isStatic flag.
+    effective_range: 35,
   },
 }
 
@@ -37,16 +44,40 @@ describe('BlueprintCard', () => {
     expect(screen.getByText('Behring P8-AR')).toBeInTheDocument()
   })
 
-  it('renders all three weapon stats with base → max ranges', () => {
+  it('renders DPS and RPM as base → max ranges', () => {
     render(<BlueprintCard blueprint={WEAPON_BP} />)
-    // base values
     expect(screen.getByText('412')).toBeInTheDocument()
-    expect(screen.getByText('650')).toBeInTheDocument()
-    expect(screen.getByText('35')).toBeInTheDocument()
-    // max values
     expect(screen.getByText('618')).toBeInTheDocument()
+    expect(screen.getByText('650')).toBeInTheDocument()
     expect(screen.getByText('780')).toBeInTheDocument()
-    expect(screen.getByText('52')).toBeInTheDocument()
+  })
+
+  it('renders Range as a single base value (static stat, no arrow)', () => {
+    render(<BlueprintCard blueprint={WEAPON_BP} />)
+    // Range reads from effective_range and has no max — should render
+    // as just "35 m" with no arrow.
+    expect(screen.getByText('35')).toBeInTheDocument()
+    // Range's unit should still render
+    expect(screen.getByText('m')).toBeInTheDocument()
+  })
+
+  it('formats craft time as mm:ss and renders slot count with the word "slots"', () => {
+    render(<BlueprintCard blueprint={WEAPON_BP} />)
+    // 270 seconds → "4:30" (not "4m 30s" / "4M 30S"); 3 slots → "3 slots".
+    // Assert against the article's aggregate textContent because the meta
+    // row interleaves an icon SVG and a bullet separator span between the
+    // time and slot-count text nodes, which defeats getByText's
+    // single-element matching.
+    const article = screen.getByRole('article')
+    expect(article.textContent).toMatch(/4:30/)
+    expect(article.textContent).toMatch(/3\s*slots/i)
+  })
+
+  it('does NOT render the "Mats" label above the resource dots', () => {
+    render(<BlueprintCard blueprint={WEAPON_BP} />)
+    // Spec §5.1 does not mandate a label. It was an implementation
+    // invention that drifted from spec.
+    expect(screen.queryByText(/^Mats$/i)).not.toBeInTheDocument()
   })
 
   it('renders the type and sub-type labels', () => {
