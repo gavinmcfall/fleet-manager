@@ -33,8 +33,8 @@ export const STAT_CONFIG = {
     strip: 'weapon',
     groupLabels: ['DPS', 'RPM', 'Range (m)'],
     stats: [
-      { key: 'dps',   label: 'DPS',   unit: 'dmg/s', basePath: 'dps',                maxPath: 'dps_max',                decimals: 1 },
-      { key: 'rpm',   label: 'RPM',   unit: 'rpm',   basePath: 'rounds_per_minute',  maxPath: 'rounds_per_minute_max', decimals: 0 },
+      { key: 'dps',   label: 'DPS',   unit: '',      basePath: 'dps',                maxPath: 'dps_max',                decimals: 1 },
+      { key: 'rpm',   label: 'RPM',   unit: '',      basePath: 'rounds_per_minute',  maxPath: 'rounds_per_minute_max', decimals: 0 },
       { key: 'range', label: 'Range', unit: 'm',     basePath: 'effective_range',    maxPath: null, isStatic: true,    decimals: 0 },
     ],
   },
