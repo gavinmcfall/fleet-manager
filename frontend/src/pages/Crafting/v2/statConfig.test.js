@@ -54,6 +54,57 @@ describe('statConfig', () => {
     })
   })
 
+  describe('computeMaxStats integration', () => {
+    it('overlays computed max values when slots + modifiers are present', () => {
+      const bp = {
+        type: 'weapons',
+        base_stats: {
+          damage: 100,
+          rounds_per_minute: 600,
+          dps: 1000,
+          effective_range: 35,
+        },
+        slots: [
+          {
+            modifiers: [
+              { key: 'weapon_damage', modifier_at_end: 1.5 },
+              { key: 'weapon_firerate', modifier_at_end: 1.2 },
+            ],
+          },
+        ],
+      }
+      const stats = resolveStats(bp)
+      const dps = stats.find(s => s.key === 'dps')
+      const rpm = stats.find(s => s.key === 'rpm')
+      const range = stats.find(s => s.key === 'range')
+
+      // base dps reads from base.dps (1000), max comes from computeMaxStats
+      expect(dps.base).toBe(1000)
+      expect(dps.max).toBe(1800) // (100×1.5)×(600×1.2)/60 = 1800
+
+      // rpm base from rounds_per_minute, max from rpm × 1.2
+      expect(rpm.base).toBe(600)
+      expect(rpm.max).toBe(720)
+
+      // range stays static — computed overlay never touches range fields
+      expect(range.base).toBe(35)
+      expect(range.max).toBeNull()
+      expect(range.isStatic).toBe(true)
+    })
+
+    it('leaves max null when a weapon has no damage/rpm modifiers AND no base damage', () => {
+      // A blueprint with dps but no damage/rpm splits can't be computed.
+      // The overlay is empty; max stays null from the resolveStats null path.
+      const bp = {
+        type: 'weapons',
+        base_stats: { dps: 1000 /* no damage, no rpm */ },
+        slots: [],
+      }
+      const stats = resolveStats(bp)
+      expect(stats[0]).toMatchObject({ key: 'dps', base: 1000, max: null })
+    })
+  })
+
   describe('readStat', () => {
     it('returns null for missing blueprint', () => {
       expect(readStat(null, 'dps')).toBeNull()

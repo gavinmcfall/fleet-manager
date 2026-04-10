@@ -71,6 +71,8 @@ export function readStat(blueprint, path) {
   return current ?? null
 }
 
+import { computeMaxStats } from './computeMaxStats'
+
 /**
  * Resolve the three configured stats for a blueprint, returning an array of
  * { key, label, unit, base, max, isStatic } tuples.
@@ -79,18 +81,33 @@ export function readStat(blueprint, path) {
  *   silent-fallback note on STAT_CONFIG above).
  * - Static stats (isStatic: true) always have max === null and should be
  *   rendered by StatCell without an arrow.
+ * - Max values are COMPUTED from crafting slot modifiers via
+ *   computeMaxStats() and overlaid onto base_stats before path reads.
+ *   This is required because the API doesn't return any `_max` fields —
+ *   the computation is done client-side on every render (memoized by
+ *   the caller if perf becomes an issue; map lookups are cheap).
  */
 export function resolveStats(blueprint) {
   const type = blueprint?.type
   const config = STAT_CONFIG[type]
   if (!config) return []
 
+  // Derive `_max` values from slot modifiers and overlay them onto
+  // base_stats. If base_stats already has a `_max` field (e.g. from
+  // fabricated test fixtures), the computed value wins — it's the
+  // canonical derivation from the crafting model.
+  const computedMax = computeMaxStats(blueprint)
+  const mergedBlueprint = {
+    ...blueprint,
+    base_stats: { ...(blueprint?.base_stats ?? {}), ...computedMax },
+  }
+
   return config.stats.map(stat => ({
     key: stat.key,
     label: stat.label,
     unit: stat.unit,
-    base: readStat(blueprint, stat.basePath),
-    max: stat.maxPath ? readStat(blueprint, stat.maxPath) : null,
+    base: readStat(mergedBlueprint, stat.basePath),
+    max: stat.maxPath ? readStat(mergedBlueprint, stat.maxPath) : null,
     isStatic: stat.isStatic === true,
   }))
 }
