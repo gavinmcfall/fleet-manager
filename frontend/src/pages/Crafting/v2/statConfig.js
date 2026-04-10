@@ -12,6 +12,11 @@
  *               value without a `→ max` arrow. Use for weapon range (no
  *               weapon_range modifier in craftingUtils.STAT_INFO) and
  *               ammo velocity (no modifier exists).
+ *   - decimals: Number of decimal places for display rounding (default 0).
+ *               Applied in resolveStats so StatCell receives clean numbers.
+ *   - scale:    Multiplier applied before display (default 1). Use for
+ *               resist_* values that are 0.0–1.0 in the DB but should
+ *               render as 0–100 with unit "%" (spec §3.3).
  *
  * When new blueprint types are added, extend this config; every component
  * reads from here so there is a single source of truth.
@@ -28,27 +33,27 @@ export const STAT_CONFIG = {
     strip: 'weapon',
     groupLabels: ['DPS', 'RPM', 'Range (m)'],
     stats: [
-      { key: 'dps',   label: 'DPS',   unit: 'dmg/s', basePath: 'dps',                maxPath: 'dps_max' },
-      { key: 'rpm',   label: 'RPM',   unit: 'rpm',   basePath: 'rounds_per_minute',  maxPath: 'rounds_per_minute_max' },
-      { key: 'range', label: 'Range', unit: 'm',     basePath: 'effective_range',    maxPath: null, isStatic: true },
+      { key: 'dps',   label: 'DPS',   unit: 'dmg/s', basePath: 'dps',                maxPath: 'dps_max',                decimals: 1 },
+      { key: 'rpm',   label: 'RPM',   unit: 'rpm',   basePath: 'rounds_per_minute',  maxPath: 'rounds_per_minute_max', decimals: 0 },
+      { key: 'range', label: 'Range', unit: 'm',     basePath: 'effective_range',    maxPath: null, isStatic: true,    decimals: 0 },
     ],
   },
   armour: {
     strip: 'armour',
     groupLabels: ['Phys', 'Energy', 'Stun'],
     stats: [
-      { key: 'phys',   label: 'Phys',   unit: '%', basePath: 'resist_physical', maxPath: 'resist_physical_max' },
-      { key: 'energy', label: 'Energy', unit: '%', basePath: 'resist_energy',   maxPath: 'resist_energy_max' },
-      { key: 'stun',   label: 'Stun',   unit: '%', basePath: 'resist_stun',     maxPath: 'resist_stun_max' },
+      { key: 'phys',   label: 'Phys',   unit: '%', basePath: 'resist_physical', maxPath: 'resist_physical_max', decimals: 0, scale: 100 },
+      { key: 'energy', label: 'Energy', unit: '%', basePath: 'resist_energy',   maxPath: 'resist_energy_max',   decimals: 0, scale: 100 },
+      { key: 'stun',   label: 'Stun',   unit: '%', basePath: 'resist_stun',     maxPath: 'resist_stun_max',     decimals: 0, scale: 100 },
     ],
   },
   ammo: {
     strip: 'ammo',
     groupLabels: ['Damage', 'Penetration', 'Velocity (m/s)'],
     stats: [
-      { key: 'damage',      label: 'DMG', unit: '',    basePath: 'damage',      maxPath: 'damage_max' },
-      { key: 'penetration', label: 'PEN', unit: '',    basePath: 'penetration', maxPath: 'penetration_max' },
-      { key: 'velocity',    label: 'VEL', unit: 'm/s', basePath: 'velocity',    maxPath: null, isStatic: true },
+      { key: 'damage',      label: 'DMG', unit: '',    basePath: 'damage',      maxPath: 'damage_max',      decimals: 1 },
+      { key: 'penetration', label: 'PEN', unit: '',    basePath: 'penetration', maxPath: 'penetration_max', decimals: 0 },
+      { key: 'velocity',    label: 'VEL', unit: 'm/s', basePath: 'velocity',    maxPath: null, isStatic: true, decimals: 0 },
     ],
   },
 }
@@ -72,6 +77,13 @@ export function readStat(blueprint, path) {
 }
 
 import { computeMaxStats } from './computeMaxStats'
+
+/** Round a number to `d` decimal places. */
+function roundTo(value, d) {
+  if (d === 0) return Math.round(value)
+  const factor = 10 ** d
+  return Math.round(value * factor) / factor
+}
 
 /**
  * Resolve the three configured stats for a blueprint, returning an array of
@@ -102,12 +114,19 @@ export function resolveStats(blueprint) {
     base_stats: { ...(blueprint?.base_stats ?? {}), ...computedMax },
   }
 
-  return config.stats.map(stat => ({
-    key: stat.key,
-    label: stat.label,
-    unit: stat.unit,
-    base: readStat(mergedBlueprint, stat.basePath),
-    max: stat.maxPath ? readStat(mergedBlueprint, stat.maxPath) : null,
-    isStatic: stat.isStatic === true,
-  }))
+  return config.stats.map(stat => {
+    const rawBase = readStat(mergedBlueprint, stat.basePath)
+    const rawMax = stat.maxPath ? readStat(mergedBlueprint, stat.maxPath) : null
+    const scale = stat.scale ?? 1
+    const dec = stat.decimals ?? 0
+
+    return {
+      key: stat.key,
+      label: stat.label,
+      unit: stat.unit,
+      base: rawBase != null ? roundTo(rawBase * scale, dec) : null,
+      max: rawMax != null ? roundTo(rawMax * scale, dec) : null,
+      isStatic: stat.isStatic === true,
+    }
+  })
 }
