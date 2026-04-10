@@ -142,6 +142,8 @@ export const shipNameMap: Record<string, string> = {
   "san\u2019tok.y\u0101i": "san\u2019tok.y\u0101i",
   "carrack expedition w/c8x": "carrack expedition w/c8x",
   "carrack w/c8x": "carrack w/c8x",
+  // UTV — RSI lists as just "UTV", DB has "Greycat UTV" (with manufacturer prefix)
+  utv: "greycat utv",
 };
 
 // --- GraphQL client ---
