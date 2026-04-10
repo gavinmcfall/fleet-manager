@@ -3,12 +3,11 @@ import { Star, SlidersHorizontal, Repeat, Clock } from 'lucide-react'
 import StatCell from './StatCell'
 import { resolveStats } from './statConfig'
 import { formatCraftTime } from '../craftingUtils'
+import { getResourceColor } from './resourceGroups'
 
 const TYPE_LABEL = { weapons: 'Weapon', armour: 'Armour', ammo: 'Ammo' }
 
 // Solid type-color strip + glow, per spec §3.6 and the v2 reference mockup.
-// Previous gradient (`bg-gradient-to-r from-X to-rgba(X, 0.3)`) was an
-// implementation flourish that drifted from the spec and the mockup.
 const STRIP_CLASS = {
   weapons: 'bg-[var(--type-weapon)] shadow-[0_0_8px_var(--type-weapon)]',
   armour:  'bg-[var(--type-armour)] shadow-[0_0_8px_var(--type-armour)]',
@@ -19,13 +18,6 @@ const TYPE_TEXT = {
   weapons: 'text-[var(--type-weapon)]',
   armour:  'text-[var(--type-armour)]',
   ammo:    'text-[var(--type-ammo)]',
-}
-
-// Generate a stable color for each distinct resource name. The palette has
-// 5 colors — accepted limit for now; replace with per-resource icons later.
-const RESOURCE_PALETTE = ['#a78bfa', '#22d3ee', '#f5a623', '#2ec4b6', '#5b9bd5']
-function colorForResource(name, index) {
-  return RESOURCE_PALETTE[index % RESOURCE_PALETTE.length]
 }
 
 /**
@@ -104,12 +96,12 @@ export default function BlueprintCard({
             colour grouping lands in a follow-up batch (5-6 logical groups);
             current palette is position-based as an interim placeholder. */}
         <div className="flex items-center gap-x-3 gap-y-1 flex-wrap text-[10px] text-[var(--text-muted)]">
-          {resourceNames.slice(0, 5).map((name, i) => (
+          {resourceNames.slice(0, 5).map((name) => (
             <span key={name} className="inline-flex items-center gap-1.5">
               <span
                 title={name}
                 className="w-1.5 h-1.5 rounded-full flex-shrink-0"
-                style={{ backgroundColor: colorForResource(name, i) }}
+                style={{ backgroundColor: getResourceColor(name) }}
               />
               <span className="font-mono uppercase tracking-[0.05em]">{name}</span>
             </span>
