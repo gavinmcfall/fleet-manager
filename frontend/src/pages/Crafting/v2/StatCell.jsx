@@ -25,9 +25,9 @@ export default function StatCell({ label, base, max, unit = '', isStatic = false
 
   return (
     // mockup: .stat-cell { flex-col; gap: 4px (space-2); items-center; text-center }
-    // leading-none overrides Tailwind preflight's line-height:1.5 which
+    // leading-[1.2] overrides Tailwind preflight's line-height:1.5 which
     // bloats every text element ~30% taller than the non-Tailwind mockup.
-    <div className="flex flex-col gap-1 items-center text-center leading-none">
+    <div className="flex flex-col gap-1 items-center text-center leading-[1.2]">
       {/* mockup: .stat-label { font-mono 9px uppercase tracking 0.05em; color: text-muted } */}
       <div className="font-mono text-[9px] uppercase tracking-[0.05em] text-[var(--text-muted)]">
         {label}
