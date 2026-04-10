@@ -35,7 +35,7 @@ export const STAT_CONFIG = {
     stats: [
       { key: 'dps',   label: 'DPS',   unit: '',      basePath: 'dps',                maxPath: 'dps_max',                decimals: 1 },
       { key: 'rpm',   label: 'RPM',   unit: '',      basePath: 'rounds_per_minute',  maxPath: 'rounds_per_minute_max', decimals: 0 },
-      { key: 'range', label: 'Range', unit: 'm',     basePath: 'effective_range',    maxPath: null, isStatic: true,    decimals: 0 },
+      { key: 'range', label: 'Range', unit: '',      basePath: 'effective_range',    maxPath: null, isStatic: true,    decimals: 0 },
     ],
   },
   armour: {

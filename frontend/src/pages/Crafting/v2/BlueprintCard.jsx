@@ -70,7 +70,7 @@ export default function BlueprintCard({
             <Clock className="w-2.5 h-2.5 opacity-70" />
             {formatCraftTime(blueprint.craft_time_seconds)}
             <span className="text-[var(--text-subtle)]">·</span>
-            {blueprint.slots?.length || 0} slots
+            {resourceNames.length} slots
           </span>
         </div>
 

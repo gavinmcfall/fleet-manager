@@ -55,10 +55,8 @@ describe('BlueprintCard', () => {
   it('renders Range as a single base value (static stat, no arrow)', () => {
     render(<BlueprintCard blueprint={WEAPON_BP} />)
     // Range reads from effective_range and has no max — should render
-    // as just "35 m" with no arrow.
+    // as just "35" with no arrow. No unit (label "Range" implies it).
     expect(screen.getByText('35')).toBeInTheDocument()
-    // Range's unit should still render
-    expect(screen.getByText('m')).toBeInTheDocument()
   })
 
   it('formats craft time as mm:ss and renders slot count with the word "slots"', () => {
