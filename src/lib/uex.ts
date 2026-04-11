@@ -150,7 +150,7 @@ async function syncCommodities(
           `INSERT INTO terminal_inventory
            (terminal_id, item_uuid, item_type, item_name, latest_buy_price, latest_sell_price, latest_source, latest_observed_at, game_version_id)
            VALUES (?, ?, 'commodity', ?, ?, ?, 'uex', datetime('now'), ?)
-           ON CONFLICT(terminal_id, item_uuid, game_version_id) DO UPDATE SET
+           ON CONFLICT(terminal_id, item_uuid) DO UPDATE SET
            latest_buy_price = excluded.latest_buy_price,
            latest_sell_price = excluded.latest_sell_price,
            latest_source = 'uex',
@@ -192,7 +192,7 @@ async function syncItems(
           `INSERT INTO terminal_inventory
            (terminal_id, item_uuid, item_type, item_name, latest_buy_price, latest_sell_price, latest_source, latest_observed_at, game_version_id)
            VALUES (?, ?, 'item', ?, ?, ?, 'uex', datetime('now'), ?)
-           ON CONFLICT(terminal_id, item_uuid, game_version_id) DO UPDATE SET
+           ON CONFLICT(terminal_id, item_uuid) DO UPDATE SET
            latest_buy_price = excluded.latest_buy_price,
            latest_sell_price = excluded.latest_sell_price,
            latest_source = 'uex',

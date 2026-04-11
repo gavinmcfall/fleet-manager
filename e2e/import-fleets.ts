@@ -158,7 +158,7 @@ async function main() {
         d1Execute(
           `INSERT INTO vehicles (slug, name, game_version_id, updated_at)
            VALUES ('${slug}', ${escSql(entry.name)}, (SELECT game_version_id FROM vehicles GROUP BY game_version_id ORDER BY COUNT(*) DESC LIMIT 1), datetime('now'))
-           ON CONFLICT(slug, game_version_id) DO UPDATE SET name=excluded.name`,
+           ON CONFLICT(slug) DO UPDATE SET name=excluded.name`,
         );
         // Get the new ID
         const newVehicle = d1Query<{ id: number }>(
