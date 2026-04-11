@@ -538,7 +538,7 @@ export async function syncShipProductionStatus(db: D1Database): Promise<void> {
         `SELECT v.id, v.name, v.slug
            FROM vehicles v
           WHERE v.removed = 0
-            AND v.game_version_id = (SELECT id FROM game_versions WHERE is_default = 1)`,
+            AND v.is_deleted = 0`,
       )
       .all<{ id: number; name: string; slug: string }>();
 
@@ -687,7 +687,7 @@ export async function syncShipProductionStatus(db: D1Database): Promise<void> {
               `UPDATE vehicles SET is_pledgeable = 0
                  WHERE removed = 0
                    AND uuid IS NOT NULL AND uuid != ''
-                   AND game_version_id = (SELECT id FROM game_versions WHERE is_default = 1)
+                   AND is_deleted = 0
                    AND id NOT IN (${placeholders})`,
             )
             .bind(...matchedIdList),

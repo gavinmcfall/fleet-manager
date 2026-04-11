@@ -12,7 +12,12 @@ const COMMODITY_OVERRIDES: Record<string, string> = {
 };
 
 function normalize(name: string): string {
-  return name.toLowerCase().replace(/[^a-z0-9\s]/g, "").replace(/\s+/g, " ").trim();
+  return name.toLowerCase()
+    .replace(/[/_-]/g, " ")         // separators → space
+    .replace(/[^a-z0-9\s]/g, "")   // strip remaining punctuation
+    .replace(/gray/g, "grey")       // American → British spelling
+    .replace(/(\D)\s+(\d+)$/, "$1$2") // trailing digit collapse
+    .replace(/\s+/g, " ").trim();
 }
 
 interface UexResponse<T> {
@@ -73,8 +78,8 @@ export async function syncUexPrices(
   }
 
   // Get game version for inserts
-  const gv = await db.prepare("SELECT id FROM game_versions ORDER BY id DESC LIMIT 1").first();
-  const gvId = (gv?.id as number) ?? 1;
+  const gv = await db.prepare("SELECT id FROM game_versions WHERE is_default = 1 LIMIT 1").first<{ id: number }>();
+  const gvId = gv?.id ?? 1;
 
   try {
     if (type === "commodities" || type === "all") {

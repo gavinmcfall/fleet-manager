@@ -76,9 +76,7 @@ export async function syncProductionStatuses(db: D1Database): Promise<{ checked:
     .prepare(
       `SELECT v.slug, v.production_status_id
        FROM vehicles v
-       INNER JOIN (
-         SELECT slug, MAX(game_version_id) as gv FROM vehicles GROUP BY slug
-       ) _vv ON v.slug = _vv.slug AND v.game_version_id = _vv.gv`,
+       WHERE v.is_deleted = 0`,
     )
     .all<{ slug: string; production_status_id: number | null }>();
 

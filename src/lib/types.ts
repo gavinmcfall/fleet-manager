@@ -8,6 +8,7 @@ export interface Env {
   ASSETS: Fetcher;
   AVATARS: R2Bucket;
   SC_BRIDGE_CACHE: KVNamespace;
+  LOCALIZATION_KV: KVNamespace;
   RSI_API_ENABLED: string;
   RSI_BASE_URL: string;
   RSI_RATE_LIMIT: string;
@@ -140,7 +141,6 @@ export interface Vehicle {
   image_url_medium?: string;
   image_url_large?: string;
   pledge_url?: string;
-  game_version_id?: number;
   parent_vehicle_id?: number;
   created_at: string;
   updated_at: string;
@@ -188,7 +188,6 @@ export interface Component {
   size?: number;
   grade?: string;
   description?: string;
-  game_version_id?: number;
   created_at: string;
   updated_at: string;
 }
@@ -203,7 +202,6 @@ export interface FPSWeapon {
   sub_type?: string;
   size?: number;
   description?: string;
-  game_version_id?: number;
   created_at: string;
   updated_at: string;
 }
@@ -219,7 +217,6 @@ export interface FPSArmour {
   size?: number;
   grade?: string;
   description?: string;
-  game_version_id?: number;
   created_at: string;
   updated_at: string;
 }
@@ -234,7 +231,6 @@ export interface FPSAttachment {
   sub_type?: string;
   size?: number;
   description?: string;
-  game_version_id?: number;
   created_at: string;
   updated_at: string;
 }
@@ -248,7 +244,6 @@ export interface FPSAmmo {
   manufacturer_id?: number;
   sub_type?: string;
   description?: string;
-  game_version_id?: number;
   created_at: string;
   updated_at: string;
 }
@@ -262,7 +257,6 @@ export interface FPSUtility {
   manufacturer_id?: number;
   sub_type?: string;
   description?: string;
-  game_version_id?: number;
   created_at: string;
   updated_at: string;
 }

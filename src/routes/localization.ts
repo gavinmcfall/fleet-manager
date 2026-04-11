@@ -232,7 +232,7 @@ export function localizationRoutes() {
 
   routes.get("/preview", async (c) => {
     const db = c.env.DB;
-    const kv = c.env.SC_BRIDGE_CACHE;
+    const kv = c.env.LOCALIZATION_KV;
     const userId = getAuthUser(c).id;
 
     const configRow = await db
@@ -292,7 +292,7 @@ export function localizationRoutes() {
 
   routes.get("/download", async (c) => {
     const db = c.env.DB;
-    const kv = c.env.SC_BRIDGE_CACHE;
+    const kv = c.env.LOCALIZATION_KV;
     const userId = getAuthUser(c).id;
 
     // Get default game version code
@@ -461,9 +461,6 @@ async function buildOverrides(
   config: LocalizationConfig,
   validKeys?: Map<string, string>,
 ): Promise<LabelOverride[]> {
-  // Get default game version for queries that need version-keyed data
-  const verRow = await db.prepare("SELECT id FROM game_versions WHERE is_default = 1 LIMIT 1").first<{ id: number }>();
-  const versionId = verRow?.id ?? 0;
   const overrides: LabelOverride[] = [];
 
   // ASOP ordering
@@ -525,10 +522,9 @@ async function buildOverrides(
                 ${sizeCol}, ${gradeCol}, t.sub_type
          FROM ${cat.table} t
          LEFT JOIN manufacturers m ON m.id = t.manufacturer_id
-         WHERE t.game_version_id = ?
+         WHERE t.is_deleted = 0
          AND t.class_name IS NOT NULL`,
       )
-      .bind(versionId)
       .all<{
         class_name: string;
         name: string;
@@ -559,10 +555,9 @@ async function buildOverrides(
       .prepare(
         `SELECT class_name, name FROM trade_commodities
          WHERE category IN ('vice', 'counterfeit')
-         AND game_version_id = ?
+         AND is_deleted = 0
          AND class_name IS NOT NULL`,
       )
-      .bind(versionId)
       .all<{ class_name: string; name: string }>();
 
     overrides.push(
@@ -580,19 +575,17 @@ async function buildOverrides(
       .prepare(
         `SELECT class_name, name FROM trade_commodities
          WHERE category IN ('minerals', 'metals', 'mixedmining')
-         AND game_version_id = ?
+         AND is_deleted = 0
          AND class_name IS NOT NULL`,
       )
-      .bind(versionId)
       .all<{ class_name: string; name: string }>();
 
     const mineableRows = await db
       .prepare(
         `SELECT class_name, name FROM mineable_elements
-         WHERE game_version_id = ?
+         WHERE is_deleted = 0
          AND class_name IS NOT NULL`,
       )
-      .bind(versionId)
       .all<{ class_name: string; name: string }>();
 
     const allMaterialRows = [
@@ -614,14 +607,13 @@ async function buildOverrides(
          JOIN contract_generator_contracts cgc ON cgc.id = cgbp.contract_generator_contract_id
          JOIN crafting_blueprint_reward_pool_items cbri ON cbri.crafting_blueprint_reward_pool_id = cgbp.crafting_blueprint_reward_pool_id
          JOIN crafting_blueprints cb ON cb.id = cbri.crafting_blueprint_id
-         LEFT JOIN fps_weapons fw ON fw.class_name = REPLACE(cb.tag, 'BP_CRAFT_', '') AND fw.game_version_id = cb.game_version_id
-         LEFT JOIN fps_armour fa ON fa.class_name = REPLACE(cb.tag, 'BP_CRAFT_', '') AND fa.game_version_id = cb.game_version_id
-         LEFT JOIN fps_helmets fh ON fh.class_name = REPLACE(cb.tag, 'BP_CRAFT_', '') AND fh.game_version_id = cb.game_version_id
-         LEFT JOIN fps_ammo_types fam ON fam.class_name = REPLACE(cb.tag, 'BP_CRAFT_', '') AND fam.game_version_id = cb.game_version_id
-         WHERE cgc.game_version_id = ?
+         LEFT JOIN fps_weapons fw ON fw.class_name = REPLACE(cb.tag, 'BP_CRAFT_', '') AND fw.is_deleted = 0
+         LEFT JOIN fps_armour fa ON fa.class_name = REPLACE(cb.tag, 'BP_CRAFT_', '') AND fa.is_deleted = 0
+         LEFT JOIN fps_helmets fh ON fh.class_name = REPLACE(cb.tag, 'BP_CRAFT_', '') AND fh.is_deleted = 0
+         LEFT JOIN fps_ammo_types fam ON fam.class_name = REPLACE(cb.tag, 'BP_CRAFT_', '') AND fam.is_deleted = 0
+         WHERE cgc.is_deleted = 0
          AND cgc.desc_loc_key IS NOT NULL AND cgc.desc_loc_key != ''`,
       )
-      .bind(versionId)
       .all<{ desc_loc_key: string; blueprint_name: string }>();
 
     // Group blueprints by desc_loc_key

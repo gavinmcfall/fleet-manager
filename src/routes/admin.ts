@@ -335,7 +335,7 @@ export function adminRoutes() {
     })),
     async (c) => {
     const { version_code } = c.req.valid("query");
-    const kv = c.env.SC_BRIDGE_CACHE;
+    const kv = c.env.LOCALIZATION_KV;
 
     // Verify the version exists
     const ver = await c.env.DB
@@ -385,7 +385,7 @@ export function adminRoutes() {
     async (c) => {
       const { name, label, description, icon, version_code, sort_order } = c.req.valid("query");
       const db = c.env.DB;
-      const kv = c.env.SC_BRIDGE_CACHE;
+      const kv = c.env.LOCALIZATION_KV;
 
       // Verify the version exists
       const ver = await db
@@ -592,111 +592,36 @@ export function adminRoutes() {
 
     const versionId = version.id;
 
-    // Tables with game_version_id FK in FK-safe deletion order (children before parents).
-    // Topologically sorted so no DELETE violates a FK constraint.
-    const versionedTables = [
-      // Vehicle children → vehicles → manufacturers
-      "vehicle_weapon_racks", "vehicle_suit_lockers", "vehicle_ports",
-      "salvageable_ships", "vehicle_roles", "vehicle_careers",
-      // Loot children → loot_map → FPS/vehicle tables
-      "loot_item_locations", "loot_map", "vehicle_components",
-      // Shop children → shops → star_map_locations
-      "shop_locations", "shop_inventory",
-      // Mission children → missions → mission_givers → star_map_locations
-      "missions", "mission_givers", "star_map_locations", "star_systems",
-      "ship_missiles",
-      // Reputation children → reputation_scopes → factions
-      "reputation_perks", "reputation_standings",
-      "faction_reputation_scopes", "reputation_scopes", "reputation_reward_tiers",
-      // NPC children
-      "npc_loadout_items", "npc_loadouts",
-      // Mining (no inter-table FKs among versioned tables)
-      "rock_compositions", "mining_quality_distributions", "mining_modules",
-      "mining_locations", "mining_lasers", "mining_gadgets",
-      "mining_clustering_presets", "mineable_elements",
-      // Mission lookups
-      "mission_types", "mission_organizations",
-      // FPS tables → manufacturers
-      "fps_weapons", "fps_utilities", "fps_melee", "fps_helmets",
-      "fps_clothing", "fps_attachments", "fps_armour", "fps_ammo",
-      "consumables", "props",
-      // Shops (parent)
-      "shops",
-      // Root parents (most-referenced, delete last)
-      "vehicles", "manufacturers",
-      // Law system
-      "jurisdiction_infraction_overrides", "law_jurisdictions", "law_infractions",
-      // Remaining leaf tables
-      "harvestables", "fps_carryables", "fps_ammo_types", "consumable_effects",
-      "factions", "damage_types", "armor_resistance_profiles",
-      "trade_commodities", "commodities", "contracts",
-      "crafting_resources", "crafting_blueprints",
-      "refining_processes",
+    // PTU data lives in ptu_* shadow tables. Purge = DROP all of them.
+    const { VERSIONED_TABLES } = await import("../lib/ptu");
+
+    // Child tables without game_version_id that shadow ptu_* parents
+    const ptuChildTables = [
+      "ptu_crafting_slot_modifiers",
+      "ptu_crafting_blueprint_slots",
+      "ptu_mining_location_deposits",
+      "ptu_salvageable_ship_components",
+      "ptu_paint_vehicles",
+      "ptu_npc_factions",
     ];
 
-    // Child tables without game_version_id — DELETE via FK to parent
-    // Must be deleted BEFORE their parents to avoid FK constraint errors
-    const deleteStatements: D1PreparedStatement[] = [];
-
-    // Delete child tables first (no game_version_id — delete via FK to versioned parent)
-    // Order matters: deepest children first
-
-    // crafting_slot_modifiers → crafting_blueprint_slots → crafting_blueprints (versioned)
-    deleteStatements.push(
-      db.prepare(
-        `DELETE FROM crafting_slot_modifiers WHERE crafting_blueprint_slot_id IN (
-          SELECT id FROM crafting_blueprint_slots WHERE crafting_blueprint_id IN (
-            SELECT id FROM crafting_blueprints WHERE game_version_id = ?
-          )
-        )`
-      ).bind(versionId)
-    );
-    deleteStatements.push(
-      db.prepare(
-        `DELETE FROM crafting_blueprint_slots WHERE crafting_blueprint_id IN (
-          SELECT id FROM crafting_blueprints WHERE game_version_id = ?
-        )`
-      ).bind(versionId)
-    );
-
-    // mining_location_deposits → mining_locations (versioned)
-    deleteStatements.push(
-      db.prepare(
-        `DELETE FROM mining_location_deposits WHERE mining_location_id IN (
-          SELECT id FROM mining_locations WHERE game_version_id = ?
-        )`
-      ).bind(versionId)
-    );
-
-    // salvageable_ship_components → salvageable_ships (versioned)
-    deleteStatements.push(
-      db.prepare(
-        `DELETE FROM salvageable_ship_components WHERE salvageable_ship_id IN (
-          SELECT id FROM salvageable_ships WHERE game_version_id = ?
-        )`
-      ).bind(versionId)
-    );
-
-    // Then delete versioned tables
-    for (const t of versionedTables) {
-      deleteStatements.push(
-        db.prepare(`DELETE FROM ${t} WHERE game_version_id = ?`).bind(versionId)
-      );
-    }
-
-    // Clean up npc_factions — lookup table, no game_version_id.
-    // Runs after npc_loadouts are deleted so orphaned factions get removed.
-    deleteStatements.push(
-      db.prepare("DELETE FROM npc_factions WHERE id NOT IN (SELECT DISTINCT faction_id FROM npc_loadouts WHERE faction_id IS NOT NULL)")
-    );
+    const dropStatements: D1PreparedStatement[] = [
+      // Drop child shadow tables first
+      ...ptuChildTables.map(t => db.prepare(`DROP TABLE IF EXISTS ${t}`)),
+      // Drop all versioned shadow tables
+      ...VERSIONED_TABLES.map(t => db.prepare(`DROP TABLE IF EXISTS ptu_${t}`)),
+    ];
 
     // Clear build_number so the row is hidden from dropdown
-    deleteStatements.push(
+    dropStatements.push(
       db.prepare("UPDATE game_versions SET build_number = NULL WHERE id = ?").bind(versionId)
     );
 
     try {
-      await db.batch(deleteStatements);
+      // D1 batch limit is 100 statements
+      for (let i = 0; i < dropStatements.length; i += 100) {
+        await db.batch(dropStatements.slice(i, i + 100));
+      }
     } catch (err) {
       console.error("[admin/ptu-purge] batch failed:", err);
       return c.json({ error: `Purge failed: ${String(err)}` }, 500);
@@ -706,7 +631,7 @@ export function adminRoutes() {
     const kv = c.env.SC_BRIDGE_CACHE;
     await purgeByPrefix(kv);
 
-    return c.json({ ok: true, tables_purged: versionedTables.length + 4, channel }); // +4 child tables
+    return c.json({ ok: true, tables_purged: VERSIONED_TABLES.length + ptuChildTables.length, channel });
   });
 
   /**

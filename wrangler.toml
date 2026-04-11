@@ -42,6 +42,10 @@ migrations_dir = "src/db/migrations"
 binding = "SC_BRIDGE_CACHE"
 id = "608aaea06e2b4177b7e824a05e680ff3"
 
+[[env.production.kv_namespaces]]
+binding = "LOCALIZATION_KV"
+id = "2ec90d2a93d44e83921625176255a8bd"
+
 [[env.production.r2_buckets]]
 binding = "AVATARS"
 bucket_name = "scbridge-avatars-production"
@@ -50,7 +54,6 @@ bucket_name = "scbridge-avatars-production"
 crons = [
   "30 3 * * *",  # session cleanup
   "45 3 * * *",  # RSI API images (ships + paints)
-  "0 4 * * *",   # Fleetyards production status sync
   "0 */2 * * *", # UEX commodity prices (every 2h)
   "30 5 * * *",  # UEX item prices (daily)
 ]
@@ -92,6 +95,10 @@ migrations_dir = "src/db/migrations"
 [[env.staging.kv_namespaces]]
 binding = "SC_BRIDGE_CACHE"
 id = "c43dfff89ae445a897916dc8e3fa7967"
+
+[[env.staging.kv_namespaces]]
+binding = "LOCALIZATION_KV"
+id = "2ec90d2a93d44e83921625176255a8bd"
 
 [[env.staging.r2_buckets]]
 binding = "AVATARS"
