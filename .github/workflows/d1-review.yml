@@ -1,0 +1,100 @@
+name: D1 Review
+
+# Manually triggered D1 review gate.
+#
+# This workflow runs the d1-review engine (lives in the private SC-Bridge/tools repo)
+# against the scbridge-staging D1 database and produces a markdown+JSON report.
+#
+# To enable the automatic gate-on-deploy path, a repository secret `TOOLS_REPO_PAT`
+# must be set to a PAT with `repo:read` scope on SC-Bridge/tools. Until then, run
+# this workflow manually via the Actions tab → "D1 Review" → "Run workflow".
+
+on:
+  workflow_dispatch:
+    inputs:
+      env:
+        description: "Target D1 database"
+        required: true
+        default: "staging"
+        type: choice
+        options:
+          - staging
+          - production
+      mode:
+        description: "Engine mode"
+        required: true
+        default: "report"
+        type: choice
+        options:
+          - report
+          - gate
+      strict:
+        description: "Treat WARN as blocking (gate mode only)"
+        required: false
+        default: false
+        type: boolean
+
+jobs:
+  review:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    steps:
+      - name: Checkout fleet-manager
+        uses: actions/checkout@v6
+
+      - name: Checkout tools repo
+        uses: actions/checkout@v6
+        with:
+          repository: SC-Bridge/tools
+          token: ${{ secrets.TOOLS_REPO_PAT }}
+          path: tools
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Install Python deps
+        run: pip install pyyaml
+
+      - name: Set up Node (for wrangler)
+        uses: actions/setup-node@v6
+        with:
+          node-version: 22
+
+      - name: Run d1-review
+        id: review
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+        run: |
+          cd tools/scripts
+          STRICT_FLAG=""
+          if [ "${{ inputs.strict }}" = "true" ]; then STRICT_FLAG="--strict"; fi
+          python3 -m d1_review.cli \
+            --env "${{ inputs.env }}" \
+            --mode "${{ inputs.mode }}" \
+            --config "${{ github.workspace }}/wrangler.toml" \
+            --out-dir "${{ github.workspace }}/qa-reports" \
+            --baseline-dir "${{ github.workspace }}/tools/qa-baselines" \
+            $STRICT_FLAG
+
+      - name: Upload report artifact
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: d1-review-${{ inputs.env }}-${{ github.run_id }}
+          path: qa-reports/*
+          retention-days: 30
+
+      - name: Append report to summary
+        if: always()
+        run: |
+          echo "## D1 Review — ${{ inputs.env }} (${{ inputs.mode }} mode)" >> $GITHUB_STEP_SUMMARY
+          LATEST_MD=$(ls -t qa-reports/d1-review-${{ inputs.env }}-*.md 2>/dev/null | head -1 || echo "")
+          if [ -n "$LATEST_MD" ]; then
+            cat "$LATEST_MD" >> $GITHUB_STEP_SUMMARY
+          else
+            echo "No report file produced." >> $GITHUB_STEP_SUMMARY
+          fi
