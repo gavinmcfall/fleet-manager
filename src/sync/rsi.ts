@@ -422,6 +422,12 @@ interface ShipMatrixShip {
   name: string;
   production_status: string;
   chassis_id: number;
+  // Additional fields used for backfilling concept ships without p4k data.
+  // All can be null in the response; we only UPDATE when the DB column is NULL.
+  cargocapacity: number | null;
+  scm_speed: number | null;
+  type: string | null; // combat / transport / industrial / exploration / multi / competition / support / ground
+  size: string | null; // small / medium / large / capital / snub / vehicle
 }
 
 interface ShipMatrixResponse {
@@ -532,15 +538,30 @@ export async function syncShipProductionStatus(db: D1Database): Promise<void> {
     console.log(`[rsi] Fetched ${rsiShips.length} ships from ship-matrix`);
 
     // Load all DB vehicles (latest game version) for matching.
-    // We need more than just name/slug — we need the id to UPDATE.
+    // We fetch current values for the columns we might backfill — only fill
+    // NULLs, never overwrite p4k-sourced data.
     const { results: dbVehicles } = await db
       .prepare(
-        `SELECT v.id, v.name, v.slug
+        `SELECT v.id, v.name, v.slug, v.cargo, v.vehicle_type,
+                v.speed_scm, v.production_status_id, v.class_name
            FROM vehicles v
           WHERE v.removed = 0
             AND v.is_deleted = 0`,
       )
-      .all<{ id: number; name: string; slug: string }>();
+      .all<{
+        id: number;
+        name: string;
+        slug: string;
+        cargo: number | null;
+        vehicle_type: string | null;
+        speed_scm: number | null;
+        production_status_id: number | null;
+        class_name: string | null;
+      }>();
+
+    // Index rows by id for backfill lookups.
+    const dbById = new Map<number, typeof dbVehicles[0]>();
+    for (const v of dbVehicles) dbById.set(v.id, v);
 
     // Build lookup indexes.
     // 1. Direct name match (full lowercase name → id)
@@ -574,9 +595,18 @@ export async function syncShipProductionStatus(db: D1Database): Promise<void> {
     const statusKeyToId = new Map<string, number>();
     for (const s of statusRows) statusKeyToId.set(s.key, s.id);
 
-    // Match ships and collect updates
+    // Match ships and collect updates. RSI ship-matrix is the authoritative
+    // source for production_status. It's also the ONLY source for cargo /
+    // vehicle_type / speed_scm on RSI-only concept ships (Galaxy, Kraken,
+    // Orion etc.) that exist in our DB via seed but have no p4k entity data.
+    //
+    // Backfill rule: only UPDATE when the DB column is NULL. p4k data wins
+    // over RSI when both exist (p4k is authoritative for per-ship mechanics).
     const matchedIds = new Set<number>();
-    const updates: Array<{ id: number; statusId: number }> = [];
+    const statusUpdates: Array<{ id: number; statusId: number }> = [];
+    const cargoUpdates: Array<{ id: number; cargo: number }> = [];
+    const vtypeUpdates: Array<{ id: number; vehicleType: string }> = [];
+    const scmUpdates: Array<{ id: number; speedScm: number }> = [];
     let unmatched = 0;
     const unmatchedNames: string[] = [];
 
@@ -585,18 +615,17 @@ export async function syncShipProductionStatus(db: D1Database): Promise<void> {
       if (!shipName) continue;
 
       const normalizedStatus = normalizeProductionStatus(ship.production_status);
+      const statusId = normalizedStatus ? statusKeyToId.get(normalizedStatus) : undefined;
+      // We can still apply cargo / vehicle_type / speed_scm even when the
+      // production status is missing — those are independent columns.
       if (!normalizedStatus) {
         console.log(
-          `[rsi] Skipping ${shipName}: unknown status ${ship.production_status}`,
+          `[rsi] Unknown status for ${shipName}: ${ship.production_status}`,
         );
-        continue;
-      }
-      const statusId = statusKeyToId.get(normalizedStatus);
-      if (!statusId) {
+      } else if (!statusId) {
         console.log(
-          `[rsi] Skipping ${shipName}: no production_statuses row for ${normalizedStatus}`,
+          `[rsi] No production_statuses row for ${normalizedStatus} (${shipName})`,
         );
-        continue;
       }
 
       // Try each matching strategy in order
@@ -635,29 +664,76 @@ export async function syncShipProductionStatus(db: D1Database): Promise<void> {
       }
 
       matchedIds.add(dbId);
-      updates.push({ id: dbId, statusId });
+      const dbRow = dbById.get(dbId);
+      if (!dbRow) continue; // defensive — shouldn't happen
+
+      // production_status (always update if we have a valid statusId — keep
+      // the existing behavior where RSI wins because production status is an
+      // RSI concern, not a p4k one).
+      if (statusId) statusUpdates.push({ id: dbId, statusId });
+
+      // cargo — only fill if DB is NULL. Accept 0 as a valid value.
+      if (dbRow.cargo === null && typeof ship.cargocapacity === "number") {
+        cargoUpdates.push({ id: dbId, cargo: ship.cargocapacity });
+      }
+
+      // vehicle_type — only fill if NULL. ship-matrix 'type' values map to
+      // our convention: 'ground' → ground_vehicle, everything else → spaceship.
+      // (We don't have a reliable gravlev distinction from ship-matrix alone;
+      // gravlev vehicles mostly come from p4k with correct vehicle_type already.)
+      if (dbRow.vehicle_type === null && ship.type) {
+        const vt = ship.type.toLowerCase() === "ground" ? "ground_vehicle" : "spaceship";
+        vtypeUpdates.push({ id: dbId, vehicleType: vt });
+      }
+
+      // speed_scm — only fill if NULL AND the RSI value is > 0. RSI publishes
+      // 0 for many concepts without finalized flight mechanics; we'd rather
+      // leave those NULL than misrepresent as stationary.
+      if (
+        dbRow.speed_scm === null &&
+        typeof ship.scm_speed === "number" &&
+        ship.scm_speed > 0
+      ) {
+        scmUpdates.push({ id: dbId, speedScm: ship.scm_speed });
+      }
     }
 
     console.log(
-      `[rsi] Matched ${updates.length}/${rsiShips.length} ship-matrix entries to DB`,
+      `[rsi] Matched ${matchedIds.size}/${rsiShips.length} ship-matrix entries to DB ` +
+        `(status=${statusUpdates.length} cargo=${cargoUpdates.length} ` +
+        `vtype=${vtypeUpdates.length} scm=${scmUpdates.length})`,
     );
     if (unmatched > 0) {
       console.log(`[rsi] Unmatched RSI ships (${unmatched}): ${unmatchedNames.join(", ")}`);
     }
 
     // Apply updates in batches. Also mark everything in the DB as pledgeable=1
-    // if the column exists (migration may not be applied yet) — we do this in
-    // the same batch by including an is_pledgeable update via COALESCE so it's
-    // a no-op if the column is missing. Actually simpler: use two passes and
-    // tolerate errors on the is_pledgeable path.
+    // if the column exists (migration may not be applied yet).
     const statements: D1PreparedStatement[] = [];
-    for (const u of updates) {
+    for (const u of statusUpdates) {
       statements.push(
         db
-          .prepare(
-            `UPDATE vehicles SET production_status_id = ? WHERE id = ?`,
-          )
+          .prepare(`UPDATE vehicles SET production_status_id = ? WHERE id = ?`)
           .bind(u.statusId, u.id),
+      );
+    }
+    for (const u of cargoUpdates) {
+      statements.push(
+        db.prepare(`UPDATE vehicles SET cargo = ? WHERE id = ?`).bind(u.cargo, u.id),
+      );
+    }
+    for (const u of vtypeUpdates) {
+      statements.push(
+        db
+          .prepare(`UPDATE vehicles SET vehicle_type = ? WHERE id = ?`)
+          .bind(u.vehicleType, u.id),
+      );
+    }
+    for (const u of scmUpdates) {
+      statements.push(
+        db
+          .prepare(`UPDATE vehicles SET speed_scm = ? WHERE id = ?`)
+          .bind(u.speedScm, u.id),
       );
     }
 
@@ -705,12 +781,20 @@ export async function syncShipProductionStatus(db: D1Database): Promise<void> {
       await db.batch(chunk);
     }
 
-    const detail = `matched=${updates.length} unmatched=${unmatched} fetched=${rsiShips.length}`;
-    await updateSyncHistory(db, syncID, "success", updates.length, detail);
+    const detail =
+      `matched=${matchedIds.size} unmatched=${unmatched} ` +
+      `status=${statusUpdates.length} cargo=${cargoUpdates.length} ` +
+      `vtype=${vtypeUpdates.length} scm=${scmUpdates.length} ` +
+      `fetched=${rsiShips.length}`;
+    await updateSyncHistory(db, syncID, "success", matchedIds.size, detail);
     console.log(`[rsi] Ship production status sync complete: ${detail}`);
     logEvent("sync_rsi_production_status", {
       fetched: rsiShips.length,
-      matched: updates.length,
+      matched: matchedIds.size,
+      status_updates: statusUpdates.length,
+      cargo_updates: cargoUpdates.length,
+      vtype_updates: vtypeUpdates.length,
+      scm_updates: scmUpdates.length,
       unmatched,
       pledgeable_errors: pledgeableErrors,
     });
