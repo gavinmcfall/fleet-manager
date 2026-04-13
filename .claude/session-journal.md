@@ -1,8 +1,76 @@
 # Session Journal
 
 ## Current Focus
-**Data integrity remediation COMPLETE. Starting crafting_blueprint_reward_pool_items gap.**
-scbridge-staging fully loaded + validated 2026-04-12 13:17. Next up: populate `crafting_blueprint_reward_pool_items` (currently 0 rows — mission reward chain data).
+**PHASE A LOAD-ORDER PLAN WRITTEN. Ready to execute 2026-04-14+ when Gavin resumes.**
+
+2026-04-13 end-of-night — after the earlier milestones (gap closure, RSI poller extension, DNS zone import), the session closed with two extractor hardenings + Phase A runbook:
+
+**Tonight's additions (session tail):**
+1. **Promoter script built + committed** — `tools/db-ops/promote_game_data.py` dumps game-data tables from scbridge-staging → scbridge-production, preserves source ids verbatim, 47+11 table exclude list. Dry-run against scbridge-staging found 130 game tables.
+2. **Companion tables gap found and closed** — while dry-running promoter, discovered 11 `companion_*` telemetry tables were missing from `extract_user_data.py` + YAML FK matrix. NERDZ prod has **~11,413 rows** of real companion data (315 sessions, 5,872 events, ...). All FKs are text_stable (user_id → user.id), no chain remap needed. Added to extractor, YAML, and promoter exclude list. Commit `7b3bde0`.
+3. **Full extractor dry-run against NERDZ prod** — 58 tables, 0 failures, **25,860 SQL statements** totalling 9.1 MB. Zero orphan FKs on the three biggest self-ref chains (user_pledges.sync_id, user_pledge_items.user_pledge_id, user_pledge_upgrades.user_pledge_id). Output at `/tmp/nerdz-prod-full-dryrun.sql`.
+4. **Phase A load-order plan written** — `/home/gavin/scbridge/tools/docs/plan/2026-04-14-phase-a-load-order.md`, commit `14c1005`. Covers BA bootstrap → migrations → game data → (optional RSI re-sync) → user data → verify → cleanup.
+
+**Earlier this session:**
+1. **Close-every-gap plan executed** — 7/7 coverage rules green on scbridge-staging.
+2. **RSI poller extended** to populate cargo + vehicle_type + scm_speed from ship-matrix. Deploy run `24329962693` green.
+3. **DNS zone** imported into SC Bridge account (17 records). Awaiting registrar transfer post-Phase A.
+
+### State of play at session break (2026-04-13 ~20:30 NZ)
+
+**Commits landed:**
+| SHA | Repo | What |
+|---|---|---|
+| `4f1e3b8` | fleet-manager | P1: drop dead tables (commodities, fps_ammo) — migration 0194 |
+| `260f01f` | tools | P2: 7 pipeline gap fixes bundled |
+| `85559de` | tools | new d1-review baseline after pipeline fixes |
+| `d781db4` | tools | P3-A: coverage rules engine + ship-family fuel fallback |
+| `116c488` | tools | P3-C: cargo family fallback + tighten applicability |
+| `8dfa511` | fleet-manager | P3-T16: RSI poller extends cargo/vehicle_type/scm; on staging branch |
+| `e5d03dc` | tools | db-ops/ba-bootstrap.sql — BA schema (twoFactorEnabled stripped) |
+| `a37ca92` | tools | db-ops/extract_user_data.py — NERDZ→SC Bridge user extractor |
+| `1435a4e` | tools | db-ops/extract_strategy.md + user_data_fk_remap.yaml |
+| `7b3bde0` | tools | 11 companion_* tables added to extractor + promoter |
+| `14c1005` | tools | Phase A load-order plan (2026-04-14) |
+
+**Migration 0195** (`0195_user_two_factor_enabled.sql`) — applied to scbridge-staging ONLY. NOT yet applied to scbridge-production (DB is empty). When loading scbridge-production, BA bootstrap must run FIRST with `twoFactorEnabled` removed from `user` CREATE TABLE so 0195 does its ADD COLUMN cleanly.
+
+**Cutover status:**
+- scbridge.app zone exists in SC Bridge account, 17 records loaded, status Pending
+- SC Bridge workers deployed (scbridge, scbridge-staging), no Custom Domain bindings yet
+- NERDZ still authoritative for scbridge.app, still serving 34 users + 8 staging test users
+- Zone file exported to `/mnt/c/Users/gavin/Downloads/scbridge.app.txt` (17 records)
+- Inter-account transfer NOT yet submitted — waits for Phase A data load + Worker bindings
+
+**Next up when session resumes (2026-04-14+):**
+**Primary reference:** `tools/docs/plan/2026-04-14-phase-a-load-order.md`
+
+Strict load order for scbridge-production:
+1. **BA bootstrap** (`ba-bootstrap.sql`) — creates 9 BA tables WITHOUT `twoFactorEnabled`
+2. **Migrations 0001-0195** — schema + migration 0195 ADD COLUMN twoFactorEnabled
+3. **Game data promoter** — `promote_game_data.py --source-db scbridge-staging --output /tmp/scbridge-prod-game-data.sql` then apply
+4. **(Optional) RSI seed re-sync** — skip unless specific need; scbridge-staging data is current
+5. **User data extractor** — `extract_user_data.py --source-db sc-companion-v2` then apply
+6. **Verification** — every orphan-FK query must return 0; d1-review gate must pass
+7. **Cleanup migration 0196** — DROP _nerdz_id columns after green verification
+
+**Open decisions for tomorrow:** (1) rehearse on scbridge-staging first? (2) regenerate game-data SQL day-of vs reuse tonight's output? (3) fresh NERDZ extract day-of vs reuse tonight's 25,860-stmt file?
+
+**Validated row counts (2026-04-13 dry-run):** 34 users, 3,024 pledges, 6,897 pledge items, 1,107 fleet rows, 11,413 companion rows, 25,860 total statements, 9.1 MB.
+
+### Molasses rule (2026-04-13) — Gavin directive
+> "we take this like molasses, slow and steady. one step at a time, we pause throughout, we update we asssess, we validate we move... You must NEVER assume ANYTHING, treat the wirten word in your documentation as stale, you validate every ID, every env var, every data point"
+
+Has caught 3 doc/assumption bugs this session: wrong staging UUID in CLAUDE.md, misleading "staging deploy verified" claim, wrong "user_rsi_profiles is deprecated" assumption.
+
+### Memory files with full detail
+- `project_close_every_gap_plan.md` — 17-gap P1/P2/P3 execution
+- `project_coverage_rules_engine.md` — d1-review YAML type:coverage rules
+- `project_nerdz_cutover_validation.md` — 40+ validated facts, commits, preconditions, procedure
+- Plan doc: `/home/gavin/scbridge/tools/docs/plan/2026-04-13-close-every-gap.md`
+- Plan doc: `/home/gavin/scbridge/tools/docs/plan/2026-04-13-nerdz-to-scbridge-cutover.md`
+
+### Previous focus (carry forward for context)
 
 ### Session 2026-04-12 afternoon — Completion of overnight remediation
 
