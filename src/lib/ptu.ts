@@ -42,7 +42,7 @@ export const VERSIONED_TABLES = [
   "mining_clustering_presets", "mineable_elements",
   // FPS tables → manufacturers
   "fps_weapons", "fps_utilities", "fps_melee", "fps_helmets",
-  "fps_clothing", "fps_attachments", "fps_armour", "fps_ammo",
+  "fps_clothing", "fps_attachments", "fps_armour",
   "fps_ammo_types", "fps_carryables",
   "consumable_effects", "consumable_effect_types", "consumables",
   // Contract system
@@ -55,7 +55,7 @@ export const VERSIONED_TABLES = [
   "armor_resistance_profiles",
   "jurisdiction_infraction_overrides", "law_jurisdictions", "law_infractions",
   "harvestables", "props",
-  "trade_commodities", "commodities",
+  "trade_commodities",
   "refining_processes",
   "damage_types", "factions",
   "paints", "shops",
