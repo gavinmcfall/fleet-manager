@@ -232,8 +232,7 @@ export function loadoutRoutes() {
                 cw.heat_per_shot, vc.power_draw, vc.power_draw_min, cw.fire_modes,
                 cr.radar_range, cr.radar_angle,
                 ce.qed_range, ce.qed_strength,
-                cm.ammo_count, cm.missile_type, cm.lock_time, cm.tracking_signal,
-                cm.damage, cm.blast_radius, cm.speed, cm.lock_range,
+                cm.ammo_count, cm.missile_type,
                 vc.em_signature, vc.mass, vc.hp, cc.overheat_temperature,
                 vc.base_heat_generation, vc.distortion_max,
                 m.name AS manufacturer_name, m.code AS manufacturer_code
