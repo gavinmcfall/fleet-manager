@@ -1160,13 +1160,16 @@ export async function getLootByUuid(db: D1Database, uuid: string): Promise<Recor
       .first() as Record<string, unknown> | null;
   }
 
-  // Fetch locations from junction table, resolving UUIDs to display names
+  // Fetch locations from junction table, resolving UUIDs to display names.
+  // 9 vestigial cols were dropped in migration 0203 (buy_price/sell_price →
+  // terminal_inventory; contract_name/guild/reward_type/reward_amount/reward_max/amount
+  // → contracts tables; location_tag → unused). Kept fields: container mechanics,
+  // NPC actor/faction, denormalized spawn_locations, core source+location.
   const locations = await db.prepare(`
-    SELECT lil.source_type, lil.location_key, lil.location_tag, lil.container_type,
+    SELECT lil.source_type, lil.location_key, lil.container_type,
       lil.per_container, lil.per_roll, lil.rolls, lil.loot_table,
-      lil.buy_price, lil.sell_price,
       lil.actor, lil.faction, lil.slot, lil.probability, lil.spawn_locations,
-      lil.contract_name, lil.guild, lil.reward_type, lil.amount, lil.weight,
+      lil.weight,
       COALESCE(s.name, sml.name, nl.loadout_name, lil.location_key) as location_name,
       s.slug as shop_slug, s.location_label as shop_location
     FROM loot_item_locations lil
@@ -1310,11 +1313,10 @@ export async function getUserLootWishlist(db: D1Database, userId: string): Promi
   const ids = items.map(i => i.id);
   const placeholders = ids.map(() => '?').join(',');
   const locResult = await db.prepare(
-    `SELECT loot_map_id, source_type, location_key, location_tag, container_type,
+    `SELECT loot_map_id, source_type, location_key, container_type,
       per_container, per_roll, rolls, loot_table,
-      buy_price, sell_price,
       actor, faction, slot, probability,
-      contract_name, guild, reward_type, amount, weight
+      weight
     FROM loot_item_locations WHERE loot_map_id IN (${placeholders})`
   ).bind(...ids).all();
 
@@ -1495,9 +1497,8 @@ export async function getLootSetBySlug(
   if (pieceIds.length > 0) {
     const locPlaceholders = pieceIds.map(() => '?').join(',');
     const locResult = await db.prepare(
-      `SELECT loot_map_id, source_type, location_key, location_tag, container_type,
-        per_container, buy_price, sell_price, actor, faction, slot, probability,
-        contract_name, guild
+      `SELECT loot_map_id, source_type, location_key, container_type,
+        per_container, actor, faction, slot, probability
       FROM loot_item_locations WHERE loot_map_id IN (${locPlaceholders})`
     ).bind(...pieceIds).all();
 

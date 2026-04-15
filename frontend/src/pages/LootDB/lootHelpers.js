@@ -85,14 +85,18 @@ export function resolveLocationEntry(entry, type) {
     }
   }
   if (type === 'contracts') {
+    // contract_name, guild, contract dropped in migration 0203 — canonical
+    // source is contracts table. Frontend should prefer entry.contract fields
+    // that come from the contracts JOIN; legacy entry.guild/contract_name stay
+    // for backwards-compat with older cached responses.
     const guild = entry.guild || entry.contract || '?'
     const contractRef = entry.contract_name || entry.contract || null
     return { label: guild, detail: null, probability: null, contractKey: true, contractRef }
   }
   // containers, default — junction table: location_key, container_type, per_container
-  const rawKey = entry.location_key || entry.location || entry.locationTag || ''
+  const rawKey = entry.location_key || entry.location || ''
   return {
-    label: rawKey ? friendlyLocation(rawKey) : (entry.location_tag || entry.name || '?'),
+    label: rawKey ? friendlyLocation(rawKey) : (entry.name || '?'),
     detail: entry.container_type || entry.containerType || null,
     probability: entry.per_container ?? entry.perContainer ?? entry.probability ?? null,
     rawKey,

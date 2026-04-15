@@ -260,18 +260,22 @@ export function loadoutRoutes() {
     let shopMap: Record<string, Array<{ location_key: string; shop_name: string; location_label: string | null; buy_price: number | null }>> = {};
 
     if (classNames.length > 0) {
+      // Three-layer shop model (migrations 0184-0185): terminal_inventory holds
+      // item prices per terminal; terminals roll up to shops. Join lm.uuid →
+      // terminal_inventory.item_uuid → terminals → shops.
       const shopRows = await batchInQuery<any>(
         db,
         classNames,
         (ph) =>
           `SELECT REPLACE(lm.class_name, 'EntityClassDefinition.', '') AS class_name,
-                  lil.location_key, ROUND(lil.buy_price) AS buy_price,
+                  t.shop_name_key AS location_key,
+                  ROUND(COALESCE(ti.latest_buy_price, ti.base_buy_price)) AS buy_price,
                   s.display_name AS shop_name, s.location_label
-           FROM loot_item_locations lil
-           JOIN loot_map lm ON lm.id = lil.loot_map_id
-           LEFT JOIN shops s ON REPLACE(s.name, ' ', '_') = lil.location_key
-             AND s.display_name IS NOT NULL
-           WHERE lil.source_type = 'shop' AND lil.buy_price > 0
+           FROM terminal_inventory ti
+           JOIN loot_map lm ON lm.uuid = ti.item_uuid
+           JOIN terminals t ON t.id = ti.terminal_id
+           LEFT JOIN shops s ON s.id = t.shop_id
+           WHERE COALESCE(ti.latest_buy_price, ti.base_buy_price) > 0
              AND REPLACE(lm.class_name, 'EntityClassDefinition.', '') IN (${ph})`,
       );
 
@@ -279,7 +283,7 @@ export function loadoutRoutes() {
         if (!shopMap[row.class_name]) shopMap[row.class_name] = [];
         shopMap[row.class_name].push({
           location_key: row.location_key,
-          shop_name: row.shop_name || row.location_key.replace(/^Inv_/, '').replace(/_/g, ' '),
+          shop_name: row.shop_name || (row.location_key || '').replace(/^Inv_/, '').replace(/_/g, ' '),
           location_label: row.location_label,
           buy_price: row.buy_price,
         });
@@ -513,14 +517,18 @@ export function loadoutRoutes() {
          LEFT JOIN manufacturers m ON m.id = vc.manufacturer_id
          LEFT JOIN (
            SELECT REPLACE(lm.class_name, 'EntityClassDefinition.', '') AS class_name,
-                  COALESCE(s.display_name, REPLACE(REPLACE(lil.location_key, 'Inv_', ''), '_', ' ')) AS shop_display_name,
+                  COALESCE(s.display_name, REPLACE(REPLACE(t.shop_name_key, 'Inv_', ''), '_', ' ')) AS shop_display_name,
                   s.location_label,
-                  ROUND(lil.buy_price) AS buy_price,
-                  ROW_NUMBER() OVER (PARTITION BY lm.class_name ORDER BY lil.buy_price ASC) AS rn
-           FROM loot_item_locations lil
-           JOIN loot_map lm ON lm.id = lil.loot_map_id
-           LEFT JOIN shops s ON REPLACE(s.name, ' ', '_') = lil.location_key AND s.display_name IS NOT NULL
-           WHERE lil.source_type = 'shop' AND lil.buy_price > 0
+                  ROUND(COALESCE(ti.latest_buy_price, ti.base_buy_price)) AS buy_price,
+                  ROW_NUMBER() OVER (
+                    PARTITION BY lm.class_name
+                    ORDER BY COALESCE(ti.latest_buy_price, ti.base_buy_price) ASC
+                  ) AS rn
+           FROM terminal_inventory ti
+           JOIN loot_map lm ON lm.uuid = ti.item_uuid
+           JOIN terminals t ON t.id = ti.terminal_id
+           LEFT JOIN shops s ON s.id = t.shop_id
+           WHERE COALESCE(ti.latest_buy_price, ti.base_buy_price) > 0
          ) cheapest ON cheapest.class_name = vc.class_name AND cheapest.rn = 1
          LEFT JOIN user_fleet uf ON uf.id = ulc.source_fleet_id
          LEFT JOIN vehicles v ON v.id = uf.vehicle_id
@@ -540,15 +548,17 @@ export function loadoutRoutes() {
 
     const rows = await c.env.DB
       .prepare(
-        `SELECT lil.location_key, ROUND(lil.buy_price) AS buy_price,
-                COALESCE(s.display_name, REPLACE(REPLACE(lil.location_key, 'Inv_', ''), '_', ' ')) AS shop_name,
+        `SELECT t.shop_name_key AS location_key,
+                ROUND(COALESCE(ti.latest_buy_price, ti.base_buy_price)) AS buy_price,
+                COALESCE(s.display_name, REPLACE(REPLACE(t.shop_name_key, 'Inv_', ''), '_', ' ')) AS shop_name,
                 s.location_label
-         FROM loot_item_locations lil
-         JOIN loot_map lm ON lm.id = lil.loot_map_id
-         LEFT JOIN shops s ON REPLACE(s.name, ' ', '_') = lil.location_key AND s.display_name IS NOT NULL
-         WHERE lil.source_type = 'shop' AND lil.buy_price > 0
+         FROM terminal_inventory ti
+         JOIN loot_map lm ON lm.uuid = ti.item_uuid
+         JOIN terminals t ON t.id = ti.terminal_id
+         LEFT JOIN shops s ON s.id = t.shop_id
+         WHERE COALESCE(ti.latest_buy_price, ti.base_buy_price) > 0
            AND REPLACE(lm.class_name, 'EntityClassDefinition.', '') = ?
-         ORDER BY lil.buy_price ASC`,
+         ORDER BY COALESCE(ti.latest_buy_price, ti.base_buy_price) ASC`,
       )
       .bind(className)
       .all();
