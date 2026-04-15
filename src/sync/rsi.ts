@@ -428,6 +428,22 @@ interface ShipMatrixShip {
   scm_speed: number | null;
   type: string | null; // combat / transport / industrial / exploration / multi / competition / support / ground
   size: string | null; // small / medium / large / capital / snub / vehicle
+  // ── Extended 2026-04-15 — concept-ship gap closure ────────────
+  // Physical + meta fields the ship-matrix publishes that were previously
+  // unread by the poller. Values arrive as strings ("120") or numbers;
+  // coerce via toNumber. See reference_fps_ammo_damage_thermal_drift.md
+  // for plan docs/2026-04-15-scbridge-launch-cutover.md Phase 6.
+  length: string | number | null;
+  beam: string | number | null;
+  height: string | number | null;
+  mass: string | number | null;
+  min_crew: string | number | null;
+  max_crew: string | number | null;
+  classification: string | null;
+  focus: string | null;
+  url: string | null;
+  price: string | number | null;
+  manufacturer: { code?: string; name?: string } | null;
 }
 
 interface ShipMatrixResponse {
@@ -436,6 +452,17 @@ interface ShipMatrixResponse {
 }
 
 const SHIP_MATRIX_URL = "https://robertsspaceindustries.com/ship-matrix/index";
+
+/**
+ * Coerce string|number|null → number|null.
+ * Ship-matrix returns numeric fields as strings ("120") or numbers or null.
+ * Treats empty string as null. Returns null for unparseable.
+ */
+function toNumber(v: unknown): number | null {
+  if (v === null || v === undefined || v === "") return null;
+  const n = typeof v === "number" ? v : parseFloat(String(v));
+  return Number.isFinite(n) ? n : null;
+}
 
 /** Map RSI's status values to our production_statuses.key values. */
 function normalizeProductionStatus(rsi: string | null | undefined): string | null {
@@ -543,7 +570,11 @@ export async function syncShipProductionStatus(db: D1Database): Promise<void> {
     const { results: dbVehicles } = await db
       .prepare(
         `SELECT v.id, v.name, v.slug, v.cargo, v.vehicle_type,
-                v.speed_scm, v.production_status_id, v.class_name
+                v.speed_scm, v.production_status_id, v.class_name,
+                v.length, v.beam, v.height, v.mass,
+                v.crew_min, v.crew_max, v.classification, v.focus,
+                v.pledge_url, v.pledge_price, v.manufacturer_code,
+                v.manufacturer_id
            FROM vehicles v
           WHERE v.removed = 0
             AND v.is_deleted = 0`,
@@ -557,6 +588,18 @@ export async function syncShipProductionStatus(db: D1Database): Promise<void> {
         speed_scm: number | null;
         production_status_id: number | null;
         class_name: string | null;
+        length: number | null;
+        beam: number | null;
+        height: number | null;
+        mass: number | null;
+        crew_min: number | null;
+        crew_max: number | null;
+        classification: string | null;
+        focus: string | null;
+        pledge_url: string | null;
+        pledge_price: number | null;
+        manufacturer_code: string | null;
+        manufacturer_id: number | null;
       }>();
 
     // Index rows by id for backfill lookups.
@@ -607,6 +650,18 @@ export async function syncShipProductionStatus(db: D1Database): Promise<void> {
     const cargoUpdates: Array<{ id: number; cargo: number }> = [];
     const vtypeUpdates: Array<{ id: number; vehicleType: string }> = [];
     const scmUpdates: Array<{ id: number; speedScm: number }> = [];
+    // ── Extended 2026-04-15: physical + meta fields ─────────────
+    const lengthUpdates: Array<{ id: number; length: number }> = [];
+    const beamUpdates: Array<{ id: number; beam: number }> = [];
+    const heightUpdates: Array<{ id: number; height: number }> = [];
+    const massUpdates: Array<{ id: number; mass: number }> = [];
+    const crewMinUpdates: Array<{ id: number; crewMin: number }> = [];
+    const crewMaxUpdates: Array<{ id: number; crewMax: number }> = [];
+    const classificationUpdates: Array<{ id: number; classification: string }> = [];
+    const focusUpdates: Array<{ id: number; focus: string }> = [];
+    const pledgeUrlUpdates: Array<{ id: number; url: string }> = [];
+    const pledgePriceUpdates: Array<{ id: number; price: number }> = [];
+    const mfrCodeUpdates: Array<{ id: number; code: string }> = [];
     let unmatched = 0;
     const unmatchedNames: string[] = [];
 
@@ -696,12 +751,64 @@ export async function syncShipProductionStatus(db: D1Database): Promise<void> {
       ) {
         scmUpdates.push({ id: dbId, speedScm: ship.scm_speed });
       }
+
+      // ── Physical + meta fields (2026-04-15 extension) ──────────
+      // Only fill if DB is NULL — p4k data wins for Flight Ready ships.
+      // Concept ships have no p4k entity so RSI is their only source.
+      const length = toNumber(ship.length);
+      if (dbRow.length === null && length !== null && length > 0) {
+        lengthUpdates.push({ id: dbId, length });
+      }
+      const beam = toNumber(ship.beam);
+      if (dbRow.beam === null && beam !== null && beam > 0) {
+        beamUpdates.push({ id: dbId, beam });
+      }
+      const height = toNumber(ship.height);
+      if (dbRow.height === null && height !== null && height > 0) {
+        heightUpdates.push({ id: dbId, height });
+      }
+      const mass = toNumber(ship.mass);
+      if (dbRow.mass === null && mass !== null && mass > 0) {
+        massUpdates.push({ id: dbId, mass });
+      }
+      const crewMin = toNumber(ship.min_crew);
+      if (dbRow.crew_min === null && crewMin !== null) {
+        crewMinUpdates.push({ id: dbId, crewMin });
+      }
+      const crewMax = toNumber(ship.max_crew);
+      if (dbRow.crew_max === null && crewMax !== null) {
+        crewMaxUpdates.push({ id: dbId, crewMax });
+      }
+      if (dbRow.classification === null && ship.classification) {
+        classificationUpdates.push({ id: dbId, classification: ship.classification });
+      }
+      if (dbRow.focus === null && ship.focus) {
+        focusUpdates.push({ id: dbId, focus: ship.focus });
+      }
+      // pledge_url + pledge_price: always overwrite — RSI store is the
+      // authoritative source (no p4k equivalent).
+      if (ship.url) {
+        pledgeUrlUpdates.push({ id: dbId, url: ship.url });
+      }
+      const price = toNumber(ship.price);
+      if (price !== null && price >= 0) {
+        pledgePriceUpdates.push({ id: dbId, price });
+      }
+      const mfrCode = ship.manufacturer?.code;
+      if (dbRow.manufacturer_code === null && mfrCode) {
+        mfrCodeUpdates.push({ id: dbId, code: mfrCode });
+      }
     }
 
     console.log(
       `[rsi] Matched ${matchedIds.size}/${rsiShips.length} ship-matrix entries to DB ` +
         `(status=${statusUpdates.length} cargo=${cargoUpdates.length} ` +
-        `vtype=${vtypeUpdates.length} scm=${scmUpdates.length})`,
+        `vtype=${vtypeUpdates.length} scm=${scmUpdates.length} ` +
+        `length=${lengthUpdates.length} beam=${beamUpdates.length} height=${heightUpdates.length} ` +
+        `mass=${massUpdates.length} crew_min=${crewMinUpdates.length} crew_max=${crewMaxUpdates.length} ` +
+        `classification=${classificationUpdates.length} focus=${focusUpdates.length} ` +
+        `url=${pledgeUrlUpdates.length} price=${pledgePriceUpdates.length} ` +
+        `mfr=${mfrCodeUpdates.length})`,
     );
     if (unmatched > 0) {
       console.log(`[rsi] Unmatched RSI ships (${unmatched}): ${unmatchedNames.join(", ")}`);
@@ -734,6 +841,53 @@ export async function syncShipProductionStatus(db: D1Database): Promise<void> {
         db
           .prepare(`UPDATE vehicles SET speed_scm = ? WHERE id = ?`)
           .bind(u.speedScm, u.id),
+      );
+    }
+
+    // ── Physical + meta field updates (2026-04-15 extension) ────
+    for (const u of lengthUpdates) {
+      statements.push(db.prepare(`UPDATE vehicles SET length = ? WHERE id = ?`).bind(u.length, u.id));
+    }
+    for (const u of beamUpdates) {
+      statements.push(db.prepare(`UPDATE vehicles SET beam = ? WHERE id = ?`).bind(u.beam, u.id));
+    }
+    for (const u of heightUpdates) {
+      statements.push(db.prepare(`UPDATE vehicles SET height = ? WHERE id = ?`).bind(u.height, u.id));
+    }
+    for (const u of massUpdates) {
+      statements.push(db.prepare(`UPDATE vehicles SET mass = ? WHERE id = ?`).bind(u.mass, u.id));
+    }
+    for (const u of crewMinUpdates) {
+      statements.push(db.prepare(`UPDATE vehicles SET crew_min = ? WHERE id = ?`).bind(u.crewMin, u.id));
+    }
+    for (const u of crewMaxUpdates) {
+      statements.push(db.prepare(`UPDATE vehicles SET crew_max = ? WHERE id = ?`).bind(u.crewMax, u.id));
+    }
+    for (const u of classificationUpdates) {
+      statements.push(
+        db.prepare(`UPDATE vehicles SET classification = ? WHERE id = ?`).bind(u.classification, u.id),
+      );
+    }
+    for (const u of focusUpdates) {
+      statements.push(db.prepare(`UPDATE vehicles SET focus = ? WHERE id = ?`).bind(u.focus, u.id));
+    }
+    for (const u of pledgeUrlUpdates) {
+      statements.push(db.prepare(`UPDATE vehicles SET pledge_url = ? WHERE id = ?`).bind(u.url, u.id));
+    }
+    for (const u of pledgePriceUpdates) {
+      statements.push(db.prepare(`UPDATE vehicles SET pledge_price = ? WHERE id = ?`).bind(u.price, u.id));
+    }
+    for (const u of mfrCodeUpdates) {
+      // Set manufacturer_code + resolve manufacturer_id FK in one pass.
+      statements.push(
+        db.prepare(`UPDATE vehicles SET manufacturer_code = ? WHERE id = ?`).bind(u.code, u.id),
+      );
+      statements.push(
+        db
+          .prepare(
+            `UPDATE vehicles SET manufacturer_id = (SELECT id FROM manufacturers WHERE code = ? LIMIT 1) WHERE id = ? AND manufacturer_id IS NULL`,
+          )
+          .bind(u.code, u.id),
       );
     }
 
