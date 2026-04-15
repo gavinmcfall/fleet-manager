@@ -728,7 +728,7 @@ return cachedJson(c, `gd:missions`, async () => {
              m.description,
              COALESCE(NULLIF(m.reward_amount, 0), m.reward_min, 0) as reward_amount,
              m.reward_currency,
-             COALESCE(m.is_lawful, m.lawful, 0) as is_lawful,
+             COALESCE(m.is_lawful, 0) as is_lawful,
              m.difficulty,
              COALESCE(m.category, m.mission_type) as category,
              m.subcategory as availability,
@@ -1644,7 +1644,7 @@ return cachedJson(c, `gd:fps-gear`, async () => {
       const puMissions = await db.prepare(
         `SELECT m.id, COALESCE(m.title, m.name) as title, m.description,
                 COALESCE(NULLIF(m.reward_amount, 0), m.reward_min, 0) as reward_amount, m.reward_currency,
-                COALESCE(m.is_lawful, m.lawful, 0) as is_lawful, m.difficulty,
+                COALESCE(m.is_lawful, 0) as is_lawful, m.difficulty,
                 COALESCE(m.category, m.mission_type) as category,
                 COALESCE(m.display_name, m.mission_giver) as giver_name,
                 m.reputation_reward_size as rep_summary,
