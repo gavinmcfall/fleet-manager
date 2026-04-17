@@ -62,6 +62,9 @@ tmp/
 temp/
 *.tmp
 
+# QA / d1-review audit output — disposable per-run dumps (see CLAUDE.md)
+qa-reports/
+
 # Erkul reference snapshots (large JSON, contains ephemeral session tokens)
 scbridge/tools/scripts/erkul_reference/snapshots/
 

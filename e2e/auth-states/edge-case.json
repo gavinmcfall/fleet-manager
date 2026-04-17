@@ -2,10 +2,10 @@
   "cookies": [
     {
       "name": "cf_clearance",
-      "value": "fiRiaSftE5PjKs4Os_Cy2zBKuGzNQMYMwTK.5_CAZrU-1773010508-1.2.1.1-nFGcqkK3ckf50PDAuBPv0RU92iCGfy196mi76uAwIW3emrwar7p8SPbbIWDyMjmCCmoQRb_ImuZA76V0gJ_m.H4LD0hYz9OS1T7xWFiFNvuLy8e1VrGBPuY1s7mcOA535f33gECvkGNb.EgV8QVfzJu07_4GcthoNFPCNdggDYsB.kA1pFG9CmDPxDu.wrGKlakb9tlRP2ip9yc7TZkuyRL5bN6STLVnym0TsoAh5PQ",
+      "value": "62DZ6W4jE4LLlCmRsR7oTRMvquISEzPOrAy2PLGaQmU-1775588720-1.2.1.1-4_nF3HY635I_Dt4FxAXnxkEPVvxO2Q7EtA1lEyeTtpJvcRtEnFi6dDnxKGi1eBC2aTrX41rFmD4rwiPoVyUyYG1v8HEvtMdQt3CzGO4NRNDM.rfBPlEFeFDXlhT1BNIwJgbieHl8eFmZYa2fk2tKpJghNjqx4heYqhaRA8Za_G0LE1ksYSytG6eY92LG76XUOtEllbEDH_75h_K9x1.k3dPT0g2MCzPSyxwLSGtleipm3GHYCFUT1hbwbgFgnUo2iD9orup4wSDjBOeR2up8CUL1AUa_CX9XX_shXnMKvpu1WDC4t35RILoUoCtTqGUv1yGvsDvlUSguRAcnymj1ww",
       "domain": ".scbridge.app",
       "path": "/",
-      "expires": 1804546512.813519,
+      "expires": 1807124721.372028,
       "httpOnly": true,
       "secure": true,
       "sameSite": "None",
@@ -14,20 +14,20 @@
     },
     {
       "name": "__Secure-better-auth.session_token",
-      "value": "IuHjpcWRoOMNQv5FdoxQyLCx04kSGqf2.ozjbofxzQMegGzVkl7jSHjlyJ6wYH0hwzhXSF00gRSY%3D",
+      "value": "N9Nigqtg7w6J6uBfiNMiUHAqaxxpUkQj.nbUJX5scb9STn6EnH1xJG%2FDxkkqOGvzyPzw%2BG2i3Kug%3D",
       "domain": "scbridge.app",
       "path": "/",
-      "expires": 1773615313.857591,
+      "expires": 1776193522.473931,
       "httpOnly": true,
       "secure": true,
       "sameSite": "Lax"
     },
     {
       "name": "__Secure-better-auth.session_data",
-      "value": "eyJzZXNzaW9uIjp7InNlc3Npb24iOnsiZXhwaXJlc0F0IjoiMjAyNi0wMy0xNVQyMjo1NTowOS4wNjBaIiwidG9rZW4iOiJJdUhqcGNXUm9PTU5RdjVGZG94UXlMQ3gwNGtTR3FmMiIsImNyZWF0ZWRBdCI6IjIwMjYtMDMtMDhUMjI6NTU6MDkuMDYwWiIsInVwZGF0ZWRBdCI6IjIwMjYtMDMtMDhUMjI6NTU6MDkuMDYwWiIsImlwQWRkcmVzcyI6IiIsInVzZXJBZ2VudCI6Ik1vemlsbGEvNS4wIChYMTE7IExpbnV4IHg4Nl82NCkgQXBwbGVXZWJLaXQvNTM3LjM2IChLSFRNTCwgbGlrZSBHZWNrbykgSGVhZGxlc3NDaHJvbWUvMTQ1LjAuNzYzMi42IFNhZmFyaS81MzcuMzYiLCJ1c2VySWQiOiJlYmQ5Njc5MS1hZTNiLTQyODgtYTg2MS01YmZlNTMxYmM0OGMiLCJpbXBlcnNvbmF0ZWRCeSI6bnVsbCwiYWN0aXZlT3JnYW5pemF0aW9uSWQiOm51bGwsImlkIjoicE40VExHMDl5T2M3MkZ4T0FWTlhQMG8zbDhGcUpCUEkifSwidXNlciI6eyJuYW1lIjoiRWRnZSBDYXNlIFVzZXIiLCJlbWFpbCI6ImUyZS1lZGdlQHNjYnJpZGdlLmFwcCIsImVtYWlsVmVyaWZpZWQiOnRydWUsImltYWdlIjpudWxsLCJjcmVhdGVkQXQiOiIyMDI2LTAzLTA4VDIxOjA1OjMzLjkyOFoiLCJ1cGRhdGVkQXQiOiIyMDI2LTAzLTA4VDIxOjA1OjMzLjkyOFoiLCJyb2xlIjoidXNlciIsImJhbm5lZCI6bnVsbCwiYmFuUmVhc29uIjpudWxsLCJiYW5FeHBpcmVzIjpudWxsLCJ0d29GYWN0b3JFbmFibGVkIjpudWxsLCJpZCI6ImViZDk2NzkxLWFlM2ItNDI4OC1hODYxLTViZmU1MzFiYzQ4YyJ9LCJ1cGRhdGVkQXQiOjE3NzMwMTA1MDkxMjAsInZlcnNpb24iOiIxIn0sImV4cGlyZXNBdCI6MTc3MzAxMDgwOTEyMCwic2lnbmF0dXJlIjoiQ3VxM09yTFZaRmxhdWp4Ym9aZ1Y2Y2dTMkYzWVBnWHUzY3pTY1BuVG1hWSJ9",
+      "value": "eyJzZXNzaW9uIjp7InNlc3Npb24iOnsiZXhwaXJlc0F0IjoiMjAyNi0wNC0xNFQxOTowNToyMS4xNjNaIiwidG9rZW4iOiJOOU5pZ3F0Zzd3Nko2dUJmaU5NaVVIQXFheHhwVWtRaiIsImNyZWF0ZWRBdCI6IjIwMjYtMDQtMDdUMTk6MDU6MjEuMTYzWiIsInVwZGF0ZWRBdCI6IjIwMjYtMDQtMDdUMTk6MDU6MjEuMTYzWiIsImlwQWRkcmVzcyI6IiIsInVzZXJBZ2VudCI6Ik1vemlsbGEvNS4wIChYMTE7IExpbnV4IHg4Nl82NCkgQXBwbGVXZWJLaXQvNTM3LjM2IChLSFRNTCwgbGlrZSBHZWNrbykgSGVhZGxlc3NDaHJvbWUvMTQ1LjAuNzYzMi42IFNhZmFyaS81MzcuMzYiLCJ1c2VySWQiOiJlYmQ5Njc5MS1hZTNiLTQyODgtYTg2MS01YmZlNTMxYmM0OGMiLCJhY3RpdmVPcmdhbml6YXRpb25JZCI6bnVsbCwiaWQiOiJoaUJsa3FCNkl6RXA1eWhKSkF5TGR5NE1OWnZRVjRxMiJ9LCJ1c2VyIjp7Im5hbWUiOiJFZGdlIENhc2UgVXNlciIsImVtYWlsIjoiZTJlLWVkZ2VAc2NicmlkZ2UuYXBwIiwiZW1haWxWZXJpZmllZCI6dHJ1ZSwiaW1hZ2UiOm51bGwsImNyZWF0ZWRBdCI6IjIwMjYtMDMtMDhUMjE6MDU6MzMuOTI4WiIsInVwZGF0ZWRBdCI6IjIwMjYtMDMtMDhUMjE6MDU6MzMuOTI4WiIsInJvbGUiOiJ1c2VyIiwiYmFubmVkIjpudWxsLCJiYW5SZWFzb24iOm51bGwsImJhbkV4cGlyZXMiOm51bGwsInR3b0ZhY3RvckVuYWJsZWQiOmZhbHNlLCJpZCI6ImViZDk2NzkxLWFlM2ItNDI4OC1hODYxLTViZmU1MzFiYzQ4YyJ9LCJ1cGRhdGVkQXQiOjE3NzU1ODg3MjEyMTIsInZlcnNpb24iOiIxIn0sImV4cGlyZXNBdCI6MTc3NTU4ODc4MTIxMiwic2lnbmF0dXJlIjoiRkNIN2pBM3lCZ2Z5ZEJCdGtZT0tpUUlSa0N1Z0tUaHlVcHl4b0pPRHFGWSJ9",
       "domain": "scbridge.app",
       "path": "/",
-      "expires": 1773010813.857668,
+      "expires": 1775588782.474017,
       "httpOnly": true,
       "secure": true,
       "sameSite": "Lax"

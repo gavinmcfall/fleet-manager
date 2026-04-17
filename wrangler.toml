@@ -32,6 +32,13 @@ name = "scbridge"
 workers_dev = true
 preview_urls = false
 
+# Custom Domain bindings — dormant until scbridge.app NS flip completes on
+# SC Bridge CF account. Workers.dev URLs continue working independently.
+[[env.production.routes]]
+pattern = "scbridge.app"
+zone_name = "scbridge.app"
+custom_domain = true
+
 [[env.production.d1_databases]]
 binding = "DB"
 database_name = "scbridge-production"
@@ -85,6 +92,12 @@ head_sampling_rate = 1.0
 name = "scbridge-staging"
 workers_dev = true
 preview_urls = false
+
+# Custom Domain binding — dormant until scbridge.app NS flip completes.
+[[env.staging.routes]]
+pattern = "staging.scbridge.app"
+zone_name = "scbridge.app"
+custom_domain = true
 
 [[env.staging.d1_databases]]
 binding = "DB"

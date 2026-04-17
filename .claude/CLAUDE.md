@@ -6,7 +6,7 @@ data, and item stats. Deployed as a Cloudflare Worker with a D1 database and Rea
 
 ## Tech Stack
 - **Backend:** TypeScript, Hono framework, Cloudflare Workers
-- **Database:** Cloudflare D1 (SQLite dialect), 144 migrations
+- **Database:** Cloudflare D1 (SQLite dialect), 185 migrations
 - **Frontend:** React SPA (Vite), Tailwind CSS, Lucide icons, Recharts
 - **Auth:** Better Auth v1.4.18 with Kysely D1 dialect
 - **Deployment:** `wrangler deploy` via GitHub Actions on push to `main` or `staging`
@@ -31,6 +31,7 @@ data, and item stats. Deployed as a Cloudflare Worker with a D1 database and Rea
 - `lib/validation.ts` — Zod input validation helpers (`validate` middleware wrapper, shared schemas)
 - `lib/cache.ts` — KV read-through cache (`cachedJson`, `resolveVersionId`, `purgeByPrefix`, `cacheSlug`)
 - `lib/fleet-import.ts` — Fleet/pledge import helpers (`executeFleetSwap`, `executeTableSwap`, vehicle matching)
+- `lib/uex.ts` — UEX Corp API sync: fetches community-reported prices, updates terminal_inventory, auto-purges KV cache
 
 ### Routes (`/src/routes/`)
 - `fleet.ts` — User fleet CRUD, ship custom names
@@ -66,7 +67,7 @@ React SPA. 41 page components including: `Dashboard`, `FleetTable`, `ShipDB`, `S
 `Insurance`, `Analysis`, `AnalysisHistory`, `Insights`, `Import`, `Account/`, `LootDB/`, `POI`, `POIDetail`,
 `Contracts`, `Orgs`, `OrgProfile`, `OrgSettings`, `Settings`, `Admin`, `UserManagement`,
 `Login`, `Register`, `ForgotPassword`, `ResetPassword`, `TwoFactorVerify`, `VerifyEmail`,
-`AcceptInvitation`, `Shops`, `TradeCommodities`, `LawSystem`, `Reputation`, `Careers`,
+`AcceptInvitation`, `Shops`, `TradeCommodities`, `LawSystem`, `Careers`,
 `MiningGuide`, `PaintBrowser`, `NPCLoadouts`, `ArmorSetDetail`, `Crafting/`, `About`,
 `Privacy`, `Terms`, `NotFound`.
 
@@ -98,6 +99,9 @@ All filter/sort/pagination state uses URL query strings (`useSearchParams`) for 
 |----------|------|
 | `30 3 * * *` | Session cleanup — expired sessions + verifications |
 | `45 3 * * *` | RSI API images — ship + paint images from RSI GraphQL |
+| `0 4 * * *` | Fleetyards production status sync |
+| `0 */2 * * *` | UEX commodity prices (every 2h) — with KV auto-purge |
+| `30 5 * * *` | UEX item prices (daily) — with KV auto-purge |
 
 ## Data Sources
 
@@ -282,7 +286,7 @@ Run wrangler from `/tmp` when targeting SC Bridge account (avoids wrangler.toml 
 - **Note:** Better Auth tables (`user`, `session`, `account`, etc.) were bootstrapped manually on the staging DB since they're created by Better Auth at runtime, not by migration files. If the staging DB is ever recreated, run the bootstrap SQL before applying migrations.
 
 ### Staging (SC Bridge — new)
-- **D1:** `scbridge-staging` (`0efb50f0-96fe-4f9f-9c97-9b4d77b5cb75`)
+- **D1:** `scbridge-staging` (`21556b70-381e-4805-9ecd-0224ee2334f6`)
 - **R2:** `scbridge-avatars-staging`
 - **KV:** `SC_BRIDGE_CACHE_STAGING` (`c43dfff89ae445a897916dc8e3fa7967`)
 

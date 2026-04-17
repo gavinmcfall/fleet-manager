@@ -2,10 +2,10 @@
   "cookies": [
     {
       "name": "cf_clearance",
-      "value": "0xw2telIy971T_BRZZpLhKCnAb5ee.7SiLEe9LygKfY-1773010512-1.2.1.1-b7n9ZuMrscrwwIht8XCLAYFoXA.1o9n7PdIvowDmWRUkpOghSxfQfWsqcbn5u2_u2T..RkgDuXkP.s.R2zQcK6LedRZr5LD6yf.XxhvpHYNWip6LoF7OVY5gKlVruPTypuDA2fHUWxG5ze0iwNdpHmRSRAoXh7RkAAN18ZQxLl1QmXUM_UdWmvDEFa7Rtmnyk4Jo6sWZ.7xdxqRsR0K.pZ7E1YuYpg1WZhY_zww.nFY",
+      "value": "JsJcgSp9A2u1NIwBEq7v1_NbLo_VrDKr85U7TCWOAF0-1775588723-1.2.1.1-hB7k2_kaygvxhcAauDnqfFfQocO3oatP5HWJrOa7PjaJcLmbZ2UX_M2O_7JPf__qCfkGqELOnb8AM2fjFv_A7FGysPN7WRUG0kxznQx5t_Fp9viB3XilTfwacjoK1bNg5Azr_uQt6wW2Fzb52xcIMr4NU1trioF_rwRiy8naU_dGnvrFNP0SE9obJOqJCWUHCDnrFajEf5p.2q7bKoPQ1kqAG0mC9Q63e0gIYy_gRYx_eKtfEndRnqFY4Oc9b_KHYatRJrvZsDyuhHvppVaq5Zd77dMprNY1NnxUoYxLAYsSy.5pXQVVCwABdw83Qe0uFSt.mg9D8YwA2ZJLxQ9ZYg",
       "domain": ".scbridge.app",
       "path": "/",
-      "expires": 1804546516.738626,
+      "expires": 1807124724.971749,
       "httpOnly": true,
       "secure": true,
       "sameSite": "None",
@@ -14,20 +14,20 @@
     },
     {
       "name": "__Secure-better-auth.session_token",
-      "value": "Bb95WNbGDw1RhjwI5HCHXMbPc9HJ7wpv.qJWtOy5NVKL4BhO%2BkwpR%2FqfpwIqYF%2BHtbhEsmeEPlxA%3D",
+      "value": "i8HAGBvYaEhZVutCtFejRjuq6l8veUeH.Kfwz8BQPoGJVLFu6KcmWfcGIQKpITwpsczt%2FopVKvNA%3D",
       "domain": "scbridge.app",
       "path": "/",
-      "expires": 1773615317.815403,
+      "expires": 1776193526.17016,
       "httpOnly": true,
       "secure": true,
       "sameSite": "Lax"
     },
     {
       "name": "__Secure-better-auth.session_data",
-      "value": "eyJzZXNzaW9uIjp7InNlc3Npb24iOnsiZXhwaXJlc0F0IjoiMjAyNi0wMy0xNVQyMjo1NToxMy4wMDhaIiwidG9rZW4iOiJCYjk1V05iR0R3MVJoandJNUhDSFhNYlBjOUhKN3dwdiIsImNyZWF0ZWRBdCI6IjIwMjYtMDMtMDhUMjI6NTU6MTMuMDA4WiIsInVwZGF0ZWRBdCI6IjIwMjYtMDMtMDhUMjI6NTU6MTMuMDA4WiIsImlwQWRkcmVzcyI6IiIsInVzZXJBZ2VudCI6Ik1vemlsbGEvNS4wIChYMTE7IExpbnV4IHg4Nl82NCkgQXBwbGVXZWJLaXQvNTM3LjM2IChLSFRNTCwgbGlrZSBHZWNrbykgSGVhZGxlc3NDaHJvbWUvMTQ1LjAuNzYzMi42IFNhZmFyaS81MzcuMzYiLCJ1c2VySWQiOiIxZTJiNzEwMC00Yzg1LTQ2ODktYWE5OC1hYjllMTU3NDIwZTYiLCJpbXBlcnNvbmF0ZWRCeSI6bnVsbCwiYWN0aXZlT3JnYW5pemF0aW9uSWQiOm51bGwsImlkIjoiWHg0Umd4UDNUZGJwYndwZXBnWUtJNEZBdUN5SW1WV0wifSwidXNlciI6eyJuYW1lIjoiT3JnIExlYWRlciIsImVtYWlsIjoiZTJlLW9yZ0BzY2JyaWRnZS5hcHAiLCJlbWFpbFZlcmlmaWVkIjp0cnVlLCJpbWFnZSI6bnVsbCwiY3JlYXRlZEF0IjoiMjAyNi0wMy0wOFQyMTowNTozMy45MjhaIiwidXBkYXRlZEF0IjoiMjAyNi0wMy0wOFQyMTowNTozMy45MjhaIiwicm9sZSI6InVzZXIiLCJiYW5uZWQiOm51bGwsImJhblJlYXNvbiI6bnVsbCwiYmFuRXhwaXJlcyI6bnVsbCwidHdvRmFjdG9yRW5hYmxlZCI6bnVsbCwiaWQiOiIxZTJiNzEwMC00Yzg1LTQ2ODktYWE5OC1hYjllMTU3NDIwZTYifSwidXBkYXRlZEF0IjoxNzczMDEwNTEzMDc2LCJ2ZXJzaW9uIjoiMSJ9LCJleHBpcmVzQXQiOjE3NzMwMTA4MTMwNzYsInNpZ25hdHVyZSI6Im5ZalVjRXJTMm5OZkdmdVA0X1dqY2JBRkJDenNZbzFfVnlwOFV3c05KWEkifQ",
+      "value": "eyJzZXNzaW9uIjp7InNlc3Npb24iOnsiZXhwaXJlc0F0IjoiMjAyNi0wNC0xNFQxOTowNToyNC42OTVaIiwidG9rZW4iOiJpOEhBR0J2WWFFaFpWdXRDdEZlalJqdXE2bDh2ZVVlSCIsImNyZWF0ZWRBdCI6IjIwMjYtMDQtMDdUMTk6MDU6MjQuNjk1WiIsInVwZGF0ZWRBdCI6IjIwMjYtMDQtMDdUMTk6MDU6MjQuNjk1WiIsImlwQWRkcmVzcyI6IiIsInVzZXJBZ2VudCI6Ik1vemlsbGEvNS4wIChYMTE7IExpbnV4IHg4Nl82NCkgQXBwbGVXZWJLaXQvNTM3LjM2IChLSFRNTCwgbGlrZSBHZWNrbykgSGVhZGxlc3NDaHJvbWUvMTQ1LjAuNzYzMi42IFNhZmFyaS81MzcuMzYiLCJ1c2VySWQiOiIxZTJiNzEwMC00Yzg1LTQ2ODktYWE5OC1hYjllMTU3NDIwZTYiLCJhY3RpdmVPcmdhbml6YXRpb25JZCI6bnVsbCwiaWQiOiI5YUh3OUNOb0V3b1pZRkNZMTNQc2Vwem5qZjAzcWI4OCJ9LCJ1c2VyIjp7Im5hbWUiOiJPcmcgTGVhZGVyIiwiZW1haWwiOiJlMmUtb3JnQHNjYnJpZGdlLmFwcCIsImVtYWlsVmVyaWZpZWQiOnRydWUsImltYWdlIjpudWxsLCJjcmVhdGVkQXQiOiIyMDI2LTAzLTA4VDIxOjA1OjMzLjkyOFoiLCJ1cGRhdGVkQXQiOiIyMDI2LTAzLTA4VDIxOjA1OjMzLjkyOFoiLCJyb2xlIjoidXNlciIsImJhbm5lZCI6bnVsbCwiYmFuUmVhc29uIjpudWxsLCJiYW5FeHBpcmVzIjpudWxsLCJ0d29GYWN0b3JFbmFibGVkIjpmYWxzZSwiaWQiOiIxZTJiNzEwMC00Yzg1LTQ2ODktYWE5OC1hYjllMTU3NDIwZTYifSwidXBkYXRlZEF0IjoxNzc1NTg4NzI0NzQ1LCJ2ZXJzaW9uIjoiMSJ9LCJleHBpcmVzQXQiOjE3NzU1ODg3ODQ3NDUsInNpZ25hdHVyZSI6IkswWVpHN2FaSTl2YWJKZ0NlVFoyUTJKZkRoa0p4U0VNazBjSVBWV1Y3cWMifQ",
       "domain": "scbridge.app",
       "path": "/",
-      "expires": 1773010817.815481,
+      "expires": 1775588786.170252,
       "httpOnly": true,
       "secure": true,
       "sameSite": "Lax"
