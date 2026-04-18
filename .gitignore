@@ -65,6 +65,12 @@ temp/
 # QA / d1-review audit output — disposable per-run dumps (see CLAUDE.md)
 qa-reports/
 
+# Exploratory QA sweep — screenshots, findings, state (see plans/curious-popping-toucan.md)
+qa-exploratory/
+
+# Auth-state backups (created when regenerating storage state against a new origin)
+e2e/auth-states/backup-*/
+
 # Erkul reference snapshots (large JSON, contains ephemeral session tokens)
 scbridge/tools/scripts/erkul_reference/snapshots/
 
@@ -77,6 +83,7 @@ dist/
 
 # Playwright
 e2e/.auth-state.json
+e2e/auth-states/*.json
 e2e/screenshots/
 e2e/test-results/
 .playwright-mcp/

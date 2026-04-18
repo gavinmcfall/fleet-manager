@@ -10,7 +10,9 @@ export default defineConfig({
   outputDir: './e2e/test-results',
   timeout: 30000,
   use: {
-    baseURL: 'https://scbridge.app',
+    // Override with BASE_URL env var — e.g. https://scbridge-staging.ops-925.workers.dev
+    // during the SC Bridge CF migration (custom domain still dormant).
+    baseURL: process.env.BASE_URL || 'https://scbridge.app',
     screenshot: 'on',
     trace: 'on-first-retry',
   },

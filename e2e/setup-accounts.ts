@@ -1,9 +1,21 @@
 #!/usr/bin/env tsx
 /**
- * Create test persona accounts directly in production D1 via wrangler.
+ * Create test persona accounts directly in D1 via wrangler.
  * Bypasses the auth UI (no 2FA needed) — inserts into user, account, session tables.
  *
- * Usage: source ~/.secrets && npx tsx e2e/setup-accounts.ts
+ * Usage (default — NERDZ production, legacy):
+ *   source ~/.secrets && npx tsx e2e/setup-accounts.ts
+ *
+ * Usage (SC Bridge staging):
+ *   source ~/.secrets && export CLOUDFLARE_API_TOKEN=$CLOUDFLARE_API_TOKEN_SCBRIDGE
+ *   export CLOUDFLARE_ACCOUNT_ID=92557ddeffaf43d64db74acf783ec49d
+ *   D1_DB=scbridge-staging WRANGLER_ENV=staging WRANGLER_CONFIG=wrangler.toml \
+ *     npx tsx e2e/setup-accounts.ts
+ *
+ * Env vars:
+ *   D1_DB          — D1 database name (default "sc-companion", legacy NERDZ prod)
+ *   WRANGLER_ENV   — wrangler --env flag value (default unset)
+ *   WRANGLER_CONFIG — wrangler --config flag (default unset; required when using --env)
  *
  * Idempotent — skips accounts that already exist.
  * Does NOT import fleets — that requires the import API (separate step).
@@ -11,6 +23,14 @@
 import { execSync } from "child_process";
 import { PERSONAS } from "../test/fixtures/personas";
 import { randomUUID } from "crypto";
+
+const D1_DB = process.env.D1_DB ?? "sc-companion";
+const WRANGLER_ENV = process.env.WRANGLER_ENV ?? "";
+const WRANGLER_CONFIG = process.env.WRANGLER_CONFIG ?? "";
+const WRANGLER_FLAGS = [
+  WRANGLER_ENV ? `--env ${WRANGLER_ENV}` : "",
+  WRANGLER_CONFIG ? `--config ${WRANGLER_CONFIG}` : "",
+].filter(Boolean).join(" ");
 
 const ITERATIONS = 100_000;
 const HASH_ALGO = "SHA-256";
@@ -43,10 +63,8 @@ async function hashPassword(password: string): Promise<string> {
 function d1Execute(sql: string): string {
   // Escape single quotes in SQL for shell safety
   const escaped = sql.replace(/'/g, "'\\''");
-  return execSync(
-    `. ~/.secrets && npx wrangler d1 execute sc-companion --remote --command '${escaped}' --json`,
-    { encoding: "utf-8", maxBuffer: 10 * 1024 * 1024, shell: "/bin/bash" },
-  );
+  const cmd = `. ~/.secrets && npx wrangler d1 execute ${D1_DB} --remote${WRANGLER_FLAGS ? " " + WRANGLER_FLAGS : ""} --command '${escaped}' --json`;
+  return execSync(cmd, { encoding: "utf-8", maxBuffer: 10 * 1024 * 1024, shell: "/bin/bash" });
 }
 
 function d1Query<T = Record<string, unknown>>(sql: string): T[] {
@@ -56,7 +74,8 @@ function d1Query<T = Record<string, unknown>>(sql: string): T[] {
 }
 
 async function main() {
-  console.log("=== SC Bridge Test Account Setup (via D1) ===\n");
+  console.log("=== SC Bridge Test Account Setup (via D1) ===");
+  console.log(`Target: D1=${D1_DB}${WRANGLER_ENV ? ` env=${WRANGLER_ENV}` : ""}${WRANGLER_CONFIG ? ` config=${WRANGLER_CONFIG}` : ""}\n`);
 
   const now = new Date().toISOString();
 
