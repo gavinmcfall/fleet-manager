@@ -416,6 +416,11 @@ function EntryRow({ entry, repFocus, isHighlighted, highlightRef, prerequisites,
       <button onClick={() => setExpanded(!expanded)} className="w-full text-left px-4 py-3 flex items-center gap-3 hover:bg-white/[0.02] transition-colors">
         <div className="flex-1 min-w-0">
           <span className="text-sm text-gray-200">{entry.title}</span>
+          {entry.variantCount > 1 && (
+            <span className="text-[10px] text-sc-accent ml-2 font-mono tabular-nums" title={`${entry.variantCount} variants across locations — CIG emits one mission per planet/moon`}>
+              × {entry.variantCount}
+            </span>
+          )}
           {entry.giver_display && (
             <span className="text-[10px] text-gray-500 ml-2 font-mono hidden sm:inline">{entry.giver_display}</span>
           )}
@@ -657,7 +662,7 @@ export default function Missions() {
   // templates — the game engine fills the tokens per generated instance, so
   // rendering them statically is noise. Hide by default; expose an opt-in toggle.
   const [showTemplates, setShowTemplates] = useState(false)
-  const allEntries = useMemo(
+  const filteredEntries = useMemo(
     () => showTemplates ? rawEntries : rawEntries.filter(e => !e.is_template),
     [rawEntries, showTemplates],
   )
@@ -665,6 +670,24 @@ export default function Missions() {
     () => rawEntries.filter(e => e.is_template).length,
     [rawEntries],
   )
+  // Group entries with identical title+giver+reward. CIG emits N separate
+  // mission rows per planet for the same mission template (e.g. 4 identical
+  // "Live and let an independent contractor deal out revenge" rows for
+  // Stanton 1-4). Collapse to one row per group with a variant count.
+  const allEntries = useMemo(() => {
+    const groups = new Map()
+    for (const e of filteredEntries) {
+      const key = `${e.title || ''}|${e.giver_display || ''}|${e.reward_amount || 0}|${e.category || ''}`
+      const existing = groups.get(key)
+      if (existing) {
+        existing.variantCount++
+        existing.variants.push({ id: e.id, location_ref: e.location_ref, slug: e.slug || e.id })
+      } else {
+        groups.set(key, { ...e, variantCount: 1, variants: [{ id: e.id, location_ref: e.location_ref, slug: e.slug || e.id }] })
+      }
+    }
+    return Array.from(groups.values())
+  }, [filteredEntries])
 
   // Categories + source counts for filters
   const categories = useMemo(() => {
