@@ -164,6 +164,11 @@ export async function triggerFullSync() {
   return postJSON('/sync/all')
 }
 
+// F279: manual UEX price sync trigger — admin-only, bypasses the 2h cron.
+export async function triggerUexSync(type = 'all') {
+  return postJSON('/admin/uex/sync', { type })
+}
+
 export async function importHangarXplor(jsonData) {
   return postJSON('/import/hangarxplor', jsonData)
 }

@@ -203,8 +203,11 @@ export default function Careers() {
     }
   }, [data, search])
 
+  // F135: counts must mirror the vehicle-aware filter used for the list so
+  // the header "N careers · M roles" matches what's actually displayed.
   const totalCareers = data?.careers?.filter(
     (c) => !FILTERED_NAMES.some((f) => c.name.toLowerCase() === f.toLowerCase())
+      && (c.vehicle_count > 0 || (c.vehicles && c.vehicles.length > 0))
   ).length || 0
   const totalRoles = data?.roles?.filter(
     (r) => !FILTERED_NAMES.some((f) => r.name.toLowerCase() === f.toLowerCase())

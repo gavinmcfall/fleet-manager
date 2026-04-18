@@ -442,6 +442,8 @@ export default function FpsLoadout() {
         fontFamily: 'sans-serif',
       }}
     >
+      {/* F288: page-level heading for screen readers (the visual UI uses styled spans). */}
+      <h1 className="sr-only">FPS Loadout — Preview</h1>
       <div className="absolute inset-0">
         <div className="relative w-full h-full">
 

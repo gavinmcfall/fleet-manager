@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useRef, useCallback } from 'react'
-import { RefreshCw, Globe, Play, AlertCircle, Ticket, Copy, Check, Trash2, FlaskConical, Image, ThumbsUp, X, ExternalLink } from 'lucide-react'
-import { useSyncStatus, triggerRSISync, triggerFullSync, setPreferences } from '../hooks/useAPI'
+import { RefreshCw, Globe, Play, AlertCircle, Ticket, Copy, Check, Trash2, FlaskConical, Image, ThumbsUp, X, ExternalLink, DollarSign } from 'lucide-react'
+import { useSyncStatus, triggerRSISync, triggerFullSync, triggerUexSync, setPreferences } from '../hooks/useAPI'
 import useTimezone from '../hooks/useTimezone'
 
 import { formatDate } from '../lib/dates'
@@ -11,6 +11,8 @@ import ConfirmDialog from '../components/ConfirmDialog'
 
 const syncActions = [
   { id: 'rsi', label: 'RSI API', icon: Globe, trigger: triggerRSISync, description: 'Ship images from RSI GraphQL API' },
+  // F279: manual UEX trigger — bypasses the 2h cron when community prices need a fresh pull.
+  { id: 'uex', label: 'UEX Prices', icon: DollarSign, trigger: () => triggerUexSync('all'), description: 'Commodity + item prices from UEX Corp' },
 ]
 
 function InvitePanel() {

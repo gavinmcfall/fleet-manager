@@ -20,8 +20,8 @@ const FONT_OPTIONS = [
 const ALL_TIMEZONES = Intl.supportedValuesOf('timeZone')
 
 const PROVIDERS = [
-  { value: 'anthropic', label: 'Claude', company: 'Anthropic', desc: 'Opus 4.6, Sonnet 4.6, Haiku 4.5' },
-  { value: 'openai', label: 'ChatGPT', company: 'OpenAI', desc: 'GPT-5.2, GPT-4o, GPT-4o Mini' },
+  { value: 'anthropic', label: 'Claude', company: 'Anthropic', desc: 'Opus 4.7, Sonnet 4.6, Haiku 4.5' },
+  { value: 'openai', label: 'ChatGPT', company: 'OpenAI', desc: 'GPT-5.2, GPT-5 Mini, GPT-4o' },
   { value: 'google', label: 'Gemini', company: 'Google', desc: '2.5 Pro, Flash, Flash-Lite' },
 ]
 

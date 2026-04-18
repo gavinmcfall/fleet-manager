@@ -3,6 +3,25 @@ import { Monitor, Trash2 } from 'lucide-react'
 import { formatDate } from '../../lib/dates'
 import PanelSection from '../../components/PanelSection'
 
+// F211: lightweight User-Agent parse — just enough to label the session.
+// Full-blown UA detection isn't worth a library here.
+function parseUserAgent(ua) {
+  if (!ua) return null
+  const browser = /Edg\//.test(ua) ? 'Edge'
+    : /Firefox\//.test(ua) ? 'Firefox'
+    : /Chrome\//.test(ua) && !/Edg\//.test(ua) ? 'Chrome'
+    : /Safari\//.test(ua) && !/Chrome\//.test(ua) ? 'Safari'
+    : null
+  const os = /Windows NT 10/.test(ua) ? 'Windows'
+    : /Mac OS X/.test(ua) ? 'macOS'
+    : /Android/.test(ua) ? 'Android'
+    : /iPhone|iPad/.test(ua) ? 'iOS'
+    : /Linux/.test(ua) ? 'Linux'
+    : null
+  if (!browser && !os) return null
+  return [browser, os].filter(Boolean).join(' · ')
+}
+
 export default function SessionsSection({
   timezone,
   session,
@@ -22,6 +41,7 @@ export default function SessionsSection({
           <div className="space-y-3">
             {sessions.map((s) => {
               const isCurrent = s.token === session?.session?.token
+              const ua = parseUserAgent(s.userAgent)
               return (
                 <div
                   key={s.id}
@@ -30,7 +50,7 @@ export default function SessionsSection({
                   <div>
                     <div className="flex items-center gap-2">
                       <span className="text-sm text-white">
-                        {isCurrent ? 'Current Session' : 'Session'}
+                        {ua || (isCurrent ? 'Current Session' : 'Session')}
                       </span>
                       {isCurrent && (
                         <span className="text-[10px] font-mono text-sc-accent bg-sc-accent/10 px-1.5 py-0.5 rounded">
