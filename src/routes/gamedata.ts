@@ -724,7 +724,11 @@ return cachedJson(c, `gd:missions`, async () => {
         db.prepare(
           `SELECT m.id, m.uuid, m.slug,
              COALESCE(m.title, m.name) as title,
-             COALESCE(m.display_name, m.mission_giver) as giver_name,
+             -- Giver is separate from the mission title; don't fall back to
+             -- display_name (which is just the localised title). If the
+             -- pipeline couldn't resolve a giver, leave it null so the UI
+             -- hides the field instead of echoing the title.
+             m.mission_giver as giver_name,
              m.description,
              COALESCE(NULLIF(m.reward_amount, 0), m.reward_min, 0) as reward_amount,
              m.reward_currency,
@@ -1657,7 +1661,7 @@ return cachedJson(c, `gd:fps-gear`, async () => {
                 COALESCE(NULLIF(m.reward_amount, 0), m.reward_min, 0) as reward_amount, m.reward_currency,
                 COALESCE(m.is_lawful, 0) as is_lawful, m.difficulty,
                 COALESCE(m.category, m.mission_type) as category,
-                COALESCE(m.display_name, m.mission_giver) as giver_name,
+                m.mission_giver as giver_name,
                 m.reputation_reward_size as rep_summary,
                 m.rep_fail_summary as rep_fail,
                 m.rep_abandon_summary as rep_abandon,

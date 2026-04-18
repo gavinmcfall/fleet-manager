@@ -111,6 +111,33 @@ export function friendlyElementName(className) {
     .replace(/\b\w/g, (c) => c.toUpperCase())
 }
 
+// Humanize raw CIG rock_type tokens like `asteroid_mtype`, `asteroid_ship`,
+// `ground_vehicle`, `fps`, etc. Used anywhere rock_type is surfaced in UI.
+const ASTEROID_TYPE_LABEL = {
+  c: 'C-Type Asteroid',
+  e: 'E-Type Asteroid',
+  i: 'I-Type Asteroid',
+  m: 'M-Type Asteroid',
+  p: 'P-Type Asteroid',
+  q: 'Q-Type Asteroid',
+  s: 'S-Type Asteroid',
+  x: 'X-Type Asteroid',
+}
+const ROCK_TYPE_LABEL = {
+  asteroid: 'Asteroid',
+  asteroid_ship: 'Ship Salvage',
+  ground_vehicle: 'Vehicle Salvage',
+  surface: 'Surface',
+  fps: 'Hand Mining',
+}
+export function friendlyRockType(rockType) {
+  if (!rockType) return '—'
+  if (ROCK_TYPE_LABEL[rockType]) return ROCK_TYPE_LABEL[rockType]
+  const m = rockType.match(/^asteroid_([a-z])type$/)
+  if (m) return ASTEROID_TYPE_LABEL[m[1]] || 'Asteroid'
+  return rockType.replace(/_/g, ' ').replace(/\b\w/g, s => s.toUpperCase())
+}
+
 // --- Instability color helpers ---
 export function instabilityColor(val) {
   if (val == null) return 'text-gray-400'

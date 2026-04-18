@@ -28,12 +28,32 @@ function CompositionCard({ composition }) {
     try { return JSON.parse(composition.composition_json) } catch { return [] }
   }, [composition.composition_json])
 
-  const ROCK_TYPE_STYLES = {
-    asteroid: { badge: 'bg-violet-900/40 text-violet-300 border-violet-700/50', label: 'Asteroid' },
-    surface:  { badge: 'bg-emerald-900/40 text-emerald-300 border-emerald-700/50', label: 'Surface' },
-    fps:      { badge: 'bg-amber-900/40 text-amber-300 border-amber-700/50', label: 'Hand Mining' },
+  // Rock classification — CIG stores raw IDs like `asteroid_mtype` (metallic)
+  // and `asteroid_ctype` (carbonaceous). These are standard astronomical
+  // spectral classes — humanize them rather than surface the raw token.
+  const ASTEROID_TYPE_LABEL = {
+    c: 'C-Type Asteroid',      // Carbonaceous
+    e: 'E-Type Asteroid',      // Enstatite
+    i: 'I-Type Asteroid',      // Icy / intermediate
+    m: 'M-Type Asteroid',      // Metallic
+    p: 'P-Type Asteroid',      // Primitive
+    q: 'Q-Type Asteroid',      // Quartzitic
+    s: 'S-Type Asteroid',      // Stony
+    x: 'X-Type Asteroid',
   }
-  const rockInfo = ROCK_TYPE_STYLES[composition.rock_type] || { badge: 'bg-gray-700/60 text-gray-400 border-gray-600/50', label: composition.rock_type }
+  const ROCK_TYPE_STYLES = {
+    asteroid:        { badge: 'bg-violet-900/40 text-violet-300 border-violet-700/50', label: 'Asteroid' },
+    asteroid_ship:   { badge: 'bg-rose-900/40 text-rose-300 border-rose-700/50', label: 'Ship Salvage' },
+    ground_vehicle:  { badge: 'bg-rose-900/40 text-rose-300 border-rose-700/50', label: 'Vehicle Salvage' },
+    surface:         { badge: 'bg-emerald-900/40 text-emerald-300 border-emerald-700/50', label: 'Surface' },
+    fps:             { badge: 'bg-amber-900/40 text-amber-300 border-amber-700/50', label: 'Hand Mining' },
+  }
+  const asteroidTypeMatch = (composition.rock_type || '').match(/^asteroid_([a-z])type$/)
+  const rockInfo = ROCK_TYPE_STYLES[composition.rock_type] ?? (
+    asteroidTypeMatch
+      ? { badge: 'bg-violet-900/40 text-violet-300 border-violet-700/50', label: ASTEROID_TYPE_LABEL[asteroidTypeMatch[1]] || 'Asteroid' }
+      : { badge: 'bg-gray-700/60 text-gray-400 border-gray-600/50', label: (composition.rock_type || 'Unknown').replace(/_/g, ' ').replace(/\b\w/g, s => s.toUpperCase()) }
+  )
 
   // Use primary element as the card title (what players care about)
   const primaryElement = elements.length > 0 ? friendlyElementName(elements[0].element) : composition.name

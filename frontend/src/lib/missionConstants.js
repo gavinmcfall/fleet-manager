@@ -374,6 +374,86 @@ export function cleanMissionDescription(text) {
   return clean
 }
 
+// Difficulty abbreviation → label. Applied to tokens split from a mission
+// filename stem when the pipeline couldn't resolve the ~mission(Contractor|…)
+// template at extraction time (contractor-bound at runtime, not static).
+const DIFF_ABBREV_TOKEN = {
+  ve: 'Very Easy',
+  e: 'Easy',
+  m: 'Medium',
+  h: 'Hard',
+  vh: 'Very Hard',
+  extreme: 'Extreme',
+}
+
+// Base mission words that CIG concatenates without underscores — separate
+// them before title-casing so "dataheist" → "Data Heist".
+const MISSION_WORD_SPLITS = [
+  [/^dataheist/i, 'Data Heist'],
+  [/^bountyhunter/i, 'Bounty Hunter'],
+  [/^bounty/i, 'Bounty'],
+  [/^cargohaul/i, 'Cargo Haul'],
+  [/^salvagebeacon/i, 'Salvage Beacon'],
+  [/^personalbeacon/i, 'Personal Beacon'],
+  [/^delivery/i, 'Delivery'],
+  [/^investigate/i, 'Investigate'],
+  [/^rescue/i, 'Rescue'],
+  [/^prisonbreak/i, 'Prison Break'],
+  [/^mercenary/i, 'Mercenary'],
+  [/^recover/i, 'Recover'],
+  [/^retrieve/i, 'Retrieve'],
+  [/^collect/i, 'Collect'],
+  [/^tracker/i, 'Tracker'],
+]
+
+/**
+ * Humanize a raw mission filename stem into a legible title. Used as a
+ * fallback when the DB still has the stem (pipeline couldn't resolve the
+ * runtime `~mission(Contractor|…)` template). Returns the original input
+ * if it doesn't look like a stem (has spaces / punctuation / already-
+ * resolved template placeholders like `{Name}`).
+ *
+ * Example: `dataheist_unlawful_vh_stanton1` → `Data Heist · Very Hard · Stanton 1`
+ */
+export function humanizeMissionStem(raw) {
+  if (!raw) return raw
+  // Already-resolved titles (have spaces or template placeholders) pass through.
+  if (/\s/.test(raw) || raw.includes('{')) return raw
+  if (!/^[a-z0-9_]+$/i.test(raw)) return raw
+
+  let head = raw
+  let baseLabel = null
+  for (const [re, label] of MISSION_WORD_SPLITS) {
+    if (re.test(head)) {
+      head = head.replace(re, '')
+      baseLabel = label
+      break
+    }
+  }
+  const tokens = head.split('_').filter(Boolean)
+  const parts = baseLabel ? [baseLabel] : []
+  for (const t of tokens) {
+    const lower = t.toLowerCase()
+    if (lower === 'unlawful' || lower === 'lawful' || lower === 'prison') {
+      continue  // drop — already signalled by badges / is_lawful flag
+    }
+    if (DIFF_ABBREV_TOKEN[lower]) {
+      parts.push(DIFF_ABBREV_TOKEN[lower])
+      continue
+    }
+    // Split a trailing digit off locations like "stanton1" → "Stanton 1"
+    const locMatch = t.match(/^([a-z]+?)(\d+)$/i)
+    if (locMatch) {
+      parts.push(
+        locMatch[1].charAt(0).toUpperCase() + locMatch[1].slice(1).toLowerCase() + ' ' + locMatch[2],
+      )
+      continue
+    }
+    parts.push(t.charAt(0).toUpperCase() + t.slice(1).toLowerCase())
+  }
+  return parts.length ? parts.join(' · ') : raw
+}
+
 /** Format raw rep_reward strings like "+50bountyhuntersguild" or "+250citizensforprosperity,-100xenothreat" */
 export function formatRepReward(raw) {
   if (!raw) return null

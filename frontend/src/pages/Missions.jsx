@@ -7,7 +7,7 @@ import LoadingState from '../components/LoadingState'
 import ErrorState from '../components/ErrorState'
 import SearchInput from '../components/SearchInput'
 import StatCard from '../components/StatCard'
-import { FACTION_LOGOS, getFactionLogo, GUILD_LABELS, cleanMissionDescription, humanizeFactionSlug, humanizeScopeSlug, humanizeStandingSlug, humanizeComparison, formatRepReward, formatRepRequirement } from '../lib/missionConstants'
+import { FACTION_LOGOS, getFactionLogo, GUILD_LABELS, cleanMissionDescription, humanizeFactionSlug, humanizeScopeSlug, humanizeStandingSlug, humanizeComparison, formatRepReward, formatRepRequirement, humanizeMissionStem } from '../lib/missionConstants'
 
 function Pill({ active, onClick, children }) {
   return (
@@ -601,7 +601,11 @@ export default function Missions() {
         id: `m-${m.id}`,
         mission_id: m.id,
         contract_id: null,
-        title: m.title,
+        // Fallback: pipeline can't resolve runtime `~mission(Contractor|…)`
+        // templates so some titles are stem-encoded. Humanise so the list
+        // reads as "Data Heist · Very Hard · Stanton 1" instead of raw
+        // `dataheist_unlawful_vh_stanton1`.
+        title: humanizeMissionStem(m.title),
         description: m.description,
         source: m.availability || 'dynamic',
         category: m.category,
