@@ -334,8 +334,12 @@ export default function POI() {
   // Shop tree — organized by location hierarchy
   const shopTree = useMemo(() => {
     if (!allShops) return { tree: [], unmatched: [] }
-    // Filter out removed locations
-    const active = allShops.filter(s => !s.location_name?.includes('(Removed)'))
+    // Filter out removed locations AND shops with 0 items (F120 — SOC
+    // template / generic shops that don't actually stock anything
+    // clutter the OTHER group and have no user value).
+    const active = allShops.filter(s =>
+      !s.location_name?.includes('(Removed)') && (s.item_count || 0) > 0
+    )
     return assignShopsToTree(LOCATION_TREE, active)
   }, [allShops])
 
