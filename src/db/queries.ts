@@ -1170,7 +1170,16 @@ export async function getLootByUuid(db: D1Database, uuid: string): Promise<Recor
       lil.per_container, lil.per_roll, lil.rolls, lil.loot_table,
       lil.actor, lil.faction, lil.slot, lil.probability, lil.spawn_locations,
       lil.weight,
-      COALESCE(s.name, sml.name, nl.loadout_name, lil.location_key) as location_name,
+      COALESCE(
+        s.name,
+        sml.name,
+        -- F115: NPC loadout names are raw class-name form
+        -- ("SLoadoutAssortment.asd_captain"). Strip the prefix + swap
+        -- underscores for spaces so the UI shows "asd captain" instead
+        -- of the raw form or the UUID fallback.
+        REPLACE(REPLACE(nl.loadout_name, 'SLoadoutAssortment.', ''), '_', ' '),
+        lil.location_key
+      ) as location_name,
       s.slug as shop_slug, s.location_label as shop_location
     FROM loot_item_locations lil
     LEFT JOIN shops s ON lil.source_type = 'shop' AND s.uuid = lil.location_key

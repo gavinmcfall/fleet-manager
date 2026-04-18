@@ -40,7 +40,7 @@ export default function ItemCard({ item, collectionQty, onSetCollectionQty, wish
             {wishlisted ? <Bookmark className="w-3.5 h-3.5" /> : <BookmarkPlus className="w-3.5 h-3.5" />}
           </button>
         )}
-        {item.rarity && (
+        {item.rarity && item.rarity !== 'N/A' && (
           <span className={`text-[10px] font-mono px-1.5 py-0.5 rounded border ${rs.badge}`}>
             {item.rarity}
           </span>

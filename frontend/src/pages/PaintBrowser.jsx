@@ -151,8 +151,14 @@ export default function PaintBrowser() {
 
 function PaintPlaceholder({ size = 'lg' }) {
   const iconCls = size === 'lg' ? 'w-10 h-10' : 'w-6 h-6'
+  // F110: ~9.5% of paints have no RSI CDN image (capital-ship paints + concept
+  // variants CIG hasn't posted to the store). Real paints, not broken links —
+  // tooltip clarifies so users don't assume a bug.
   return (
-    <div className="flex flex-col items-center justify-center gap-2 text-gray-600 w-full h-full">
+    <div
+      className="flex flex-col items-center justify-center gap-2 text-gray-600 w-full h-full"
+      title="No RSI store image available for this paint"
+    >
       <Palette className={iconCls} />
       {size === 'lg' && <span className="text-[10px] font-mono uppercase tracking-wider">No Image</span>}
     </div>
