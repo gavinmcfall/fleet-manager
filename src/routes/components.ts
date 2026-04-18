@@ -12,6 +12,11 @@ const VALID_TYPES = new Set([
 /**
  * /api/components/:type — Public reference data for all ship components by type.
  * No auth required. KV-cached per type.
+ *
+ * Columns live on `vehicle_components` (base) + per-type satellite tables
+ * (component_powerplants, component_coolers, component_shields,
+ * component_quantum_drives, component_weapons, component_radar, component_qed,
+ * component_missiles). Mirrors the JOIN pattern in src/routes/loadout.ts.
  */
 export function componentRoutes() {
   const app = new Hono<HonoEnv>();
@@ -27,34 +32,39 @@ export function componentRoutes() {
     return cachedJson(c, `components:${type}`, async () => {
       const componentTypes = PORT_TYPE_TO_COMPONENT_TYPE[type] || [type];
       const typePlaceholders = componentTypes.map(() => "?").join(",");
-      // STAT_SORT_KEY uses sub-table aliases (cp., cw., etc.) for loadout joins.
-      // This route queries vehicle_components directly, so remap to vc.
-      const rawSort = componentTypes.map(t => STAT_SORT_KEY[t]).find(Boolean) || "vc.name";
-      const sortKey = rawSort.replace(/^[a-z]+\./, "vc.");
+      // STAT_SORT_KEY already uses correct sub-table aliases (cp., cw., etc.).
+      const sortKey = componentTypes.map(t => STAT_SORT_KEY[t]).find(Boolean) || "vc.name";
 
       const rows = await db
         .prepare(
           `SELECT vc.id, vc.uuid, vc.name, vc.slug, vc.class_name, vc.type, vc.sub_type,
                   vc.size, vc.grade, vc.class,
-                  vc.power_output, vc.overpower_performance, vc.overclock_performance,
-                  vc.thermal_output, vc.cooling_rate, vc.max_temperature,
-                  vc.shield_hp, vc.shield_regen, vc.resist_physical, vc.resist_energy,
-                  vc.resist_distortion, vc.resist_thermal, vc.regen_delay, vc.downed_regen_delay,
-                  vc.quantum_speed, vc.quantum_range, vc.fuel_rate, vc.spool_time,
-                  vc.cooldown_time, vc.stage1_accel, vc.stage2_accel,
-                  vc.rounds_per_minute, vc.ammo_container_size, vc.damage_per_shot,
-                  vc.damage_type, vc.projectile_speed, vc.effective_range, vc.dps,
-                  vc.damage_physical, vc.damage_energy, vc.damage_distortion, vc.damage_thermal,
-                  vc.heat_per_shot, vc.power_draw, vc.fire_modes,
-                  vc.radar_range, vc.radar_angle,
-                  vc.qed_range, vc.qed_strength,
-                  vc.ammo_count, vc.missile_type, vc.lock_time, vc.tracking_signal,
-                  vc.damage, vc.blast_radius, vc.speed, vc.lock_range,
-                  vc.em_signature, vc.mass, vc.hp, vc.overheat_temperature,
+                  cp.power_output, cp.overpower_performance, cp.overclock_performance,
+                  vc.thermal_output, cc.cooling_rate, cc.max_temperature,
+                  cs.shield_hp, cs.shield_regen, cs.resist_physical, cs.resist_energy,
+                  cs.resist_distortion, cs.resist_thermal, cs.regen_delay, cs.downed_regen_delay,
+                  cq.quantum_speed, cq.quantum_range, cq.fuel_rate, cq.spool_time,
+                  cq.cooldown_time, cq.stage1_accel, cq.stage2_accel,
+                  cw.rounds_per_minute, cw.ammo_container_size, cw.damage_per_shot,
+                  cw.damage_type, cw.projectile_speed, cw.effective_range, cw.dps,
+                  cw.damage_physical, cw.damage_energy, cw.damage_distortion, cw.damage_thermal,
+                  cw.heat_per_shot, vc.power_draw, vc.power_draw_min, cw.fire_modes,
+                  cr.radar_range, cr.radar_angle,
+                  ce.qed_range, ce.qed_strength,
+                  cm.ammo_count, cm.missile_type,
+                  vc.em_signature, vc.mass, vc.hp, cc.overheat_temperature,
                   vc.base_heat_generation, vc.distortion_max,
                   m.name AS manufacturer_name, m.code AS manufacturer_code
            FROM vehicle_components vc
            LEFT JOIN manufacturers m ON m.id = vc.manufacturer_id
+           LEFT JOIN component_powerplants cp ON cp.component_id = vc.id
+           LEFT JOIN component_coolers cc ON cc.component_id = vc.id
+           LEFT JOIN component_shields cs ON cs.component_id = vc.id
+           LEFT JOIN component_quantum_drives cq ON cq.component_id = vc.id
+           LEFT JOIN component_weapons cw ON cw.component_id = vc.id
+           LEFT JOIN component_radar cr ON cr.component_id = vc.id
+           LEFT JOIN component_qed ce ON ce.component_id = vc.id
+           LEFT JOIN component_missiles cm ON cm.component_id = vc.id
            WHERE vc.type IN (${typePlaceholders})
              AND vc.name NOT LIKE '%Template%'
            ORDER BY ${sortKey} DESC NULLS LAST, vc.name`,

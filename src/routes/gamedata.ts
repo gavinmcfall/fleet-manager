@@ -740,7 +740,18 @@ return cachedJson(c, `gd:missions`, async () => {
              m.fail_if_criminal, m.available_in_prison,
              m.wanted_level_min, m.wanted_level_max,
              m.buy_in_amount, m.reward_max, m.has_standing_bonus,
-             m.location_ref, m.locality
+             m.location_ref, m.locality,
+             -- Mark mission as template when the title/description still contains
+             -- unresolved runtime placeholder tokens (e.g. {Creature}, {Location},
+             -- {ReputationRank}, {CargoGradeToken}, {title}). These are filled in
+             -- by the game engine when generating specific mission instances, so
+             -- we can't render them meaningfully in the list. 1215 of 1978 (~61%)
+             -- missions are templates; the frontend can filter them.
+             CASE
+               WHEN (COALESCE(m.title, m.name) LIKE '%{%}%')
+                 OR (m.description LIKE '%{%}%')
+               THEN 1 ELSE 0
+             END as is_template
            FROM missions m
            WHERE COALESCE(m.not_for_release, 0) = 0
            ORDER BY COALESCE(m.category, m.mission_type), COALESCE(m.reward_amount, m.reward_min, 0) DESC`,

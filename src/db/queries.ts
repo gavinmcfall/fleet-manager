@@ -1691,6 +1691,7 @@ interface LocationAggRow {
 
 interface LocationSummary {
   key: string;
+  name?: string;
   itemCount: number;
   rarities: Record<string, number>;
 }
@@ -1711,24 +1712,51 @@ const LOOT_EXCLUSION_FILTER = `lm.name NOT IN ('<= PLACEHOLDER =>')
  * Lightweight summary for the POI directory page.
  * Returns location keys + item counts + rarity distributions.
  * Uses indexed loot_item_locations junction table — no JSON parsing.
+ *
+ * NPC rows are aggregated at the faction level (location_key is per-loadout UUID,
+ * not a user-facing identifier); the resulting entry carries faction code as key
+ * and faction display name so the "NPC Factions" tab has meaningful labels.
  */
 export async function getLootLocationSummary(db: D1Database): Promise<LootLocationSummaryResult> {
-  const sql = `SELECT lil.source_type, lil.location_key as key,
-      COUNT(DISTINCT lil.loot_map_id) as itemCount,
-      SUM(CASE WHEN COALESCE(lm.rarity, 'Common') = 'Common' THEN 1 ELSE 0 END) as r_Common,
-      SUM(CASE WHEN lm.rarity = 'Uncommon' THEN 1 ELSE 0 END) as r_Uncommon,
-      SUM(CASE WHEN lm.rarity = 'Rare' THEN 1 ELSE 0 END) as r_Rare,
-      SUM(CASE WHEN lm.rarity = 'Epic' THEN 1 ELSE 0 END) as r_Epic,
-      SUM(CASE WHEN lm.rarity = 'Legendary' THEN 1 ELSE 0 END) as r_Legendary
+  const rarityAgg = `
+    SUM(CASE WHEN COALESCE(lm.rarity, 'Common') = 'Common' THEN 1 ELSE 0 END) as r_Common,
+    SUM(CASE WHEN lm.rarity = 'Uncommon' THEN 1 ELSE 0 END) as r_Uncommon,
+    SUM(CASE WHEN lm.rarity = 'Rare' THEN 1 ELSE 0 END) as r_Rare,
+    SUM(CASE WHEN lm.rarity = 'Epic' THEN 1 ELSE 0 END) as r_Epic,
+    SUM(CASE WHEN lm.rarity = 'Legendary' THEN 1 ELSE 0 END) as r_Legendary`;
+
+  // Containers + shops: group by location_key (stable friendly identifier).
+  const containerShopSql = `SELECT lil.source_type, lil.location_key as key, NULL as name,
+      COUNT(DISTINCT lil.loot_map_id) as itemCount,${rarityAgg}
     FROM loot_item_locations lil
     JOIN loot_map lm ON lm.id = lil.loot_map_id
     WHERE lil.location_key != ''
+      AND lil.source_type IN ('container', 'shop')
       AND ${LOOT_EXCLUSION_FILTER}
     GROUP BY lil.source_type, lil.location_key`;
 
-  const result = await db.prepare(sql).all<LocationAggRow & { source_type: string }>();
+  // NPCs: collapse per-loadout UUIDs up to their parent faction so the POI
+  // directory shows "Nine Tails / Outlaws / Advocacy" instead of 2,668 UUIDs.
+  // Loadouts without a resolvable faction bucket as 'unknown'.
+  const npcFactionSql = `SELECT 'npc' as source_type,
+      COALESCE(nf.code, 'unknown') as key,
+      COALESCE(nf.name, 'Unknown') as name,
+      COUNT(DISTINCT lil.loot_map_id) as itemCount,${rarityAgg}
+    FROM loot_item_locations lil
+    JOIN loot_map lm ON lm.id = lil.loot_map_id
+    LEFT JOIN npc_loadouts nl ON nl.uuid = lil.location_key
+    LEFT JOIN npc_factions nf ON nf.id = nl.faction_id
+    WHERE lil.location_key != ''
+      AND lil.source_type = 'npc'
+      AND ${LOOT_EXCLUSION_FILTER}
+    GROUP BY COALESCE(nf.code, 'unknown'), COALESCE(nf.name, 'Unknown')`;
 
-  function toSummaries(rows: (LocationAggRow & { source_type: string })[]): LocationSummary[] {
+  const [containerShopResult, npcResult] = await Promise.all([
+    db.prepare(containerShopSql).all<LocationAggRow & { source_type: string; name: string | null }>(),
+    db.prepare(npcFactionSql).all<LocationAggRow & { source_type: string; name: string | null }>(),
+  ]);
+
+  function toSummaries(rows: (LocationAggRow & { source_type: string; name: string | null })[]): LocationSummary[] {
     return rows.map((r) => {
       const rarities: Record<string, number> = {};
       if (r.r_Common) rarities.Common = r.r_Common;
@@ -1736,21 +1764,18 @@ export async function getLootLocationSummary(db: D1Database): Promise<LootLocati
       if (r.r_Rare) rarities.Rare = r.r_Rare;
       if (r.r_Epic) rarities.Epic = r.r_Epic;
       if (r.r_Legendary) rarities.Legendary = r.r_Legendary;
-      return { key: r.key, itemCount: r.itemCount, rarities };
+      return { key: r.key, name: r.name ?? undefined, itemCount: r.itemCount, rarities };
     });
   }
 
-  const grouped = { containers: [] as (LocationAggRow & { source_type: string })[], shops: [] as (LocationAggRow & { source_type: string })[], npcs: [] as (LocationAggRow & { source_type: string })[] };
-  for (const row of result.results) {
-    if (row.source_type === 'container') grouped.containers.push(row);
-    else if (row.source_type === 'shop') grouped.shops.push(row);
-    else if (row.source_type === 'npc') grouped.npcs.push(row);
-  }
+  const containers = containerShopResult.results.filter((r) => r.source_type === 'container');
+  const shops = containerShopResult.results.filter((r) => r.source_type === 'shop');
+  const npcs = npcResult.results;
 
   return {
-    containers: toSummaries(grouped.containers),
-    shops: toSummaries(grouped.shops),
-    npcs: toSummaries(grouped.npcs),
+    containers: toSummaries(containers),
+    shops: toSummaries(shops),
+    npcs: toSummaries(npcs),
   };
 }
 

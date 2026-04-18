@@ -339,12 +339,13 @@ export default function POI() {
     return assignShopsToTree(LOCATION_TREE, active)
   }, [allShops])
 
-  // NPCs
+  // NPCs — server groups by faction and returns loc.name. Fall back to
+  // friendlyFaction for safety (e.g. 'unknown' bucket, cached pre-server-fix payloads).
   const npcEntries = useMemo(() => {
     if (!data?.npcs) return []
     return data.npcs.map((loc) => ({
       rawKey: loc.key,
-      friendlyName: friendlyFaction(loc.key),
+      friendlyName: loc.name || friendlyFaction(loc.key),
       itemCount: loc.itemCount,
       rarities: loc.rarities || {},
     }))

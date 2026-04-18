@@ -565,7 +565,7 @@ export default function Missions() {
   }, [setSearchParams])
 
   // Normalize contracts + missions into one list
-  const allEntries = useMemo(() => {
+  const rawEntries = useMemo(() => {
     const entries = []
 
     // Contracts → unified shape
@@ -638,11 +638,26 @@ export default function Missions() {
         locality: m.locality ?? null,
         rep_fail: m.rep_fail ?? null,
         rep_abandon: m.rep_abandon ?? null,
+        is_template: m.is_template === 1,
       })
     }
 
     return entries
   }, [contracts, missionData])
+
+  // Template missions (titles/descriptions with unresolved {token} placeholders
+  // like {Creature}, {Location}, {ReputationRank}) are CIG mission-instance
+  // templates — the game engine fills the tokens per generated instance, so
+  // rendering them statically is noise. Hide by default; expose an opt-in toggle.
+  const [showTemplates, setShowTemplates] = useState(false)
+  const allEntries = useMemo(
+    () => showTemplates ? rawEntries : rawEntries.filter(e => !e.is_template),
+    [rawEntries, showTemplates],
+  )
+  const templateCount = useMemo(
+    () => rawEntries.filter(e => e.is_template).length,
+    [rawEntries],
+  )
 
   // Categories + source counts for filters
   const categories = useMemo(() => {
@@ -786,6 +801,20 @@ export default function Missions() {
       {view === 'all' && (
         <div className="flex flex-wrap gap-3 items-start">
           <SearchInput value={search} onChange={v => setParam('q', v, true)} placeholder="Search..." className="max-w-sm flex-1" />
+          {templateCount > 0 && (
+            <button
+              type="button"
+              onClick={() => setShowTemplates(v => !v)}
+              className={`rounded-lg px-3 py-2 text-xs font-mono border transition-colors ${
+                showTemplates
+                  ? 'bg-sc-accent/10 border-sc-accent/40 text-sc-accent'
+                  : 'bg-sc-darker border-sc-border text-gray-400 hover:text-gray-300'
+              }`}
+              title="Templates are CIG mission instances with unresolved tokens like {Creature}, {ReputationRank} — hidden by default"
+            >
+              {showTemplates ? '✓ ' : ''}Show {templateCount} templates
+            </button>
+          )}
           <select value={sourceFilter} onChange={e => setParam('source', e.target.value)} className="bg-sc-darker border border-sc-border rounded-lg px-3 py-2 text-xs text-gray-300 font-mono focus:outline-none focus:border-sc-accent/40">
             <option value="">All Sources</option>
             <option value="contract">Contracts ({sourceCounts.contract})</option>

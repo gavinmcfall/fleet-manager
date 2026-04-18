@@ -211,7 +211,9 @@ export default function ElementDetail() {
               try {
                 const els = JSON.parse(comp.composition_json)
                 const match = els.find(e => e.element?.toLowerCase() === element.class_name?.toLowerCase())
-                if (match) elPct = { min: match.minPct, max: match.maxPct }
+                if (match && typeof match.minPct === 'number' && typeof match.maxPct === 'number') {
+                  elPct = { min: match.minPct, max: match.maxPct }
+                }
               } catch { /* skip */ }
 
               return (
