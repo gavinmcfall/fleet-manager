@@ -574,7 +574,7 @@ export async function syncShipProductionStatus(db: D1Database): Promise<void> {
                 v.length, v.beam, v.height, v.mass,
                 v.crew_min, v.crew_max, v.classification, v.focus,
                 v.pledge_url, v.pledge_price, v.manufacturer_code,
-                v.manufacturer_id
+                v.manufacturer_id, v.size, v.size_label
            FROM vehicles v
           WHERE v.removed = 0
             AND v.is_deleted = 0`,
@@ -600,6 +600,8 @@ export async function syncShipProductionStatus(db: D1Database): Promise<void> {
         pledge_price: number | null;
         manufacturer_code: string | null;
         manufacturer_id: number | null;
+        size: number | null;
+        size_label: string | null;
       }>();
 
     // Index rows by id for backfill lookups.
@@ -662,6 +664,15 @@ export async function syncShipProductionStatus(db: D1Database): Promise<void> {
     const pledgeUrlUpdates: Array<{ id: number; url: string }> = [];
     const pledgePriceUpdates: Array<{ id: number; price: number }> = [];
     const mfrCodeUpdates: Array<{ id: number; code: string }> = [];
+    // F234: RSI ship-matrix provides a size string (snub/small/medium/large/capital/vehicle)
+    // for ships where the p4k extractor had no bounding-box dimensions (Javelin,
+    // Hurricane, Paladin, MOTH, Syulen, etc.). Backfill size + size_label when
+    // p4k came back null. Int `size` codes match the pipeline extractor:
+    //   snub=1 small=2 medium=3 large=4 capital=5 vehicle=0 (ground)
+    const sizeUpdates: Array<{ id: number; sizeInt: number; sizeLabel: string }> = [];
+    const RSI_SIZE_TO_INT: Record<string, number> = {
+      snub: 1, small: 2, medium: 3, large: 4, capital: 5, vehicle: 0,
+    };
     let unmatched = 0;
     const unmatchedNames: string[] = [];
 
@@ -771,12 +782,21 @@ export async function syncShipProductionStatus(db: D1Database): Promise<void> {
       if (dbRow.mass === null && mass !== null && mass > 0) {
         massUpdates.push({ id: dbId, mass });
       }
+      // F242: p4k extractor falls back to crew_min/crew_max=1 when component
+      // data is thin. Capital + large ships should never really be crew=1;
+      // prefer RSI ship-matrix over the suspicious 1-default.
       const crewMin = toNumber(ship.min_crew);
-      if (dbRow.crew_min === null && crewMin !== null) {
+      if (crewMin !== null && (
+        dbRow.crew_min === null ||
+        (dbRow.crew_min === 1 && crewMin > 1)
+      )) {
         crewMinUpdates.push({ id: dbId, crewMin });
       }
       const crewMax = toNumber(ship.max_crew);
-      if (dbRow.crew_max === null && crewMax !== null) {
+      if (crewMax !== null && (
+        dbRow.crew_max === null ||
+        (dbRow.crew_max === 1 && crewMax > 1)
+      )) {
         crewMaxUpdates.push({ id: dbId, crewMax });
       }
       if (dbRow.classification === null && ship.classification) {
@@ -797,6 +817,15 @@ export async function syncShipProductionStatus(db: D1Database): Promise<void> {
       const mfrCode = ship.manufacturer?.code;
       if (dbRow.manufacturer_code === null && mfrCode) {
         mfrCodeUpdates.push({ id: dbId, code: mfrCode });
+      }
+      // F234: backfill size + size_label from RSI ship-matrix when p4k extractor
+      // couldn't derive them from bounding-box dimensions.
+      if (dbRow.size_label === null && ship.size) {
+        const sizeStr = ship.size.toLowerCase();
+        const sizeInt = RSI_SIZE_TO_INT[sizeStr];
+        if (sizeInt !== undefined) {
+          sizeUpdates.push({ id: dbId, sizeInt, sizeLabel: sizeStr });
+        }
       }
     }
 
@@ -876,6 +905,12 @@ export async function syncShipProductionStatus(db: D1Database): Promise<void> {
     }
     for (const u of pledgePriceUpdates) {
       statements.push(db.prepare(`UPDATE vehicles SET pledge_price = ? WHERE id = ?`).bind(u.price, u.id));
+    }
+    for (const u of sizeUpdates) {
+      statements.push(
+        db.prepare(`UPDATE vehicles SET size = ?, size_label = ? WHERE id = ?`)
+          .bind(u.sizeInt, u.sizeLabel, u.id),
+      );
     }
     for (const u of mfrCodeUpdates) {
       // Set manufacturer_code + resolve manufacturer_id FK in one pass.
