@@ -11,6 +11,7 @@ import LoadingState from '../../components/LoadingState'
 import ErrorState from '../../components/ErrorState'
 import ShipImage from '../../components/ShipImage'
 import RatingModal from '../../components/RatingModal'
+import ConfirmDialog from '../../components/ConfirmDialog'
 import { formatDate } from '../../lib/dates'
 import useTimezone from '../../hooks/useTimezone'
 
@@ -99,9 +100,16 @@ export default function OpDetail() {
   const handleMarkPaid = (payeeUserId) =>
     apiCall(`/api/orgs/${slug}/ops/${opId}/payouts/${payeeUserId}`, 'PATCH')
 
+  // F289: Share Link flips the op's is_public flag. Confirm first so org-leaders
+  // don't accidentally expose internal ops to the public.
+  const [shareConfirm, setShareConfirm] = useState(false)
   const handleGenerateCode = async () => {
     const result = await apiCall(`/api/orgs/${slug}/ops/${opId}/code`)
     if (result?.join_code) setJoinCode(result.join_code)
+  }
+  const confirmGenerateCode = () => {
+    setShareConfirm(false)
+    handleGenerateCode()
   }
 
   const handleCopyCode = () => {
@@ -190,7 +198,7 @@ export default function OpDetail() {
           </button>
         )}
         {canManage && (r.status === 'planning' || r.status === 'active') && (
-          <button onClick={handleGenerateCode} disabled={!!actionLoading}
+          <button onClick={() => setShareConfirm(true)} disabled={!!actionLoading}
             className="px-3 py-1.5 text-xs font-display tracking-wider uppercase flex items-center gap-1.5 border border-sc-border rounded text-gray-400 hover:text-sc-accent hover:border-sc-accent/30 transition-colors disabled:opacity-50">
             <ExternalLink className="w-3.5 h-3.5" />
             {r.join_code ? 'Regenerate Code' : 'Share Link'}
@@ -198,14 +206,22 @@ export default function OpDetail() {
         )}
       </div>
 
-      {/* Join code display */}
+      {/* Join code display — F291: surface expiry timestamp so org-leaders know
+          when the shared link stops working (defaults to 24h from generation). */}
       {(joinCode || r.join_code) && (
-        <div className="flex items-center gap-2 p-3 bg-sc-darker border border-sc-border rounded">
-          <span className="text-xs text-gray-400">Join link:</span>
-          <code className="text-sm text-sc-accent font-mono">{window.location.origin}/join/{joinCode || r.join_code}</code>
-          <button onClick={handleCopyCode} className="p-1 rounded hover:bg-white/5">
-            {codeCopied ? <Check className="w-3.5 h-3.5 text-green-400" /> : <Copy className="w-3.5 h-3.5 text-gray-400" />}
-          </button>
+        <div className="flex flex-col gap-1 p-3 bg-sc-darker border border-sc-border rounded">
+          <div className="flex items-center gap-2">
+            <span className="text-xs text-gray-400">Join link:</span>
+            <code className="text-sm text-sc-accent font-mono">{window.location.origin}/join/{joinCode || r.join_code}</code>
+            <button onClick={handleCopyCode} className="p-1 rounded hover:bg-white/5">
+              {codeCopied ? <Check className="w-3.5 h-3.5 text-green-400" /> : <Copy className="w-3.5 h-3.5 text-gray-400" />}
+            </button>
+          </div>
+          {r.join_code_expires_at && (
+            <p className="text-[10px] text-gray-500 font-mono">
+              Expires {formatDate(r.join_code_expires_at, timezone)} · Public is_public={r.is_public ? 'true' : 'false'}
+            </p>
+          )}
         </div>
       )}
 
@@ -378,6 +394,21 @@ export default function OpDetail() {
           onRated={refetch}
         />
       )}
+
+      {/* F289: Share Link confirm — one-click used to flip op to public silently. */}
+      <ConfirmDialog
+        open={shareConfirm}
+        onConfirm={confirmGenerateCode}
+        onCancel={() => setShareConfirm(false)}
+        title={r.join_code ? 'Regenerate Join Code' : 'Share this Op'}
+        message={
+          r.join_code
+            ? `Regenerate the join code? The existing link will stop working immediately and anyone who already had it won't be able to join.`
+            : `Generate a public join code for "${r.name}"? Anyone with the link will be able to view + join this op for the next 24 hours.`
+        }
+        confirmLabel={r.join_code ? 'Regenerate' : 'Share'}
+        variant="warning"
+      />
     </div>
   )
 }

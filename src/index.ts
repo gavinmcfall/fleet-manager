@@ -103,7 +103,10 @@ app.use("*", async (c, next) => {
     "img-src 'self' https://imagedelivery.net https://robertsspaceindustries.com " +
     "https://media.robertsspaceindustries.com https://cdn.robertsspaceindustries.com " +
     "https://avatars.githubusercontent.com https://www.gravatar.com https://www.googletagmanager.com data:; " +
-    "connect-src 'self' https://www.google-analytics.com https://*.google-analytics.com https://*.analytics.google.com https://www.googletagmanager.com https://static.cloudflareinsights.com; " +
+    // F249: gtag.js beacons /g/collect to www.google.com in some GA4 configs,
+    // not the *.google-analytics.com / analytics.google.com hosts. Without
+    // this connect-src entry the tracker is silently CSP-blocked.
+    "connect-src 'self' https://www.google-analytics.com https://*.google-analytics.com https://*.analytics.google.com https://www.googletagmanager.com https://www.google.com https://static.cloudflareinsights.com; " +
     "frame-ancestors 'none'; base-uri 'self'; form-action 'self' http://localhost:* http://127.0.0.1:*",
   );
 });

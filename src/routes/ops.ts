@@ -1003,11 +1003,22 @@ export function opsRoutes() {
 export function publicOpsRoutes() {
   const routes = new Hono<HonoEnv>();
 
-  // GET /api/ops/join/:code — op summary for join page
-  routes.get("/join/:code", async (c) => {
-    const user = c.get("user");
-    if (!user) return c.json({ error: "Unauthorized" }, 401);
+  // TODO F294: add Cloudflare WAF rate-limit rule on /api/ops/join/* —
+  // currently unlimited, which allows enumeration of valid join codes
+  // (authenticated users can distinguish 200 from 404). In-app rate
+  // limiting in a Worker isolate is weak (state is per-isolate); the
+  // proper gate lives in CF Dashboard → WAF → Rate limiting rules:
+  //   Path: /api/ops/join/*
+  //   Threshold: 30 requests / 1 minute per IP
+  //   Action: Block with 429
+  // Matches the /api/auth/* rate limit already in production (3 req/10s).
 
+  // GET /api/ops/join/:code — op summary for join page
+  // F292: allow anonymous preview (Discord-share use case). Authenticated
+  // users get the same payload — authentication gate moved to POST join
+  // (line 1043). Without this, anon visitors saw 401 and couldn't even
+  // see what op they were being invited to.
+  routes.get("/join/:code", async (c) => {
     const code = c.req.param("code").toUpperCase();
     const db = c.env.DB;
 

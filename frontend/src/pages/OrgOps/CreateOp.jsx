@@ -18,6 +18,10 @@ export default function CreateOp({ slug, onClose }) {
   const [name, setName] = useState('')
   const [opType, setOpType] = useState('mining')
   const [description, setDescription] = useState('')
+  // F290: visibility toggle — default 'org' so members in the same org see
+  // the op automatically. 'private' for leader-only, 'public' for Discord-
+  // sharable. Backend auto-generates a join code when is_public=true.
+  const [visibility, setVisibility] = useState('org')
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState(null)
 
@@ -35,6 +39,8 @@ export default function CreateOp({ slug, onClose }) {
           name: name.trim(),
           op_type: opType,
           description: description.trim() || null,
+          is_public: visibility === 'public' ? 1 : 0,
+          visibility,
         }),
       })
       const data = await resp.json()
@@ -107,6 +113,39 @@ export default function CreateOp({ slug, onClose }) {
             className="w-full px-4 py-2.5 bg-sc-darker border border-sc-border rounded text-sm text-white placeholder-gray-600 focus:border-sc-accent focus:outline-none focus:ring-1 focus:ring-sc-accent/50 h-24 resize-none"
             maxLength={2000}
           />
+        </div>
+
+        {/* F290: visibility toggle — previously defaulted to private silently. */}
+        <div>
+          <label className="block text-xs font-medium text-gray-400 mb-1.5 uppercase tracking-wider">
+            Who can see this op?
+          </label>
+          <div className="grid grid-cols-3 gap-1.5">
+            {[
+              { key: 'org', label: 'Org', hint: 'Visible to org members' },
+              { key: 'private', label: 'Private', hint: 'Only you + invited members' },
+              { key: 'public', label: 'Public', hint: 'Anyone with a join link' },
+            ].map(({ key, label, hint }) => (
+              <button
+                key={key}
+                type="button"
+                onClick={() => setVisibility(key)}
+                title={hint}
+                className={`px-2.5 py-2 rounded text-xs font-display uppercase tracking-wide border transition-colors ${
+                  visibility === key
+                    ? 'text-sc-accent border-sc-accent/30 bg-sc-accent/10'
+                    : 'text-gray-400 border-sc-border hover:text-gray-300 hover:border-sc-border bg-white/[0.02]'
+                }`}
+              >
+                {label}
+              </button>
+            ))}
+          </div>
+          <p className="text-[11px] text-gray-500 mt-1">
+            {visibility === 'org' && 'Members of this org will see the op in their list.'}
+            {visibility === 'private' && 'Only you + anyone you explicitly invite can see the op.'}
+            {visibility === 'public' && 'A 24h join code will be generated. Anyone with the link can view + join.'}
+          </p>
         </div>
 
         <div className="flex gap-2 pt-2">

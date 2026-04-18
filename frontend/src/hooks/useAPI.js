@@ -31,6 +31,27 @@ const postJSON = (path, body) => apiFetch('POST', path, body)
 const patchJSON = (path, body) => apiFetch('PATCH', path, body)
 const putJSON = (path, body) => apiFetch('PUT', path, body)
 
+// F212/F253/F263/F297: concurrent mounts of useAPI(path) used to each fire
+// their own fetch. Worst offender was /api/settings/preferences (fetched
+// 4× per page load — App sidebar, useFontPreference, usePrivacyMode,
+// useTimezone). Shared in-flight map dedupes concurrent callers — the
+// first mount triggers the fetch, subsequent mounts while it's in flight
+// subscribe to the same Promise. No long-lived cache (refetch/invalidation
+// semantics stay unchanged) — only the "thundering herd on page load" case
+// is fixed.
+const inflight = new Map()
+function sharedFetchJSON(path) {
+  const hit = inflight.get(path)
+  if (hit) return hit
+  const p = fetchJSON(path).finally(() => {
+    // Clear the entry after settle so subsequent refetches always hit the
+    // network. The dedupe window is the duration of one round trip.
+    if (inflight.get(path) === p) inflight.delete(path)
+  })
+  inflight.set(path, p)
+  return p
+}
+
 export function useAPI(path, { skip = false } = {}) {
   const [data, setData] = useState(null)
   const [loading, setLoading] = useState(!skip)
@@ -40,7 +61,7 @@ export function useAPI(path, { skip = false } = {}) {
     if (skip) return
     setLoading(true)
     setError(null)
-    fetchJSON(path)
+    sharedFetchJSON(path)
       .then(setData)
       .catch((e) => setError(e.message))
       .finally(() => setLoading(false))

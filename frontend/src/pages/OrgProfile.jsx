@@ -45,12 +45,27 @@ function OrgFleet({ slug, callerRole }) {
   const fleet = data?.fleet ?? []
 
   if (fleet.length === 0) {
+    // F258: empty-fleet has three distinct causes — surface each clearly
+    // instead of a single ambiguous "No ships visible to you".
+    // 1. Non-member: they need to join first.
+    // 2. Org owner/admin: members haven't flipped ship visibility up.
+    // 3. Regular member: same as owner — nobody shared ships yet.
     return (
       <div className="text-center py-16 text-gray-500">
         <Rocket className="w-10 h-10 mx-auto mb-3 text-gray-600" />
-        <p className="text-sm">No ships visible to you</p>
-        {!callerRole && (
-          <p className="text-xs mt-1">Join the org to see member ships</p>
+        {!callerRole ? (
+          <>
+            <p className="text-sm">No ships visible to you</p>
+            <p className="text-xs mt-1">Join the org to see member ships</p>
+          </>
+        ) : (
+          <>
+            <p className="text-sm text-gray-400">No ships shared with this org yet</p>
+            <p className="text-xs mt-1 max-w-md mx-auto">
+              Each ship in your personal fleet defaults to <span className="font-mono text-gray-400">Private</span>.
+              Flip the visibility to <span className="font-mono text-gray-400">Org</span> on <Link to="/fleet" className="text-sc-accent hover:underline">your fleet page</Link> to share ships with members.
+            </p>
+          </>
         )}
       </div>
     )

@@ -968,6 +968,13 @@ export async function getLootItems(db: D1Database): Promise<LootItem[]> {
           'Char_Head_Eyes','Char_Body','Char_Head_Eyelash',
           'Currency','MobiGlas'
         )
+        -- F248: hide placeholder items + NPC-only Vanduul ship components
+        -- that clutter the main grid. Kept lootable VCK-1 blade variants
+        -- (category='weapon') and excluded only the Vanduul ship components /
+        -- utilities that aren't player-accessible. Null-safe so rows
+        -- without a class_name (test seeds, legacy rows) still pass.
+        AND (lm.class_name IS NULL OR lm.class_name NOT LIKE '%_placeholder_%')
+        AND NOT (lm.class_name LIKE 'vncl_%' AND lm.category IN ('ship_component', 'ship_weapon'))
       ORDER BY lm.name ASC`;
   const result = await db.prepare(sql).all();
   return result.results as unknown as LootItem[];
