@@ -276,34 +276,38 @@ export function orgRoutes() {
 
     if (!user) return c.json({ error: "Not found" }, 404);
 
-    const org = await db
+    // F255: merged org lookup + membership check into one query so the
+    // timing profile is identical whether the org doesn't exist or the
+    // caller isn't a member. Previously a non-member on an existing org
+    // ran two DB trips while a lookup on a non-existent org ran one,
+    // creating a side-channel for enumerating org slugs.
+    const row = await db
       .prepare(
-        `SELECT id, name, slug, logo, description, rsiSid, rsiUrl, homepage, discord, twitch, youtube, createdAt,
-          verified_at, rsi_model, rsi_commitment, rsi_roleplay,
-          rsi_primary_focus, rsi_secondary_focus, rsi_banner_url, rsi_member_count,
-          rsi_history_html, rsi_manifesto_html, rsi_charter_html, last_synced_at
-        FROM organization WHERE slug = ?`,
+        `SELECT o.id, o.name, o.slug, o.logo, o.description, o.rsiSid, o.rsiUrl,
+          o.homepage, o.discord, o.twitch, o.youtube, o.createdAt,
+          o.verified_at, o.rsi_model, o.rsi_commitment, o.rsi_roleplay,
+          o.rsi_primary_focus, o.rsi_secondary_focus, o.rsi_banner_url, o.rsi_member_count,
+          o.rsi_history_html, o.rsi_manifesto_html, o.rsi_charter_html, o.last_synced_at,
+          m.role AS caller_role
+        FROM organization o
+        LEFT JOIN member m ON m.organizationId = o.id AND m.userId = ?
+        WHERE o.slug = ?`,
       )
-      .bind(slug)
-      .first();
+      .bind(user.id, slug)
+      .first<Record<string, unknown> & { caller_role: string | null }>();
 
-    if (!org) return c.json({ error: "Not found" }, 404);
-
-    const membership = await db
-      .prepare("SELECT role FROM member WHERE organizationId = ? AND userId = ?")
-      .bind((org as { id: string }).id, user.id)
-      .first<{ role: string }>();
-    if (!membership) return c.json({ error: "Not found" }, 404);
+    if (!row || !row.caller_role) return c.json({ error: "Not found" }, 404);
 
     const memberCount = await db
       .prepare("SELECT COUNT(*) as count FROM member WHERE organizationId = ?")
-      .bind((org as { id: string }).id)
+      .bind(row.id)
       .first<{ count: number }>();
 
+    const { caller_role, ...org } = row;
     return c.json({
       ...org,
       memberCount: memberCount?.count ?? 0,
-      callerRole: membership.role,
+      callerRole: caller_role,
     });
   });
 
