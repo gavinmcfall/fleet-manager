@@ -359,6 +359,11 @@ export function cleanMissionDescription(text) {
   let clean = text
     // Strip HTML-like tags (EM4, etc.) but keep their inner text
     .replace(/<[^>]+>/g, '')
+    // Runtime templates — CIG binds these at mission-pickup time
+    // (`~serviceBeacon(InitiatorName)`, `~mission(Contractor|Key)`, etc.).
+    // Collapse to a `{Var}` placeholder so the description reads cleanly
+    // instead of leaking the template markup.
+    .replace(/~[a-z]+\(([^|)]*\|)?([A-Za-z0-9_]+)\)/gi, '{$2}')
     // Remove all-caps header lines (lines that are ALL CAPS and < 60 chars)
     .replace(/^[A-Z][A-Z\s&,.:;\-/()]{3,58}$/gm, '')
     // Remove "CONTRACT TYPE:", "CONTRACTOR STATUS:", "APPROVAL CODE:", "FOR IMMEDIATE PROCESSING" lines

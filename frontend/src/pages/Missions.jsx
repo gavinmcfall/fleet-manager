@@ -574,7 +574,10 @@ export default function Missions() {
         id: `c-${c.id}`,
         mission_id: null,
         contract_id: c.id,
-        title: c.title,
+        // Contract titles have the same runtime-template issue as missions —
+        // humanise so chain contract rows read as "Chain Eliminate All · 1
+        // Location · Eliminate Specific" rather than the raw stem.
+        title: humanizeMissionStem(c.title),
         description: c.description,
         source: 'contract',
         category: c.category,

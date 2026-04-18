@@ -498,8 +498,16 @@ export async function upsertPaint(
 export async function getAllPaints(db: D1Database): Promise<Paint[]> {
   const paintResult = await db
     .prepare(
+      // NULL out placeholder descriptions at query time so the frontend
+      // never sees "<= PLACEHOLDER =>" or "<= UNINITIALIZED =>" text.
       `SELECT p.id, p.uuid, p.name, p.slug, p.class_name,
-        p.description, p.image_url, p.image_url_small, p.image_url_medium, p.image_url_large,
+        CASE
+          WHEN p.description LIKE '<=%=>' OR p.description LIKE '%PLACEHOLDER%'
+            OR p.description LIKE '%UNINITIALIZED%'
+          THEN NULL
+          ELSE p.description
+        END AS description,
+        p.image_url, p.image_url_small, p.image_url_medium, p.image_url_large,
         p.created_at, p.updated_at
       FROM paints p WHERE p.is_base_variant = 0 ORDER BY p.name`,
     )
