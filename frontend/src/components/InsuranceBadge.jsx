@@ -11,7 +11,16 @@ function formatInsuranceLabel(label) {
 
 export default function InsuranceBadge({ isLifetime, label }) {
   const display = isLifetime ? 'Lifetime' : formatInsuranceLabel(label)
-  if (!display) return <span className="text-xs text-gray-400">&mdash;</span>
+  // F250: keep the em-dash placeholder when insurance data is missing, but
+  // explain via title so users aren't left guessing why.
+  if (!display) return (
+    <span
+      className="text-xs text-gray-400"
+      title="No insurance data — sync or import pledge details to populate"
+    >
+      &mdash;
+    </span>
+  )
 
   return isLifetime ? (
     <span className="badge badge-lti whitespace-nowrap inline-block w-24 text-center">Lifetime</span>

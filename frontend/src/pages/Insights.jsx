@@ -217,20 +217,33 @@ export default function Insights() {
                   <span className="ml-auto text-xs font-mono text-gray-500">{group.ships.length} ships</span>
                 </div>
                 <div className="p-4 space-y-1.5">
-                  {group.ships.map((ship, j) => {
-                    const name = typeof ship === 'string' ? ship : ship.name
-                    const slug = typeof ship === 'string' ? null : ship.slug
-                    const fleetId = typeof ship === 'string' ? null : ship.fleet_id
-                    return slug && fleetId ? (
-                      <Link key={j} to={`/loadout/${slug}?fleet_id=${fleetId}`} className="text-sm text-gray-400 flex items-center gap-2 hover:text-sc-accent transition-colors">
-                        <span className="w-1.5 h-1.5 rounded-full bg-sc-border" />{name}
-                      </Link>
-                    ) : (
-                      <div key={j} className="text-sm text-gray-400 flex items-center gap-2">
-                        <span className="w-1.5 h-1.5 rounded-full bg-sc-border" />{name}
-                      </div>
-                    )
-                  })}
+                  {/* F240: group duplicate ships under a single row with count. */}
+                  {(() => {
+                    const grouped = new Map()
+                    for (const ship of group.ships) {
+                      const name = typeof ship === 'string' ? ship : ship.name
+                      const slug = typeof ship === 'string' ? null : ship.slug
+                      const fleetId = typeof ship === 'string' ? null : ship.fleet_id
+                      const existing = grouped.get(name)
+                      if (existing) {
+                        existing.count++
+                      } else {
+                        grouped.set(name, { name, slug, fleetId, count: 1 })
+                      }
+                    }
+                    return Array.from(grouped.values()).map((g, j) => {
+                      const label = g.count > 1 ? `${g.name} × ${g.count}` : g.name
+                      return g.slug && g.fleetId ? (
+                        <Link key={j} to={`/loadout/${g.slug}?fleet_id=${g.fleetId}`} className="text-sm text-gray-400 flex items-center gap-2 hover:text-sc-accent transition-colors">
+                          <span className="w-1.5 h-1.5 rounded-full bg-sc-border" />{label}
+                        </Link>
+                      ) : (
+                        <div key={j} className="text-sm text-gray-400 flex items-center gap-2">
+                          <span className="w-1.5 h-1.5 rounded-full bg-sc-border" />{label}
+                        </div>
+                      )
+                    })
+                  })()}
                   {group.notes && <p className="text-xs text-gray-400 mt-2 pt-2 border-t border-sc-border/30">{group.notes}</p>}
                 </div>
               </div>

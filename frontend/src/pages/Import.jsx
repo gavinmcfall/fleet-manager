@@ -193,9 +193,22 @@ export default function Import() {
               <p className="text-xs text-gray-400">
                 Install the extension to sync your hangar data directly from RSI.
               </p>
-              <button onClick={sync.detect} className="text-xs text-sc-accent hover:underline">
-                Retry detection
-              </button>
+              <div className="flex flex-wrap gap-3 items-center text-xs">
+                <a
+                  href="#get-the-extension"
+                  onClick={(e) => {
+                    e.preventDefault()
+                    document.getElementById('get-the-extension')?.scrollIntoView({ behavior: 'smooth', block: 'start' })
+                  }}
+                  className="text-sc-accent hover:underline flex items-center gap-1"
+                >
+                  <Download className="w-3 h-3" />
+                  See install instructions
+                </a>
+                <button onClick={sync.detect} className="text-sc-accent hover:underline">
+                  Retry detection
+                </button>
+              </div>
             </div>
           )}
 
@@ -320,7 +333,7 @@ export default function Import() {
         </div>
       </PanelSection>
 
-      <PanelSection title="Get the Extension" icon={Download}>
+      <PanelSection title="Get the Extension" icon={Download} id="get-the-extension">
         <div className="p-5 space-y-4">
           <p className="text-sm text-gray-400">
             The SC Bridge Sync extension connects to your RSI account and sends hangar data to SC Bridge.

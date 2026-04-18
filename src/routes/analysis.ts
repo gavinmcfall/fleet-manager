@@ -589,17 +589,26 @@ export function analyzeFleet(fleet: UserFleetEntry[], _allVehicles: Vehicle[], t
   const nonLtiShips: typeof ltiShips = [];
   const unknownShips: typeof ltiShips = [];
 
+  // F227/F235: dedupe by vehicle_id so crew Min/Max reflects the set of unique
+  // ship types owned, not the multiplied crew cost of owning duplicates. A
+  // player with two Idris-P should see Min/Max Crew once (e.g. 6/102), not
+  // twice (e.g. 12/204).
+  const seenVehicleIds = new Set<number>();
+
   for (const entry of fleet) {
     // Production status
     if (entry.production_status === "flight_ready") flightReady++;
     if (entry.production_status === "in_concept") inConcept++;
 
-    // Cargo
+    // Cargo (sum across all entries — owning two haulers does mean more cargo)
     totalCargo += entry.cargo ?? 0;
 
-    // Crew
-    minCrew += entry.crew_min ?? 0;
-    maxCrew += entry.crew_max ?? 0;
+    // Crew — dedupe by vehicle_id
+    if (entry.vehicle_id != null && !seenVehicleIds.has(entry.vehicle_id)) {
+      seenVehicleIds.add(entry.vehicle_id);
+      minCrew += entry.crew_min ?? 0;
+      maxCrew += entry.crew_max ?? 0;
+    }
 
     // Size distribution
     const size = entry.size_label || "Unknown";
