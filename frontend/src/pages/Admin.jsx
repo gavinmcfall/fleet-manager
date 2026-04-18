@@ -7,6 +7,7 @@ import { formatDate } from '../lib/dates'
 import PageHeader from '../components/PageHeader'
 import LoadingState from '../components/LoadingState'
 import PanelSection from '../components/PanelSection'
+import ConfirmDialog from '../components/ConfirmDialog'
 
 const syncActions = [
   { id: 'rsi', label: 'RSI API', icon: Globe, trigger: triggerRSISync, description: 'Ship images from RSI GraphQL API' },
@@ -125,8 +126,10 @@ function InvitePanel() {
 }
 
 
+// "All Cache" lives at the BOTTOM so the default (first) selection is the
+// safer "All Game Data" prefix — the default previously was "All Cache" which
+// made a single mis-click nuke the entire KV namespace (F274).
 const CACHE_PREFIXES = [
-  { value: '',               label: 'All Cache' },
   { value: 'gd:',            label: 'All Game Data' },
   { value: 'gd:npc-loadout', label: 'NPC Loadouts' },
   { value: 'gd:vehicles',    label: 'Vehicles' },
@@ -135,14 +138,23 @@ const CACHE_PREFIXES = [
   { value: 'gd:missions',    label: 'Missions' },
   { value: 'gd:factions',    label: 'Factions' },
   { value: 'gd:contracts',   label: 'Contracts' },
+  { value: '',               label: 'All Cache (danger)' },
 ]
 
 function CachePurgePanel() {
-  const [prefix, setPrefix] = useState('')
+  // Default to the safer "All Game Data" prefix (first entry). Users have to
+  // explicitly select "All Cache (danger)" at the bottom of the list to nuke
+  // everything. All purges go through ConfirmDialog (F274).
+  const [prefix, setPrefix] = useState(CACHE_PREFIXES[0].value)
   const [purging, setPurging] = useState(false)
   const [result, setResult] = useState(null)
+  const [confirming, setConfirming] = useState(false)
 
-  const handlePurge = async () => {
+  const selectedLabel = CACHE_PREFIXES.find((p) => p.value === prefix)?.label || prefix
+  const isAllCache = prefix === ''
+
+  const doPurge = async () => {
+    setConfirming(false)
     setPurging(true)
     setResult(null)
     try {
@@ -180,7 +192,7 @@ function CachePurgePanel() {
             ))}
           </select>
           <button
-            onClick={handlePurge}
+            onClick={() => setConfirming(true)}
             disabled={purging}
             className="btn-primary flex items-center gap-2 text-sm px-3 py-2 disabled:opacity-50"
           >
@@ -194,6 +206,19 @@ function CachePurgePanel() {
           </p>
         )}
       </div>
+      <ConfirmDialog
+        open={confirming}
+        onConfirm={doPurge}
+        onCancel={() => setConfirming(false)}
+        title={isAllCache ? 'Purge ALL Cache' : 'Purge Cache'}
+        message={
+          isAllCache
+            ? 'This will drop every KV cache entry site-wide. The next request to each cached endpoint will hit the DB and write a fresh cache entry. Continue?'
+            : `Purge KV entries matching "${prefix}*" (${selectedLabel})?`
+        }
+        confirmLabel={isAllCache ? 'Purge All Cache' : 'Purge'}
+        variant={isAllCache ? 'danger' : 'warning'}
+      />
     </PanelSection>
   )
 }
@@ -470,6 +495,7 @@ export default function Admin() {
   const { data: syncHistory, loading, error, refetch } = useSyncStatus()
   const [triggering, setTriggering] = useState(null)
   const [triggerError, setTriggerError] = useState(null)
+  const [fullSyncConfirm, setFullSyncConfirm] = useState(false)
 
   const handleTrigger = async (id, triggerFn) => {
     setTriggering(id)
@@ -484,7 +510,10 @@ export default function Admin() {
     }
   }
 
-  const handleFullSync = async () => {
+  // Full Sync runs the entire RSI ship-matrix + image chain (expensive, slow,
+  // API-cost heavy). Require explicit confirmation before kicking it off (F275).
+  const confirmFullSync = async () => {
+    setFullSyncConfirm(false)
     setTriggering('all')
     setTriggerError(null)
     try {
@@ -506,7 +535,7 @@ export default function Admin() {
         subtitle="Sync management and system controls"
         actions={
           <button
-            onClick={handleFullSync}
+            onClick={() => setFullSyncConfirm(true)}
             disabled={triggering !== null}
             className="btn-primary flex items-center gap-2"
           >
@@ -514,6 +543,16 @@ export default function Admin() {
             {triggering === 'all' ? 'Running...' : 'Full Sync'}
           </button>
         }
+      />
+
+      <ConfirmDialog
+        open={fullSyncConfirm}
+        onConfirm={confirmFullSync}
+        onCancel={() => setFullSyncConfirm(false)}
+        title="Run Full Sync"
+        message="Full Sync kicks off the RSI ship-matrix poller + image download chain. It's long-running, hits external RSI APIs, and consumes Worker CPU. Continue?"
+        confirmLabel="Run Full Sync"
+        variant="warning"
       />
 
       {triggerError && (

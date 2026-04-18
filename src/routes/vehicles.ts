@@ -79,9 +79,11 @@ export function vehicleRoutes<E extends { Bindings: Env }>() {
           LEFT JOIN production_statuses ps ON ps.id = v.production_status_id
           LEFT JOIN vehicles pv ON pv.id = v.parent_vehicle_id
           LEFT JOIN production_statuses pps ON pps.id = pv.production_status_id
-          WHERE v.slug = ? AND v.is_paint_variant = 0`,
+          WHERE (v.slug = ? OR v.short_slug = ?) AND v.is_paint_variant = 0
+          ORDER BY CASE WHEN v.slug = ? THEN 0 ELSE 1 END
+          LIMIT 1`,
         )
-        .bind(slug)
+        .bind(slug, slug, slug)
         .first();
       return vehicle;
     });

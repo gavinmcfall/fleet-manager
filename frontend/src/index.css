@@ -114,7 +114,11 @@
   }
 
   .stat-value {
-    @apply text-2xl font-display font-bold text-white;
+    /* Electrolize ships one weight (400). `font-bold` (700) forced the browser
+     * to synthesize bold, which renders "0" as a tofu square in Chromium on
+     * some platforms (F218/F232). Keep the display font but drop the synthetic
+     * bold — Electrolize is distinctive enough at 400. */
+    @apply text-2xl font-display text-white;
   }
 
   .stat-label {

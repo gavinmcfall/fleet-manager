@@ -627,6 +627,10 @@ function OverviewTab({ ship, isAuthed }) {
 // ─── Loadout ──────────────────────────────────────────────────────────────────
 
 function LoadoutItems({ items, emptyIcon: Icon, emptyMessage, onItemClick }) {
+  // F106: capital ships expose 50+ hardpoints that game data doesn't populate.
+  // Default to hiding empty ports per category; expose a toggle to reveal them.
+  const [expandedCategories, setExpandedCategories] = useState(() => new Set())
+
   if (!items || items.length === 0) {
     return (
       <div className="text-center py-16 text-gray-500">
@@ -654,12 +658,23 @@ function LoadoutItems({ items, emptyIcon: Icon, emptyMessage, onItemClick }) {
     turretWeapons.get(pid).push(item)
   })
 
+  const toggleCategory = (cat) => {
+    setExpandedCategories(prev => {
+      const next = new Set(prev)
+      if (next.has(cat)) next.delete(cat); else next.add(cat)
+      return next
+    })
+  }
+
   return (
     <div className="space-y-3">
       {Object.entries(grouped).map(([category, rows]) => {
         const TypeIcon = PORT_TYPE_ICON[rows[0]?.port_type]
         const filled = rows.filter(r => !!r.component_name)
+        const empties = rows.filter(r => !r.component_name)
         const total = rows.length
+        const showEmpties = expandedCategories.has(category)
+        const displayRows = showEmpties ? rows : filled
         return (
         <div key={category} className="panel overflow-hidden">
           <div className="panel-header flex items-center gap-2">
@@ -668,10 +683,20 @@ function LoadoutItems({ items, emptyIcon: Icon, emptyMessage, onItemClick }) {
             <span className="text-gray-600 font-normal ml-0.5">
               {filled.length < total ? `${filled.length} / ${total}` : `${total}`}
             </span>
+            {empties.length > 0 && (
+              <button
+                type="button"
+                onClick={() => toggleCategory(category)}
+                className="ml-auto text-xs font-mono text-gray-500 hover:text-gray-300 transition-colors"
+                aria-label={`${showEmpties ? 'Hide' : 'Show'} ${empties.length} empty ${category} hardpoints`}
+              >
+                {showEmpties ? `− hide ${empties.length} empty` : `+ show ${empties.length} empty`}
+              </button>
+            )}
           </div>
-          {rows.length > 0 && (
+          {displayRows.length > 0 && (
             <div className="divide-y divide-sc-border/20">
-              {rows.map((item, i) => {
+              {displayRows.map((item, i) => {
                 const sz = item.component_size ?? (item.size_max > 0 ? item.size_max : null)
                 const weapons = item.port_type === 'turret' ? (turretWeapons.get(item.port_id) || []) : []
                 const isEmpty = !item.component_name

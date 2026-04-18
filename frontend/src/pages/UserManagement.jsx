@@ -23,6 +23,9 @@ export default function UserManagement() {
   const [actionError, setActionError] = useState(null)
   const [actionLoading, setActionLoading] = useState(null)
   const [deleteTarget, setDeleteTarget] = useState(null)
+  const [banTarget, setBanTarget] = useState(null)
+  const [roleTarget, setRoleTarget] = useState(null)
+  const [impersonateTarget, setImpersonateTarget] = useState(null)
 
   const fetchUsers = useCallback(async () => {
     setLoading(true)
@@ -56,11 +59,14 @@ export default function UserManagement() {
 
   useEffect(() => { fetchUsers() }, [fetchUsers])
 
-  const handleSetRole = async (userId, newRole) => {
-    setActionLoading(userId)
+  const confirmSetRole = async () => {
+    if (!roleTarget) return
+    const { id, role } = roleTarget
+    setRoleTarget(null)
+    setActionLoading(id)
     setActionError(null)
     try {
-      await authClient.admin.setRole({ userId, role: newRole })
+      await authClient.admin.setRole({ userId: id, role })
       await fetchUsers()
     } catch (err) {
       setActionError(err.message || 'Failed to update role')
@@ -69,14 +75,17 @@ export default function UserManagement() {
     }
   }
 
-  const handleBan = async (userId, banned) => {
-    setActionLoading(userId)
+  const confirmBan = async () => {
+    if (!banTarget) return
+    const { id, banned } = banTarget
+    setBanTarget(null)
+    setActionLoading(id)
     setActionError(null)
     try {
       if (banned) {
-        await authClient.admin.banUser({ userId })
+        await authClient.admin.banUser({ userId: id })
       } else {
-        await authClient.admin.unbanUser({ userId })
+        await authClient.admin.unbanUser({ userId: id })
       }
       await fetchUsers()
     } catch (err) {
@@ -102,11 +111,14 @@ export default function UserManagement() {
     }
   }
 
-  const handleImpersonate = async (userId) => {
-    setActionLoading(userId)
+  const confirmImpersonate = async () => {
+    if (!impersonateTarget) return
+    const { id } = impersonateTarget
+    setImpersonateTarget(null)
+    setActionLoading(id)
     setActionError(null)
     try {
-      await authClient.admin.impersonateUser({ userId })
+      await authClient.admin.impersonateUser({ userId: id })
       window.location.href = '/'
     } catch (err) {
       setActionError(err.message || 'Failed to impersonate user')
@@ -157,7 +169,12 @@ export default function UserManagement() {
                     <td className="px-5 py-3">
                       <select
                         value={u.role || 'user'}
-                        onChange={(e) => handleSetRole(u.id, e.target.value)}
+                        onChange={(e) => {
+                          const newRole = e.target.value
+                          if (newRole !== (u.role || 'user')) {
+                            setRoleTarget({ id: u.id, name: u.name || u.email, currentRole: u.role || 'user', role: newRole })
+                          }
+                        }}
                         disabled={actionLoading === u.id}
                         className="bg-sc-darker border border-sc-border rounded px-2 py-1 text-xs text-gray-300 focus:border-sc-accent focus:outline-none"
                       >
@@ -181,16 +198,18 @@ export default function UserManagement() {
                     <td className="px-5 py-3 text-right">
                       <div className="flex items-center justify-end gap-2">
                         <button
-                          onClick={() => handleImpersonate(u.id)}
+                          onClick={() => setImpersonateTarget({ id: u.id, name: u.name || u.email })}
                           disabled={actionLoading === u.id || u.id === session?.user?.id}
+                          aria-label={`Impersonate ${u.name || u.email}`}
                           title="Impersonate"
                           className="p-1.5 rounded text-sc-accent hover:bg-sc-accent/10 transition-colors disabled:opacity-50"
                         >
                           <UserCheck className="w-3.5 h-3.5" />
                         </button>
                         <button
-                          onClick={() => handleBan(u.id, !u.banned)}
-                          disabled={actionLoading === u.id}
+                          onClick={() => setBanTarget({ id: u.id, name: u.name || u.email, banned: !u.banned })}
+                          disabled={actionLoading === u.id || u.id === session?.user?.id}
+                          aria-label={`${u.banned ? 'Unban' : 'Ban'} ${u.name || u.email}`}
                           title={u.banned ? 'Unban' : 'Ban'}
                           className={`p-1.5 rounded transition-colors ${
                             u.banned
@@ -202,7 +221,8 @@ export default function UserManagement() {
                         </button>
                         <button
                           onClick={() => setDeleteTarget({ id: u.id, name: u.name || u.email })}
-                          disabled={actionLoading === u.id}
+                          disabled={actionLoading === u.id || u.id === session?.user?.id}
+                          aria-label={`Delete user ${u.name || u.email}`}
                           title="Delete user"
                           className="p-1.5 rounded text-sc-danger hover:bg-sc-danger/10 transition-colors disabled:opacity-50"
                         >
@@ -238,6 +258,54 @@ export default function UserManagement() {
         message={deleteTarget ? `Delete user "${deleteTarget.name}"? This cannot be undone.` : ''}
         confirmLabel="Delete"
         variant="danger"
+      />
+
+      <ConfirmDialog
+        open={!!roleTarget}
+        onConfirm={confirmSetRole}
+        onCancel={() => setRoleTarget(null)}
+        title="Change Role"
+        message={
+          roleTarget
+            ? `Change role for "${roleTarget.name}" from ${roleTarget.currentRole} to ${roleTarget.role}?${
+                roleTarget.role === 'super_admin'
+                  ? ' This grants full access to every user and every admin action.'
+                  : ''
+              }`
+            : ''
+        }
+        confirmLabel={roleTarget?.role === 'super_admin' ? 'Grant super_admin' : 'Change Role'}
+        variant={roleTarget?.role === 'super_admin' ? 'danger' : 'warning'}
+      />
+
+      <ConfirmDialog
+        open={!!banTarget}
+        onConfirm={confirmBan}
+        onCancel={() => setBanTarget(null)}
+        title={banTarget?.banned ? 'Ban User' : 'Unban User'}
+        message={
+          banTarget
+            ? banTarget.banned
+              ? `Ban "${banTarget.name}"? They will be signed out and unable to log in.`
+              : `Unban "${banTarget.name}"? They will be able to log in again.`
+            : ''
+        }
+        confirmLabel={banTarget?.banned ? 'Ban' : 'Unban'}
+        variant={banTarget?.banned ? 'danger' : 'warning'}
+      />
+
+      <ConfirmDialog
+        open={!!impersonateTarget}
+        onConfirm={confirmImpersonate}
+        onCancel={() => setImpersonateTarget(null)}
+        title="Impersonate User"
+        message={
+          impersonateTarget
+            ? `Sign in as "${impersonateTarget.name}"? You'll see the app as they do until you stop impersonating.`
+            : ''
+        }
+        confirmLabel="Impersonate"
+        variant="warning"
       />
     </div>
   )

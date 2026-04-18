@@ -43,7 +43,31 @@ export function analysisRoutes() {
       .bind(userID)
       .first<{ total: number }>();
 
-    const analysis = analyzeFleet(fleet, allVehicles, pledgeTotal?.total ?? 0);
+    let totalPledgeValue = pledgeTotal?.total ?? 0;
+
+    // Fallback: sum user_fleet.pledge_cost strings when user_pledges is empty
+    // (persona accounts, older accounts that pre-date pledge-row seeding, or
+    // imports that only populated fleet entries). Skips aUEC / non-USD entries.
+    // Accurate enough to keep the Fleet Value card from showing $0 (F216/F230).
+    if (totalPledgeValue === 0) {
+      const fleetCostSum = await db
+        .prepare(
+          `SELECT COALESCE(SUM(
+             CASE
+               WHEN pledge_cost IS NULL THEN 0
+               WHEN pledge_cost LIKE '%UEC%' THEN 0
+               WHEN pledge_cost LIKE '¤%' THEN 0
+               ELSE CAST(REPLACE(REPLACE(REPLACE(pledge_cost, '$', ''), ',', ''), ' USD', '') AS REAL)
+             END
+           ), 0) as total
+           FROM user_fleet WHERE user_id = ?`,
+        )
+        .bind(userID)
+        .first<{ total: number }>();
+      totalPledgeValue = fleetCostSum?.total ?? 0;
+    }
+
+    const analysis = analyzeFleet(fleet, allVehicles, totalPledgeValue);
     return c.json(analysis);
   });
 
@@ -711,8 +735,11 @@ export function analyzeFleet(fleet: UserFleetEntry[], _allVehicles: Vehicle[], t
   // Redundancies — detect ships with the same granular focus (e.g. "Light Fighter"),
   // not the broad role group (e.g. "Combat"). A Gladius and Perseus are both "Combat"
   // but "Light Fighter" vs "Heavy Gunship" is fleet diversity, not redundancy.
+  // Threshold lowered from 3 to 2: 2 of the same granular focus IS a redundancy
+  // worth flagging to small-fleet users (previously only whale-size fleets saw
+  // anything, per F219).
   const redundancies = Object.entries(focusCategories)
-    .filter(([, ships]) => ships.length >= 3)
+    .filter(([, ships]) => ships.length >= 2)
     .map(([focus, ships]) => ({
       role: focus,
       ships,

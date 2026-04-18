@@ -1,8 +1,8 @@
 import React, { useMemo } from 'react'
-import { useSearchParams } from 'react-router-dom'
+import { Link, useSearchParams } from 'react-router-dom'
 import { useAnalysis } from '../hooks/useAPI'
 import PrivacyMask from '../components/PrivacyMask'
-import { Shield, ShieldAlert, ShieldQuestion, Calendar, Tag } from 'lucide-react'
+import { Shield, ShieldAlert, ShieldQuestion, Calendar, Tag, Rocket } from 'lucide-react'
 import PageHeader from '../components/PageHeader'
 import LoadingState from '../components/LoadingState'
 import ErrorState from '../components/ErrorState'
@@ -53,6 +53,26 @@ export default function Insurance() {
 
   if (loading) return <LoadingState message="Loading insurance data..." />
   if (error) return <ErrorState message={error} onRetry={refetch} />
+
+  // Empty fleet — mirror Dashboard/Insights illustrated empty-state pattern (F204).
+  const totalShips = lti.length + nonLTI.length + unknown.length
+  if (totalShips === 0) {
+    return (
+      <div className="space-y-6 animate-fade-in-up">
+        <PageHeader title="INSURANCE TRACKER" />
+        <div className="panel p-12 text-center">
+          <Shield className="w-16 h-16 mx-auto mb-4 text-sc-accent/60" />
+          <h2 className="font-display font-bold text-2xl text-white mb-2">No insurance data yet</h2>
+          <p className="text-gray-400 text-base mb-6 max-w-md mx-auto">
+            Sync your RSI hangar to see LTI coverage, pledge dates, and warbond status for every ship.
+          </p>
+          <Link to="/sync-import" className="btn-primary inline-flex items-center gap-2">
+            <Rocket className="w-4 h-4" /> Sync Your Fleet
+          </Link>
+        </div>
+      </div>
+    )
+  }
 
   return (
     <div className="space-y-6">

@@ -38,10 +38,12 @@ function parsePledgeCost(raw) {
   return { display: formatted, numeric: num }
 }
 
-/** Get MSRP display from the vehicles table pledge_price (in cents). */
+/** Get MSRP display from the vehicles table pledge_price. Value is stored in
+ * whole USD (e.g. Origin 100i = 50), not cents — the earlier /100 divisor
+ * displayed Gladius as $1 and Javelin as $30 (F217/F231). */
 function getMsrp(entry) {
   if (entry.pledge_price != null && entry.pledge_price > 0) {
-    const dollars = entry.pledge_price / 100
+    const dollars = entry.pledge_price
     return { display: `$${Math.round(dollars).toLocaleString('en-US')}`, numeric: dollars }
   }
   return { display: '-', numeric: 0 }

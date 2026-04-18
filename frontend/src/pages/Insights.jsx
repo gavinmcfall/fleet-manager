@@ -143,7 +143,7 @@ export default function Insights() {
                 <p className="text-sm font-semibold text-sc-warn mb-1">High-Value Ships Without LTI</p>
                 <p className="text-xs text-gray-400">
                   {highValueNonLti.length} ship{highValueNonLti.length !== 1 ? 's' : ''} worth over $200 {highValueNonLti.length !== 1 ? 'lack' : 'lacks'} lifetime insurance:{' '}
-                  {highValueNonLti.map(s => s.name).join(', ')}
+                  {highValueNonLti.map(s => s.ship_name || s.name).join(', ')}
                 </p>
               </div>
             </div>
