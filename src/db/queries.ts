@@ -230,7 +230,7 @@ export async function getShipLoadout(db: D1Database, slug: string): Promise<Reco
     .prepare(
       `WITH ship_ports AS (
         SELECT vp.* FROM vehicle_ports vp
-        WHERE vp.vehicle_id IN (SELECT v.id FROM vehicles v WHERE v.slug = ?)
+        WHERE vp.vehicle_id IN (SELECT v.id FROM vehicles v WHERE v.slug = ? OR v.short_slug = ?)
       ),
       -- Walk from each returned port down to its deepest child with a real component.
       -- Starts from top-level ports AND turret children (which are also returned in results).
@@ -425,7 +425,7 @@ export async function getShipLoadout(db: D1Database, slug: string): Promise<Reco
           WHEN 'Modules' THEN 11 ELSE 20 END,
         p.max_size DESC, p.port_name`,
     )
-    .bind(slug)
+    .bind(slug, slug)
     .all();
 
   return result.results as Record<string, unknown>[];
@@ -437,10 +437,10 @@ export async function getShipModules(db: D1Database, slug: string): Promise<Reco
       `SELECT vm.id, vm.uuid, vm.port_name, vm.class_name, vm.display_name,
               vm.size, vm.is_default, vm.has_loadout
        FROM vehicle_modules vm
-       WHERE vm.vehicle_id IN (SELECT v.id FROM vehicles v WHERE v.slug = ?)
+       WHERE vm.vehicle_id IN (SELECT v.id FROM vehicles v WHERE v.slug = ? OR v.short_slug = ?)
        ORDER BY vm.port_name, vm.is_default DESC, vm.display_name`
     )
-    .bind(slug)
+    .bind(slug, slug)
     .all();
   return result.results as Record<string, unknown>[];
 }
