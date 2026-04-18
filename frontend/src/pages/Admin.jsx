@@ -20,6 +20,9 @@ function InvitePanel() {
   const [generating, setGenerating] = useState(false)
   const [newUrl, setNewUrl] = useState(null)
   const [copied, setCopied] = useState(false)
+  // F276: confirm before generating — guards against accidental one-click
+  // invite minting (every invite is an open door).
+  const [confirmOpen, setConfirmOpen] = useState(false)
   const urlRef = useRef(null)
 
   useEffect(() => {
@@ -30,6 +33,7 @@ function InvitePanel() {
   }, [])
 
   const handleGenerate = async () => {
+    setConfirmOpen(false)
     setGenerating(true)
     setNewUrl(null)
     setCopied(false)
@@ -61,7 +65,7 @@ function InvitePanel() {
       <div className="p-4 space-y-4">
         <div className="flex items-center gap-3">
           <button
-            onClick={handleGenerate}
+            onClick={() => setConfirmOpen(true)}
             disabled={generating}
             className="btn-primary flex items-center gap-2 text-sm disabled:opacity-50"
           >
@@ -69,6 +73,16 @@ function InvitePanel() {
             {generating ? 'Generating...' : 'Generate Invite'}
           </button>
         </div>
+
+        <ConfirmDialog
+          open={confirmOpen}
+          onConfirm={handleGenerate}
+          onCancel={() => setConfirmOpen(false)}
+          title="Generate Invite Link"
+          message="This creates a single-use invite link that registers the next person who opens it as a new SC Bridge user. Make sure you trust the recipient before sharing."
+          confirmLabel="Generate"
+          variant="warning"
+        />
 
         {newUrl && (
           <div className="flex items-center gap-2">
@@ -330,6 +344,9 @@ function ImageCapturePanel() {
   const [kindFilter, setKindFilter] = useState('')
   const [loading, setLoading] = useState(false)
   const [preview, setPreview] = useState(null)
+  // F278: confirm promote + ignore actions to prevent single-click mistakes
+  // on ~125 pending rows (both write to prod CF Images / DB).
+  const [pendingAction, setPendingAction] = useState(null) // { type: 'promote'|'ignore', id, title }
 
   const fetchCaptures = useCallback(async () => {
     setLoading(true)
@@ -454,10 +471,10 @@ function ImageCapturePanel() {
                     {/* Actions */}
                     <td className="px-3 py-2 text-right">
                       <div className="flex items-center justify-end gap-1">
-                        <button onClick={() => handlePromote(cap.id)} className="px-2 py-1 text-[10px] bg-emerald-500/10 text-emerald-400 border border-emerald-500/20 rounded hover:bg-emerald-500/20 transition-colors cursor-pointer" title="Promote to CDN">
+                        <button onClick={() => setPendingAction({ type: 'promote', id: cap.id, title: cap.title })} className="px-2 py-1 text-[10px] bg-emerald-500/10 text-emerald-400 border border-emerald-500/20 rounded hover:bg-emerald-500/20 transition-colors cursor-pointer" title="Promote to CDN">
                           Promote
                         </button>
-                        <button onClick={() => handleDecline(cap.id)} className="px-2 py-1 text-[10px] bg-white/[0.04] text-gray-500 border border-white/[0.06] rounded hover:bg-red-500/10 hover:text-red-400 hover:border-red-500/20 transition-colors cursor-pointer" title="Decline permanently">
+                        <button onClick={() => setPendingAction({ type: 'ignore', id: cap.id, title: cap.title })} className="px-2 py-1 text-[10px] bg-white/[0.04] text-gray-500 border border-white/[0.06] rounded hover:bg-red-500/10 hover:text-red-400 hover:border-red-500/20 transition-colors cursor-pointer" title="Decline permanently">
                           Ignore
                         </button>
                       </div>
@@ -488,6 +505,24 @@ function ImageCapturePanel() {
           </button>
         </div>
       )}
+
+      <ConfirmDialog
+        open={!!pendingAction}
+        onConfirm={async () => {
+          if (!pendingAction) return
+          const { type, id } = pendingAction
+          setPendingAction(null)
+          if (type === 'promote') await handlePromote(id)
+          else await handleDecline(id)
+        }}
+        onCancel={() => setPendingAction(null)}
+        title={pendingAction?.type === 'promote' ? 'Promote Image to CDN' : 'Decline Image Capture'}
+        message={pendingAction?.type === 'promote'
+          ? `Upload "${pendingAction?.title || 'this image'}" to Cloudflare Images and mark the capture promoted. This counts against the CF Images quota and is hard to reverse.`
+          : `Permanently discard "${pendingAction?.title || 'this image'}". The capture will be removed; the next sync can recapture it if it's still in the RSI store.`}
+        confirmLabel={pendingAction?.type === 'promote' ? 'Promote' : 'Discard'}
+        variant={pendingAction?.type === 'promote' ? 'warning' : 'danger'}
+      />
     </PanelSection>
   )
 }

@@ -20,8 +20,12 @@ export function syncRoutes<E extends { Bindings: Env }>() {
   const routes = new Hono<E>();
 
   // GET /api/sync/status — recent sync history
+  // F277: default limit bumped to 50 so errors from a week ago don't rotate
+  // off screen. Admin UI clamps to ?limit= if they want fewer.
   routes.get("/status", async (c) => {
     const db = c.env.DB;
+    const rawLimit = parseInt(c.req.query("limit") || "50", 10);
+    const limit = Number.isFinite(rawLimit) && rawLimit > 0 && rawLimit <= 200 ? rawLimit : 50;
     const result = await db
       .prepare(
         `SELECT sh.id, sh.source_id, sh.endpoint, sh.status, sh.record_count,
@@ -29,8 +33,9 @@ export function syncRoutes<E extends { Bindings: Env }>() {
           ss.label as source_label
         FROM sync_history sh
         LEFT JOIN sync_sources ss ON ss.id = sh.source_id
-        ORDER BY sh.started_at DESC LIMIT 10`,
+        ORDER BY sh.started_at DESC LIMIT ?`,
       )
+      .bind(limit)
       .all();
     return c.json(result.results);
   });

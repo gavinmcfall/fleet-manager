@@ -26,6 +26,9 @@ export default function UserManagement() {
   const [banTarget, setBanTarget] = useState(null)
   const [roleTarget, setRoleTarget] = useState(null)
   const [impersonateTarget, setImpersonateTarget] = useState(null)
+  // F272: client-side search + role filter. Enough until user count gets large.
+  const [search, setSearch] = useState('')
+  const [roleFilter, setRoleFilter] = useState('all')
 
   const fetchUsers = useCallback(async () => {
     setLoading(true)
@@ -128,11 +131,21 @@ export default function UserManagement() {
 
   if (loading) return <LoadingState variant="skeleton" />
 
+  const q = search.trim().toLowerCase()
+  const filteredUsers = users.filter(u => {
+    if (roleFilter !== 'all' && (u.role || 'user') !== roleFilter) return false
+    if (!q) return true
+    return (
+      (u.name || '').toLowerCase().includes(q) ||
+      (u.email || '').toLowerCase().includes(q)
+    )
+  })
+
   return (
     <div className="space-y-6 animate-fade-in-up">
       <PageHeader
         title="USER MANAGEMENT"
-        subtitle={`${users.length} registered user${users.length !== 1 ? 's' : ''}`}
+        subtitle={`${filteredUsers.length} of ${users.length} user${users.length !== 1 ? 's' : ''}${(q || roleFilter !== 'all') ? ' match filter' : ''}`}
       />
 
       {actionError && (
@@ -148,6 +161,31 @@ export default function UserManagement() {
         </div>
       ) : (
         <PanelSection title="Users" icon={Users} className="overflow-hidden">
+          <div className="px-5 py-3 border-b border-sc-border/50 flex flex-wrap items-center gap-3">
+            <input
+              type="text"
+              value={search}
+              onChange={(e) => setSearch(e.target.value)}
+              placeholder="Search by name or email..."
+              className="flex-1 min-w-[200px] max-w-sm px-3 py-1.5 text-xs bg-sc-darker border border-sc-border rounded text-white placeholder-gray-600 focus:border-sc-accent focus:outline-none focus:ring-1 focus:ring-sc-accent/50"
+            />
+            <select
+              value={roleFilter}
+              onChange={(e) => setRoleFilter(e.target.value)}
+              className="px-2.5 py-1.5 text-xs bg-sc-darker border border-sc-border rounded text-gray-300 focus:border-sc-accent focus:outline-none"
+            >
+              <option value="all">All Roles</option>
+              {ROLES.map(r => <option key={r} value={r}>{r}</option>)}
+            </select>
+            {(search || roleFilter !== 'all') && (
+              <button
+                onClick={() => { setSearch(''); setRoleFilter('all') }}
+                className="text-xs text-gray-500 hover:text-sc-accent transition-colors"
+              >
+                Clear
+              </button>
+            )}
+          </div>
           <div className="overflow-x-auto">
             <table className="w-full">
               <caption className="sr-only">Registered users</caption>
@@ -162,8 +200,11 @@ export default function UserManagement() {
                 </tr>
               </thead>
               <tbody className="divide-y divide-sc-border/30">
-                {users.map((u) => (
-                  <tr key={u.id} className="hover:bg-white/[0.02] transition-colors">
+                {filteredUsers.map((u) => {
+                  // F271: deleted accounts are read-only — disable role + ban controls.
+                  const isDeleted = !!(u.deleted_at || u.deletedAt)
+                  return (
+                  <tr key={u.id} className={`hover:bg-white/[0.02] transition-colors ${isDeleted ? 'opacity-60' : ''}`}>
                     <td className="px-5 py-3 text-sm text-white">{u.name || '—'}</td>
                     <td className="px-5 py-3 text-sm font-mono text-gray-300">{u.email}</td>
                     <td className="px-5 py-3">
@@ -175,8 +216,8 @@ export default function UserManagement() {
                             setRoleTarget({ id: u.id, name: u.name || u.email, currentRole: u.role || 'user', role: newRole })
                           }
                         }}
-                        disabled={actionLoading === u.id}
-                        className="bg-sc-darker border border-sc-border rounded px-2 py-1 text-xs text-gray-300 focus:border-sc-accent focus:outline-none"
+                        disabled={actionLoading === u.id || isDeleted}
+                        className="bg-sc-darker border border-sc-border rounded px-2 py-1 text-xs text-gray-300 focus:border-sc-accent focus:outline-none disabled:cursor-not-allowed"
                       >
                         {ROLES.map((r) => (
                           <option key={r} value={r}>{r}</option>
@@ -184,7 +225,11 @@ export default function UserManagement() {
                       </select>
                     </td>
                     <td className="px-5 py-3">
-                      {u.banned ? (
+                      {u.deleted_at || u.deletedAt ? (
+                        <span className="inline-flex items-center gap-1 text-xs font-mono text-gray-500" title="User account deleted">
+                          <Trash2 className="w-3 h-3" /> Deleted
+                        </span>
+                      ) : u.banned ? (
                         <span className="inline-flex items-center gap-1 text-xs font-mono text-sc-danger">
                           <Ban className="w-3 h-3" /> Banned
                         </span>
@@ -199,39 +244,40 @@ export default function UserManagement() {
                       <div className="flex items-center justify-end gap-2">
                         <button
                           onClick={() => setImpersonateTarget({ id: u.id, name: u.name || u.email })}
-                          disabled={actionLoading === u.id || u.id === session?.user?.id}
+                          disabled={actionLoading === u.id || u.id === session?.user?.id || isDeleted}
                           aria-label={`Impersonate ${u.name || u.email}`}
-                          title="Impersonate"
-                          className="p-1.5 rounded text-sc-accent hover:bg-sc-accent/10 transition-colors disabled:opacity-50"
+                          title={isDeleted ? 'Cannot impersonate deleted user' : 'Impersonate'}
+                          className="p-1.5 rounded text-sc-accent hover:bg-sc-accent/10 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
                         >
                           <UserCheck className="w-3.5 h-3.5" />
                         </button>
                         <button
                           onClick={() => setBanTarget({ id: u.id, name: u.name || u.email, banned: !u.banned })}
-                          disabled={actionLoading === u.id || u.id === session?.user?.id}
+                          disabled={actionLoading === u.id || u.id === session?.user?.id || isDeleted}
                           aria-label={`${u.banned ? 'Unban' : 'Ban'} ${u.name || u.email}`}
-                          title={u.banned ? 'Unban' : 'Ban'}
+                          title={isDeleted ? 'Cannot ban deleted user' : (u.banned ? 'Unban' : 'Ban')}
                           className={`p-1.5 rounded transition-colors ${
                             u.banned
                               ? 'text-sc-success hover:bg-sc-success/10'
                               : 'text-sc-warn hover:bg-sc-warn/10'
-                          } disabled:opacity-50`}
+                          } disabled:opacity-50 disabled:cursor-not-allowed`}
                         >
                           <Ban className="w-3.5 h-3.5" />
                         </button>
                         <button
                           onClick={() => setDeleteTarget({ id: u.id, name: u.name || u.email })}
-                          disabled={actionLoading === u.id || u.id === session?.user?.id}
+                          disabled={actionLoading === u.id || u.id === session?.user?.id || isDeleted}
                           aria-label={`Delete user ${u.name || u.email}`}
-                          title="Delete user"
-                          className="p-1.5 rounded text-sc-danger hover:bg-sc-danger/10 transition-colors disabled:opacity-50"
+                          title={isDeleted ? 'Already deleted' : 'Delete user'}
+                          className="p-1.5 rounded text-sc-danger hover:bg-sc-danger/10 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
                         >
                           <Trash2 className="w-3.5 h-3.5" />
                         </button>
                       </div>
                     </td>
                   </tr>
-                ))}
+                  )
+                })}
               </tbody>
             </table>
           </div>
