@@ -412,18 +412,54 @@ const MISSION_WORD_SPLITS = [
 ]
 
 /**
+ * Split a camelCase / PascalCase string into tokens.
+ * `DataHeistTitle_VH` → ['Data', 'Heist', 'Title', 'VH']
+ */
+function splitCamel(s) {
+  return s
+    .replace(/[_]+/g, ' ')
+    .replace(/([a-z0-9])([A-Z])/g, '$1 $2')
+    .replace(/([A-Z]+)([A-Z][a-z])/g, '$1 $2')
+    .split(/\s+/)
+    .filter(Boolean)
+}
+
+/**
  * Humanize a raw mission filename stem into a legible title. Used as a
  * fallback when the DB still has the stem (pipeline couldn't resolve the
- * runtime `~mission(Contractor|…)` template). Returns the original input
- * if it doesn't look like a stem (has spaces / punctuation / already-
- * resolved template placeholders like `{Name}`).
+ * runtime `~mission(Contractor|…)` template). Handles three forms:
  *
- * Example: `dataheist_unlawful_vh_stanton1` → `Data Heist · Very Hard · Stanton 1`
+ * 1. Raw filename stem: `dataheist_unlawful_vh_stanton1` → `Data Heist · Very Hard · Stanton 1`
+ * 2. Template placeholder: `{DataHeistTitle_VH}` → `Data Heist · Very Hard`
+ * 3. Already-resolved titles (have spaces or camelCase display): pass through unchanged
  */
 export function humanizeMissionStem(raw) {
   if (!raw) return raw
-  // Already-resolved titles (have spaces or template placeholders) pass through.
-  if (/\s/.test(raw) || raw.includes('{')) return raw
+
+  // Form 2: `{TemplateKey}` — the pipeline left a template placeholder because
+  // the runtime value binds per-contractor. Split camelCase + strip known
+  // title suffix ("Title", "Description") + map difficulty abbreviations.
+  const templateMatch = typeof raw === 'string' && raw.match(/^\{([A-Za-z0-9_]+)\}$/)
+  if (templateMatch) {
+    const inner = templateMatch[1]
+    const tokens = splitCamel(inner).filter(t => t.toLowerCase() !== 'title' && t.toLowerCase() !== 'description')
+    const parts = []
+    let baseWords = []
+    for (const t of tokens) {
+      const lower = t.toLowerCase()
+      if (DIFF_ABBREV_TOKEN[lower]) {
+        if (baseWords.length) { parts.push(baseWords.join(' ')); baseWords = [] }
+        parts.push(DIFF_ABBREV_TOKEN[lower])
+      } else {
+        baseWords.push(t)
+      }
+    }
+    if (baseWords.length) parts.unshift(baseWords.join(' '))
+    return parts.length ? parts.join(' · ') : inner
+  }
+
+  // Already-resolved titles (have spaces) pass through.
+  if (/\s/.test(raw)) return raw
   if (!/^[a-z0-9_]+$/i.test(raw)) return raw
 
   let head = raw
