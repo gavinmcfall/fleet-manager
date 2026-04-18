@@ -194,6 +194,8 @@ export default function FleetTable() {
         case 'pledge': va = getShipValue(a).numeric; vb = getShipValue(b).numeric; break
         case 'msrp': va = getMsrp(a).numeric; vb = getMsrp(b).numeric; break
         case 'pack': va = a.pledge_name || ''; vb = b.pledge_name || ''; break
+        case 'status': va = (a.production_status || '').toLowerCase(); vb = (b.production_status || '').toLowerCase(); break
+        case 'insurance': va = a.insurance_type || ''; vb = b.insurance_type || ''; break
         default: va = a.vehicle_name; vb = b.vehicle_name
       }
       if (typeof va === 'string') {
@@ -244,12 +246,14 @@ export default function FleetTable() {
           placeholder="Search ships..."
           className="flex-1 max-w-sm"
         />
-        <FilterSelect
-          value={sizeFilter}
-          onChange={(e) => setSearchParams(prev => { e.target.value === 'all' ? prev.delete('size') : prev.set('size', e.target.value); return prev }, { replace: true })}
-          options={sizes}
-          allLabel="All Sizes"
-        />
+        {sizes.length > 1 && (
+          <FilterSelect
+            value={sizeFilter}
+            onChange={(e) => setSearchParams(prev => { e.target.value === 'all' ? prev.delete('size') : prev.set('size', e.target.value); return prev }, { replace: true })}
+            options={sizes}
+            allLabel="All Sizes"
+          />
+        )}
         {packs.length > 0 && (
           <select
             value={packFilter}
@@ -299,8 +303,23 @@ export default function FleetTable() {
                     </span>
                   </th>
                 ))}
-                <th scope="col" className="table-header whitespace-nowrap">Status</th>
-                <th scope="col" className="table-header whitespace-nowrap">Insurance</th>
+                {[
+                  { key: 'status', label: 'Status' },
+                  { key: 'insurance', label: 'Insurance' },
+                ].map(({ key, label }) => (
+                  <th
+                    key={key}
+                    scope="col"
+                    className="table-header cursor-pointer hover:text-gray-300 select-none whitespace-nowrap"
+                    onClick={() => toggleSort(key)}
+                    aria-sort={sortKey === key ? (sortDir === 'asc' ? 'ascending' : 'descending') : undefined}
+                  >
+                    <span className="flex items-center gap-1">
+                      {label}
+                      <ArrowUpDown className={`w-3 h-3 ${sortKey === key ? 'text-sc-accent' : 'text-gray-500'}`} aria-hidden="true" />
+                    </span>
+                  </th>
+                ))}
                 {inOrgs && <th scope="col" className="table-header">Visibility</th>}
                 {inOrgs && <th scope="col" className="table-header">Ops</th>}
               </tr>

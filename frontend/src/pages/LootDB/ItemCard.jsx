@@ -32,10 +32,11 @@ export default function ItemCard({ item, collectionQty, onSetCollectionQty, wish
         {isAuthed && (
           <button
             onClick={(e) => { e.stopPropagation(); onToggleWishlist(item.uuid, wishlisted) }}
-            className={`flex items-center justify-center transition-all duration-150 shrink-0 ${
-              wishlisted ? 'text-amber-400' : 'text-gray-600 hover:text-gray-400'
+            className={`flex items-center justify-center p-1 -m-1 rounded transition-all duration-150 shrink-0 ${
+              wishlisted ? 'text-amber-400' : 'text-gray-600 hover:text-gray-400 hover:bg-white/5'
             }`}
             title={wishlisted ? 'Remove from wishlist' : 'Add to wishlist'}
+            aria-label={wishlisted ? 'Remove from wishlist' : 'Add to wishlist'}
           >
             {wishlisted ? <Bookmark className="w-3.5 h-3.5" /> : <BookmarkPlus className="w-3.5 h-3.5" />}
           </button>

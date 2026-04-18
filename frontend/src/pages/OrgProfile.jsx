@@ -112,7 +112,7 @@ function OrgMembers({ slug }) {
 
   return (
     <div className="space-y-2">
-      <p className="text-xs text-gray-500 font-mono">{members.length} members</p>
+      <p className="text-xs text-gray-500 font-mono">{members.length} {members.length === 1 ? 'member' : 'members'}</p>
       <div className="grid gap-1">
         {members.map((m) => (
           <div key={m.id} className="flex items-center gap-3 px-3 py-2 rounded border border-sc-border/50 bg-white/[0.02]">
@@ -398,7 +398,7 @@ export default function OrgProfile() {
 
           <div className="flex items-center gap-2 text-xs text-gray-500">
             <Users className="w-3.5 h-3.5" />
-            {org.memberCount} members
+            {org.memberCount} {org.memberCount === 1 ? 'member' : 'members'}
             {org.rsi_member_count && org.rsi_member_count !== org.memberCount && (
               <span className="text-gray-600">({org.rsi_member_count.toLocaleString()} on RSI)</span>
             )}

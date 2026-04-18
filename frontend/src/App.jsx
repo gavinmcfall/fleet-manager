@@ -136,7 +136,7 @@ const authNavItems = [
       { to: '/fleet', icon: Rocket, label: 'Fleet' },
       { to: '/insurance', icon: Shield, label: 'Insurance' },
       {
-        to: '/insights',
+        to: '/analysis',
         icon: BarChart3,
         label: 'Analysis',
         submenu: [
@@ -146,7 +146,7 @@ const authNavItems = [
         ],
       },
       { to: '/fps-loadout', icon: Shirt, label: 'FPS Loadout', featureFlag: 'fpsLoadout' },
-      { to: '/localization', icon: Languages, label: 'Localization' },
+      { to: '/localization', icon: Languages, label: 'Localization', adminOnly: true },
       { to: '/sync-import', icon: Upload, label: 'Sync & Import' },
     ],
   },
@@ -163,9 +163,12 @@ const superAdminNavItems = [
   { to: '/users', icon: Users, label: 'Users' },
 ]
 
-function filterNavItem(item, isLoggedIn, features) {
+function filterNavItem(item, isLoggedIn, features, role) {
   if (item.auth && !isLoggedIn) return null
   if (item.featureFlag && !features?.[item.featureFlag]) return null
+  // F226: adminOnly entries (e.g. Localization tooling) are hidden from
+  // regular users. Visible to admin + super_admin roles only.
+  if (item.adminOnly && role !== 'admin' && role !== 'super_admin') return null
   if (item.submenu) {
     const filteredSub = item.submenu.filter(sub => !sub.auth || isLoggedIn)
     return { ...item, submenu: filteredSub.length > 0 ? filteredSub : undefined }
@@ -173,23 +176,23 @@ function filterNavItem(item, isLoggedIn, features) {
   return item
 }
 
-function filterNav(items, isLoggedIn, features) {
+function filterNav(items, isLoggedIn, features, role) {
   return items
     .map(item => {
       if (item.items) {
         const filtered = item.items
-          .map(child => filterNavItem(child, isLoggedIn, features))
+          .map(child => filterNavItem(child, isLoggedIn, features, role))
           .filter(Boolean)
         return filtered.length > 0 ? { ...item, items: filtered } : null
       }
-      return filterNavItem(item, isLoggedIn, features)
+      return filterNavItem(item, isLoggedIn, features, role)
     })
     .filter(Boolean)
 }
 
 function getNavItems(role, isLoggedIn, features) {
-  if (!isLoggedIn) return filterNav([...publicNavItems], false, features)
-  const items = filterNav([...authNavItems], true, features)
+  if (!isLoggedIn) return filterNav([...publicNavItems], false, features, role)
+  const items = filterNav([...authNavItems], true, features, role)
   if (role === 'admin' || role === 'super_admin') {
     items.push(...adminNavItems)
   }

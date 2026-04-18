@@ -150,7 +150,8 @@ export default function LootDB() {
   const [searchParams, setSearchParams] = useSearchParams()
 
   const search = searchParams.get('q') || ''
-  const category = searchParams.get('cat') || 'all'
+  // F111: accept both ?category= (canonical) and legacy ?cat= for backward compat.
+  const category = searchParams.get('category') || searchParams.get('cat') || 'all'
   const brand = searchParams.get('brand') || null
   const setName = searchParams.get('set') || null
   const raritiesParam = searchParams.get('rarities') || ''
@@ -172,7 +173,8 @@ export default function LootDB() {
 
   const setCategory = useCallback((value) => {
     setSearchParams(prev => {
-      if (value && value !== 'all') prev.set('cat', value); else prev.delete('cat')
+      prev.delete('cat') // legacy key — remove if present
+      if (value && value !== 'all') prev.set('category', value); else prev.delete('category')
       prev.delete('brand')
       prev.delete('set')
       prev.delete('sub')
@@ -471,6 +473,7 @@ export default function LootDB() {
   const clearAllFilters = useCallback(() => {
     setSearchParams(prev => {
       prev.delete('cat')
+      prev.delete('category')
       prev.delete('brand')
       prev.delete('set')
       prev.delete('rarities')

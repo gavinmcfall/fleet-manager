@@ -308,7 +308,7 @@ export default function Orgs() {
                   <div className="flex items-center gap-3 mt-0.5">
                     <span className="text-xs text-gray-500 flex items-center gap-1">
                       <Users className="w-3 h-3" />
-                      {org.memberCount ?? '?'} members
+                      {org.memberCount ?? '?'} {org.memberCount === 1 ? 'member' : 'members'}
                     </span>
                     {org.rsi_model && (
                       <span className="text-xs text-gray-600">{org.rsi_model}</span>
