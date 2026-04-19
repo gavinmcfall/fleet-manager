@@ -1214,15 +1214,13 @@ export async function getLootByUuid(db: D1Database, uuid: string): Promise<Recor
   }
 
   // Enrich with shop availability — only community-reported prices (UEX)
-  // Game-file base prices are unreliable and should not surface in the UI
-  // Also check variant UUIDs (e.g., turret vs non-turret versions of same weapon)
+  // Game-file base prices are unreliable and should not surface in the UI.
+  // Match all variants of this item by name (e.g., turret vs non-turret
+  // versions of the same weapon share "Internal Tank" / "Shield Generator"
+  // / other generic names). Use an EXISTS subquery so we don't hit D1's
+  // 100-bindings-per-statement limit — some generic names like "Internal
+  // Tank" have 290+ variants which would blow a plain IN (?,?,...).
   const itemName = item.name as string;
-  const variantUuids = await db.prepare(
-    `SELECT uuid FROM loot_map WHERE name = ?`
-  ).bind(itemName).all<{ uuid: string }>();
-  const uuidList = variantUuids.results.map(r => r.uuid);
-  if (uuidList.length === 0) uuidList.push(uuid);
-  const uuidPlaceholders = uuidList.map(() => "?").join(",");
   const shopAvailability = await db.prepare(`
     SELECT ti.latest_buy_price AS buy_price,
            ti.latest_sell_price AS sell_price,
@@ -1231,11 +1229,14 @@ export async function getLootByUuid(db: D1Database, uuid: string): Promise<Recor
     FROM terminal_inventory ti
     JOIN terminals t ON t.id = ti.terminal_id
     JOIN shops s ON s.id = t.shop_id
-    WHERE ti.item_uuid IN (${uuidPlaceholders})
+    WHERE EXISTS (
+      SELECT 1 FROM loot_map lm
+      WHERE lm.uuid = ti.item_uuid AND lm.name = ?
+    )
       AND ti.latest_source IS NOT NULL
       AND (ti.latest_buy_price > 0 OR ti.latest_sell_price > 0)
     ORDER BY s.location_label, s.name
-  `).bind(...uuidList).all();
+  `).bind(itemName).all();
 
   for (const shop of shopAvailability.results) {
     const r = shop as Record<string, unknown>;
