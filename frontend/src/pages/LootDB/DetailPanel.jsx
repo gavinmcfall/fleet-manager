@@ -1,7 +1,7 @@
 import { X, ShoppingCart, Package, FileText, Plus, Bookmark, BookmarkPlus, ExternalLink } from 'lucide-react'
 import { Link } from 'react-router-dom'
 import { useLootItem } from '../../hooks/useAPI'
-import { rarityStyle, CATEGORY_BADGE_STYLES, CATEGORY_LABELS, RESISTANCE_KEYS, effectiveCategory } from '../../lib/lootDisplay'
+import { rarityStyle, CATEGORY_BADGE_STYLES, CATEGORY_LABELS, RESISTANCE_KEYS, effectiveCategory, humanizeRawDisplayName } from '../../lib/lootDisplay'
 import LoadingState from '../../components/LoadingState'
 import LocationSection from './LocationSection'
 import ResistanceBar from './ResistanceBar'
@@ -301,7 +301,7 @@ export default function DetailPanel({ uuid, manufacturerName, collectionQty, onS
           <div className="flex-1 overflow-y-auto p-4 pb-8 space-y-5">
             {/* Name + badges */}
             <div className="space-y-2">
-              <h2 className="text-sm font-semibold text-white leading-tight">{item.name}</h2>
+              <h2 className="text-sm font-semibold text-white leading-tight">{humanizeRawDisplayName(item.name)}</h2>
               {manufacturerName && (
                 <p className="text-[10px] font-mono text-gray-500">{manufacturerName}</p>
               )}

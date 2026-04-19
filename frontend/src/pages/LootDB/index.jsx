@@ -21,6 +21,7 @@ import CategoryStrip from './CategoryStrip'
 import {
   RARITY_ORDER, RARITY_STYLES, rarityStyle,
   CATEGORY_LABELS, CATEGORY_BADGE_STYLES, effectiveCategory,
+  humanizeRawDisplayName,
 } from '../../lib/lootDisplay'
 
 import {
@@ -877,7 +878,7 @@ export default function LootDB() {
                     <span className={`text-[10px] font-display uppercase px-1.5 py-0.5 rounded w-20 text-center shrink-0 ${catStyle}`}>
                       {catLabel}
                     </span>
-                    <span className="text-xs text-gray-200 flex-1 min-w-0 truncate">{item.name}</span>
+                    <span className="text-xs text-gray-200 flex-1 min-w-0 truncate">{humanizeRawDisplayName(item.name)}</span>
                     {item.rarity && rs && (
                       <span className={`text-[10px] font-mono px-1.5 py-0.5 rounded border ${rs.badge} shrink-0`}>
                         {item.rarity}

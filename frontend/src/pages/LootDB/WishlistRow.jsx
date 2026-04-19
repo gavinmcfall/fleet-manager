@@ -1,5 +1,5 @@
 import { Plus, MapPin, ShoppingCart } from 'lucide-react'
-import { rarityStyle, CATEGORY_BADGE_STYLES, CATEGORY_LABELS, effectiveCategory } from '../../lib/lootDisplay'
+import { rarityStyle, CATEGORY_BADGE_STYLES, CATEGORY_LABELS, effectiveCategory, humanizeRawDisplayName } from '../../lib/lootDisplay'
 import SourceIcons from './SourceIcons'
 import CollectionStepper from './CollectionStepper'
 
@@ -20,7 +20,7 @@ export default function WishlistRow({ item, primarySource, collectionQty, onSetC
         {catLabel}
       </span>
       <div className="flex-1 min-w-0">
-        <span className="text-xs text-gray-200 truncate block">{item.name}</span>
+        <span className="text-xs text-gray-200 truncate block">{humanizeRawDisplayName(item.name)}</span>
         {primarySource && (
           <span className="text-[10px] text-gray-500 truncate block mt-0.5">
             {primarySource.type === 'shop' ? '🛒' : '📍'}{' '}

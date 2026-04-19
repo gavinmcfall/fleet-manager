@@ -1,7 +1,7 @@
 import { useState } from 'react'
 import { Scale, X, ChevronUp, ChevronDown } from 'lucide-react'
 import { useLootItem } from '../../hooks/useAPI'
-import { effectiveCategory, CATEGORY_LABELS, rarityStyle } from '../../lib/lootDisplay'
+import { effectiveCategory, CATEGORY_LABELS, rarityStyle, humanizeRawDisplayName } from '../../lib/lootDisplay'
 import CompareTable from './CompareTable'
 
 function CompareItemLoader({ uuid, onRemove }) {
@@ -10,7 +10,7 @@ function CompareItemLoader({ uuid, onRemove }) {
   if (!item) return null
   return (
     <span className="text-[10px] font-mono text-gray-300 bg-white/[0.06] px-2 py-0.5 rounded border border-white/[0.08] flex items-center gap-1 max-w-40">
-      <span className="truncate">{item.name}</span>
+      <span className="truncate">{humanizeRawDisplayName(item.name)}</span>
       <button onClick={() => onRemove(uuid)} className="text-gray-500 hover:text-white shrink-0">
         <X className="w-2.5 h-2.5" />
       </button>

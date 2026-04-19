@@ -2,7 +2,7 @@ import { useParams, Link, useNavigate } from 'react-router-dom'
 import { ArrowLeft, ShoppingCart, Package, Swords, FileText, Bookmark, BookmarkPlus, Plus, Check } from 'lucide-react'
 import { useLootItem, useLootCollection, useLootWishlist, toggleLootWishlist, setLootCollectionQuantity } from '../../hooks/useAPI'
 import { useSession } from '../../lib/auth-client'
-import { rarityStyle, CATEGORY_BADGE_STYLES, CATEGORY_LABELS, effectiveCategory } from '../../lib/lootDisplay'
+import { rarityStyle, CATEGORY_BADGE_STYLES, CATEGORY_LABELS, effectiveCategory, humanizeRawDisplayName } from '../../lib/lootDisplay'
 import PageHeader from '../../components/PageHeader'
 import LoadingState from '../../components/LoadingState'
 import ErrorState from '../../components/ErrorState'
@@ -168,7 +168,7 @@ export default function FullItemDetail() {
             </span>
           )}
         </div>
-        <h1 className="text-xl font-display font-bold text-white">{item.name}</h1>
+        <h1 className="text-xl font-display font-bold text-white">{humanizeRawDisplayName(item.name)}</h1>
         {item.manufacturer_name && (
           <p className="text-sm font-mono text-gray-400">{item.manufacturer_name}</p>
         )}

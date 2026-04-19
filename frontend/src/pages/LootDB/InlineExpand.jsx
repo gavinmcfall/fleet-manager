@@ -1,5 +1,5 @@
 import { X, Bookmark, BookmarkPlus, Plus, MapPin } from 'lucide-react'
-import { rarityStyle, CATEGORY_BADGE_STYLES, CATEGORY_LABELS, effectiveCategory } from '../../lib/lootDisplay'
+import { rarityStyle, CATEGORY_BADGE_STYLES, CATEGORY_LABELS, effectiveCategory, humanizeRawDisplayName } from '../../lib/lootDisplay'
 import SourceIcons from './SourceIcons'
 
 export default function InlineExpand({ item, collectionQty, onSetCollectionQty, wishlisted, onToggleWishlist, isAuthed, onClose, onOpenDetail }) {
@@ -23,7 +23,7 @@ export default function InlineExpand({ item, collectionQty, onSetCollectionQty, 
             )}
             <SourceIcons item={item} />
           </div>
-          <h3 className="text-sm font-semibold text-white mt-1.5">{item.name}</h3>
+          <h3 className="text-sm font-semibold text-white mt-1.5">{humanizeRawDisplayName(item.name)}</h3>
           {item.manufacturer_name && (
             <p className="text-[10px] font-mono text-gray-500 mt-0.5">{item.manufacturer_name}</p>
           )}

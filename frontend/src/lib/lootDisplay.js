@@ -81,3 +81,35 @@ export const RESISTANCE_LABELS = {
   resist_biochemical: 'Biochemical',
   resist_stun: 'Stun',
 }
+
+/**
+ * Humanise raw-pattern item display names.
+ *
+ * Some loot items (mostly fps_clothing, fps_ammo_types, fps_carryables —
+ * ~115 rows total) arrive from the pipeline with their class-name as
+ * `name` because CIG never published a localised display name for them
+ * (dev assets, NPC-only gear, etc.). Looks like `battaglia_pants_01` /
+ * `arma_barrel_stab_s2_02`.
+ *
+ * Helper returns a Title-Cased rendition for these, leaves already-
+ * humanised names alone. Intended for use at display-render sites only
+ * — the underlying DB value stays raw as identity.
+ */
+const RAW_SNAKE_CASE_RE = /^[a-z][a-z0-9_]*$/
+export function humanizeRawDisplayName(raw) {
+  if (!raw || typeof raw !== 'string') return raw
+  if (raw.includes(' ')) return raw  // already humanised
+  if (!RAW_SNAKE_CASE_RE.test(raw)) return raw  // not raw snake_case
+  if (!raw.includes('_')) return raw  // single-token lowercase — leave as-is
+  return raw
+    .split('_')
+    .filter(Boolean)
+    .map(t => {
+      // Preserve numeric-only tokens
+      if (/^\d+$/.test(t)) return t
+      // Short caliber-like tokens keep uppercase ("s2" → "S2", "smg" → "SMG")
+      if (t.length <= 3 && /[a-z]/.test(t)) return t.toUpperCase()
+      return t.charAt(0).toUpperCase() + t.slice(1).toLowerCase()
+    })
+    .join(' ')
+}

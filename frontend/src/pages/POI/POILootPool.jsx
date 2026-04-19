@@ -4,6 +4,7 @@ import { Package } from 'lucide-react'
 import SearchInput from '../../components/SearchInput'
 import {
   RARITY_STYLES, CATEGORY_LABELS, CATEGORY_BADGE_STYLES, CATEGORY_ORDER,
+  humanizeRawDisplayName,
 } from '../../lib/lootDisplay'
 
 function pct(n) {
@@ -124,7 +125,7 @@ export default function POILootPool({ envelope }) {
                       <tr key={item.uuid || i} className="border-b border-sc-border/50 last:border-0 hover:bg-white/3">
                         <td className="px-3 py-1.5">
                           <Link to={`/loot/${item.uuid}`} className="text-gray-200 hover:text-sc-accent transition-colors">
-                            {item.name}
+                            {humanizeRawDisplayName(item.name)}
                           </Link>
                           {item.rarity && item.rarity !== 'N/A' && rs && (
                             <span className={`ml-2 text-[9px] font-mono px-1.5 py-0.5 rounded border ${rs.badge}`}>

@@ -1,5 +1,5 @@
 import { Bookmark, BookmarkPlus, Check } from 'lucide-react'
-import { rarityStyle, CATEGORY_BADGE_STYLES, CATEGORY_LABELS, effectiveCategory } from '../../lib/lootDisplay'
+import { rarityStyle, CATEGORY_BADGE_STYLES, CATEGORY_LABELS, effectiveCategory, humanizeRawDisplayName } from '../../lib/lootDisplay'
 import SourceIcons from './SourceIcons'
 import CollectionStepper from './CollectionStepper'
 import ItemCardStats from './ItemCardStats'
@@ -51,7 +51,7 @@ export default function ItemCard({ item, collectionQty, onSetCollectionQty, wish
       {/* Name + manufacturer */}
       <div className="flex-1">
         <p className="text-xs font-medium text-gray-200 leading-tight line-clamp-2">
-          {item.name}
+          {humanizeRawDisplayName(item.name)}
         </p>
         {item.manufacturer_name && (
           <p className="text-[10px] font-mono text-gray-500 mt-0.5 truncate">{item.manufacturer_name}</p>

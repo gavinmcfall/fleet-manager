@@ -1,4 +1,4 @@
-import { rarityStyle, effectiveCategory } from '../../lib/lootDisplay'
+import { rarityStyle, effectiveCategory, humanizeRawDisplayName } from '../../lib/lootDisplay'
 import { getStatConfig } from './CategoryStatConfig'
 
 // Stats to compare per category — ordered by importance
@@ -114,7 +114,7 @@ export default function CompareTable({ items, category }) {
           const rs = item.rarity ? rarityStyle(item.rarity) : null
           return (
             <div key={item.uuid} className="panel p-3 text-center">
-              <p className="text-xs font-medium text-white truncate">{item.name}</p>
+              <p className="text-xs font-medium text-white truncate">{humanizeRawDisplayName(item.name)}</p>
               {item.manufacturer_name && (
                 <p className="text-[9px] font-mono text-gray-500 mt-0.5 truncate">{item.manufacturer_name}</p>
               )}

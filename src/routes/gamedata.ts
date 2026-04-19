@@ -897,10 +897,26 @@ return cachedJson(c, `gd:missions`, async () => {
         })
       }
 
+      // F300: 11 mission descriptions contain `~serviceBeacon(InitiatorName)`
+      // and similar runtime-bound templates that CIG resolves per-pickup.
+      // Collapse to `{Key}` placeholders here at the API layer so every
+      // consumer (future mobile app, export, etc.) gets clean text, not
+      // just the web frontend via cleanMissionDescription.
+      const RUNTIME_TEMPLATE_RE = /~[a-z]+\(([^|)]*\|)?([A-Za-z0-9_]+)\)/gi
+      const missions = (missionsResult.results as Array<Record<string, unknown>>).map(m => {
+        const desc = m.description as string | null | undefined
+        if (desc && RUNTIME_TEMPLATE_RE.test(desc)) {
+          return {
+            ...m,
+            description: desc.replace(RUNTIME_TEMPLATE_RE, (_, _contractor, key) => `{${key}}`),
+          }
+        }
+        return m
+      })
       return {
         types: typesResult.results,
         givers: giversResult.results,
-        missions: missionsResult.results,
+        missions,
         prerequisites,
         rep_requirements,
       }
