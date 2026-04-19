@@ -7,9 +7,22 @@ export default function StatsPanel({ stockComponents, overrides, horizontal }) {
 
   if (!stockComponents) return null
   const hasChanges = Object.keys(overrides).length > 0
+  // F502: when power + cooling + shieldHp + qtSpeed are all zero, this ship
+  // has no equipped components in its default loadout — the extractor didn't
+  // populate `equipped_item_uuid` on its power/cooler/shield/quantum ports.
+  // 140 ships affected on staging (2026-04-20). Show a banner so players
+  // understand the gap instead of assuming the site is broken.
+  const noDefaultsData = stock.power === 0 && stock.cooling === 0
+    && stock.shieldHp === 0 && stock.qtSpeed === 0
 
   return (
     <div className={horizontal ? 'px-4 py-3 border-b border-white/[0.06] bg-white/[0.02]' : 'p-4 space-y-4'}>
+      {noDefaultsData && (
+        <div className="px-3 py-2 rounded bg-amber-500/10 border border-amber-500/30 text-[11px] text-amber-300">
+          Default component data isn't populated for this ship yet — stats will read 0 until the next pipeline refresh.
+          You can still equip components manually to see computed totals.
+        </div>
+      )}
       <div className={horizontal ? 'grid grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-3' : 'space-y-4'}>
 
       <StatsSection icon={Crosshair} title="Firepower" color="text-red-400">

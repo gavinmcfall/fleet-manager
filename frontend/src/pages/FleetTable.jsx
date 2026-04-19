@@ -1,7 +1,7 @@
 import React, { useMemo, useState, useRef, useEffect } from 'react'
 import { useSearchParams, useNavigate } from 'react-router-dom'
 import { useFleet, useUserOrgs, updateShipVisibility } from '../hooks/useAPI'
-import { ArrowUpDown, SearchX, Rocket, Upload, Wrench, ChevronDown } from 'lucide-react'
+import { ArrowUpDown, SearchX, Rocket, Upload, Wrench, ChevronDown, Filter } from 'lucide-react'
 import PageHeader from '../components/PageHeader'
 import PrivacyMask from '../components/PrivacyMask'
 import LoadingState from '../components/LoadingState'
@@ -12,6 +12,7 @@ import InsuranceBadge from '../components/InsuranceBadge'
 import StatusBadge from '../components/StatusBadge'
 import ShipImage from '../components/ShipImage'
 import CommunityTools from '../components/CommunityTools'
+import { getRoleGroup } from '../lib/roleGroups'
 
 /** Get display value and numeric sort value for a fleet entry's cost.
  * Prefers current_value_cents (from upgrade chain / pledge data) over raw pledge_cost string. */
@@ -393,21 +394,32 @@ export default function FleetTable() {
                         <span className="badge badge-size inline-block w-16 text-center">{v.size_label || '?'}</span>
                       </div>
                     </td>
-                    <td className="table-cell text-gray-400">{v.focus || '-'}</td>
+                    <td className="table-cell text-gray-400">{getRoleGroup(v.focus, v.classification) || '-'}</td>
                     <td className="table-cell">
                       {(() => {
                         const count = v.pledge_id ? (packCounts.get(v.pledge_id) || 1) : 1
                         const name = cleanPledgeName(v.pledge_name)
+                        // F500: the pack cell used to be a large button — clicking anywhere in
+                        // the pack name area filtered by pack instead of navigating to the ship
+                        // detail (the intended row-level behavior per the row's aria-label).
+                        // Now the pack name is plain text (falls through to the row onClick),
+                        // and a dedicated filter-icon button handles pack filtering.
                         if (count > 1 && name) {
                           return (
-                            <button
-                              onClick={(e) => { e.stopPropagation(); setSearchParams(prev => { prev.set('pack', v.pledge_id); return prev }) }}
-                              className="text-left text-xs text-sc-accent2 hover:text-sc-accent transition-colors"
-                              title={`Filter to this pack (${count} ships)`}
-                            >
-                              <span className="block truncate max-w-[180px]">{name}</span>
-                              <span className="text-[10px] text-gray-600">{count} ships</span>
-                            </button>
+                            <div className="flex items-center gap-2">
+                              <div className="min-w-0 flex-1">
+                                <span className="block text-xs text-sc-accent2 truncate max-w-[180px]">{name}</span>
+                                <span className="text-[10px] text-gray-600">{count} ships</span>
+                              </div>
+                              <button
+                                onClick={(e) => { e.stopPropagation(); setSearchParams(prev => { prev.set('pack', v.pledge_id); return prev }) }}
+                                className="text-gray-500 hover:text-sc-accent transition-colors shrink-0 p-1"
+                                title={`Filter fleet to this pack (${count} ships)`}
+                                aria-label={`Filter fleet to the ${name} pack`}
+                              >
+                                <Filter className="w-3 h-3" />
+                              </button>
+                            </div>
                           )
                         }
                         return <span className="text-xs text-gray-600">{name || '-'}</span>

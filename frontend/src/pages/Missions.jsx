@@ -7,7 +7,7 @@ import LoadingState from '../components/LoadingState'
 import ErrorState from '../components/ErrorState'
 import SearchInput from '../components/SearchInput'
 import StatCard from '../components/StatCard'
-import { FACTION_LOGOS, getFactionLogo, GUILD_LABELS, cleanMissionDescription, humanizeFactionSlug, humanizeScopeSlug, humanizeStandingSlug, humanizeComparison, formatRepReward, formatRepRequirement, humanizeMissionStem } from '../lib/missionConstants'
+import { FACTION_LOGOS, getFactionLogo, GUILD_LABELS, cleanMissionDescription, humanizeFactionSlug, humanizeScopeSlug, humanizeStandingSlug, humanizeComparison, formatRepReward, formatRepRequirement, humanizeMissionStem, humanizeMissionGiverSlug } from '../lib/missionConstants'
 
 function Pill({ active, onClick, children }) {
   return (
@@ -632,7 +632,7 @@ export default function Missions() {
         source: m.availability || 'dynamic',
         category: m.category,
         category_display: CATEGORY_LABELS[m.category] || m.category,
-        giver_display: (m.giver_name && m.giver_name !== 'SENDER NOT FOUND') ? m.giver_name : null,
+        giver_display: humanizeMissionGiverSlug(m.giver_name),
         giver_slug: m.giver_slug || null,
         reward_amount: m.reward_amount || 0,
         is_dynamic_reward: m.is_dynamic_reward ?? 0,

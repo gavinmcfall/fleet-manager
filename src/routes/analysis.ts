@@ -589,12 +589,6 @@ export function analyzeFleet(fleet: UserFleetEntry[], _allVehicles: Vehicle[], t
   const nonLtiShips: typeof ltiShips = [];
   const unknownShips: typeof ltiShips = [];
 
-  // F227/F235: dedupe by vehicle_id so crew Min/Max reflects the set of unique
-  // ship types owned, not the multiplied crew cost of owning duplicates. A
-  // player with two Idris-P should see Min/Max Crew once (e.g. 6/102), not
-  // twice (e.g. 12/204).
-  const seenVehicleIds = new Set<number>();
-
   for (const entry of fleet) {
     // Production status
     if (entry.production_status === "flight_ready") flightReady++;
@@ -603,12 +597,15 @@ export function analyzeFleet(fleet: UserFleetEntry[], _allVehicles: Vehicle[], t
     // Cargo (sum across all entries — owning two haulers does mean more cargo)
     totalCargo += entry.cargo ?? 0;
 
-    // Crew — dedupe by vehicle_id
-    if (entry.vehicle_id != null && !seenVehicleIds.has(entry.vehicle_id)) {
-      seenVehicleIds.add(entry.vehicle_id);
-      minCrew += entry.crew_min ?? 0;
-      maxCrew += entry.crew_max ?? 0;
-    }
+    // F505: Crew sums across ALL entries (not deduped by vehicle_id). A
+    // player with 2x Cutlass Black needs crew for two Cutlasses to fly
+    // both simultaneously — this is the fleet-planning value players care
+    // about. The earlier F227/F235 dedupe made sense at the "unique ship
+    // types" lens but undercounts the real crew need. If we ever want the
+    // unique-types number too, expose both as `min_crew_per_fleet` + a
+    // separate `min_crew_per_ship_type` field.
+    minCrew += entry.crew_min ?? 0;
+    maxCrew += entry.crew_max ?? 0;
 
     // Size distribution
     const size = entry.size_label || "Unknown";

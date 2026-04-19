@@ -324,12 +324,36 @@ export async function getShipLoadout(db: D1Database, slug: string): Promise<Reco
         -- F501: NULL out "<= PLACEHOLDER =>" / "<= UNINITIALIZED =>" sentinels
         -- that CIG leaves on unpopulated mount rows. Surfacing them as display
         -- text made the Cutlass Black turret hardpoints look broken.
-        CASE WHEN mount.name LIKE '<=%=>' THEN NULL ELSE mount.name END AS mount_name,
+        --
+        -- F503: for CountermeasureLauncher components, CIG names them
+        -- "<Brand> <Ship> - <Type>" (e.g. "Aegis Gladius - Decoy Launcher")
+        -- even when the component is fitted to a different ship (CIG
+        -- re-uses the asset). The parent-ship prefix misleads players into
+        -- thinking they're looking at Gladius hardware on their Cutlass.
+        -- Strip everything up to and including " - " on countermeasure
+        -- launcher names; leave other component names untouched.
+        CASE
+          WHEN mount.name LIKE '<=%=>' THEN NULL
+          WHEN COALESCE(d.sub_type, mount.sub_type) = 'CountermeasureLauncher'
+            AND mount.name LIKE '% - %'
+            THEN SUBSTR(mount.name, INSTR(mount.name, ' - ') + 3)
+          ELSE mount.name
+        END AS mount_name,
         mount.type AS mount_type,
-        CASE WHEN COALESCE(d.name, mount.name) LIKE '<=%=>' THEN NULL
-             ELSE COALESCE(d.name, mount.name) END AS child_name,
-        CASE WHEN COALESCE(d.name, mount.name) LIKE '<=%=>' THEN NULL
-             ELSE COALESCE(d.name, mount.name) END AS component_name,
+        CASE
+          WHEN COALESCE(d.name, mount.name) LIKE '<=%=>' THEN NULL
+          WHEN COALESCE(d.sub_type, mount.sub_type) = 'CountermeasureLauncher'
+            AND COALESCE(d.name, mount.name) LIKE '% - %'
+            THEN SUBSTR(COALESCE(d.name, mount.name), INSTR(COALESCE(d.name, mount.name), ' - ') + 3)
+          ELSE COALESCE(d.name, mount.name)
+        END AS child_name,
+        CASE
+          WHEN COALESCE(d.name, mount.name) LIKE '<=%=>' THEN NULL
+          WHEN COALESCE(d.sub_type, mount.sub_type) = 'CountermeasureLauncher'
+            AND COALESCE(d.name, mount.name) LIKE '% - %'
+            THEN SUBSTR(COALESCE(d.name, mount.name), INSTR(COALESCE(d.name, mount.name), ' - ') + 3)
+          ELSE COALESCE(d.name, mount.name)
+        END AS component_name,
         COALESCE(d.type, mount.type) AS component_type,
         COALESCE(d.sub_type, mount.sub_type) AS sub_type,
         COALESCE(d.size, mount.size) AS component_size,
@@ -514,7 +538,15 @@ export async function getAllPaints(db: D1Database): Promise<Paint[]> {
         END AS description,
         p.image_url, p.image_url_small, p.image_url_medium, p.image_url_large,
         p.created_at, p.updated_at
-      FROM paints p WHERE p.is_base_variant = 0 ORDER BY p.name`,
+      FROM paints p
+      WHERE p.is_base_variant = 0
+        -- F408: hide paints with no image from the default grid. CIG hasn't
+        -- published store images for these yet (mostly ship base liveries
+        -- and unreleased concept paints). Showing them as "NO IMAGE" tiles
+        -- was visual noise. Items remain queryable via /api/paints/ship/:slug.
+        AND (p.image_url IS NOT NULL OR p.image_url_medium IS NOT NULL
+             OR p.image_url_small IS NOT NULL OR p.image_url_large IS NOT NULL)
+      ORDER BY p.name`,
     )
     .all();
 
@@ -2400,15 +2432,22 @@ async function getPOISiblings(
   if (!parentUuid) {
     return { siblings: [], truncated: false };
   }
+  // F407: dedupe by name (CIG emits duplicate "Prospect Point" rows for
+  // different zone variants) and filter out `*-clusterparent` internal
+  // routing rows — they're hierarchy nodes, not player-visitable POIs.
   const { results } = await db
     .prepare(
-      `SELECT sml.id, sml.slug, sml.name, sml.location_type,
+      `SELECT MIN(sml.id) AS id, sml.slug, sml.name, sml.location_type,
          EXISTS(
            SELECT 1 FROM shops s WHERE s.location_label = sml.name LIMIT 1
          ) AS has_activity
        FROM star_map_locations sml
        WHERE sml.parent_uuid = ?
          AND sml.id != ?
+         AND sml.slug NOT LIKE '%-clusterparent%'
+         AND sml.slug NOT LIKE '%_clusterparent%'
+         AND sml.name NOT LIKE '%Clusterparent'
+       GROUP BY sml.name
        ORDER BY has_activity DESC, sml.name ASC
        LIMIT 13`,
     )

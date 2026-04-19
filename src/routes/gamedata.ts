@@ -337,6 +337,13 @@ const [
   app.get("/shops", async (c) => {
     const db = c.env.DB
     return cachedJson(c, `gd:shops`, async () => {
+      // F404: exclude shops whose `location_label` is a raw internal CIG
+      // code (derelict-settlement short form, distribution-centre numeric
+      // codes, paradise-bay cluster tags, raw-location / region-encounter
+      // entries, admin / template / container-rooted routing shops).
+      // These aren't player-visitable places — they're internal routing
+      // rows. Shops with clean location labels (Orison, Lorville, Area18,
+      // etc.) stay visible.
       const { results } = await db
         .prepare(
           `SELECT s.*,
@@ -344,7 +351,26 @@ const [
              (SELECT COUNT(*) FROM terminal_inventory ti JOIN terminals t ON t.id = ti.terminal_id WHERE t.shop_id = s.id) as item_count,
              s.location_label as location_name
            FROM shops s
-           
+           WHERE COALESCE(s.shop_type, '') != 'admin'
+             AND (s.location_label IS NULL
+                  OR (
+                    s.location_label NOT LIKE 'Drlct%'
+                    AND s.location_label NOT LIKE 'Pbay%'
+                    AND s.location_label NOT LIKE 'RL %'
+                    AND s.location_label NOT LIKE 'RegionC%'
+                    AND s.location_label NOT LIKE 'ab %'
+                    AND s.location_label NOT LIKE 's1 dc%'
+                    AND s.location_label NOT LIKE 's2 dc%'
+                    AND s.location_label NOT LIKE 's3 dc%'
+                    AND s.location_label NOT LIKE 's4 dc%'
+                    AND LOWER(s.location_label) NOT LIKE '%socpak%'
+                    AND s.location_label NOT LIKE 'Foyer%'
+                    AND s.location_label NOT LIKE 'ObjectContainer%'
+                  ))
+             AND s.name NOT LIKE 'OC %'
+             AND s.name NOT LIKE 'OOC %'
+             AND s.name NOT LIKE 'LOC %'
+             AND s.name NOT LIKE '%NONPURCHASABLE%'
            ORDER BY s.name`,
         )
         .all()

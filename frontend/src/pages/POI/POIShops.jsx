@@ -3,14 +3,40 @@ import { Link } from 'react-router-dom'
 import { Store } from 'lucide-react'
 
 const SHOP_TYPE_STYLES = {
-  admin:    'bg-blue-500/10 text-blue-400 border-blue-500/30',
-  weapons:  'bg-red-500/10 text-red-400 border-red-500/30',
-  armor:    'bg-amber-500/10 text-amber-400 border-amber-500/30',
-  clothing: 'bg-purple-500/10 text-purple-400 border-purple-500/30',
-  food:     'bg-green-500/10 text-green-400 border-green-500/30',
-  ship:     'bg-cyan-500/10 text-cyan-400 border-cyan-500/30',
-  general:  'bg-gray-500/10 text-gray-400 border-gray-500/30',
-  default:  'bg-gray-500/10 text-gray-400 border-gray-500/30',
+  admin:            'bg-blue-500/10 text-blue-400 border-blue-500/30',
+  weapons:          'bg-red-500/10 text-red-400 border-red-500/30',
+  armor:            'bg-amber-500/10 text-amber-400 border-amber-500/30',
+  clothing:         'bg-purple-500/10 text-purple-400 border-purple-500/30',
+  food:             'bg-green-500/10 text-green-400 border-green-500/30',
+  medical:          'bg-pink-500/10 text-pink-400 border-pink-500/30',
+  ship:             'bg-cyan-500/10 text-cyan-400 border-cyan-500/30',
+  landing_services: 'bg-cyan-500/10 text-cyan-400 border-cyan-500/30',
+  cargo:            'bg-amber-500/10 text-amber-400 border-amber-500/30',
+  general:          'bg-gray-500/10 text-gray-400 border-gray-500/30',
+  default:          'bg-gray-500/10 text-gray-400 border-gray-500/30',
+}
+
+// Humanise `shop_type` for display. CIG sometimes uses snake_case / SCREAMING
+// ("LANDING_SERVICES") or CamelCase; normalise to "Title Case Words".
+function humanizeShopType(raw) {
+  if (!raw) return null
+  return String(raw)
+    .replace(/[_-]+/g, ' ')
+    .replace(/([a-z])([A-Z])/g, '$1 $2')
+    .toLowerCase()
+    .replace(/\b\w/g, c => c.toUpperCase())
+}
+
+// Split common CamelCase-concat shop names like "CousinCrows Orison" into
+// "Cousin Crows Orison", "CrusaderShowroomWeaponry" → "Crusader Showroom
+// Weaponry". Leaves already-spaced names alone.
+function humanizeShopName(raw) {
+  if (!raw) return raw
+  return String(raw)
+    .replace(/([a-z])([A-Z])/g, '$1 $2')
+    .replace(/([A-Z]+)([A-Z][a-z])/g, '$1 $2')
+    .replace(/\s+/g, ' ')
+    .trim()
 }
 
 function formatAuec(n) {
@@ -68,7 +94,7 @@ export default function POIShops({ envelope }) {
             >
               <Store className="w-3.5 h-3.5 text-gray-500 shrink-0" />
               <div className="flex-1 min-w-0">
-                <div className="text-xs text-gray-200 truncate">{shop.name}</div>
+                <div className="text-xs text-gray-200 truncate">{humanizeShopName(shop.name)}</div>
                 {shop.has_uex_data ? (
                   <div className="text-[10px] text-gray-500 font-mono">
                     {shop.item_count} items
@@ -82,7 +108,7 @@ export default function POIShops({ envelope }) {
               </div>
               {shop.shop_type && (
                 <span className={`text-[10px] font-display uppercase px-1.5 py-0.5 rounded border shrink-0 ${style}`}>
-                  {shop.shop_type}
+                  {humanizeShopType(shop.shop_type)}
                 </span>
               )}
             </Link>

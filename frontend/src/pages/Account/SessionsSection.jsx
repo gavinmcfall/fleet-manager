@@ -35,11 +35,21 @@ export default function SessionsSection({
       <div className="p-5">
         {sessionsLoading ? (
           <p className="text-sm text-gray-500">Loading sessions...</p>
-        ) : sessions.length === 0 ? (
-          <p className="text-sm text-gray-500">No active sessions found.</p>
-        ) : (
+        ) : (() => {
+          // F506: filter out expired sessions — Better-Auth keeps them in the
+          // table until the nightly cleanup cron runs, but the UI should only
+          // list live sessions. Users were confused seeing 4-day-old expired
+          // rows next to their current session.
+          const now = Date.now()
+          const liveSessions = (sessions || []).filter(
+            s => !s.expiresAt || new Date(s.expiresAt).getTime() > now,
+          )
+          if (liveSessions.length === 0) {
+            return <p className="text-sm text-gray-500">No active sessions found.</p>
+          }
+          return (
           <div className="space-y-3">
-            {sessions.map((s) => {
+            {liveSessions.map((s) => {
               const isCurrent = s.token === session?.session?.token
               const ua = parseUserAgent(s.userAgent)
               return (
@@ -72,7 +82,7 @@ export default function SessionsSection({
               )
             })}
 
-            {sessions.length > 1 && (
+            {liveSessions.length > 1 && (
               <button
                 onClick={onRevokeAllSessions}
                 className="mt-2 px-4 py-2 bg-sc-danger/10 border border-sc-danger/30 text-sc-danger font-display tracking-wider uppercase text-xs rounded hover:bg-sc-danger/20 transition-colors flex items-center gap-2"
@@ -82,7 +92,8 @@ export default function SessionsSection({
               </button>
             )}
           </div>
-        )}
+          )
+        })()}
       </div>
     </PanelSection>
     </div>

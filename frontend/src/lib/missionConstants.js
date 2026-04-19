@@ -490,9 +490,95 @@ export function humanizeMissionStem(raw) {
       )
       continue
     }
-    parts.push(t.charAt(0).toUpperCase() + t.slice(1).toLowerCase())
+    parts.push(splitCompoundToken(t))
   }
   return parts.length ? parts.join(' · ') : raw
+}
+
+// Known compound-word prefixes CIG concatenates without underscores. Split
+// them before title-casing so stems like "haulcargo_rounddelivery" →
+// "Haul Cargo · Round Delivery" instead of the raw "Rounddelivery".
+// F403: extend this list as new compound forms surface.
+const COMPOUND_SPLITS = [
+  // Known corp/location prefixes — match longest first
+  { re: /^covalex(s\d+dc\d+)$/i, out: (_, code) => `Covalex ${code.toUpperCase()}` },
+  { re: /^hurston([a-z]+)$/i,    out: (_, rest) => `Hurston ${cap(rest)}` },
+  { re: /^sakura([a-z]+)$/i,     out: (_, rest) => `Sakura ${cap(rest)}` },
+  { re: /^stanton([a-z]+)$/i,    out: (_, rest) => `Stanton ${cap(rest)}` },
+  { re: /^pyro([a-z]+)$/i,       out: (_, rest) => `Pyro ${cap(rest)}` },
+  { re: /^microtech([a-z]+)$/i,  out: (_, rest) => `microTech ${cap(rest)}` },
+  // Known action suffix compounds
+  { re: /^round(delivery)$/i,    out: (_, rest) => `Round ${cap(rest)}` },
+  { re: /^cleanup(op)$/i,        out: () => `Cleanup Op` },
+  { re: /^location(debrismanager)$/i, out: () => `Location Debris Manager` },
+  // "dc" as standalone token → "DC"
+  { re: /^dc$/i,                 out: () => 'DC' },
+  { re: /^l(\d+)$/i,             out: (_, n) => `L${n}` },  // "l19" → "L19"
+]
+
+function cap(s) {
+  return s.charAt(0).toUpperCase() + s.slice(1).toLowerCase()
+}
+
+function splitCompoundToken(t) {
+  for (const { re, out } of COMPOUND_SPLITS) {
+    const m = t.match(re)
+    if (m) return out(...m)
+  }
+  return cap(t)
+}
+
+/**
+ * Humanise a raw `missions.mission_giver` slug like
+ * `missiongiver_covalexindependentcontractors` → "Covalex Independent
+ * Contractors". Format is `missiongiver_` prefix + lower-concat corp name;
+ * we strip the prefix, then split common corp/guild tokens into separate
+ * words. Known-mapping table first, generic split as fallback.
+ */
+const KNOWN_GIVER_CORPS = [
+  // Ordered longest-first so "covalexindependent" matches before "covalex"
+  ['covalexindependentcontractors', 'Covalex Independent Contractors'],
+  ['covalexshipping', 'Covalex Shipping'],
+  ['redwindlinehaul', 'Red Wind Linehaul'],
+  ['unifieddistributionmanagement', 'Unified Distribution Management'],
+  ['bountyhuntersguild', "Bounty Hunters Guild"],
+  ['citizensforprosperity', 'Citizens for Prosperity'],
+  ['hurstondynamics', 'Hurston Dynamics'],
+  ['crusaderindustries', 'Crusader Industries'],
+  ['microtech', 'microTech'],
+  ['bitzeros', 'Bit Zeros'],
+  ['hiredmuscle', 'Hired Muscle'],
+  ['xenothreat', 'XenoThreat'],
+  ['ninetails', 'Nine Tails'],
+  ['headhunters', 'Headhunters'],
+  ['frontierfighters', 'Frontier Fighters'],
+  ['cfp', 'CFP'],
+  ['cdf', 'CDF'],
+]
+
+export function humanizeMissionGiverSlug(raw) {
+  if (!raw) return null
+  let s = String(raw).toLowerCase()
+  // Strip the SENDER NOT FOUND placeholder
+  if (s === 'sender not found') return null
+  // Strip the "missiongiver_" prefix
+  s = s.replace(/^missiongiver_/, '')
+  // Known multi-word corp names
+  for (const [token, label] of KNOWN_GIVER_CORPS) {
+    if (s === token) return label
+    // Could also match as a prefix with suffix after (rare); skip for now
+  }
+  // Generic: if the result still has no spaces but has multiple syllables,
+  // just title-case each underscore-separated token.
+  if (!/[\s_-]/.test(s)) {
+    // Best we can do without a word-split dictionary — capitalise + return.
+    return s.charAt(0).toUpperCase() + s.slice(1)
+  }
+  return s
+    .replace(/[_-]+/g, ' ')
+    .replace(/\s+/g, ' ')
+    .trim()
+    .replace(/\b\w/g, c => c.toUpperCase())
 }
 
 /** Format raw rep_reward strings like "+50bountyhuntersguild" or "+250citizensforprosperity,-100xenothreat" */

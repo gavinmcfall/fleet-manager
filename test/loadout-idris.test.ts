@@ -616,11 +616,13 @@ describe("Loadout API — Idris-P golden data", () => {
     const cms = data.filter((p) => p.port_type === "countermeasure");
     expect(cms).toHaveLength(4);
 
+    // F503: CountermeasureLauncher names have parent-ship prefix stripped
+    // ("Aegis Hammerhead - Decoy Launcher" → "Decoy Launcher") at query time.
     const decoys = cms.filter(
-      (p) => p.component_name === "Aegis Hammerhead - Decoy Launcher"
+      (p) => p.component_name === "Decoy Launcher"
     );
     const noise = cms.filter(
-      (p) => p.component_name === "Aegis Hammerhead - Noise Launcher"
+      (p) => p.component_name === "Noise Launcher"
     );
     expect(decoys).toHaveLength(2);
     expect(noise).toHaveLength(2);

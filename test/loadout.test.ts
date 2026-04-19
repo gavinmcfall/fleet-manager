@@ -1636,7 +1636,9 @@ describe("Loadout API — Carrack Expedition golden data", () => {
 
     const cmNames = cms.map((c) => c.component_name).sort();
     expect(cmNames).toContain("Joker Defcon Flares Ammo");
-    expect(cmNames).toContain("Joker Defcon - Noise Launcher");
+    // F503: CountermeasureLauncher names stripped of parent-ship prefix
+    // ("Joker Defcon - Noise Launcher" → "Noise Launcher") at query time.
+    expect(cmNames).toContain("Noise Launcher");
   });
 
   it("returns 1 sensor (Surveyor radar)", async () => {
