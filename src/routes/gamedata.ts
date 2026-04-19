@@ -730,7 +730,13 @@ return cachedJson(c, `gd:missions`, async () => {
              -- hides the field instead of echoing the title.
              m.mission_giver as giver_name,
              m.description,
-             COALESCE(NULLIF(m.reward_amount, 0), m.reward_min, 0) as reward_amount,
+             -- 0213: when is_dynamic_reward=1 the payout is runtime-computed
+             -- (cargo grade, distance, rep tier); return NULL so the UI can
+             -- show "Dynamic" instead of a misleading 0.
+             CASE WHEN m.is_dynamic_reward = 1 THEN NULL
+                  ELSE COALESCE(NULLIF(m.reward_amount, 0), m.reward_min, 0)
+             END as reward_amount,
+             COALESCE(m.is_dynamic_reward, 0) as is_dynamic_reward,
              m.reward_currency,
              COALESCE(m.is_lawful, 0) as is_lawful,
              m.difficulty,
@@ -743,7 +749,11 @@ return cachedJson(c, `gd:missions`, async () => {
              m.time_limit_minutes, m.max_players, m.can_share, m.once_only,
              m.fail_if_criminal, m.available_in_prison,
              m.wanted_level_min, m.wanted_level_max,
-             m.buy_in_amount, m.reward_max, m.has_standing_bonus,
+             m.buy_in_amount,
+             CASE WHEN m.is_dynamic_reward = 1 AND m.reward_max IN (0, 1) THEN NULL
+                  ELSE m.reward_max
+             END as reward_max,
+             m.has_standing_bonus,
              m.location_ref, m.locality,
              -- Mark mission as template when the title/description still contains
              -- unresolved runtime placeholder tokens (e.g. {Creature}, {Location},

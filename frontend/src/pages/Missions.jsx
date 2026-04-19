@@ -450,6 +450,10 @@ function EntryRow({ entry, repFocus, isHighlighted, highlightRef, prerequisites,
                 {' '}<span className="text-gray-600">aUEC</span>
                 {entry.has_standing_bonus === 1 && <span className="text-emerald-400 ml-1" title="Standing bonus available">+</span>}
               </>
+            ) : entry.is_dynamic_reward === 1 ? (
+              <span className="text-sc-accent2 italic text-[11px]" title="CIG computes the reward at runtime from cargo grade / distance / rep tier">
+                Dynamic
+              </span>
             ) : entry.source === 'mission_board' ? (
               <span className="text-gray-600 italic text-[10px]">Reward Unknown</span>
             ) : (
@@ -621,6 +625,7 @@ export default function Missions() {
         giver_display: (m.giver_name && m.giver_name !== 'SENDER NOT FOUND') ? m.giver_name : null,
         giver_slug: m.giver_slug || null,
         reward_amount: m.reward_amount || 0,
+        is_dynamic_reward: m.is_dynamic_reward ?? 0,
         reward_text: (m.reward_currency && m.reward_currency !== 'UEC' && (m.reward_amount || 0) > 0)
           ? `${m.reward_amount}x ${m.reward_currency}`
           : null,
