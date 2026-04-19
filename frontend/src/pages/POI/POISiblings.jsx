@@ -36,7 +36,7 @@ export default function POISiblings({ envelope, parentSlug }) {
         <p className="mt-2 text-[10px] text-gray-500">
           Showing 12 of {envelope.count}+ nearby POIs.
           {parentSlug && (
-            <Link to={`/poi/${encodeURIComponent(parentSlug)}`} className="ml-1 text-sc-accent hover:underline">
+            <Link to={`/poi/at/${encodeURIComponent(parentSlug)}`} className="ml-1 text-sc-accent hover:underline">
               See all
             </Link>
           )}

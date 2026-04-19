@@ -2,7 +2,7 @@ import { Hono } from "hono"
 import type { HonoEnv } from "../lib/types"
 import { cachedJson, cacheSlug } from "../lib/cache"
 import { resolvePOISlug } from "../lib/poi"
-import { getPOIDetail } from "../db/queries"
+import { getPOIDetail, getPOIChildren } from "../db/queries"
 
 /** SQL expression for shop display name — populated by extraction scripts */
 const SHOP_DISPLAY_NAME_EXPR = `COALESCE(s.display_name, REPLACE(REPLACE(REPLACE(s.name, 'Inv ', ''), '_', ' '), '  ', ' '))`
@@ -486,6 +486,17 @@ return cachedJson(c, `gd:trade`, async () => {
     // return a populated object (location + zero-count sections).
     return cachedJson(c, `gd:poi:${cacheSlug(slug)}`, () =>
       getPOIDetail(db, slug, resolved),
+    )
+  })
+
+  // GET /api/gamedata/poi/:slug/children — full uncapped list of POIs under
+  // a given parent. Powers the `/poi/at/:parentSlug` "see all" page referenced
+  // from the sibling section's truncated warning.
+  app.get("/poi/:slug/children", async (c) => {
+    const slug = c.req.param("slug")
+    const db = c.env.DB
+    return cachedJson(c, `gd:poi-children:${cacheSlug(slug)}`, () =>
+      getPOIChildren(db, slug),
     )
   })
 

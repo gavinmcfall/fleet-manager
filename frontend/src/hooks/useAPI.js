@@ -139,6 +139,10 @@ export function usePaints() {
   return useAPI('/paints')
 }
 
+export function usePaintDetail(slug) {
+  return useAPI(slug ? `/paints/${encodeURIComponent(slug)}` : null, { skip: !slug })
+}
+
 export function useFleet() {
   return useAPI('/vehicles')
 }
@@ -347,6 +351,14 @@ export function useLocationShops(locationSlug) {
  */
 export function usePOI(slug) {
   return useAPI(slug ? `/gamedata/poi/${encodeURIComponent(slug)}` : null, { skip: !slug })
+}
+
+/**
+ * Full uncapped list of POIs under a given parent POI slug. Powers the
+ * parent-level "see all" page.
+ */
+export function usePOIChildren(parentSlug) {
+  return useAPI(parentSlug ? `/gamedata/poi/${encodeURIComponent(parentSlug)}/children` : null, { skip: !parentSlug })
 }
 
 export function useLootSet(setSlug) {

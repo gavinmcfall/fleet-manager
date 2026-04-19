@@ -176,23 +176,22 @@ function PaintCard({ paint }) {
   const shipNames = paint.vehicles.map((v) => v.name).join(', ')
 
   return (
-    <div className="bg-sc-panel border border-sc-border/40 rounded overflow-hidden group hover:border-sc-accent/40 transition-colors">
+    <Link
+      to={`/paints/${encodeURIComponent(paint.slug)}`}
+      className="block bg-sc-panel border border-sc-border/40 rounded overflow-hidden group hover:border-sc-accent/40 transition-colors"
+    >
       <div className="aspect-square flex items-center justify-center bg-sc-darker/50">
         <PaintImage src={thumb} alt={paint.name} className="w-full h-full object-cover transition-transform duration-300 group-hover:scale-105" />
       </div>
       <div className="p-2 space-y-1">
-        <p className="text-xs font-mono text-gray-200 truncate" title={paint.name}>{paint.name}</p>
+        <p className="text-xs font-mono text-gray-200 truncate group-hover:text-sc-accent transition-colors" title={paint.name}>{paint.name}</p>
         {paint.vehicles.length > 0 && (
           <p className="text-[10px] text-gray-500 truncate" title={shipNames}>
-            {paint.vehicles.length === 1 ? (
-              <Link to={`/ships/${paint.vehicles[0].slug}`} className="hover:text-sc-accent transition-colors">{paint.vehicles[0].name}</Link>
-            ) : (
-              `${paint.vehicles.length} ships`
-            )}
+            {paint.vehicles.length === 1 ? paint.vehicles[0].name : `${paint.vehicles.length} ships`}
           </p>
         )}
       </div>
-    </div>
+    </Link>
   )
 }
 
@@ -201,11 +200,13 @@ function PaintRow({ paint }) {
 
   return (
     <div className="flex items-center gap-4 px-4 py-3 hover:bg-white/[0.02] transition-colors">
-      <div className="shrink-0 w-14 h-14 rounded overflow-hidden bg-sc-darker/50 border border-sc-border/40 flex items-center justify-center">
+      <Link to={`/paints/${encodeURIComponent(paint.slug)}`} className="shrink-0 w-14 h-14 rounded overflow-hidden bg-sc-darker/50 border border-sc-border/40 flex items-center justify-center">
         <PaintImage src={thumb} alt={paint.name} className="w-full h-full object-cover" size="sm" />
-      </div>
+      </Link>
       <div className="min-w-0 flex-1">
-        <p className="text-sm font-mono text-gray-200">{paint.name}</p>
+        <Link to={`/paints/${encodeURIComponent(paint.slug)}`} className="text-sm font-mono text-gray-200 hover:text-sc-accent transition-colors inline-block">
+          {paint.name}
+        </Link>
         {paint.vehicles.length > 0 && (
           <div className="flex flex-wrap gap-x-2 gap-y-0.5 mt-1">
             {paint.vehicles.map((v) => (

@@ -12,9 +12,18 @@
  * request for `/api/gamedata/poi/FloatingIslands` can resolve shops + missions
  * that are keyed to `stanton2-orison`.
  *
- * Mirrors `LOCATION_SLUG_MAP` in `frontend/src/lib/lootLocations.js`. Keep the
- * two in sync manually until the ingest pipeline derives `canonical_slug` as
- * a column on `star_map_locations` (follow-up ticket).
+ * **Why this table stays small** — 2026-04-20 investigation into "scale-out"
+ * revealed that of the 128 distinct `location_key` values in
+ * loot_item_locations, most are NOT player-visitable POIs. They're CIG's
+ * internal loot-table archetype names (e.g. `Kaboos`, `StormBreaker`,
+ * `Loot_HighTech`, `DCDelving`, `ColonialOutpost_Outlaw_Large`) — grouping
+ * categories, not places. Only 4 container slugs double-purpose as real
+ * POIs — and those are the ones below. Auto-populating the map with all 128
+ * would produce junk routes ("/poi/Loot_Criminal", "/poi/DCDelving") that
+ * mean nothing to players. The hand-maintained table is the right shape
+ * until/unless CIG changes how container slugs map to zones.
+ *
+ * Mirrors `LOCATION_SLUG_MAP` in `frontend/src/lib/lootLocations.js`.
  */
 
 /** Container slug (DataCore form) → canonical star_map_locations slug. */

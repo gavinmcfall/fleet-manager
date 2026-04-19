@@ -580,6 +580,62 @@ export async function getAllPaints(db: D1Database): Promise<Paint[]> {
   return paints;
 }
 
+/**
+ * Fetch a single paint by slug, including compatible vehicles. Returns null
+ * when the slug doesn't resolve — caller should 404. Used by the paints
+ * detail page.
+ */
+export async function getPaintBySlug(
+  db: D1Database,
+  slug: string,
+): Promise<(Paint & { manufacturer_code: string | null; manufacturer_name: string | null }) | null> {
+  const row = (await db
+    .prepare(
+      `SELECT p.id, p.uuid, p.name, p.slug, p.class_name,
+        CASE
+          WHEN p.description LIKE '<=%=>' OR p.description LIKE '%PLACEHOLDER%'
+            OR p.description LIKE '%UNINITIALIZED%'
+          THEN NULL
+          ELSE p.description
+        END AS description,
+        p.image_url, p.image_url_small, p.image_url_medium, p.image_url_large,
+        p.created_at, p.updated_at
+      FROM paints p
+      WHERE p.slug = ? AND p.is_base_variant = 0
+      LIMIT 1`,
+    )
+    .bind(slug)
+    .first()) as any;
+
+  if (!row) return null;
+
+  const vRes = await db
+    .prepare(
+      `SELECT v.id, v.name, v.slug, v.image_url,
+        COALESCE(rm.name, m.name) AS manufacturer_name,
+        COALESCE(rm.code, m.code) AS manufacturer_code
+       FROM paint_vehicles pv
+       JOIN vehicles v ON v.id = pv.vehicle_id
+       LEFT JOIN manufacturers m ON m.id = v.manufacturer_id
+       LEFT JOIN vehicles rv ON rv.id = v.replaced_by_vehicle_id
+       LEFT JOIN manufacturers rm ON rm.id = rv.manufacturer_id
+       WHERE pv.paint_id = ?
+       ORDER BY v.name`,
+    )
+    .bind(row.id)
+    .all<{ id: number; name: string; slug: string; image_url: string | null; manufacturer_name: string | null; manufacturer_code: string | null }>();
+
+  const manufacturerName = vRes.results[0]?.manufacturer_name ?? null;
+  const manufacturerCode = vRes.results[0]?.manufacturer_code ?? null;
+
+  return {
+    ...row,
+    vehicles: vRes.results,
+    manufacturer_code: manufacturerCode,
+    manufacturer_name: manufacturerName,
+  } as any;
+}
+
 export async function getPaintsForVehicle(db: D1Database, vehicleSlug: string): Promise<Paint[]> {
   const paintResult = await db
     .prepare(
@@ -2424,6 +2480,53 @@ async function getPOIMissions(
  * Sibling POIs under the same parent. Capped at 12, sorted with
  * shop-having rows first so the list is always useful.
  */
+/**
+ * Full list of children under a given parent POI (uncapped). Powers
+ * `/poi/at/:parentSlug`. Filters the same container-parent / routing
+ * rows as getPOISiblings.
+ */
+export async function getPOIChildren(
+  db: D1Database,
+  parentSlug: string,
+): Promise<{
+  parent: { slug: string; name: string } | null;
+  children: POISibling[];
+} | null> {
+  const parent = (await db
+    .prepare(`SELECT id, uuid, slug, name FROM star_map_locations WHERE slug = ? LIMIT 1`)
+    .bind(parentSlug)
+    .first()) as { id: number; uuid: string; slug: string; name: string } | null;
+  if (!parent) return null;
+
+  const { results } = await db
+    .prepare(
+      `SELECT MIN(sml.id) AS id, sml.slug, sml.name, sml.location_type,
+         EXISTS(
+           SELECT 1 FROM shops s WHERE s.location_label = sml.name LIMIT 1
+         ) AS has_activity
+       FROM star_map_locations sml
+       WHERE sml.parent_uuid = ?
+         AND sml.slug NOT LIKE '%-clusterparent%'
+         AND sml.slug NOT LIKE '%_clusterparent%'
+         AND sml.name NOT LIKE '%Clusterparent'
+       GROUP BY sml.name
+       ORDER BY has_activity DESC, sml.name ASC`,
+    )
+    .bind(parent.uuid)
+    .all();
+
+  return {
+    parent: { slug: parent.slug, name: parent.name },
+    children: (results as any[]).map((r) => ({
+      id: r.id,
+      slug: r.slug,
+      name: r.name,
+      location_type: r.location_type ?? "unknown",
+      has_activity: !!r.has_activity,
+    })),
+  };
+}
+
 async function getPOISiblings(
   db: D1Database,
   parentUuid: string | null,

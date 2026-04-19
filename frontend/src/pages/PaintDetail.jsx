@@ -1,0 +1,128 @@
+import React from 'react'
+import { Link, useParams } from 'react-router-dom'
+import { ArrowLeft, Palette, Rocket, AlertCircle } from 'lucide-react'
+import { usePaintDetail } from '../hooks/useAPI'
+import PageHeader from '../components/PageHeader'
+import LoadingState from '../components/LoadingState'
+import ErrorState from '../components/ErrorState'
+import ShipImage from '../components/ShipImage'
+import EmptyState from '../components/EmptyState'
+
+export default function PaintDetail() {
+  const { slug } = useParams()
+  const decoded = slug ? decodeURIComponent(slug) : ''
+  const { data, loading, error, refetch } = usePaintDetail(decoded)
+
+  if (loading) return <LoadingState message="Loading paint..." />
+  if (error) return <ErrorState message={error} onRetry={refetch} />
+  if (!data) {
+    return (
+      <div className="space-y-4 animate-fade-in-up">
+        <Link to="/paints" className="inline-flex items-center gap-1.5 text-xs text-gray-400 hover:text-gray-200 transition-colors">
+          <ArrowLeft className="w-3.5 h-3.5" />
+          Back to Paints
+        </Link>
+        <EmptyState
+          message="This paint couldn't be found."
+          icon={AlertCircle}
+          large
+          actionLink={{ to: '/paints', label: 'Browse all paints' }}
+        />
+      </div>
+    )
+  }
+
+  const hero = data.image_url || data.image_url_large || data.image_url_medium || data.image_url_small
+
+  return (
+    <div className="space-y-5 animate-fade-in-up">
+      <Link to="/paints" className="inline-flex items-center gap-1.5 text-xs text-gray-400 hover:text-gray-200 transition-colors">
+        <ArrowLeft className="w-3.5 h-3.5" />
+        Back to Paints
+      </Link>
+
+      <PageHeader
+        title={data.name}
+        subtitle={data.manufacturer_name ? `by ${data.manufacturer_name}` : null}
+        actions={
+          <span className="text-[10px] font-display uppercase tracking-wide px-2 py-1 rounded bg-sc-accent/10 text-sc-accent border border-sc-accent/30 flex items-center gap-1.5">
+            <Palette className="w-3 h-3" />
+            Paint
+          </span>
+        }
+      />
+
+      <div className="grid grid-cols-1 md:grid-cols-[2fr_3fr] gap-6">
+        {/* Hero image */}
+        <div className="rounded-lg overflow-hidden border border-sc-border bg-sc-darker">
+          {hero ? (
+            <img
+              src={hero}
+              alt={data.name}
+              className="w-full h-auto object-contain"
+              loading="lazy"
+            />
+          ) : (
+            <div className="aspect-[4/3] flex items-center justify-center text-gray-600 text-xs font-mono uppercase tracking-wider">
+              No image available
+            </div>
+          )}
+        </div>
+
+        {/* Right column: description + compatible ships */}
+        <div className="space-y-5">
+          {data.description && (
+            <section>
+              <h2 className="text-[10px] font-display uppercase tracking-widest text-gray-500 mb-2">Description</h2>
+              <p className="text-sm text-gray-300 whitespace-pre-line">{data.description}</p>
+            </section>
+          )}
+
+          <section>
+            <h2 className="text-[10px] font-display uppercase tracking-widest text-gray-500 mb-2">
+              Fits {data.vehicles.length} ship{data.vehicles.length !== 1 ? 's' : ''}
+            </h2>
+            {data.vehicles.length === 0 ? (
+              <p className="text-xs text-gray-500 italic">No ships linked to this paint in the current data.</p>
+            ) : (
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                {data.vehicles.map(v => (
+                  <Link
+                    key={v.id}
+                    to={`/ships/${v.slug}`}
+                    className="flex items-center gap-3 px-3 py-2 border border-sc-border rounded hover:border-sc-accent/40 hover:bg-white/5 transition-colors"
+                  >
+                    {v.image_url ? (
+                      <ShipImage
+                        src={v.image_url}
+                        alt={v.name}
+                        aspectRatio="thumbnail-sm"
+                        className="rounded border border-sc-border/50 shrink-0"
+                      />
+                    ) : (
+                      <div className="w-12 h-8 rounded bg-sc-darker flex items-center justify-center shrink-0">
+                        <Rocket className="w-3.5 h-3.5 text-gray-600" />
+                      </div>
+                    )}
+                    <span className="text-xs text-gray-200 truncate">{v.name}</span>
+                  </Link>
+                ))}
+              </div>
+            )}
+          </section>
+
+          {data.class_name && (
+            <section>
+              <h2 className="text-[10px] font-display uppercase tracking-widest text-gray-500 mb-2">Technical</h2>
+              <dl className="text-[11px] font-mono text-gray-400 grid grid-cols-[max-content_1fr] gap-x-3 gap-y-1">
+                <dt>Class</dt><dd>{data.class_name}</dd>
+                <dt>Slug</dt><dd>{data.slug}</dd>
+                {data.uuid && <><dt>UUID</dt><dd className="truncate">{data.uuid}</dd></>}
+              </dl>
+            </section>
+          )}
+        </div>
+      </div>
+    </div>
+  )
+}

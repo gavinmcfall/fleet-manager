@@ -45,7 +45,9 @@ const LootDB = lazy(() => import('./pages/LootDB'))
 const FullItemDetail = lazy(() => import('./pages/LootDB/FullItemDetail'))
 const POI = lazy(() => import('./pages/POI'))
 const POIDetail = lazy(() => import('./pages/POIDetail'))
+const POIChildren = lazy(() => import('./pages/POIChildren'))
 const PaintBrowser = lazy(() => import('./pages/PaintBrowser'))
+const PaintDetail = lazy(() => import('./pages/PaintDetail'))
 const ArmorSetDetail = lazy(() => import('./pages/ArmorSetDetail'))
 const Shops = lazy(() => import('./pages/Shops'))
 const TradeCommodities = lazy(() => import('./pages/TradeCommodities'))
@@ -709,11 +711,13 @@ export default function App() {
                       <Route path="/ships" element={<ShipDB />} />
                       <Route path="/ships/:slug" element={<ShipDetail />} />
                       <Route path="/paints" element={<PaintBrowser />} />
+                      <Route path="/paints/:slug" element={<PaintDetail />} />
                       <Route path="/loot" element={<LootDB />} />
                       <Route path="/loot/sets/:setSlug" element={<ArmorSetDetail />} />
                       <Route path="/loot/:uuid/detail" element={<FullItemDetail />} />
                       <Route path="/loot/:uuid" element={<LootDB />} />
                       <Route path="/poi" element={<POI />} />
+                      <Route path="/poi/at/:parentSlug" element={<POIChildren />} />
                       <Route path="/poi/:slug" element={<POIDetail />} />
                       <Route path="/poi/:type/:slug" element={<POIDetail />} />
                       <Route path="/missions" element={<Missions />} />
