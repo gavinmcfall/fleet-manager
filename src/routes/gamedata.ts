@@ -511,13 +511,23 @@ return cachedJson(c, `gd:loc-shops:${cacheSlug(slug)}`, async () => {
       }
 
       const placeholders = locationIds.map(() => "?").join(",")
+      // Two-path JOIN: shop_locations junction OR direct location_label match
+      // on the star_map_location name. The junction table is sparse on
+      // non-pipeline-linked shops — e.g. Orison has 40 real shops (Ellroys,
+      // Whammers, CousinCrows, Covalex, etc.) with `location_label='Orison'`
+      // but shop_locations only connects 4 internal routing rows. Falling
+      // back to the label match recovers the real inventory.
       const { results: shops } = await db
         .prepare(
           `SELECT DISTINCT s.id, s.name, s.slug, s.shop_type, s.location_label,
-             sl.placement_name
+             COALESCE(sl.placement_name, s.location_label) AS placement_name
            FROM shops s
-           JOIN shop_locations sl ON sl.shop_id = s.id
-           WHERE sl.location_id IN (${placeholders})
+           LEFT JOIN shop_locations sl ON sl.shop_id = s.id
+             AND sl.location_id IN (${placeholders})
+           WHERE (
+               sl.location_id IN (${placeholders})
+               OR s.location_label = (SELECT name FROM star_map_locations WHERE id = ?)
+             )
              AND COALESCE(s.shop_type, '') != 'admin'
              AND s.name NOT LIKE 'Stanton%'
              AND s.name NOT LIKE 'OC %'
@@ -525,9 +535,10 @@ return cachedJson(c, `gd:loc-shops:${cacheSlug(slug)}`, async () => {
              AND s.name NOT LIKE 'RR %'
              AND s.name NOT LIKE 'LOC %'
              AND s.name NOT LIKE 'Grim HEX OC%'
+             AND s.name NOT LIKE '%NONPURCHASABLE%'
            ORDER BY s.shop_type, s.name`,
         )
-        .bind(...locationIds)
+        .bind(...locationIds, ...locationIds, location.id)
         .all()
 
       if (shops.length === 0) {
