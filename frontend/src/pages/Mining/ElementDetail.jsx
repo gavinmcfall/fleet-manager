@@ -8,7 +8,7 @@ import QualityChart from './QualityChart'
 import {
   cleanElementName, CATEGORY_STYLES, ELEMENT_STAT_LABELS, SYSTEM_COLORS,
   instabilityColor, instabilityBg, instabilityBarColor,
-  humanizeLocationName, friendlyElementName, friendlyRockType,
+  humanizeLocationName, friendlyElementName, friendlyRockType, friendlyCompositionName,
 } from './miningUtils'
 
 export default function ElementDetail() {
@@ -219,7 +219,7 @@ export default function ElementDetail() {
               return (
                 <div key={comp.id} className="bg-white/[0.02] border border-white/[0.05] rounded-lg p-3">
                   <div className="flex items-center justify-between">
-                    <span className="text-xs text-gray-300 font-medium">{comp.name}</span>
+                    <span className="text-xs text-gray-300 font-medium">{friendlyCompositionName(comp.name)}</span>
                     <span className="text-[10px] text-gray-500 font-mono">
                       {friendlyRockType(comp.rock_type)}
                     </span>

@@ -138,6 +138,32 @@ export function friendlyRockType(rockType) {
   return rockType.replace(/_/g, ' ').replace(/\b\w/g, s => s.toUpperCase())
 }
 
+// Humanise raw rock_compositions.name values like "Asteroid_CType_Aluminium",
+// "AtacamiteDeposit_Copper", "EpicShipMineablesAsteroid_Ouratite",
+// "TestCompositionPreset_Agricium".
+// CIG's format is: <RockFamily>[Rarity][Body]_<Element>. Humaniser:
+//   1. Drop internal test-artifact prefixes ("TestCompositionPreset_")
+//   2. Split CamelCase + replace underscores with spaces
+//   3. Translate known asteroid type tokens (CType → C-Type, etc.)
+//   4. Drop trailing `_test` suffix (CIG dev tag)
+export function friendlyCompositionName(raw) {
+  if (!raw) return '—'
+  let s = String(raw)
+  // Drop dev prefixes outright
+  s = s.replace(/^TestCompositionPreset_?/i, 'Test ')
+  // Drop trailing _test
+  s = s.replace(/_test$/i, '')
+  // Expand CType → C-Type before CamelCase split so it doesn't become "C Type"
+  s = s.replace(/\b([CEIMPQSX])Type\b/g, '$1-Type')
+  // Insert spaces on CamelCase boundaries (AtacamiteDeposit → Atacamite Deposit)
+  s = s.replace(/([a-z])([A-Z])/g, '$1 $2')
+  s = s.replace(/([A-Z]+)([A-Z][a-z])/g, '$1 $2')
+  // Underscores → spaces
+  s = s.replace(/_+/g, ' ')
+  s = s.replace(/\s+/g, ' ').trim()
+  return s
+}
+
 // --- Instability color helpers ---
 export function instabilityColor(val) {
   if (val == null) return 'text-gray-400'

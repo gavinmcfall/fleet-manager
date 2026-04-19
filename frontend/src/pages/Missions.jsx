@@ -43,6 +43,16 @@ const CATEGORY_LABELS = {
   'Vehicle Delivery': 'Delivery', 'Waste Disposal': 'Collection',
   'Synced Assassination': 'Bounty', Events: 'Events', 'Combined Ops': 'Combined',
   Recovery: 'Recovery', Theft: 'Theft', Tutorial: 'Tutorial', Exploration: 'Exploration',
+  // CIG raw category values returned by /api/gamedata/missions.category
+  // ("missiontype.delivery" etc. come from p4k mission-type filename stems).
+  'missiontype.delivery': 'Delivery', 'missiontype.job': 'Job',
+  'missiontype.search': 'Search & Rescue', 'missiontype.salvage': 'Salvage',
+  'missiontype.repair': 'Repair', 'missiontype.combat': 'Combat',
+  'missiontype.transport': 'Transport', 'missiontype.escort': 'Escort',
+  servicebeacon: 'Service Beacon', bountyhunter: 'Bounty Hunter',
+  mercenary: 'Mercenary', priority: 'Priority', hauling: 'Hauling',
+  maintenance: 'Maintenance', mining: 'Mining', exploration: 'Exploration',
+  unknown: 'Other',
 }
 
 function deriveSystem(locationRef, locality) {
@@ -590,7 +600,7 @@ export default function Missions() {
         description: c.description,
         source: 'contract',
         category: c.category,
-        category_display: c.category,
+        category_display: CATEGORY_LABELS[c.category] || c.category,
         giver_display: { wikelo: 'Wikelo', gfs: "Gilly's Flight School", ruto: 'Ruto' }[c.giver_slug] || c.giver_slug,
         giver_slug: c.giver_slug || null,
         reward_amount: c.reward_amount || 0,

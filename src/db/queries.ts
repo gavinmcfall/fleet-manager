@@ -321,10 +321,15 @@ export async function getShipLoadout(db: D1Database, slug: string): Promise<Reco
         p.min_size AS size_min,
         p.max_size AS size_max,
         p.editable,
-        mount.name AS mount_name,
+        -- F501: NULL out "<= PLACEHOLDER =>" / "<= UNINITIALIZED =>" sentinels
+        -- that CIG leaves on unpopulated mount rows. Surfacing them as display
+        -- text made the Cutlass Black turret hardpoints look broken.
+        CASE WHEN mount.name LIKE '<=%=>' THEN NULL ELSE mount.name END AS mount_name,
         mount.type AS mount_type,
-        COALESCE(d.name, mount.name) AS child_name,
-        COALESCE(d.name, mount.name) AS component_name,
+        CASE WHEN COALESCE(d.name, mount.name) LIKE '<=%=>' THEN NULL
+             ELSE COALESCE(d.name, mount.name) END AS child_name,
+        CASE WHEN COALESCE(d.name, mount.name) LIKE '<=%=>' THEN NULL
+             ELSE COALESCE(d.name, mount.name) END AS component_name,
         COALESCE(d.type, mount.type) AS component_type,
         COALESCE(d.sub_type, mount.sub_type) AS sub_type,
         COALESCE(d.size, mount.size) AS component_size,
