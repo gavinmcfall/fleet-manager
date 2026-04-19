@@ -207,7 +207,7 @@ export default function POIDetail() {
 
       <PageHeader
         title={locationName}
-        subtitle={`${items.length} items available`}
+        subtitle={`${items.length} ${items.length === 1 ? 'item' : 'items'} can spawn here (containers + NPCs)`}
         actions={
           <span className="text-[10px] font-display uppercase tracking-wide px-2 py-1 rounded bg-sc-accent/10 text-sc-accent border border-sc-accent/30">
             {groupBadge}

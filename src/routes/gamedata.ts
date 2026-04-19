@@ -460,14 +460,24 @@ return cachedJson(c, `gd:loc-shops:${cacheSlug(slug)}`, async () => {
 
       if (!location) {
         // Fallback: match slug against location_label on shops directly
-        // (star_map_locations may not have a matching slug for common location names)
+        // (star_map_locations may not have a matching slug for common location names).
+        // Public POI page excludes `shop_type='admin'` (dev/template shops) and
+        // shops whose name is a container-tree artifact (plain "Stanton",
+        // "Stanton 1 Hurston", "OC <x>") — those are internal routing rows,
+        // not real in-game shops players can visit.
         const labelSlug = slug.replace(/-/g, ' ')
         const { results: labelShops } = await db
           .prepare(
             `SELECT s.id, s.name, s.slug, s.shop_type, s.location_label, NULL as placement_name
              FROM shops s
-             
              WHERE LOWER(REPLACE(s.location_label, ' ', '')) = LOWER(REPLACE(?, ' ', ''))
+               AND COALESCE(s.shop_type, '') != 'admin'
+               AND s.name NOT LIKE 'Stanton%'
+               AND s.name NOT LIKE 'OC %'
+               AND s.name NOT LIKE 'OOC %'
+               AND s.name NOT LIKE 'RR %'
+               AND s.name NOT LIKE 'LOC %'
+               AND s.name NOT LIKE 'Grim HEX OC%'
              ORDER BY s.shop_type, s.name`,
           )
           .bind(labelSlug)
@@ -506,9 +516,15 @@ return cachedJson(c, `gd:loc-shops:${cacheSlug(slug)}`, async () => {
           `SELECT DISTINCT s.id, s.name, s.slug, s.shop_type, s.location_label,
              sl.placement_name
            FROM shops s
-           
            JOIN shop_locations sl ON sl.shop_id = s.id
            WHERE sl.location_id IN (${placeholders})
+             AND COALESCE(s.shop_type, '') != 'admin'
+             AND s.name NOT LIKE 'Stanton%'
+             AND s.name NOT LIKE 'OC %'
+             AND s.name NOT LIKE 'OOC %'
+             AND s.name NOT LIKE 'RR %'
+             AND s.name NOT LIKE 'LOC %'
+             AND s.name NOT LIKE 'Grim HEX OC%'
            ORDER BY s.shop_type, s.name`,
         )
         .bind(...locationIds)
@@ -519,8 +535,14 @@ return cachedJson(c, `gd:loc-shops:${cacheSlug(slug)}`, async () => {
           .prepare(
             `SELECT s.id, s.name, s.slug, s.shop_type, s.location_label, NULL as placement_name
              FROM shops s
-             
              WHERE s.location_id IN (${placeholders})
+               AND COALESCE(s.shop_type, '') != 'admin'
+               AND s.name NOT LIKE 'Stanton%'
+               AND s.name NOT LIKE 'OC %'
+               AND s.name NOT LIKE 'OOC %'
+               AND s.name NOT LIKE 'RR %'
+               AND s.name NOT LIKE 'LOC %'
+               AND s.name NOT LIKE 'Grim HEX OC%'
              ORDER BY s.shop_type, s.name`,
           )
           .bind(...locationIds)
