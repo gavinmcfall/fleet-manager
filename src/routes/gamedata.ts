@@ -1,6 +1,8 @@
 import { Hono } from "hono"
 import type { HonoEnv } from "../lib/types"
 import { cachedJson, cacheSlug } from "../lib/cache"
+import { resolvePOISlug } from "../lib/poi"
+import { getPOIDetail } from "../db/queries"
 
 /** SQL expression for shop display name — populated by extraction scripts */
 const SHOP_DISPLAY_NAME_EXPR = `COALESCE(s.display_name, REPLACE(REPLACE(REPLACE(s.name, 'Inv ', ''), '_', ' '), '  ', ' '))`
@@ -440,6 +442,25 @@ return cachedJson(c, `gd:trade`, async () => {
 
       return { commodities, locations }
     })
+  })
+
+  // GET /api/gamedata/poi/:slug — unified POI detail.
+  // Accepts both container-side slugs (e.g. "FloatingIslands") and canonical
+  // star_map_locations slugs (e.g. "stanton2-orison"). Returns a single
+  // payload with per-section envelopes (shops / loot_pools / missions /
+  // npc_factions / siblings) so one slow subsystem degrades its section
+  // rather than the whole page. See plan:
+  // /home/gavin/.claude/plans/curious-popping-toucan.md
+  app.get("/poi/:slug", async (c) => {
+    const slug = c.req.param("slug")
+    const resolved = resolvePOISlug(slug)
+    const db = c.env.DB
+    // cachedJson auto-404s on null return — we use that when the slug
+    // doesn't resolve to any star_map_locations row. Empty-state POIs still
+    // return a populated object (location + zero-count sections).
+    return cachedJson(c, `gd:poi:${cacheSlug(slug)}`, () =>
+      getPOIDetail(db, slug, resolved),
+    )
   })
 
   // GET /api/gamedata/locations/:slug/shops — shops at a location with inventory

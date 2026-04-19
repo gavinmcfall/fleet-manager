@@ -338,6 +338,17 @@ export function useLocationShops(locationSlug) {
   return useAPI(locationSlug ? `/gamedata/locations/${locationSlug}/shops` : null, { skip: !locationSlug })
 }
 
+/**
+ * Unified POI detail hook. Returns a single payload with per-section envelopes
+ * (shops / loot_pools / missions / npc_factions / siblings). Accepts either the
+ * canonical star_map_locations slug or the container-side alias (e.g.
+ * "FloatingIslands" → "stanton2-orison"). See plan:
+ * /home/gavin/.claude/plans/curious-popping-toucan.md
+ */
+export function usePOI(slug) {
+  return useAPI(slug ? `/gamedata/poi/${encodeURIComponent(slug)}` : null, { skip: !slug })
+}
+
 export function useLootSet(setSlug) {
   return useAPI(setSlug ? `/loot/sets/${setSlug}` : null, { skip: !setSlug })
 }

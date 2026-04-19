@@ -2033,3 +2033,470 @@ export async function listSalvageableShips(
 
   return results;
 }
+
+// ============================================================================
+// POI detail — single endpoint aggregating shops / loot / missions / NPCs
+// ============================================================================
+//
+// Powers /api/gamedata/poi/:slug. Each section is wrapped in an envelope so a
+// slow / failing subquery degrades its section (`partial: true`) rather than
+// the whole page. See plan at /home/gavin/.claude/plans/curious-popping-toucan.md.
+
+interface POISectionEnvelope<T> {
+  data: T[];
+  count: number;
+  partial: boolean;
+  note?: string;
+}
+
+export interface POILocation {
+  slug: string;
+  canonical_slug: string;
+  name: string;
+  type: string;
+  hierarchy: Array<{ slug: string; name: string }>;
+  description: string | null;
+}
+
+export interface POIShopSummary {
+  id: number;
+  slug: string;
+  name: string;
+  shop_type: string | null;
+  item_count: number;
+  min_price: number | null;
+  max_price: number | null;
+  has_uex_data: boolean;
+}
+
+export interface POILootPool {
+  loot_table: string;
+  container_type: string | null;
+  rolls: number;
+  items: Array<{
+    uuid: string;
+    name: string;
+    category: string | null;
+    rarity: string | null;
+    per_roll: number;
+    per_container_odds: number;
+  }>;
+}
+
+export interface POIMissionSummary {
+  id: number;
+  title: string;
+  giver_name: string | null;
+  category: string | null;
+  reward_amount: number | null;
+  is_dynamic_reward: number;
+  likely: boolean; // true when matched via `locality` fallback, false when `location_ref` hit
+}
+
+export interface POISibling {
+  id: number;
+  slug: string;
+  name: string;
+  location_type: string;
+  has_activity: boolean;
+}
+
+export interface POIDetail {
+  location: POILocation;
+  shops: POISectionEnvelope<POIShopSummary>;
+  loot_pools: POISectionEnvelope<POILootPool>;
+  missions: POISectionEnvelope<POIMissionSummary>;
+  npc_factions: POISectionEnvelope<{ id: number; name: string; loadout_count: number }>;
+  siblings: POISectionEnvelope<POISibling> & { truncated: boolean };
+}
+
+/**
+ * Look up a location row by canonical slug. Returns null when the slug
+ * doesn't resolve — caller should 404.
+ */
+async function getPOILocationRow(
+  db: D1Database,
+  canonicalSlug: string,
+): Promise<{
+  id: number;
+  uuid: string;
+  slug: string;
+  name: string;
+  location_type: string;
+  parent_uuid: string | null;
+  description: string | null;
+} | null> {
+  return (await db
+    .prepare(
+      `SELECT id, uuid, slug, name, location_type, parent_uuid, description
+       FROM star_map_locations
+       WHERE slug = ?
+       LIMIT 1`,
+    )
+    .bind(canonicalSlug)
+    .first()) as any;
+}
+
+/**
+ * Walk up the parent chain to build a breadcrumb (deepest-first).
+ * Caps at 6 levels to guard against cycles.
+ */
+async function getPOIHierarchy(
+  db: D1Database,
+  startUuid: string | null,
+): Promise<Array<{ slug: string; name: string }>> {
+  const chain: Array<{ slug: string; name: string }> = [];
+  let cursor = startUuid;
+  for (let i = 0; i < 6 && cursor; i++) {
+    const row = (await db
+      .prepare(
+        `SELECT slug, name, parent_uuid FROM star_map_locations WHERE uuid = ?`,
+      )
+      .bind(cursor)
+      .first()) as { slug: string; name: string; parent_uuid: string | null } | null;
+    if (!row) break;
+    chain.push({ slug: row.slug, name: row.name });
+    cursor = row.parent_uuid;
+  }
+  return chain;
+}
+
+/**
+ * Real shops at this location. Joins `shops` by `location_label = location.name`
+ * (the path that recovers the 40 real Orison shops vs the 4 admin/container
+ * routing rows the shop_locations junction returns). Enriches with UEX
+ * inventory counts + price range.
+ */
+async function getPOIShops(
+  db: D1Database,
+  locationName: string,
+): Promise<POIShopSummary[]> {
+  const { results } = await db
+    .prepare(
+      `SELECT s.id, s.slug, s.name, s.shop_type,
+         (
+           SELECT COUNT(DISTINCT ti.item_uuid)
+           FROM terminal_inventory ti
+           JOIN terminals t ON t.id = ti.terminal_id
+           WHERE t.shop_id = s.id
+             AND ti.latest_source IS NOT NULL
+             AND (ti.latest_buy_price > 0 OR ti.latest_sell_price > 0)
+         ) AS item_count,
+         (
+           SELECT MIN(ti.latest_buy_price)
+           FROM terminal_inventory ti
+           JOIN terminals t ON t.id = ti.terminal_id
+           WHERE t.shop_id = s.id
+             AND ti.latest_source IS NOT NULL
+             AND ti.latest_buy_price > 0
+         ) AS min_price,
+         (
+           SELECT MAX(ti.latest_buy_price)
+           FROM terminal_inventory ti
+           JOIN terminals t ON t.id = ti.terminal_id
+           WHERE t.shop_id = s.id
+             AND ti.latest_source IS NOT NULL
+             AND ti.latest_buy_price > 0
+         ) AS max_price
+       FROM shops s
+       WHERE s.location_label = ?
+         AND COALESCE(s.shop_type, '') != 'admin'
+         AND s.name NOT LIKE 'Stanton%'
+         AND s.name NOT LIKE 'OC %'
+         AND s.name NOT LIKE 'OOC %'
+         AND s.name NOT LIKE 'RR %'
+         AND s.name NOT LIKE 'LOC %'
+         AND s.name NOT LIKE 'Grim HEX OC%'
+         AND s.name NOT LIKE '%NONPURCHASABLE%'
+       ORDER BY (item_count > 0) DESC, s.shop_type, s.name`,
+    )
+    .bind(locationName)
+    .all();
+
+  return (results as any[]).map((r) => ({
+    id: r.id,
+    slug: r.slug,
+    name: r.name,
+    shop_type: r.shop_type,
+    item_count: r.item_count ?? 0,
+    min_price: r.min_price,
+    max_price: r.max_price,
+    has_uex_data: (r.item_count ?? 0) > 0,
+  }));
+}
+
+/**
+ * Loot pools for container drops at this POI. Keyed by the container-side
+ * slug (the `location_key` in loot_item_locations). Grouped by
+ * (loot_table, container_type) so multi-container-class POIs show each pool
+ * separately.
+ */
+async function getPOILootPools(
+  db: D1Database,
+  containerSlug: string,
+): Promise<POILootPool[]> {
+  // Pool shape first — group by (loot_table, container_type) to get distinct pools
+  const { results: poolRows } = await db
+    .prepare(
+      `SELECT DISTINCT lil.loot_table, lil.container_type,
+         COALESCE(lil.rolls, 1) AS rolls
+       FROM loot_item_locations lil
+       WHERE lil.source_type = 'container'
+         AND lil.location_key = ?
+         AND lil.loot_table IS NOT NULL`,
+    )
+    .bind(containerSlug)
+    .all();
+
+  const pools: POILootPool[] = [];
+  for (const p of poolRows as any[]) {
+    const rolls = p.rolls ?? 1;
+    const { results: itemRows } = await db
+      .prepare(
+        `SELECT lm.uuid, lm.name, lm.category, lm.rarity,
+           MAX(COALESCE(lil.per_roll, 0)) AS per_roll
+         FROM loot_item_locations lil
+         JOIN loot_map lm ON lm.id = lil.loot_map_id
+         WHERE lil.source_type = 'container'
+           AND lil.location_key = ?
+           AND lil.loot_table = ?
+           AND COALESCE(lil.container_type, '') = COALESCE(?, '')
+         GROUP BY lm.uuid, lm.name, lm.category, lm.rarity
+         ORDER BY per_roll DESC, lm.name ASC`,
+      )
+      .bind(containerSlug, p.loot_table, p.container_type ?? null)
+      .all();
+
+    pools.push({
+      loot_table: p.loot_table,
+      container_type: p.container_type ?? null,
+      rolls,
+      items: (itemRows as any[]).map((i) => {
+        const per = i.per_roll ?? 0;
+        // Probability that at least one roll returns this item
+        const perContainer = 1 - Math.pow(1 - per, rolls);
+        return {
+          uuid: i.uuid,
+          name: i.name,
+          category: i.category,
+          rarity: i.rarity,
+          per_roll: per,
+          per_container_odds: perContainer,
+        };
+      }),
+    });
+  }
+
+  return pools;
+}
+
+/**
+ * Missions that send the player to this POI. Primary match: `location_ref`
+ * equals `starmapobject.<slug>` or the slug itself (locality keys like
+ * "stanton2_l5"). Fallback match: `locality` equals the location name,
+ * tagged `likely: true` so the UI can distinguish.
+ */
+async function getPOIMissions(
+  db: D1Database,
+  canonicalSlug: string,
+  locationName: string,
+): Promise<POIMissionSummary[]> {
+  // Convert "stanton2-orison" form to possible location_ref values CIG emits.
+  // Patterns seen in staging: `starmapobject.stanton2`, `stanton2_l5`, etc.
+  // Also try without the `starmapobject.` prefix.
+  const refVariants = [
+    canonicalSlug,
+    `starmapobject.${canonicalSlug.replace(/^starmapobject\./, "")}`,
+    canonicalSlug.replace(/-/g, "_"),
+    canonicalSlug.replace(/-/g, "_").replace(/^starmapobject\./, ""),
+  ];
+
+  const placeholders = refVariants.map(() => "?").join(",");
+  const { results: primary } = await db
+    .prepare(
+      `SELECT m.id,
+         COALESCE(m.title, m.name) AS title,
+         m.mission_giver AS giver_name,
+         COALESCE(m.category, m.mission_type) AS category,
+         CASE WHEN m.is_dynamic_reward = 1 THEN NULL
+              ELSE COALESCE(NULLIF(m.reward_amount, 0), m.reward_min, 0)
+         END AS reward_amount,
+         COALESCE(m.is_dynamic_reward, 0) AS is_dynamic_reward,
+         0 AS likely
+       FROM missions m
+       WHERE m.location_ref IN (${placeholders})
+         AND COALESCE(m.not_for_release, 0) = 0
+       ORDER BY reward_amount DESC
+       LIMIT 100`,
+    )
+    .bind(...refVariants)
+    .all();
+
+  // Fallback: only rows NOT already matched by location_ref
+  const primaryIds = new Set((primary as any[]).map((m) => m.id));
+  const { results: fallback } = await db
+    .prepare(
+      `SELECT m.id,
+         COALESCE(m.title, m.name) AS title,
+         m.mission_giver AS giver_name,
+         COALESCE(m.category, m.mission_type) AS category,
+         CASE WHEN m.is_dynamic_reward = 1 THEN NULL
+              ELSE COALESCE(NULLIF(m.reward_amount, 0), m.reward_min, 0)
+         END AS reward_amount,
+         COALESCE(m.is_dynamic_reward, 0) AS is_dynamic_reward,
+         1 AS likely
+       FROM missions m
+       WHERE m.locality = ?
+         AND m.location_ref IS NULL
+         AND COALESCE(m.not_for_release, 0) = 0
+       ORDER BY reward_amount DESC
+       LIMIT 100`,
+    )
+    .bind(locationName)
+    .all();
+
+  const out: POIMissionSummary[] = [];
+  for (const m of primary as any[]) {
+    out.push({
+      id: m.id,
+      title: m.title,
+      giver_name: m.giver_name,
+      category: m.category,
+      reward_amount: m.reward_amount,
+      is_dynamic_reward: m.is_dynamic_reward,
+      likely: false,
+    });
+  }
+  for (const m of fallback as any[]) {
+    if (!primaryIds.has(m.id)) {
+      out.push({
+        id: m.id,
+        title: m.title,
+        giver_name: m.giver_name,
+        category: m.category,
+        reward_amount: m.reward_amount,
+        is_dynamic_reward: m.is_dynamic_reward,
+        likely: true,
+      });
+    }
+  }
+  return out;
+}
+
+/**
+ * Sibling POIs under the same parent. Capped at 12, sorted with
+ * shop-having rows first so the list is always useful.
+ */
+async function getPOISiblings(
+  db: D1Database,
+  parentUuid: string | null,
+  selfId: number,
+): Promise<{ siblings: POISibling[]; truncated: boolean }> {
+  if (!parentUuid) {
+    return { siblings: [], truncated: false };
+  }
+  const { results } = await db
+    .prepare(
+      `SELECT sml.id, sml.slug, sml.name, sml.location_type,
+         EXISTS(
+           SELECT 1 FROM shops s WHERE s.location_label = sml.name LIMIT 1
+         ) AS has_activity
+       FROM star_map_locations sml
+       WHERE sml.parent_uuid = ?
+         AND sml.id != ?
+       ORDER BY has_activity DESC, sml.name ASC
+       LIMIT 13`,
+    )
+    .bind(parentUuid, selfId)
+    .all();
+
+  const rows = results as any[];
+  const truncated = rows.length > 12;
+  return {
+    siblings: rows.slice(0, 12).map((r) => ({
+      id: r.id,
+      slug: r.slug,
+      name: r.name,
+      location_type: r.location_type ?? "unknown",
+      has_activity: !!r.has_activity,
+    })),
+    truncated,
+  };
+}
+
+/**
+ * Orchestrator — runs the six subqueries and packages them into per-section
+ * envelopes. Caller (route handler) decides between 404 (null location) and
+ * rendering the empty-state shell (location + empty section arrays).
+ */
+export async function getPOIDetail(
+  db: D1Database,
+  inputSlug: string,
+  resolved: { canonical: string; container: string | null },
+): Promise<POIDetail | null> {
+  // 1. Resolve the location row. Try canonical first, then fallback to input
+  //    (for slugs that are already canonical and weren't mapped).
+  let row = await getPOILocationRow(db, resolved.canonical);
+  if (!row && resolved.canonical !== inputSlug) {
+    row = await getPOILocationRow(db, inputSlug);
+  }
+  if (!row) return null;
+
+  // 2. Kick off subqueries in parallel. Each catches its own errors and
+  //    reports `partial: true` rather than failing the whole page.
+  const containerSlugForLoot = resolved.container ?? inputSlug;
+
+  const [hierarchyR, shopsR, lootR, missionsR, siblingsR] = await Promise.all([
+    getPOIHierarchy(db, row.parent_uuid).catch(() => [] as Array<{ slug: string; name: string }>),
+    getPOIShops(db, row.name).catch(() => null),
+    getPOILootPools(db, containerSlugForLoot).catch(() => null),
+    getPOIMissions(db, row.slug, row.name).catch(() => null),
+    getPOISiblings(db, row.parent_uuid, row.id).catch(() => null),
+  ]);
+
+  const shops: POISectionEnvelope<POIShopSummary> = shopsR
+    ? { data: shopsR, count: shopsR.length, partial: false }
+    : { data: [], count: 0, partial: true, note: "Shop enrichment unavailable — retry shortly" };
+
+  const lootPools: POISectionEnvelope<POILootPool> = lootR
+    ? { data: lootR, count: lootR.length, partial: false }
+    : { data: [], count: 0, partial: true, note: "Loot pool unavailable — retry shortly" };
+
+  const missions: POISectionEnvelope<POIMissionSummary> = missionsR
+    ? { data: missionsR, count: missionsR.length, partial: false }
+    : { data: [], count: 0, partial: true, note: "Mission data unavailable — retry shortly" };
+
+  // NPC faction section is stubbed — current data has no reliable POI→NPC
+  // mapping (spawn_locations is descriptive text, not POI slugs). Render as
+  // partial with an explicit note until the ingest pipeline adds indexable
+  // spawn coordinates. Tracked as a follow-up.
+  const npcFactions: POISectionEnvelope<{ id: number; name: string; loadout_count: number }> = {
+    data: [],
+    count: 0,
+    partial: true,
+    note: "NPC spawn data not yet indexed by POI",
+  };
+
+  const sibs = siblingsR ?? { siblings: [], truncated: false };
+
+  return {
+    location: {
+      slug: inputSlug,
+      canonical_slug: row.slug,
+      name: row.name,
+      type: row.location_type ?? "unknown",
+      hierarchy: hierarchyR,
+      description: row.description,
+    },
+    shops,
+    loot_pools: lootPools,
+    missions,
+    npc_factions: npcFactions,
+    siblings: {
+      data: sibs.siblings,
+      count: sibs.siblings.length,
+      partial: !siblingsR,
+      truncated: sibs.truncated,
+    },
+  };
+}

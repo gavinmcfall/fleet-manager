@@ -1,8 +1,8 @@
-import React, { useMemo, useState } from 'react'
-import { useParams, Link, useSearchParams } from 'react-router-dom'
+import React, { useEffect, useMemo, useState } from 'react'
+import { useParams, Link, useSearchParams, useNavigate } from 'react-router-dom'
 import { MapPin, ArrowLeft, Store, ChevronDown, ChevronRight } from 'lucide-react'
-import { useLootLocationDetail, useLocationShops } from '../hooks/useAPI'
-import { friendlyLocation, friendlyFaction, getLocationGroup, LOCATION_SLUG_MAP } from '../lib/lootLocations'
+import { useLootLocationDetail, usePOI } from '../hooks/useAPI'
+import { friendlyFaction } from '../lib/lootLocations'
 import { friendlyShopName } from '../lib/shopNames'
 import PageHeader from '../components/PageHeader'
 import LoadingState from '../components/LoadingState'
@@ -13,20 +13,16 @@ import {
   RARITY_STYLES, CATEGORY_LABELS, CATEGORY_BADGE_STYLES, CATEGORY_ORDER,
 } from '../lib/lootDisplay'
 
-// ── Location group badges ──────────────────────────────────────────────────
-const GROUP_LABELS = {
-  named:     'Named Location',
-  cave:      'Cave',
-  outpost:   'Outpost',
-  dc:        'Distribution Centre',
-  facility:  'Facility',
-  contested: 'Contested Zone',
-  station:   'Station',
-  derelict:  'Derelict',
-  generic:   'Generic',
-}
+import POIHeader from './POI/POIHeader'
+import POIShops from './POI/POIShops'
+import POILootPool from './POI/POILootPool'
+import POIMissions from './POI/POIMissions'
+import POINPCs from './POI/POINPCs'
+import POISiblings from './POI/POISiblings'
 
-// ── Shop type badges ─────────────────────────────────────────────────────────
+// ── Legacy shop-type badges (used by the /poi/shop/:slug + /poi/npc/:slug
+// sub-views — not the new POI page). Keep for back-compat while those
+// drill-down routes still exist.
 const SHOP_TYPE_STYLES = {
   admin:    'bg-blue-500/10 text-blue-400 border-blue-500/30',
   weapon:   'bg-red-500/10 text-red-400 border-red-500/30',
@@ -37,62 +33,12 @@ const SHOP_TYPE_STYLES = {
   default:  'bg-gray-500/10 text-gray-400 border-gray-500/30',
 }
 
-function ShopCard({ shop }) {
-  const [expanded, setExpanded] = useState(false)
-  const typeStyle = SHOP_TYPE_STYLES[shop.shop_type] || SHOP_TYPE_STYLES.default
-  const displayName = shop.displayName || shop.name
-
-  return (
-    <div className="border border-sc-border rounded-lg overflow-hidden">
-      <button
-        onClick={() => setExpanded(!expanded)}
-        className="w-full flex items-center gap-3 px-3 py-2.5 hover:bg-white/3 transition-colors text-left"
-      >
-        <Store className="w-3.5 h-3.5 text-gray-500 shrink-0" />
-        <span className="text-xs text-gray-200 flex-1 min-w-0 truncate">{displayName}</span>
-        {shop.shop_type && (
-          <span className={`text-[10px] font-display uppercase px-1.5 py-0.5 rounded border shrink-0 ${typeStyle}`}>
-            {shop.shop_type}
-          </span>
-        )}
-        <span className="text-[10px] font-mono text-gray-500 shrink-0">{shop.items.length} items</span>
-        {expanded
-          ? <ChevronDown className="w-3.5 h-3.5 text-gray-500 shrink-0" />
-          : <ChevronRight className="w-3.5 h-3.5 text-gray-500 shrink-0" />}
-      </button>
-      {expanded && shop.items.length > 0 && (
-        <div className="border-t border-sc-border">
-          <table className="w-full text-xs">
-            <thead>
-              <tr className="text-[10px] font-display uppercase tracking-wide text-gray-500 border-b border-sc-border">
-                <th className="text-left px-3 py-1.5">Item</th>
-                <th className="text-right px-3 py-1.5 w-20">Buy</th>
-                <th className="text-right px-3 py-1.5 w-20">Sell</th>
-              </tr>
-            </thead>
-            <tbody>
-              {shop.items.map((item, i) => (
-                <tr key={item.item_uuid || i} className="border-b border-sc-border/50 hover:bg-white/3">
-                  <td className="px-3 py-1.5 text-gray-300">{item.resolved_name || item.item_name}</td>
-                  <td className="px-3 py-1.5 text-right font-mono text-gray-400">
-                    {item.buy_price != null ? `${Math.round(item.buy_price).toLocaleString()}` : '—'}
-                  </td>
-                  <td className="px-3 py-1.5 text-right font-mono text-gray-400">
-                    {item.sell_price != null ? `${Math.round(item.sell_price).toLocaleString()}` : '—'}
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
-      )}
-    </div>
-  )
-}
-
-// ── Detail page ────────────────────────────────────────────────────────────
-export default function POIDetail() {
-  const { type, slug } = useParams()
+// ── Shop / NPC drill-down (legacy) ────────────────────────────────────────
+// The new POI page handles the default /poi/:slug route via <POIPage/> below.
+// Shop + NPC sub-pages use the old flat-item list (nothing has changed for
+// those — they drill from a POI into a specific shop/faction and want the
+// flat view).
+function LegacyShopOrNPCDetail({ apiType, decodedSlug }) {
   const [searchParams, setSearchParams] = useSearchParams()
   const search = searchParams.get('q') || ''
   const activeCategory = searchParams.get('cat') || 'all'
@@ -107,32 +53,15 @@ export default function POIDetail() {
     return prev
   }, { replace: true })
 
-  // Resolve the API type param from the URL structure
-  // /poi/:slug → container, /poi/shop/:slug → shop, /poi/npc/:slug → npc
-  const apiType = type === 'shop' ? 'shop' : type === 'npc' ? 'npc' : 'container'
-  const decodedSlug = slug ? decodeURIComponent(slug) : ''
-
   const { data, loading, error, refetch } = useLootLocationDetail(apiType, decodedSlug)
   const items = data?.items || []
 
-  // Shop data bridge: map container slug → star_map_locations slug
-  const locationSlug = apiType === 'container' ? LOCATION_SLUG_MAP[decodedSlug] : null
-  const { data: shopData } = useLocationShops(locationSlug)
-
-  // Resolve display names
   const locationName = apiType === 'shop'
     ? friendlyShopName(decodedSlug)
-    : apiType === 'npc'
-    ? friendlyFaction(decodedSlug)
-    : friendlyLocation(decodedSlug)
+    : friendlyFaction(decodedSlug)
 
-  const groupBadge = apiType === 'shop'
-    ? 'Shop'
-    : apiType === 'npc'
-    ? 'NPC Faction'
-    : GROUP_LABELS[getLocationGroup(decodedSlug)] || getLocationGroup(decodedSlug)
+  const groupBadge = apiType === 'shop' ? 'Shop' : 'NPC Faction'
 
-  // Group items by category
   const categorizedItems = useMemo(() => {
     let filtered = items
     if (search.trim()) {
@@ -146,27 +75,21 @@ export default function POIDetail() {
     if (activeCategory !== 'all') {
       filtered = filtered.filter(i => i.category === activeCategory)
     }
-
     const groups = new Map()
     for (const item of filtered) {
       const cat = item.category || 'unknown'
       if (!groups.has(cat)) groups.set(cat, [])
       groups.get(cat).push(item)
     }
-
-    // Sort groups by category order, items by name within each group
     const sorted = [...groups.entries()].sort(([a], [b]) => {
       const ai = CATEGORY_ORDER.indexOf(a)
       const bi = CATEGORY_ORDER.indexOf(b)
       return (ai === -1 ? 99 : ai) - (bi === -1 ? 99 : bi)
     })
-    for (const [, catItems] of sorted) {
-      catItems.sort((a, b) => a.name.localeCompare(b.name))
-    }
+    for (const [, catItems] of sorted) catItems.sort((a, b) => a.name.localeCompare(b.name))
     return sorted
   }, [items, search, activeCategory])
 
-  // Category counts for filter chips
   const categoryCounts = useMemo(() => {
     const counts = { all: items.length }
     for (const item of items) {
@@ -178,10 +101,9 @@ export default function POIDetail() {
 
   const filteredCount = categorizedItems.reduce((sum, [, catItems]) => sum + catItems.length, 0)
 
-  if (loading) return <LoadingState message="Loading location..." />
+  if (loading) return <LoadingState message="Loading..." />
   if (error) return <ErrorState message={error} onRetry={refetch} />
-
-  if (!slug || items.length === 0) {
+  if (items.length === 0) {
     return (
       <div className="space-y-4 animate-fade-in-up">
         <Link to="/poi" className="inline-flex items-center gap-1.5 text-xs text-gray-400 hover:text-gray-200 transition-colors">
@@ -189,7 +111,7 @@ export default function POIDetail() {
           Back to Locations
         </Link>
         <EmptyState
-          message={`No items found for this location.`}
+          message="No items found for this location."
           icon={MapPin}
           large
           actionLink={{ to: '/poi', label: 'Browse all locations' }}
@@ -207,7 +129,7 @@ export default function POIDetail() {
 
       <PageHeader
         title={locationName}
-        subtitle={`${items.length} ${items.length === 1 ? 'item' : 'items'} can spawn here (containers + NPCs)`}
+        subtitle={`${items.length} ${items.length === 1 ? 'item' : 'items'} available`}
         actions={
           <span className="text-[10px] font-display uppercase tracking-wide px-2 py-1 rounded bg-sc-accent/10 text-sc-accent border border-sc-accent/30">
             {groupBadge}
@@ -215,28 +137,8 @@ export default function POIDetail() {
         }
       />
 
-      {/* Shop section — only for locations with mapped shops */}
-      {shopData?.shops?.length > 0 && (
-        <div className="space-y-2">
-          <h3 className="text-[10px] font-display uppercase tracking-widest text-gray-500 pl-1">
-            Shops at this location ({shopData.shops.length})
-          </h3>
-          <div className="space-y-2">
-            {shopData.shops.map(shop => (
-              <ShopCard key={shop.id} shop={shop} />
-            ))}
-          </div>
-        </div>
-      )}
+      <SearchInput value={search} onChange={setSearch} placeholder="Search items..." className="max-w-md" />
 
-      <SearchInput
-        value={search}
-        onChange={setSearch}
-        placeholder="Search items at this location..."
-        className="max-w-md"
-      />
-
-      {/* Category filter chips */}
       <div className="flex flex-wrap gap-1.5">
         <button
           onClick={() => setActiveCategory('all')}
@@ -265,7 +167,6 @@ export default function POIDetail() {
 
       <span className="text-xs font-mono text-gray-500">{filteredCount} results</span>
 
-      {/* Items grouped by category */}
       <div className="space-y-6">
         {categorizedItems.map(([category, catItems]) => (
           <div key={category}>
@@ -288,16 +189,11 @@ export default function POIDetail() {
                   {item.sub_type && (
                     <span className="text-[10px] font-mono text-gray-500 shrink-0">{item.sub_type}</span>
                   )}
-                  {item.rarity && (
+                  {item.rarity && item.rarity !== 'N/A' && (
                     <span className={`text-[10px] font-mono px-1.5 py-0.5 rounded border shrink-0 ${
                       (RARITY_STYLES[item.rarity] || RARITY_STYLES.Common).badge
                     }`}>
                       {item.rarity}
-                    </span>
-                  )}
-                  {item.perContainer != null && (
-                    <span className="text-[10px] font-mono text-gray-600 shrink-0">
-                      {(item.perContainer * 100).toFixed(1)}%
                     </span>
                   )}
                   {item.buyPrice != null && (
@@ -318,4 +214,92 @@ export default function POIDetail() {
       </div>
     </div>
   )
+}
+
+// ── New POI page (location-centric) ───────────────────────────────────────
+function POIPage({ slug }) {
+  const navigate = useNavigate()
+  const { data, loading, error, refetch } = usePOI(slug)
+
+  // Swap URL in place if user arrived via an alias slug (e.g. /poi/FloatingIslands
+  // → canonical /poi/stanton2-orison). Uses replaceState rather than a 301 so
+  // the originally-shared URL stays valid.
+  useEffect(() => {
+    if (!data?.location) return
+    const { canonical_slug } = data.location
+    if (canonical_slug && canonical_slug !== slug) {
+      navigate(`/poi/${encodeURIComponent(canonical_slug)}`, { replace: true })
+    }
+  }, [data, slug, navigate])
+
+  if (loading) return <LoadingState message="Loading location..." />
+  if (error) return <ErrorState message={error} onRetry={refetch} />
+  if (!data || !data.location) {
+    return (
+      <div className="space-y-4 animate-fade-in-up">
+        <Link to="/poi" className="inline-flex items-center gap-1.5 text-xs text-gray-400 hover:text-gray-200 transition-colors">
+          <ArrowLeft className="w-3.5 h-3.5" />
+          Back to Locations
+        </Link>
+        <EmptyState
+          message="This location couldn't be found."
+          icon={MapPin}
+          large
+          actionLink={{ to: '/poi', label: 'Browse all locations' }}
+        />
+      </div>
+    )
+  }
+
+  const { location, shops, loot_pools, missions, npc_factions, siblings } = data
+  const parentSlug = (location.hierarchy || [])[0]?.slug || null
+
+  const totallyEmpty =
+    shops.count === 0 && loot_pools.count === 0 && missions.count === 0
+  return (
+    <div className="space-y-6 animate-fade-in-up">
+      <Link to="/poi" className="inline-flex items-center gap-1.5 text-xs text-gray-400 hover:text-gray-200 transition-colors">
+        <ArrowLeft className="w-3.5 h-3.5" />
+        Back to Locations
+      </Link>
+      <POIHeader location={location} />
+      {totallyEmpty ? (
+        <div className="p-8 border border-sc-border/50 rounded text-center space-y-2">
+          <p className="text-sm text-gray-400">No known activity at this location yet.</p>
+          <p className="text-xs text-gray-600">
+            Shops, loot spawns, and missions for this POI haven't been catalogued.{' '}
+            <a
+              href="https://github.com/SC-Bridge/sc-bridge/issues/new?title=Missing%20POI%20data"
+              target="_blank"
+              rel="noreferrer"
+              className="text-sc-accent hover:underline"
+            >
+              Report missing data
+            </a>
+          </p>
+        </div>
+      ) : (
+        <>
+          <POIShops envelope={shops} />
+          <POILootPool envelope={loot_pools} />
+          <POIMissions envelope={missions} />
+          <POINPCs envelope={npc_factions} />
+        </>
+      )}
+      <POISiblings envelope={siblings} parentSlug={parentSlug} />
+    </div>
+  )
+}
+
+// ── Route dispatcher ──────────────────────────────────────────────────────
+export default function POIDetail() {
+  const { type, slug } = useParams()
+  const decodedSlug = slug ? decodeURIComponent(slug) : ''
+  // /poi/:slug          → new POI page (location-centric)
+  // /poi/shop/:slug     → legacy shop-item list
+  // /poi/npc/:slug      → legacy NPC-faction-item list
+  if (type === 'shop' || type === 'npc') {
+    return <LegacyShopOrNPCDetail apiType={type} decodedSlug={decodedSlug} />
+  }
+  return <POIPage slug={decodedSlug} />
 }
