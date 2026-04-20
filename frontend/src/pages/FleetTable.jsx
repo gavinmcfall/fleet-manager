@@ -211,10 +211,14 @@ export default function FleetTable() {
 
   const toggleSort = (key) => {
     setSearchParams(prev => {
+      // Always set `sort` explicitly so ?dir=desc alone on the URL is never
+      // ambiguous. Fixes F238 — Ship column click used to update `dir` only
+      // because the default sort key matched, breaking URL fidelity for deep
+      // links shared in that state.
+      prev.set('sort', key)
       if (sortKey === key) {
         prev.set('dir', sortDir === 'asc' ? 'desc' : 'asc')
       } else {
-        prev.set('sort', key)
         prev.set('dir', 'asc')
       }
       return prev

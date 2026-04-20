@@ -202,9 +202,19 @@ export default function Insights() {
         )}
       </div>
 
-      {/* Redundancies */}
+      {/* Redundancies — uses the granular `focus` field, NOT the broad
+          role groups above. A Gladius and Perseus are both "Combat"
+          (Role Categories) but "Light Fighter" vs "Heavy Gunship" here.
+          Labelling distinguishes the two taxonomies. (F236) */}
       <div>
-        <h3 className="font-display font-semibold text-sm uppercase tracking-widest text-gray-400 mb-3">Redundancies</h3>
+        <div className="mb-3">
+          <h3 className="font-display font-semibold text-sm uppercase tracking-widest text-gray-400">Role Redundancies</h3>
+          <p className="text-[11px] text-gray-500 mt-0.5">
+            Ships sharing the same granular focus (e.g. "Light Fighter"). More specific than
+            the broad "Role Categories" above — two ships in one category isn't redundancy
+            if they do different jobs, but two "Light Fighters" is.
+          </p>
+        </div>
         {redundancies.length === 0 ? (
           <EmptyState message="No excessive redundancies detected. Your fleet has good role diversity." />
         ) : (

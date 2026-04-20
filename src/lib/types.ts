@@ -3,12 +3,19 @@ import { HTTPException } from "hono/http-exception";
 
 // --- Cloudflare Bindings ---
 
+// Workers Rate Limiting API binding shape.
+export interface RateLimiter {
+  limit(args: { key: string }): Promise<{ success: boolean }>;
+}
+
 export interface Env {
   DB: D1Database;
   ASSETS: Fetcher;
   AVATARS: R2Bucket;
   SC_BRIDGE_CACHE: KVNamespace;
   LOCALIZATION_KV: KVNamespace;
+  // F294 — defense-in-depth rate limit on public ops join-code enumeration.
+  JOIN_RATE_LIMIT?: RateLimiter;
   RSI_API_ENABLED: string;
   RSI_BASE_URL: string;
   RSI_RATE_LIMIT: string;

@@ -1003,15 +1003,9 @@ export function opsRoutes() {
 export function publicOpsRoutes() {
   const routes = new Hono<HonoEnv>();
 
-  // TODO F294: add Cloudflare WAF rate-limit rule on /api/ops/join/* —
-  // currently unlimited, which allows enumeration of valid join codes
-  // (authenticated users can distinguish 200 from 404). In-app rate
-  // limiting in a Worker isolate is weak (state is per-isolate); the
-  // proper gate lives in CF Dashboard → WAF → Rate limiting rules:
-  //   Path: /api/ops/join/*
-  //   Threshold: 30 requests / 1 minute per IP
-  //   Action: Block with 429
-  // Matches the /api/auth/* rate limit already in production (3 req/10s).
+  // F294 — rate-limit enumeration of ops join codes. Uses Workers Rate
+  // Limiting binding (durable across isolates, 30 req/min per IP).
+  // A Cloudflare WAF rule at the zone level can still be layered on top.
 
   // GET /api/ops/join/:code — op summary for join page
   // F292: allow anonymous preview (Discord-share use case). Authenticated
@@ -1021,6 +1015,17 @@ export function publicOpsRoutes() {
   routes.get("/join/:code", async (c) => {
     const code = c.req.param("code").toUpperCase();
     const db = c.env.DB;
+
+    if (c.env.JOIN_RATE_LIMIT) {
+      const ip =
+        c.req.header("cf-connecting-ip") ||
+        c.req.header("x-forwarded-for") ||
+        "unknown";
+      const rl = await c.env.JOIN_RATE_LIMIT.limit({ key: ip });
+      if (!rl.success) {
+        return c.json({ error: "Too many requests" }, 429);
+      }
+    }
 
     const op = await db
       .prepare(

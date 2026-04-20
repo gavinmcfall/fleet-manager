@@ -87,6 +87,15 @@ enabled = true
 destinations = ["grafana-traces", "newrelic-traces"]
 head_sampling_rate = 1.0
 
+# F294 — rate limit on public ops join-code enumeration. Workers Rate
+# Limiting API: 30 requests / 1 minute per key (IP). Defense in depth
+# alongside any future Cloudflare WAF rule at the zone level.
+[[env.production.unsafe.bindings]]
+name = "JOIN_RATE_LIMIT"
+type = "ratelimit"
+namespace_id = "1294"
+simple = { limit = 30, period = 60 }
+
 # ── Staging Environment ──
 [env.staging]
 name = "scbridge-staging"
@@ -132,3 +141,10 @@ RSI_RATE_LIMIT = "1.0"
 [env.staging.observability]
 logs = { enabled = true, invocation_logs = true, head_sampling_rate = 1.0, destinations = ["newrelic-logs-staging"] }
 traces = { enabled = true, head_sampling_rate = 1.0, destinations = ["newrelic-traces-staging"] }
+
+# F294 — rate limit on public ops join-code enumeration (staging mirrors prod).
+[[env.staging.unsafe.bindings]]
+name = "JOIN_RATE_LIMIT"
+type = "ratelimit"
+namespace_id = "1294"
+simple = { limit = 30, period = 60 }
