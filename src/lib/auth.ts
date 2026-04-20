@@ -70,6 +70,11 @@ export function createAuth(env: Env) {
         verify: ({ password, hash }) => verifyPassword(password, hash),
       },
       sendResetPassword: async ({ user, url }) => {
+        // Staging-only: log the verification URL so QA flows can extract it
+        // without a mailbox. Never enabled in production.
+        if (env.ENVIRONMENT && env.ENVIRONMENT !== "production") {
+          console.log(`[auth:qa] reset-password URL for ${user.email}: ${url}`);
+        }
         await sendEmail(
           env,
           user.email,
@@ -87,6 +92,10 @@ export function createAuth(env: Env) {
       sendOnSignUp: true,
       autoSignInAfterVerification: true,
       sendVerificationEmail: async ({ user, url }) => {
+        // Staging-only: log the verification URL for QA flows. Never in prod.
+        if (env.ENVIRONMENT && env.ENVIRONMENT !== "production") {
+          console.log(`[auth:qa] verify-email URL for ${user.email}: ${url}`);
+        }
         const isEmailChange = user.emailVerified === true;
         if (isEmailChange) {
           await sendEmail(
