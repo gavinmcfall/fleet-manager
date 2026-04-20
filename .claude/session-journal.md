@@ -1,7 +1,58 @@
 # Session Journal
 
 ## Current Focus
-**PHASE A LOAD-ORDER PLAN WRITTEN. Ready to execute 2026-04-14+ when Gavin resumes.**
+**Post-sweep backlog — Phases B + C + D done. qa-20260420 Tier A+B+C done. Pipeline gaps F300 + F302 shipped. F502 needs pipeline reload. G (verification) + H (untested coverage U1–U12) remain before Phase I prod promotion.**
+
+### 2026-04-20 — Pipeline gap cleanup (post qa-20260420 Tier B/C)
+
+Commit `97e8f70` on `feat+staging`:
+- **F300** — regex-strip `~serviceBeacon(...)` / `~mission(...)` / `~item(...)` runtime templates from `/api/gamedata/missions` descriptions at the API layer. Every consumer gets clean text, not just frontend.
+- **F302** — `humanizeRawDisplayName()` helper in `frontend/src/lib/lootDisplay.js`. Title-cases raw snake_case names (battaglia_pants_01 → Battaglia Pants 01) for the ~115 CIG-unlocalized dev items. Applied at 7 render sites: `LootDB/{ItemCard,DetailPanel,FullItemDetail,InlineExpand,WishlistRow,CompareDrawer,CompareTable,index}.jsx` + `POI/POILootPool.jsx`. DB value stays raw as identity.
+
+Tests: backend 251/251 + frontend 142/142 green. Pushed to staging.
+
+**F502** left pending — short-term amber banner shipped earlier. Proper fix is extractor change to populate `equipped_item_uuid` on default ports for 140 Gladius-class ships. Blocked on next staging wipe+reload cycle.
+
+
+### 2026-04-19 — Phases B/C/D swept after forced compact
+
+Resumed the curious-popping-toucan plan and grinded Phase B → C → D autonomously on `feat/cf-account-migration`, pushing each batch to `staging`:
+
+**Commits landed this session:**
+| SHA | Branch | Contents |
+|---|---|---|
+| `98f76ad` | feat+staging | Phase B — org UX + Ops confirms + anon join preview (F249, F258, F248 null-safe, F289, F290, F291, F292, F212/253/263/297 dedup, F294 TODO) |
+| `75dd4d9` | feat+staging | Phase C1 — UX consistency + a11y (F111, F202, F203, F226, F237, F246/247, F257) |
+| `5cbb6f4` | feat+staging | Phase C2 — insights aggregation + UX clarity (F227/235 dedupe, F240 grouping, F243 scroll-to, F250 title) |
+| `933f904` | feat+staging | Phase C3 — polish + admin UEX + sessions UA + careers count (F135, F209, F211, F279, F288) |
+| `394f07a` | feat+staging | Phase D — admin remnants (F271, F272, F276, F277, F278) |
+| `0c76159` | feat+staging | F255 — close org-slug timing side-channel via merged LEFT JOIN |
+
+Every commit ran backend 244/244 + frontend 142/142 green. Characters.ts stash workaround still needed before each commit (pre-commit hook tsc).
+
+**Findings resolved this session (~30):** F111 F135 F202 F203 F209 F211 F212 F226 F227 F235 F237 F240 F243 F246 F247 F248 F249 F250 F253 F255 F257 F258 F263 F271 F272 F276 F277 F278 F279 F288 F289 F290 F291 F292 F294 F297
+
+**Skipped / not-reproducible (need live investigation):**
+- F118 POI human-slug — cascade change, risky without reload
+- F121 POI route entry — unclear UI surface
+- F221 — already resolved (row click navigates to /ships/slug)
+- F236 role-category mismatch — needs scale repro
+- F238 URL fidelity — minor, bookmarked-URL risk
+- F259 OrgSettings visibility/RSI/invite UI — substantial feature build
+- F260 — non-issue (about tab reads main org payload)
+- F261 org back-link — not present in current OrgProfile
+- F262 nav highlight — NavLink default partial matching already works for /orgs
+- F286/287 FPS Loadout a11y — Phase E deferred post-v1.0
+- F293 — already resolved via ErrorState regex in Phase A
+- F295 leader/LEADER casing — no match in current code
+
+### Remaining work (per curious-popping-toucan plan)
+
+- **Phase G verification findings** — F124 F130 F134 F140 F214 need hands-on spot-checks with Gavin present
+- **Phase H untested coverage** — ALL of U1–U12 before prod promotion
+- **Phase I production promotion** — only after A–H all green
+
+**Current branch:** `feat/cf-account-migration` is 13 commits ahead of origin/feat/cf-account-migration — still not pushed to the feature branch itself, only to staging.
 
 2026-04-13 end-of-night — after the earlier milestones (gap closure, RSI poller extension, DNS zone import), the session closed with two extractor hardenings + Phase A runbook:
 

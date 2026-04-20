@@ -323,7 +323,17 @@ export function humanizeStandingSlug(slug) {
 
 /** Humanize comparison operator */
 export function humanizeComparison(cmp) {
-  const map = { gte: 'or higher', lte: 'or lower', gt: 'above', lt: 'below', eq: 'exactly' }
+  // DB stores CIG's long-form values (GreaterThanOrEqualTo, etc.);
+  // short aliases kept for backwards compatibility.
+  const map = {
+    GreaterThanOrEqualTo: 'or higher',
+    LessThanOrEqualTo: 'or lower',
+    GreaterThan: 'above',
+    LessThan: 'below',
+    EqualTo: 'exactly',
+    NotEqualTo: 'other than',
+    gte: 'or higher', lte: 'or lower', gt: 'above', lt: 'below', eq: 'exactly',
+  }
   return map[cmp] || cmp
 }
 

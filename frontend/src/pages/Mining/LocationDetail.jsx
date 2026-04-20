@@ -170,20 +170,33 @@ export default function LocationDetail() {
                 </thead>
                 <tbody>
                   {(() => {
+                    // Collapse rows by (displayName, tier) — CIG emits one deposit
+                    // row per spawn variant, which surfaces as "Ice / Aluminum /
+                    // Iron / ..." repeating 3× in the UI. Sum relative_probability
+                    // for collapsed entries so the rendered chance still reflects
+                    // overall draw weight within the group.
                     const totalWeight = group.deposits.reduce((sum, d) => sum + (d.relative_probability || 0), 0)
-                    return group.deposits.map((dep, i) => {
+                    const aggregated = new Map()
+                    for (const dep of group.deposits) {
                       const name = dep.composition_name || cleanDepositName(dep.composition_guid)
                       const tier = extractDepositTier(dep.composition_guid)
-                      const tierInfo = tier ? (ROCK_TIER_INFO[tier] || null) : null
-                      const normalizedPct = totalWeight > 0 ? (dep.relative_probability / totalWeight * 100) : 0
-
+                      const key = `${name}|${tier || ''}`
+                      if (!aggregated.has(key)) {
+                        aggregated.set(key, { name, tier, weight: 0 })
+                      }
+                      aggregated.get(key).weight += (dep.relative_probability || 0)
+                    }
+                    const rows = [...aggregated.values()].sort((a, b) => b.weight - a.weight)
+                    return rows.map((row, i) => {
+                      const tierInfo = row.tier ? (ROCK_TIER_INFO[row.tier] || null) : null
+                      const normalizedPct = totalWeight > 0 ? (row.weight / totalWeight * 100) : 0
                       return (
                         <tr key={i} className="border-b border-white/[0.04] last:border-0 hover:bg-white/[0.02]">
-                          <td className="px-4 py-2 text-xs text-gray-300">{name}</td>
+                          <td className="px-4 py-2 text-xs text-gray-300">{row.name}</td>
                           <td className="px-4 py-2">
                             {tierInfo ? (
                               <span className={`text-[10px] px-1.5 py-0.5 rounded ${tierInfo.bg} ${tierInfo.color} ${tierInfo.border} border`}>
-                                {tier}
+                                {row.tier}
                               </span>
                             ) : (
                               <span className="text-xs text-gray-600">—</span>

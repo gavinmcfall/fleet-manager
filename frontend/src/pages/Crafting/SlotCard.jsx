@@ -194,7 +194,9 @@ export default function SlotCard({ slot, index = 0, resourceLocations }) {
     >
       <div className="flex items-center justify-between">
         <div className="flex items-center gap-3">
-          <h4 className="text-sm font-semibold text-gray-200">{slot.name}</h4>
+          <h4 className="text-sm font-semibold text-gray-200">
+            {slot.name || `Slot ${index + 1}`}
+          </h4>
           {slot.min_quality > 0 && (
             <span className="text-xs font-mono px-1.5 py-0.5 rounded bg-amber-500/10 text-amber-400 border border-amber-500/20">
               min Q{slot.min_quality}
