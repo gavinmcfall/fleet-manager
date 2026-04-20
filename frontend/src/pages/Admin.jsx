@@ -532,19 +532,49 @@ export default function Admin() {
   const { data: syncHistory, loading, error, refetch } = useSyncStatus()
   const [triggering, setTriggering] = useState(null)
   const [triggerError, setTriggerError] = useState(null)
+  // Per-button last-run result: { id, data, at } — shows inline diff/summary
+  // after a manual trigger so QA can confirm what actually happened without
+  // waiting on the next sync_history refresh.
+  const [triggerResult, setTriggerResult] = useState(null)
   const [fullSyncConfirm, setFullSyncConfirm] = useState(false)
 
   const handleTrigger = async (id, triggerFn) => {
     setTriggering(id)
     setTriggerError(null)
+    setTriggerResult(null)
     try {
-      await triggerFn()
+      const data = await triggerFn()
+      setTriggerResult({ id, data, at: Date.now() })
       setTimeout(refetch, 2000)
     } catch (err) {
       setTriggerError(err.message)
     } finally {
       setTriggering(null)
     }
+  }
+
+  // Render a concise one-line summary of a trigger response. Shape varies
+  // by endpoint — format what we recognise, fall back to the key count.
+  const summarizeTriggerResult = (id, data) => {
+    if (!data || typeof data !== 'object') return 'done'
+    if (id === 'uex') {
+      const c = data.commodities ?? 0
+      const i = data.items ?? 0
+      const errs = Array.isArray(data.errors) ? data.errors.length : 0
+      return `${c} commodities · ${i} items${errs ? ` · ${errs} errors` : ''}`
+    }
+    if (id === 'rsi') {
+      const parts = []
+      if (typeof data.ships === 'number') parts.push(`${data.ships} ships`)
+      if (typeof data.paints === 'number') parts.push(`${data.paints} paints`)
+      return parts.length ? parts.join(' · ') : 'sync queued'
+    }
+    // Generic fallback — show the first 1-2 numeric keys
+    const numeric = Object.entries(data).filter(([, v]) => typeof v === 'number')
+    if (numeric.length > 0) {
+      return numeric.slice(0, 3).map(([k, v]) => `${v.toLocaleString()} ${k}`).join(' · ')
+    }
+    return 'done'
   }
 
   // Full Sync runs the entire RSI ship-matrix + image chain (expensive, slow,
@@ -611,22 +641,30 @@ export default function Admin() {
       {/* Manual Sync Triggers */}
       <PanelSection title="Sync Triggers" icon={RefreshCw}>
         <div className="p-4 grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
-          {syncActions.map(({ id, label, icon: Icon, trigger, description }) => (
-            <button
-              key={id}
-              onClick={() => handleTrigger(id, trigger)}
-              disabled={triggering !== null}
-              className="flex items-start gap-3 p-3 bg-sc-darker border border-sc-border rounded hover:border-sc-accent/40 transition-all text-left disabled:opacity-50"
-            >
-              <Icon className="w-4 h-4 text-sc-accent mt-0.5 shrink-0" />
-              <div>
-                <span className="text-sm font-medium text-white block">
-                  {triggering === id ? 'Triggering...' : label}
-                </span>
-                <span className="text-xs text-gray-500">{description}</span>
-              </div>
-            </button>
-          ))}
+          {syncActions.map(({ id, label, icon: Icon, trigger, description }) => {
+            const hasResult = triggerResult && triggerResult.id === id
+            return (
+              <button
+                key={id}
+                onClick={() => handleTrigger(id, trigger)}
+                disabled={triggering !== null}
+                className="flex items-start gap-3 p-3 bg-sc-darker border border-sc-border rounded hover:border-sc-accent/40 transition-all text-left disabled:opacity-50"
+              >
+                <Icon className="w-4 h-4 text-sc-accent mt-0.5 shrink-0" />
+                <div className="min-w-0 flex-1">
+                  <span className="text-sm font-medium text-white block">
+                    {triggering === id ? 'Triggering...' : label}
+                  </span>
+                  <span className="text-xs text-gray-500 block">{description}</span>
+                  {hasResult && (
+                    <span className="text-[11px] font-mono text-emerald-400/80 block mt-1 truncate">
+                      ✓ {summarizeTriggerResult(id, triggerResult.data)}
+                    </span>
+                  )}
+                </div>
+              </button>
+            )
+          })}
         </div>
       </PanelSection>
 
