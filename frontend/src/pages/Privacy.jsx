@@ -43,6 +43,7 @@ export default function Privacy() {
               <li><strong className="text-gray-300">OAuth providers</strong> (Google, GitHub, Discord, Twitch) — authentication only; we receive your basic profile info</li>
               <li><strong className="text-gray-300">AI providers</strong> (OpenAI, Anthropic, Google, etc.) — sanitized fleet data is sent via your own API key for analysis; we do not send your personal information</li>
               <li><strong className="text-gray-300">Cloudflare</strong> — hosting, CDN, and DNS; subject to Cloudflare's privacy policy</li>
+              <li><strong className="text-gray-300">Grafana Cloud &amp; New Relic</strong> — observability and application logs (tail-consumer forwarding from Cloudflare Workers Observability)</li>
               <li><strong className="text-gray-300">Resend</strong> — transactional email delivery (account verification, data exports)</li>
             </ul>
           </section>
@@ -53,7 +54,7 @@ export default function Privacy() {
               <li><strong className="text-gray-300">Sessions</strong> — automatically expire after 7 days</li>
               <li><strong className="text-gray-300">Fleet data</strong> — retained until you re-import (replaces all) or delete your account</li>
               <li><strong className="text-gray-300">AI analyses</strong> — retained until you delete them or delete your account</li>
-              <li><strong className="text-gray-300">Application logs</strong> — handled by Cloudflare Workers Observability; subject to Cloudflare retention policies</li>
+              <li><strong className="text-gray-300">Application logs</strong> — subject to Cloudflare, Grafana Cloud, and New Relic retention policies</li>
             </ul>
           </section>
 
