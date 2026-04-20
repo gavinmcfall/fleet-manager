@@ -174,6 +174,23 @@ describe("POI detail — /api/gamedata/poi/:slug", () => {
     });
   });
 
+  describe("fuzzy slug (F118)", () => {
+    it("resolves mixed-case input via case-insensitive match", async () => {
+      const res = await SELF.fetch("http://localhost/api/gamedata/poi/Stanton2-Orison");
+      expect(res.status).toBe(200);
+      const data = (await res.json()) as any;
+      expect(data.location.canonical_slug).toBe("stanton2-orison");
+    });
+
+    it("resolves normalized slug via stripped-non-alphanum match", async () => {
+      // "orison" matches "stanton2-orison" via suffix-normalized lookup
+      const res = await SELF.fetch("http://localhost/api/gamedata/poi/orison");
+      expect(res.status).toBe(200);
+      const data = (await res.json()) as any;
+      expect(data.location.canonical_slug).toBe("stanton2-orison");
+    });
+  });
+
   describe("empty-state POI", () => {
     it("renders location + zero-count sections rather than 404ing", async () => {
       const res = await SELF.fetch("http://localhost/api/gamedata/poi/ghost-station");

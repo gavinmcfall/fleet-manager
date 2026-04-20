@@ -2207,10 +2207,7 @@ export interface POIDetail {
  * Look up a location row by canonical slug. Returns null when the slug
  * doesn't resolve — caller should 404.
  */
-async function getPOILocationRow(
-  db: D1Database,
-  canonicalSlug: string,
-): Promise<{
+type POILocationRow = {
   id: number;
   uuid: string;
   slug: string;
@@ -2218,7 +2215,12 @@ async function getPOILocationRow(
   location_type: string;
   parent_uuid: string | null;
   description: string | null;
-} | null> {
+};
+
+async function getPOILocationRow(
+  db: D1Database,
+  canonicalSlug: string,
+): Promise<POILocationRow | null> {
   return (await db
     .prepare(
       `SELECT id, uuid, slug, name, location_type, parent_uuid, description
@@ -2227,7 +2229,78 @@ async function getPOILocationRow(
        LIMIT 1`,
     )
     .bind(canonicalSlug)
-    .first()) as any;
+    .first()) as POILocationRow | null;
+}
+
+/**
+ * Smart slug resolution for /poi/:slug. Handles:
+ *  - exact match (canonical slug)
+ *  - case-insensitive match (user typed `/poi/Orison` vs `orison`)
+ *  - normalized match (strip non-alphanumeric → match against stripped slug
+ *    or stripped name). Closes F118: users typing `/poi/rock-cracker`
+ *    resolve to the canonical star_map_locations.slug even when it's
+ *    fully-qualified (`asteroidclusterbase-nyx-rockcracker`).
+ *
+ * Does NOT handle loot-container slugs that aren't real locations (like
+ * `Kaboos`, `Loot_HighTech`) — those are loot archetype names, not POIs.
+ * For those, the caller (LOCATION_SLUG_MAP) keeps the manual mapping.
+ */
+async function resolvePOILocationFuzzy(
+  db: D1Database,
+  inputSlug: string,
+): Promise<POILocationRow | null> {
+  // 1. exact
+  let row = await getPOILocationRow(db, inputSlug);
+  if (row) return row;
+
+  // 2. case-insensitive exact
+  const lower = inputSlug.toLowerCase();
+  row = (await db
+    .prepare(
+      `SELECT id, uuid, slug, name, location_type, parent_uuid, description
+       FROM star_map_locations
+       WHERE LOWER(slug) = ?
+       LIMIT 1`,
+    )
+    .bind(lower)
+    .first()) as POILocationRow | null;
+  if (row) return row;
+
+  // 3. normalized match — strip non-alphanumeric, lowercase. Compares
+  //    against both the stripped slug and the stripped name, so
+  //    "rock-cracker" matches the location whose name is "Rock Cracker"
+  //    or whose slug is "asteroidclusterbase-nyx-rockcracker".
+  const normalized = inputSlug.toLowerCase().replace(/[^a-z0-9]/g, "");
+  if (!normalized) return null;
+
+  row = (await db
+    .prepare(
+      `SELECT id, uuid, slug, name, location_type, parent_uuid, description
+       FROM star_map_locations
+       WHERE LOWER(REPLACE(REPLACE(slug, '-', ''), '_', '')) = ?
+          OR LOWER(REPLACE(name, ' ', '')) = ?
+       ORDER BY LENGTH(slug) ASC
+       LIMIT 1`,
+    )
+    .bind(normalized, normalized)
+    .first()) as POILocationRow | null;
+  if (row) return row;
+
+  // 4. suffix match for fully-qualified slugs — "rockcracker" should match
+  //    "asteroidclusterbase-nyx-rockcracker". Bounded with LIKE and shortest-
+  //    first to prefer the canonical (least-qualified) entry when many share
+  //    the same suffix.
+  row = (await db
+    .prepare(
+      `SELECT id, uuid, slug, name, location_type, parent_uuid, description
+       FROM star_map_locations
+       WHERE LOWER(REPLACE(REPLACE(slug, '-', ''), '_', '')) LIKE ?
+       ORDER BY LENGTH(slug) ASC
+       LIMIT 1`,
+    )
+    .bind(`%${normalized}`)
+    .first()) as POILocationRow | null;
+  return row;
 }
 
 /**
@@ -2581,11 +2654,16 @@ export async function getPOIDetail(
   inputSlug: string,
   resolved: { canonical: string; container: string | null },
 ): Promise<POIDetail | null> {
-  // 1. Resolve the location row. Try canonical first, then fallback to input
-  //    (for slugs that are already canonical and weren't mapped).
+  // 1. Resolve the location row. Try canonical → input → fuzzy (F118):
+  //    case-insensitive, non-alphanum-stripped, and suffix-match against
+  //    fully-qualified slugs so "rock-cracker" resolves to the canonical
+  //    "asteroidclusterbase-nyx-rockcracker" entry.
   let row = await getPOILocationRow(db, resolved.canonical);
   if (!row && resolved.canonical !== inputSlug) {
     row = await getPOILocationRow(db, inputSlug);
+  }
+  if (!row) {
+    row = await resolvePOILocationFuzzy(db, inputSlug);
   }
   if (!row) return null;
 
