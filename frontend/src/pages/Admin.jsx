@@ -9,10 +9,17 @@ import LoadingState from '../components/LoadingState'
 import PanelSection from '../components/PanelSection'
 import ConfirmDialog from '../components/ConfirmDialog'
 
+// D1 write cost hints on each entry — surfaced under each button so admins
+// see the cost before clicking. Every manual fire does the same writes as the
+// corresponding cron, which bills into the monthly D1 row-write quota.
+// Context: feedback_d1_write_cost_awareness.md (2026-04 incident: $200 bill
+// for 184M writes, mostly pipeline reloads + cron churn).
 const syncActions = [
-  { id: 'rsi', label: 'RSI API', icon: Globe, trigger: triggerRSISync, description: 'Ship images from RSI GraphQL API' },
+  { id: 'rsi', label: 'RSI API', icon: Globe, trigger: triggerRSISync,
+    description: 'Ship images from RSI GraphQL API', costHint: '~1.3k D1 writes' },
   // F279: manual UEX trigger — bypasses the 2h cron when community prices need a fresh pull.
-  { id: 'uex', label: 'UEX Prices', icon: DollarSign, trigger: () => triggerUexSync('all'), description: 'Commodity + item prices from UEX Corp' },
+  { id: 'uex', label: 'UEX Prices', icon: DollarSign, trigger: () => triggerUexSync('all'),
+    description: 'Commodity + item prices from UEX Corp', costHint: '~5.5k D1 writes' },
 ]
 
 function InvitePanel() {
@@ -641,7 +648,7 @@ export default function Admin() {
       {/* Manual Sync Triggers */}
       <PanelSection title="Sync Triggers" icon={RefreshCw}>
         <div className="p-4 grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
-          {syncActions.map(({ id, label, icon: Icon, trigger, description }) => {
+          {syncActions.map(({ id, label, icon: Icon, trigger, description, costHint }) => {
             const hasResult = triggerResult && triggerResult.id === id
             return (
               <button
@@ -656,6 +663,11 @@ export default function Admin() {
                     {triggering === id ? 'Triggering...' : label}
                   </span>
                   <span className="text-xs text-gray-500 block">{description}</span>
+                  {costHint && (
+                    <span className="text-[10px] font-mono text-amber-500/70 block mt-0.5">
+                      ⚠ {costHint}
+                    </span>
+                  )}
                   {hasResult && (
                     <span className="text-[11px] font-mono text-emerald-400/80 block mt-1 truncate">
                       ✓ {summarizeTriggerResult(id, triggerResult.data)}
