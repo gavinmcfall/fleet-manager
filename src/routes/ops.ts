@@ -110,6 +110,15 @@ export function opsRoutes() {
     },
   );
 
+  // ── Op types lookup ─────────────────────────────────────────────────
+  // F801 (2026-04-20): MUST be declared before /:opId — Hono's first-match-
+  // wins routing would otherwise capture "types" as an opId param and fail
+  // with "Invalid ID".
+  routes.get("/types", async (c) => {
+    const { results } = await c.env.DB.prepare("SELECT id, key, label FROM op_types ORDER BY id").all();
+    return c.json({ types: results });
+  });
+
   // ── Op detail ───────────────────────────────────────────────────────
 
   routes.get("/:opId", async (c) => {
@@ -725,13 +734,6 @@ export function opsRoutes() {
       .run();
 
     return c.json({ ok: true });
-  });
-
-  // ── Op types lookup ─────────────────────────────────────────────────
-
-  routes.get("/types", async (c) => {
-    const { results } = await c.env.DB.prepare("SELECT id, key, label FROM op_types ORDER BY id").all();
-    return c.json({ types: results });
   });
 
   // ── Rating endpoints ────────────────────────────────────────────────

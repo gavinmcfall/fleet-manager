@@ -228,17 +228,17 @@ export default function ShipDB() {
                 <span className="badge badge-size shrink-0">{ship.size_label}</span>
               </div>
               <div className="grid grid-cols-3 gap-2 text-xs font-mono text-gray-400 mt-3">
-                <div>
+                <div className="min-w-0">
                   <span className="font-semibold text-sc-accent2 block">Role</span>
-                  {ship.focus || '-'}
+                  <span className="block truncate">{ship.focus || '-'}</span>
                 </div>
-                <div>
+                <div className="min-w-0">
                   <span className="font-semibold text-sc-accent2 block">Cargo</span>
-                  {ship.cargo > 0 ? `${ship.cargo} SCU` : '-'}
+                  <span className="block truncate">{ship.cargo > 0 ? `${ship.cargo} SCU` : '-'}</span>
                 </div>
-                <div>
+                <div className="min-w-0">
                   <span className="font-semibold text-sc-accent2 block">Crew</span>
-                  {ship.min_crew}-{ship.max_crew}
+                  <span className="block truncate">{ship.min_crew}-{ship.max_crew}</span>
                 </div>
               </div>
               <div className="mt-3 pt-2 border-t border-sc-border/30">
