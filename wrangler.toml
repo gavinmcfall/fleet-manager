@@ -140,7 +140,7 @@ crons = []
 [env.staging.vars]
 RSI_API_ENABLED = "false"
 ENVIRONMENT = "staging"
-BETTER_AUTH_URL = "https://scbridge-staging.ops-925.workers.dev"
+BETTER_AUTH_URL = "https://staging.scbridge.app"
 EMAIL_FROM = "SC Bridge Staging <noreply@scbridge.app>"
 RSI_BASE_URL = "https://robertsspaceindustries.com"
 RSI_RATE_LIMIT = "1.0"
