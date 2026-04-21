@@ -27,7 +27,7 @@ export default function ExtensionSection() {
 
         <div className="space-y-2">
           <h4 className="text-xs font-medium text-gray-400 uppercase tracking-wider">Install from your browser store</h4>
-          <div className="grid sm:grid-cols-2 gap-2">
+          <div className="grid sm:grid-cols-3 gap-2">
             <a
               href="https://chromewebstore.google.com/detail/sc-bridge-sync/gcokkoamjodagagbojhkimfbjjpdfefi"
               target="_blank"
@@ -51,6 +51,19 @@ export default function ExtensionSection() {
               <div className="flex-1 min-w-0">
                 <div className="text-sm text-gray-200">Firefox Add-ons</div>
                 <div className="text-[11px] text-gray-500">Firefox</div>
+              </div>
+              <ExternalLink className="w-3.5 h-3.5 text-gray-500 shrink-0" />
+            </a>
+            <a
+              href="https://microsoftedge.microsoft.com/addons/detail/sc-bridge-sync/edndedmmbdbofdphimpcofdccbpbgjib"
+              target="_blank"
+              rel="noopener noreferrer"
+              className="flex items-center gap-3 p-3 rounded-lg border border-white/[0.06] hover:border-sc-accent/40 hover:bg-white/[0.02] transition-colors"
+            >
+              <svg className="w-5 h-5 shrink-0" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg"><defs><linearGradient id="edgeG1" x1="5.01" y1="7.71" x2="21.36" y2="7.71" gradientUnits="userSpaceOnUse"><stop offset="0" stopColor="#0c59a4"/><stop offset="1" stopColor="#114a8b"/></linearGradient><linearGradient id="edgeG2" x1="15.83" y1="13.81" x2="2.21" y2="13.81" gradientUnits="userSpaceOnUse"><stop offset="0" stopColor="#1b9de2"/><stop offset="0.16" stopColor="#1595df"/><stop offset="0.67" stopColor="#0680d7"/><stop offset="1" stopColor="#0078d4"/></linearGradient></defs><path fill="url(#edgeG1)" d="M21.63 19.74a8.87 8.87 0 01-1 .44 9.52 9.52 0 01-3.31.59c-4.36 0-8.16-3-8.16-6.85A2.9 2.9 0 0110.68 11.3c-4.16.17-5.22 4.5-5.22 7 0 7.17 6.61 7.89 8 7.89a11.7 11.7 0 003.21-.45l.22-.07a12 12 0 004.7-2.94.5.5 0 00-.07-.71z" transform="translate(-1.24 -3.96)"/><path fill="url(#edgeG2)" d="M11.15 22.61a7.4 7.4 0 01-2.12-2 7.5 7.5 0 012.75-11.14c.29-.14.78-.39 1.44-.38a3 3 0 012.35 1.18 2.9 2.9 0 01.58 1.71c0-.02-3.37-6.88-7.83-6.88A8.76 8.76 0 00.26 13.8v.22A9 9 0 003.79 21.1 8.78 8.78 0 0011.63 22.7c-.17 0-.32-.04-.48-.09z" transform="translate(-1.24 -3.96)"/><path fill="#50e6ff" d="M15.25 16.62c-.11.14-.45.34-.45.78 0 .36.23.71.65 1a4.1 4.1 0 002.75.66 5.88 5.88 0 003-.82A6.09 6.09 0 0024.26 13a7.54 7.54 0 00-2.29-5.4A8.67 8.67 0 0015.66 5a9 9 0 00-6.41 2.63A8.74 8.74 0 006.83 13a9.29 9.29 0 012.75-5.71 6.5 6.5 0 014.3-1.34 7 7 0 014.13 1.3 7.28 7.28 0 012.47 3.73 4.55 4.55 0 01-.43 4.71z" transform="translate(-1.24 -3.96)" opacity="0.5"/></svg>
+              <div className="flex-1 min-w-0">
+                <div className="text-sm text-gray-200">Edge Add-ons</div>
+                <div className="text-[11px] text-gray-500">Edge</div>
               </div>
               <ExternalLink className="w-3.5 h-3.5 text-gray-500 shrink-0" />
             </a>
