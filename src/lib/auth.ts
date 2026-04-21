@@ -147,6 +147,12 @@ export function createAuth(env: Env) {
     },
     trustedOrigins: (request) => {
       const origins: string[] = [env.BETTER_AUTH_URL];
+      // Staging uses workers.dev as BETTER_AUTH_URL but serves on the
+      // custom domain staging.scbridge.app — trust both. Production uses
+      // the custom domain directly, so no extra entry needed.
+      if (env.ENVIRONMENT === "staging") {
+        origins.push("https://staging.scbridge.app");
+      }
       // Allow pinned browser extension origins (SC Bridge Sync)
       // Extension IDs must match the TRUSTED_EXTENSION_ORIGINS set in index.ts
       const reqOrigin = request?.headers?.get("Origin") ?? "";
