@@ -121,12 +121,18 @@ app.use("/api/*", async (c, next) => {
 });
 
 // Request body size limits — reject oversized payloads before parsing
-// Import/sync payloads can be large (2000 pledges × 50 items), avatar uploads are 2MB max.
-// Most API endpoints need < 100KB. The 5MB limit covers the largest legitimate sync payloads.
-const MAX_BODY_BYTES = 5 * 1024 * 1024; // 5MB
+// Most API endpoints need < 100KB. Hangar-sync carries the full RSI export
+// (pledges + items + buybacks + upgrades), which for large accounts (500+
+// pledges, 1000+ items) comfortably exceeds 5MB. Carve out a higher cap
+// for that route only; everything else stays tight.
+const MAX_BODY_BYTES = 5 * 1024 * 1024; // 5MB default
+const MAX_BODY_BYTES_HANGAR_SYNC = 20 * 1024 * 1024; // 20MB for /api/import/hangar-sync
 app.use("/api/*", async (c, next) => {
   const contentLength = c.req.header("Content-Length");
-  if (contentLength && parseInt(contentLength, 10) > MAX_BODY_BYTES) {
+  const limit = c.req.path === "/api/import/hangar-sync"
+    ? MAX_BODY_BYTES_HANGAR_SYNC
+    : MAX_BODY_BYTES;
+  if (contentLength && parseInt(contentLength, 10) > limit) {
     return c.json({ error: "Request body too large" }, 413);
   }
   // Require Content-Length on mutation requests to prevent chunked transfer bypass (M-01)
