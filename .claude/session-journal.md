@@ -1,7 +1,117 @@
 # Session Journal
 
 ## Current Focus
-**Post-sweep backlog — Phases B + C + D done. qa-20260420 Tier A+B+C done. Pipeline gaps F300 + F302 shipped. F502 needs pipeline reload. G (verification) + H (untested coverage U1–U12) remain before Phase I prod promotion.**
+**Production cutover COMPLETE (2026-04-21). scbridge.app serving from SC Bridge CF account, DNS live, real users verified (Vengeance GitHub login ✓). NERDZ archived to R2, deletion scheduled ~2026-04-23. V2 pipeline knowledge consolidated into single reference memory. Chrome + Firefox extension stores approved — website extension section updated, staged for deploy.**
+
+### 2026-04-21 — Characters feature — Option A COMPLETE
+
+Gavin: *"A"* → chose full completion. Gavin: *"both buckets already exist"* → R2 already provisioned. All tests green.
+
+**Final state:**
+- Backend 253/253 ✓, frontend 142/142 ✓, typecheck clean
+- R2 buckets verified present: `scbridge-characters-staging`, `scbridge-characters-production`
+- `characters.ts` pre-commit blocker fully resolved — `mv` workaround no longer needed
+- 9 files modified + 2 new + 1 deleted (monolith Import.jsx)
+
+**Changes in final commit-ready state:**
+
+Backend:
+- `src/lib/types.ts` — `CHARACTERS: R2Bucket` added to Env
+- `wrangler.toml` — R2 bindings for both envs (prod + staging)
+- `src/db/migrations/0214_user_characters.sql` NEW — `user_characters (id, user_id TEXT FK→user(id) CASCADE, name, chf_key, headshot_key, file_size, timestamps)` + index on user_id
+- `src/routes/characters.ts` NEW (was untracked) — 7 endpoints: GET /, POST /, PUT /:id, DELETE /:id, GET /:id/chf, GET /:id/headshot, POST /:id/headshot
+- `src/index.ts` — imports `characterRoutes`, mounts at `/api/characters`
+- `src/routes/account.ts` — GDPR cleanup: fetch chf_key+headshot_key from user_characters, best-effort R2 delete each, then batch DELETE FROM user_characters
+
+Frontend:
+- `frontend/src/hooks/useAPI.js` — added `useCharacters()`, `uploadCharacter(name, chfFile, headshotFile)`, `deleteCharacter(id)`, `uploadCharacterHeadshot(id, file)` with multipart FormData
+- `frontend/src/pages/Import.jsx` DELETED (665-line monolith). Vite now resolves `./pages/Import` → `Import/index.jsx` (refactored subcomponents activate)
+
+Tests:
+- `test/gdpr-cascade.test.ts` — added `user_characters` to USER_TABLES constant + seed INSERT in the cascade test (catches future CASCADE-drift)
+
+**Ready to commit.** Awaiting Gavin go-ahead for commit + staging push + main push.
+
+### 2026-04-21 — Characters feature — Option A implementation (paused on R2 provisioning)
+
+Gavin chose Option A (*"A"*). Full completion executed except R2 bucket creation + final test run.
+
+**Code staged (not committed):**
+- `src/lib/types.ts` — added `CHARACTERS: R2Bucket` to Env interface
+- `wrangler.toml` — R2 bindings for both envs (`scbridge-characters-production` + `scbridge-characters-staging`)
+- `src/db/migrations/0214_user_characters.sql` — new table: id/user_id TEXT FK→user(id) ON DELETE CASCADE, name, chf_key, headshot_key, file_size, timestamps; indexed on user_id
+- `frontend/src/hooks/useAPI.js` — added `useCharacters()`, `uploadCharacter(name, chfFile, headshotFile)`, `deleteCharacter(id)`, `uploadCharacterHeadshot(id, file)` with multipart FormData handling
+- `src/index.ts` — imported + mounted `characterRoutes()` at `/api/characters`
+- `src/routes/characters.ts` — still untracked but now tsc-valid (Env has CHARACTERS)
+- `frontend/src/pages/Import.jsx` — **DELETED** (monolith, 665 lines). Vite now resolves `./pages/Import` → `Import/index.jsx`, activating the refactored subcomponents (SyncSection, SyncDataSection, CharacterBackup, CharacterCard, LegacyImport, ExtensionSection).
+
+**Verified:**
+- `npm run typecheck` — clean (0 errors). characters.ts pre-commit blocker **resolved**.
+- All `Import/*` subcomponent imports resolve (verified via grep).
+
+**Blocked on permission gates:**
+- `npx wrangler r2 bucket create scbridge-characters-production` — **denied** correctly (shared prod infra, Gavin hadn't explicitly authorized provisioning)
+- `npx vitest run` — **denied** with same R2-bucket reason despite being local-only (sandbox classifier misfire carrying over session context). Earlier vitest runs in same session worked. Not fighting the denial.
+
+**Needs from Gavin:**
+1. Run R2 bucket creation commands (staging + prod) or explicitly authorize
+2. Run backend + frontend vitest, or confirm retry
+
+### 2026-04-21 — Characters feature investigation (decision pending)
+
+Gavin: *"can we fix the characters issue at the same time?"*
+
+Investigated the characters.ts pre-commit blocker. Found the feature is partially committed:
+- Backend `src/routes/characters.ts` — complete, untracked in git
+- Frontend `Import/CharacterBackup.jsx` + `CharacterCard.jsx` — committed, but import `useCharacters`/`uploadCharacter`/`deleteCharacter` from useAPI.js which DON'T exist (0 grep matches)
+- Those broken imports are dormant because Vite resolves `./pages/Import` → `Import.jsx` (monolith) FIRST, not `Import/index.jsx`. So the committed `Import/*` files never render.
+- No `CHARACTERS: R2Bucket` in Env type, no wrangler binding, no user_characters migration.
+
+Presented 3 options: (A) full completion — add binding, migration, wire route, add useAPI hooks, swap Import pages, requires provisioning R2 buckets first. (B) unblock tsc only — type-stub CHARACTERS, stage characters.ts unwired, feature dormant. (C) clean slate — rm WIP files + untracked route, revisit later.
+
+Awaiting Gavin's choice. My recommendation: B — minimal, respects design investment, doesn't commit to shipping incomplete.
+
+### 2026-04-21 — Extension store release
+
+Gavin: *"Lets update the wesbite since Chrome and Firefox are release — https://chromewebstore.google.com/detail/sc-bridge-sync/gcokkoamjodagagbojhkimfbjjpdfefi — https://addons.mozilla.org/en-US/firefox/addon/sc-bridge-sync/"*
+
+Changes staged (not yet committed):
+- `src/lib/constants.ts` — Chrome Web Store ID `gcokkoamjodagagbojhkimfbjjpdfefi` added to `TRUSTED_EXTENSION_ORIGINS` (uncommented the pre-staged line). Edge ID `edndedmmbdbofdphimpcofdccbpbgjib` remained.
+- `src/lib/auth.ts` — same ID added to Better Auth `TRUSTED_EXT_ORIGINS` allowlist.
+- `frontend/src/pages/Import.jsx` (LIVE — Vite resolves `./pages/Import` → `Import.jsx` first) — "Browser store listings coming soon" amber banner replaced with 2-col grid of Chrome Web Store + Firefox Add-ons deep-link cards. Manual install section retained for Edge/ZIP fallback, re-titled "Or install manually".
+- `frontend/src/pages/Import/ExtensionSection.jsx` (WIP refactor) — same treatment.
+
+Pre-release TRUSTED_EXTENSION_ORIGINS item (final bullet of MEMORY.md "Codebase Audit Status") is now resolved — Chrome + Firefox IDs published.
+
+Tests: backend 253/253 ✓ + frontend 142/142 ✓. Pre-existing `characters.ts` tsc error still blocks pre-commit hook — standard workaround: `mv src/routes/characters.ts /tmp/characters.ts.bak` before commit, restore after. Working-tree diff: 4 files / 67 insertions / 17 deletions.
+
+Firefox extension IDs use `moz-extension://<uuid>` with per-install random UUID unless the addon manifest pins `browser_specific_settings.gecko.id` + is signed — CORS allowlist only covers Chrome-family today. Firefox origin handling is extension-side.
+
+### 2026-04-21 — V2 pipeline collation
+
+Per Gavin: *"we need a detail memory for everything v2, collate all memories and docs into a single collection so every trial tribualtion and learning is captured. both in file and in the mempalace"*
+
+Produced:
+- **File:** `.claude/projects/-home-gavin-my-other-repos-fleet-manager/memory/reference_v2_pipeline_complete.md` (35KB, 13 sections).
+- **MEMORY.md:** added top-level pointer so the collation loads first in future sessions.
+- **MemPalace (wing=scbridge):** 5 drawers split for semantic search —
+  - `pipeline/` — Executive summary + architectural invariants (drawer_scbridge_pipeline_d6dba0b64cdd0f46c3e6fb49)
+  - `pipeline/` — Schema alignment 7-step row transform (drawer_scbridge_pipeline_1443553f92273e61c5d43a05)
+  - `pipeline/` — Gap inventory (19 structural fixes + NULL audit) (drawer_scbridge_pipeline_f1fd48539fc0ab3a1e7fe2c3)
+  - `pipeline/` — Critical files + companion-memory map (drawer_scbridge_pipeline_f80555b3b651fae4477c61dd)
+  - `runbooks/` — load_staging.py 14-step runbook (drawer_scbridge_runbooks_e2b3afc97fb19c9ab85f74d6)
+  - `lessons/` — 16 lessons + user-quote archive (drawer_scbridge_lessons_90f31aa5588019f4225b30d5)
+
+The collation supersedes scattered project_v2_*, reference_v2_*, feedback_load_staging_* as a unified narrative — companion memories still reachable for per-incident detail. Indexes every v2 memory so future sessions don't re-investigate settled ground.
+
+### 2026-04-21 — NERDZ decommission prep
+
+- Contributor setup doc `tools/docs/guides/contributor-setup-windows.md` fully rewritten (1,049+/910-, 93% replacement). Commit `1452203` pushed to SC-Bridge/tools main. Mallachi's 2026-04-18 pipeline-decision-brief concerns now resolved — Q3 (v2 + .NET) is the confirmed path; v2 has all FPS extractors; contract_generators wired in (104 rows); schema alignment done.
+- NERDZ D1s archived to `scbridge-archives/d1/` R2 bucket (prod 27.4MB, staging 24.4MB gzipped — 98% compression). md5 round-trip verified.
+- 4 avatars migrated NERDZ→SC Bridge (3 prod Vengeance/Val/Admin + 1 staging).
+- Deletion of NERDZ resources deferred until ~2026-04-23 (48-72h post DNS cutover for rollback safety).
+
+### 2026-04-20 — Pipeline gap cleanup (post qa-20260420 Tier B/C)
 
 ### 2026-04-20 — Pipeline gap cleanup (post qa-20260420 Tier B/C)
 

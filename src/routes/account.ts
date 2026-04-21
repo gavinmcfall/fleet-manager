@@ -578,6 +578,20 @@ export function accountRoutes() {
     // Delete R2 avatar if present (best-effort — don't block deletion if this fails)
     try { await c.env.AVATARS.delete(`avatars/${user.id}`); } catch { /* avatar may not exist */ }
 
+    // Delete R2 character blobs (CHF + headshots) before the DB rows go away
+    try {
+      const chars = await db
+        .prepare("SELECT chf_key, headshot_key FROM user_characters WHERE user_id = ?")
+        .bind(user.id)
+        .all<{ chf_key: string; headshot_key: string | null }>();
+      for (const row of chars.results ?? []) {
+        try { await c.env.CHARACTERS.delete(row.chf_key); } catch { /* best-effort */ }
+        if (row.headshot_key) {
+          try { await c.env.CHARACTERS.delete(row.headshot_key); } catch { /* best-effort */ }
+        }
+      }
+    } catch { /* table may not exist yet in some test envs */ }
+
     // Atomic deletion: all app data + all auth credentials in a single batch
     // user_change_history rows are kept (tombstone audit trail) but PII fields are scrubbed
     // user row itself is soft-deleted below (anonymised, not hard-deleted)
@@ -618,6 +632,8 @@ export function accountRoutes() {
       db.prepare("DELETE FROM user_localization_ship_order WHERE user_id = ?").bind(user.id),
       // Companion app — game event data is not PII, kept for analytics
       db.prepare("DELETE FROM companion_status WHERE user_id = ?").bind(user.id),
+      // Character backup (migration 0214) — metadata; R2 blobs deleted above
+      db.prepare("DELETE FROM user_characters WHERE user_id = ?").bind(user.id),
       // Scrub PII from change history — keep rows (event log) but wipe values + IP
       db.prepare(
         `UPDATE user_change_history SET

@@ -152,8 +152,7 @@ export function createAuth(env: Env) {
       const reqOrigin = request?.headers?.get("Origin") ?? "";
       const TRUSTED_EXT_ORIGINS = new Set<string>([
         "chrome-extension://edndedmmbdbofdphimpcofdccbpbgjib", // Microsoft Edge Add-ons
-        // Add Chrome Web Store ID once approved:
-        // "chrome-extension://gcokkoamjodagagbojhkimfbjjpdfefi",
+        "chrome-extension://gcokkoamjodagagbojhkimfbjjpdfefi", // Chrome Web Store
       ]);
       if (TRUSTED_EXT_ORIGINS.has(reqOrigin)) {
         origins.push(reqOrigin);

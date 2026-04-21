@@ -57,6 +57,10 @@ id = "2ec90d2a93d44e83921625176255a8bd"
 binding = "AVATARS"
 bucket_name = "scbridge-avatars-production"
 
+[[env.production.r2_buckets]]
+binding = "CHARACTERS"
+bucket_name = "scbridge-characters-production"
+
 [env.production.triggers]
 crons = [
   "30 3 * * *",  # session cleanup
@@ -125,6 +129,10 @@ id = "2ec90d2a93d44e83921625176255a8bd"
 [[env.staging.r2_buckets]]
 binding = "AVATARS"
 bucket_name = "scbridge-avatars-staging"
+
+[[env.staging.r2_buckets]]
+binding = "CHARACTERS"
+bucket_name = "scbridge-characters-staging"
 
 [env.staging.triggers]
 crons = []

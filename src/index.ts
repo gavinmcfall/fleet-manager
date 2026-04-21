@@ -28,6 +28,7 @@ import { companionAuthRoutes } from "./routes/companion-auth";
 import { loadoutRoutes } from "./routes/loadout";
 import { componentRoutes } from "./routes/components";
 import { blueprintRoutes } from "./routes/blueprints";
+import { characterRoutes } from "./routes/characters";
 import { validateEncryptionKey } from "./lib/crypto";
 import { logEvent } from "./lib/logger";
 import { isTrustedExtension } from "./lib/constants";
@@ -418,6 +419,7 @@ app.route("/api/companion", companionRoutes());
 app.route("/api/loadout", loadoutRoutes());
 app.route("/api/components", componentRoutes());
 app.route("/api/blueprints", blueprintRoutes());
+app.route("/api/characters", characterRoutes());
 
 // Companion app auth flow — HTML pages outside /api/* (no CORS, no JSON middleware)
 app.route("/companion", companionAuthRoutes());

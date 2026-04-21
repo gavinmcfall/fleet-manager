@@ -86,6 +86,8 @@ const USER_TABLES = [
   "user_loadout_cart",
   // Crafting blueprint ownership (0146)
   "user_blueprints",
+  // Character backup CHF files (0214) — CASCADE deletes metadata; R2 blobs cleaned by account deletion flow
+  "user_characters",
 ] as const;
 
 // Tables with user_id that DON'T cascade (known exceptions).
@@ -441,6 +443,15 @@ describe("GDPR — User Deletion Cascade", () => {
            VALUES (?, ?, 'test')`
         )
         .bind(user.userId, bpRow!.id)
+        .run();
+
+      // user_characters (migration 0214)
+      await db
+        .prepare(
+          `INSERT INTO user_characters (user_id, name, chf_key, file_size)
+           VALUES (?, 'Test Character', 'test/0.chf', 1024)`
+        )
+        .bind(user.userId)
         .run();
 
       // ── Verify all tables have data ──

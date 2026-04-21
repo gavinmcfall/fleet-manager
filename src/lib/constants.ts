@@ -6,8 +6,7 @@
 // Extension IDs are stable after store publication. Update these when publishing new extensions.
 export const TRUSTED_EXTENSION_ORIGINS = new Set<string>([
   "chrome-extension://edndedmmbdbofdphimpcofdccbpbgjib", // Microsoft Edge Add-ons
-  // Add Chrome Web Store ID once approved:
-  // "chrome-extension://gcokkoamjodagagbojhkimfbjjpdfefi",
+  "chrome-extension://gcokkoamjodagagbojhkimfbjjpdfefi", // Chrome Web Store
 ]);
 
 export const isTrustedExtension = (origin: string) =>

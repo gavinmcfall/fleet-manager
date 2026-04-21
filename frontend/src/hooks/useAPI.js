@@ -195,6 +195,47 @@ export async function deleteSyncData() {
   return apiFetch('DELETE', '/settings/sync-data')
 }
 
+// Character Backup — CHF files + headshots stored in R2
+export function useCharacters() {
+  return useAPI('/characters')
+}
+
+export async function uploadCharacter(name, chfFile, headshotFile) {
+  const form = new FormData()
+  form.append('name', name)
+  form.append('chf', chfFile)
+  if (headshotFile) form.append('headshot', headshotFile)
+  const res = await fetch(`${BASE}/characters`, {
+    method: 'POST',
+    credentials: 'same-origin',
+    body: form,
+  })
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({ error: res.statusText }))
+    throw new Error(err.error || res.statusText)
+  }
+  return res.json()
+}
+
+export async function deleteCharacter(id) {
+  return apiFetch('DELETE', `/characters/${id}`)
+}
+
+export async function uploadCharacterHeadshot(id, headshotFile) {
+  const form = new FormData()
+  form.append('headshot', headshotFile)
+  const res = await fetch(`${BASE}/characters/${id}/headshot`, {
+    method: 'POST',
+    credentials: 'same-origin',
+    body: form,
+  })
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({ error: res.statusText }))
+    throw new Error(err.error || res.statusText)
+  }
+  return res.json()
+}
+
 // LLM Configuration
 export function useLLMConfig() {
   return useAPI('/settings/llm-config')

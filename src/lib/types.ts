@@ -12,6 +12,7 @@ export interface Env {
   DB: D1Database;
   ASSETS: Fetcher;
   AVATARS: R2Bucket;
+  CHARACTERS: R2Bucket;
   SC_BRIDGE_CACHE: KVNamespace;
   LOCALIZATION_KV: KVNamespace;
   // F294 — defense-in-depth rate limit on public ops join-code enumeration.
