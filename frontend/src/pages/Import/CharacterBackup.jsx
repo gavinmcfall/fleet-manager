@@ -1,8 +1,11 @@
-import React, { useState, useRef } from 'react'
-import { Plus, Upload, X, Image, FileText, Loader } from 'lucide-react'
+import React, { useState, useRef, useEffect } from 'react'
+import { Plus, Upload, X, Image, FileText, Loader, Crop } from 'lucide-react'
 import { useCharacters, uploadCharacter, deleteCharacter } from '../../hooks/useAPI'
 import CharacterCard from './CharacterCard'
 import ConfirmDialog from '../../components/ConfirmDialog'
+import AvatarCropDialog from '../../components/AvatarCropDialog'
+
+const ALLOWED_IMAGE_TYPES = ['image/jpeg', 'image/png', 'image/webp']
 
 export default function CharacterBackup() {
   const { data, loading, refetch } = useCharacters()
@@ -11,6 +14,9 @@ export default function CharacterBackup() {
   const [chfFile, setChfFile] = useState(null)
   const [headshotFile, setHeadshotFile] = useState(null)
   const [headshotPreview, setHeadshotPreview] = useState(null)
+  const [headshotError, setHeadshotError] = useState(null)
+  const [cropSource, setCropSource] = useState(null)
+  const [cropOpen, setCropOpen] = useState(false)
   const [uploading, setUploading] = useState(false)
   const [error, setError] = useState(null)
   const [confirmDialog, setConfirmDialog] = useState({ open: false })
@@ -18,6 +24,15 @@ export default function CharacterBackup() {
   const headshotInputRef = useRef(null)
   const chfDropRef = useRef(0)
   const [chfDragging, setChfDragging] = useState(false)
+
+  // Revoke any object URLs we created so we don't leak memory
+  useEffect(() => {
+    return () => {
+      if (headshotPreview && headshotPreview.startsWith('blob:')) {
+        URL.revokeObjectURL(headshotPreview)
+      }
+    }
+  }, [headshotPreview])
 
   const characters = data?.characters || []
 
@@ -34,14 +49,42 @@ export default function CharacterBackup() {
   }
 
   const handleHeadshotSelect = (file) => {
+    setHeadshotError(null)
     if (!file) return
-    const allowed = ['image/jpeg', 'image/png', 'image/webp']
-    if (!allowed.includes(file.type)) return
-    if (file.size > 2 * 1024 * 1024) return
-    setHeadshotFile(file)
-    const reader = new FileReader()
-    reader.onload = (e) => setHeadshotPreview(e.target.result)
-    reader.readAsDataURL(file)
+    if (!ALLOWED_IMAGE_TYPES.includes(file.type)) {
+      setHeadshotError(`Unsupported image type (${file.type || 'unknown'}). Use JPEG, PNG, or WebP.`)
+      return
+    }
+    // No size cap — cropper downsizes to ≤ ~100KB WebP regardless of source size.
+    setCropSource(file)
+    setCropOpen(true)
+  }
+
+  const handleCropSave = (croppedFile, previewUrl) => {
+    if (headshotPreview && headshotPreview.startsWith('blob:')) {
+      URL.revokeObjectURL(headshotPreview)
+    }
+    setHeadshotFile(croppedFile)
+    setHeadshotPreview(previewUrl)
+    setCropOpen(false)
+    setCropSource(null)
+  }
+
+  const handleCropCancel = () => {
+    setCropOpen(false)
+    setCropSource(null)
+    // Clear file input so selecting the same file again re-fires onChange
+    if (headshotInputRef.current) headshotInputRef.current.value = ''
+  }
+
+  const clearHeadshot = () => {
+    if (headshotPreview && headshotPreview.startsWith('blob:')) {
+      URL.revokeObjectURL(headshotPreview)
+    }
+    setHeadshotFile(null)
+    setHeadshotPreview(null)
+    setHeadshotError(null)
+    if (headshotInputRef.current) headshotInputRef.current.value = ''
   }
 
   const handleSave = async () => {
@@ -80,8 +123,7 @@ export default function CharacterBackup() {
   const resetForm = () => {
     setName('')
     setChfFile(null)
-    setHeadshotFile(null)
-    setHeadshotPreview(null)
+    clearHeadshot()
     setError(null)
   }
 
@@ -175,31 +217,61 @@ export default function CharacterBackup() {
             </div>
 
             {/* Headshot drop zone */}
-            <div
-              className={`p-3 border-2 border-dashed rounded-lg text-center cursor-pointer transition-all duration-200 mb-3 ${
-                headshotPreview
-                  ? 'border-sc-accent/20 bg-sc-accent/5'
-                  : 'border-white/[0.06] hover:border-white/[0.12]'
-              }`}
-              onClick={() => headshotInputRef.current?.click()}
-            >
-              <input
-                ref={headshotInputRef}
-                type="file"
-                accept="image/jpeg,image/png,image/webp"
-                className="hidden"
-                onChange={(e) => handleHeadshotSelect(e.target.files?.[0])}
-              />
-              {headshotPreview ? (
-                <div className="flex items-center gap-3">
-                  <img src={headshotPreview} alt="Preview" className="w-12 h-12 rounded-lg object-cover" />
-                  <span className="text-xs text-gray-400">Headshot added</span>
-                </div>
-              ) : (
-                <div className="flex items-center justify-center gap-2 text-xs text-gray-500">
-                  <Image className="w-4 h-4" />
-                  Add headshot (optional)
-                </div>
+            <div className="mb-3">
+              <div
+                className={`p-3 border-2 border-dashed rounded-lg cursor-pointer transition-all duration-200 ${
+                  headshotPreview
+                    ? 'border-sc-accent/20 bg-sc-accent/5'
+                    : headshotError
+                      ? 'border-red-400/30 bg-red-500/5'
+                      : 'border-white/[0.06] hover:border-white/[0.12]'
+                }`}
+                onClick={() => !headshotPreview && headshotInputRef.current?.click()}
+              >
+                <input
+                  ref={headshotInputRef}
+                  type="file"
+                  accept="image/jpeg,image/png,image/webp"
+                  className="hidden"
+                  onChange={(e) => {
+                    handleHeadshotSelect(e.target.files?.[0])
+                    // reset so selecting the same file again re-fires onChange
+                    e.target.value = ''
+                  }}
+                />
+                {headshotPreview ? (
+                  <div className="flex items-center gap-3">
+                    <img src={headshotPreview} alt="Preview" className="w-12 h-12 rounded-full object-cover border border-white/[0.08]" />
+                    <div className="flex-1 min-w-0">
+                      <p className="text-xs text-gray-300">Headshot ready</p>
+                      <p className="text-[10px] text-gray-600">512×512 WebP</p>
+                    </div>
+                    <button
+                      type="button"
+                      onClick={(e) => { e.stopPropagation(); headshotInputRef.current?.click() }}
+                      className="flex items-center gap-1 px-2 py-1 rounded text-[11px] text-gray-400 hover:text-gray-200 hover:bg-white/[0.04] transition-colors cursor-pointer"
+                      title="Replace headshot"
+                    >
+                      <Crop className="w-3 h-3" /> Replace
+                    </button>
+                    <button
+                      type="button"
+                      onClick={(e) => { e.stopPropagation(); clearHeadshot() }}
+                      className="p-1 rounded text-gray-500 hover:text-red-400 hover:bg-white/[0.04] transition-colors cursor-pointer"
+                      title="Remove headshot"
+                    >
+                      <X className="w-3.5 h-3.5" />
+                    </button>
+                  </div>
+                ) : (
+                  <div className="flex items-center justify-center gap-2 text-xs text-gray-500">
+                    <Image className="w-4 h-4" />
+                    Add headshot (optional)
+                  </div>
+                )}
+              </div>
+              {headshotError && (
+                <p className="mt-1.5 text-[11px] text-red-400">{headshotError}</p>
               )}
             </div>
 
@@ -248,6 +320,13 @@ export default function CharacterBackup() {
         message={confirmDialog.message}
         confirmLabel={confirmDialog.confirmLabel}
         variant={confirmDialog.variant}
+      />
+
+      <AvatarCropDialog
+        open={cropOpen}
+        file={cropSource}
+        onCancel={handleCropCancel}
+        onSave={handleCropSave}
       />
     </>
   )
