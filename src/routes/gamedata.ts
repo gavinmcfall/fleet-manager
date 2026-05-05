@@ -935,21 +935,22 @@ return cachedJson(c, `gd:crafting`, async () => {
            ORDER BY cb.type, cb.sub_type, cb.name`
         ).all(),
         db.prepare(
-          `SELECT cbs.id, cbs.crafting_blueprint_id, cbs.slot_index, cbs.slot_name AS name,
+          `SELECT MIN(cbs.id) AS id, cbs.crafting_blueprint_id, cbs.slot_index, cbs.slot_name AS name,
                   cbs.resource_name, cbs.quantity, cbs.min_quality
            FROM crafting_blueprint_slots cbs
            JOIN crafting_blueprints cb ON cb.id = cbs.crafting_blueprint_id
-           
+           GROUP BY cbs.crafting_blueprint_id, cbs.slot_index
            ORDER BY cbs.crafting_blueprint_id, cbs.slot_index`
         ).all(),
         db.prepare(
           `SELECT csm.crafting_blueprint_slot_id, cp.key, cp.name, cp.unit, cp.category,
-                  csm.start_quality, csm.end_quality, csm.modifier_at_start, csm.modifier_at_end
+                  MIN(csm.start_quality) AS start_quality, MIN(csm.end_quality) AS end_quality,
+                  MIN(csm.modifier_at_start) AS modifier_at_start, MIN(csm.modifier_at_end) AS modifier_at_end
            FROM crafting_slot_modifiers csm
            JOIN crafting_properties cp ON cp.id = csm.crafting_property_id
            JOIN crafting_blueprint_slots cbs ON cbs.id = csm.crafting_blueprint_slot_id
            JOIN crafting_blueprints cb ON cb.id = cbs.crafting_blueprint_id
-          `
+           GROUP BY csm.crafting_blueprint_slot_id, csm.crafting_property_id`
         ).all(),
         db.prepare(`SELECT id, key, name, unit, category FROM crafting_properties ORDER BY id`).all(),
         db.prepare(
