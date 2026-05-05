@@ -8,6 +8,8 @@ import { describe, it, expect, beforeAll } from "vitest";
 // inlined here. Must stay in sync with 0217_crafting_item_slots.sql.
 
 // Minimal schema state as-of post-0216 (tables 0217 touches + prerequisites).
+// Post-0216 baseline — must include all columns added by migrations 0129 + 0178
+// to crafting_blueprint_slots. The ptu_* table mirrors this schema.
 const SCHEMA_STATEMENTS = [
   `CREATE TABLE IF NOT EXISTS crafting_blueprints (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -25,7 +27,9 @@ const SCHEMA_STATEMENTS = [
     name TEXT NOT NULL,
     resource_name TEXT NOT NULL,
     quantity REAL NOT NULL DEFAULT 0,
-    min_quality INTEGER NOT NULL DEFAULT 0
+    min_quality INTEGER NOT NULL DEFAULT 0,
+    blueprint_uuid TEXT,
+    slot_name TEXT
   )`,
   `CREATE TABLE IF NOT EXISTS ptu_crafting_blueprints (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
