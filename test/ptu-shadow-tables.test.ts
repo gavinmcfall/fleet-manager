@@ -1,4 +1,4 @@
-import { env } from "cloudflare:test";
+import { env, SELF } from "cloudflare:test";
 import { beforeAll, describe, expect, it } from "vitest";
 import { setupTestDatabase } from "./apply-migrations";
 import { VERSIONED_TABLES, getActiveChannel, isPTUChannel } from "../src/lib/ptu";
@@ -340,5 +340,207 @@ describe("isPTUChannel", () => {
   });
   it("returns false for LIVE", () => {
     expect(isPTUChannel("LIVE")).toBe(false);
+  });
+});
+
+// -------------------------------------------------------------------
+// Route-level integration tests: /api/loot honors ?channel=PTU
+// -------------------------------------------------------------------
+//
+// These tests hit the actual route handlers via SELF.fetch and assert
+// channel-scoped data is returned based on the ?channel query param.
+//
+// Each describe block uses distinct UUIDs to avoid cross-test pollution
+// (D1 state persists across tests in the same file via vitest-pool-workers).
+
+describe("GET /api/loot honors ?channel=PTU", () => {
+  beforeAll(async () => {
+    await setupTestDatabase(env.DB);
+    await env.DB.batch([
+      env.DB.prepare(
+        `INSERT INTO loot_map (uuid, name, type, rarity, category, game_version_id) VALUES
+         ('33330000-0000-0000-0000-000000000001', 'ROUTE-LIVE Item', 'gear', 'common', 'gear', 1)`,
+      ),
+      env.DB.prepare(
+        `INSERT INTO ptu_loot_map (uuid, name, type, rarity, category, game_version_id) VALUES
+         ('33330000-0000-0000-0000-000000000002', 'ROUTE-PTU Item', 'gear', 'common', 'gear', 1)`,
+      ),
+    ]);
+  });
+
+  it("returns LIVE rows when channel param absent", async () => {
+    const res = await SELF.fetch("http://localhost/api/loot");
+    expect(res.status).toBe(200);
+    const items = (await res.json()) as Array<{ name: string }>;
+    const names = items.map((i) => i.name);
+    expect(names).toContain("ROUTE-LIVE Item");
+    expect(names).not.toContain("ROUTE-PTU Item");
+  });
+
+  it("returns PTU rows when ?channel=PTU", async () => {
+    const res = await SELF.fetch("http://localhost/api/loot?channel=PTU");
+    expect(res.status).toBe(200);
+    const items = (await res.json()) as Array<{ name: string }>;
+    const names = items.map((i) => i.name);
+    expect(names).toContain("ROUTE-PTU Item");
+    expect(names).not.toContain("ROUTE-LIVE Item");
+  });
+});
+
+describe("GET /api/loot/:uuid honors ?channel=PTU", () => {
+  beforeAll(async () => {
+    await setupTestDatabase(env.DB);
+    await env.DB.batch([
+      env.DB.prepare(
+        `INSERT INTO loot_map (uuid, name, type, rarity, category, game_version_id) VALUES
+         ('44440000-0000-0000-0000-000000000001', 'ROUTE-LIVE Detail', 'gear', 'common', 'gear', 1)`,
+      ),
+      env.DB.prepare(
+        `INSERT INTO ptu_loot_map (uuid, name, type, rarity, category, game_version_id) VALUES
+         ('44440000-0000-0000-0000-000000000001', 'ROUTE-PTU Detail', 'gear', 'common', 'gear', 1)`,
+      ),
+    ]);
+  });
+
+  it("returns LIVE row when channel absent", async () => {
+    const res = await SELF.fetch(
+      "http://localhost/api/loot/44440000-0000-0000-0000-000000000001",
+    );
+    expect(res.status).toBe(200);
+    const body = (await res.json()) as { name: string };
+    expect(body.name).toBe("ROUTE-LIVE Detail");
+  });
+
+  it("returns PTU row when ?channel=PTU", async () => {
+    const res = await SELF.fetch(
+      "http://localhost/api/loot/44440000-0000-0000-0000-000000000001?channel=PTU",
+    );
+    expect(res.status).toBe(200);
+    const body = (await res.json()) as { name: string };
+    expect(body.name).toBe("ROUTE-PTU Detail");
+  });
+});
+
+describe("GET /api/loot/sets honors ?channel=PTU", () => {
+  beforeAll(async () => {
+    await setupTestDatabase(env.DB);
+    await env.DB.batch([
+      env.DB.prepare(
+        `INSERT INTO loot_map (uuid, name, category, manufacturer_name, game_version_id) VALUES
+         ('55550000-0000-0000-0000-000000000001', 'RouteLiveBrand Pioneer Helmet', 'helmet', 'RouteLiveBrand', 1),
+         ('55550000-0000-0000-0000-000000000002', 'RouteLiveBrand Pioneer Core', 'armour', 'RouteLiveBrand', 1)`,
+      ),
+      env.DB.prepare(
+        `INSERT INTO ptu_loot_map (uuid, name, category, manufacturer_name, game_version_id) VALUES
+         ('55550000-0000-0000-0000-000000000003', 'RoutePtuBrand Vanguard Helmet', 'helmet', 'RoutePtuBrand', 1),
+         ('55550000-0000-0000-0000-000000000004', 'RoutePtuBrand Vanguard Core', 'armour', 'RoutePtuBrand', 1)`,
+      ),
+    ]);
+  });
+
+  it("returns LIVE sets when channel absent", async () => {
+    const res = await SELF.fetch("http://localhost/api/loot/sets");
+    expect(res.status).toBe(200);
+    const sets = (await res.json()) as Array<{ manufacturer: string }>;
+    const mfrs = sets.map((s) => s.manufacturer);
+    expect(mfrs).toContain("RouteLiveBrand");
+    expect(mfrs).not.toContain("RoutePtuBrand");
+  });
+
+  it("returns PTU sets when ?channel=PTU", async () => {
+    const res = await SELF.fetch("http://localhost/api/loot/sets?channel=PTU");
+    expect(res.status).toBe(200);
+    const sets = (await res.json()) as Array<{ manufacturer: string }>;
+    const mfrs = sets.map((s) => s.manufacturer);
+    expect(mfrs).toContain("RoutePtuBrand");
+    expect(mfrs).not.toContain("RouteLiveBrand");
+  });
+});
+
+describe("GET /api/loot/locations honors ?channel=PTU", () => {
+  beforeAll(async () => {
+    await setupTestDatabase(env.DB);
+    await env.DB.batch([
+      env.DB.prepare(
+        `INSERT INTO loot_map (id, uuid, name, type, rarity, category, game_version_id) VALUES
+         (9301, '66660000-0000-0000-0000-000000000001', 'Route LIVE Loc', 'gear', 'Common', 'gear', 1)`,
+      ),
+      env.DB.prepare(
+        `INSERT INTO ptu_loot_map (id, uuid, name, type, rarity, category, game_version_id) VALUES
+         (9302, '66660000-0000-0000-0000-000000000002', 'Route PTU Loc', 'gear', 'Common', 'gear', 1)`,
+      ),
+      env.DB.prepare(
+        `INSERT INTO loot_item_locations (loot_map_id, source_type, location_key, game_version_id)
+         VALUES (9301, 'container', 'route-live-container', 1)`,
+      ),
+      env.DB.prepare(
+        `INSERT INTO ptu_loot_item_locations (loot_map_id, source_type, location_key, game_version_id)
+         VALUES (9302, 'container', 'route-ptu-container', 1)`,
+      ),
+    ]);
+  });
+
+  it("returns LIVE summary when channel absent", async () => {
+    const res = await SELF.fetch("http://localhost/api/loot/locations");
+    expect(res.status).toBe(200);
+    const summary = (await res.json()) as { containers: Array<{ key: string }> };
+    const keys = summary.containers.map((c) => c.key);
+    expect(keys).toContain("route-live-container");
+    expect(keys).not.toContain("route-ptu-container");
+  });
+
+  it("returns PTU summary when ?channel=PTU", async () => {
+    const res = await SELF.fetch("http://localhost/api/loot/locations?channel=PTU");
+    expect(res.status).toBe(200);
+    const summary = (await res.json()) as { containers: Array<{ key: string }> };
+    const keys = summary.containers.map((c) => c.key);
+    expect(keys).toContain("route-ptu-container");
+    expect(keys).not.toContain("route-live-container");
+  });
+});
+
+describe("GET /api/loot/locations/:type/:slug honors ?channel=PTU", () => {
+  beforeAll(async () => {
+    await setupTestDatabase(env.DB);
+    await env.DB.batch([
+      env.DB.prepare(
+        `INSERT INTO loot_map (id, uuid, name, type, rarity, category, game_version_id) VALUES
+         (9401, '77770000-0000-0000-0000-000000000001', 'Route LIVE Detail Loc Item', 'gear', 'Common', 'gear', 1)`,
+      ),
+      env.DB.prepare(
+        `INSERT INTO ptu_loot_map (id, uuid, name, type, rarity, category, game_version_id) VALUES
+         (9402, '77770000-0000-0000-0000-000000000002', 'Route PTU Detail Loc Item', 'gear', 'Common', 'gear', 1)`,
+      ),
+      env.DB.prepare(
+        `INSERT INTO loot_item_locations (loot_map_id, source_type, location_key, game_version_id)
+         VALUES (9401, 'container', 'route-shared-detail-key', 1)`,
+      ),
+      env.DB.prepare(
+        `INSERT INTO ptu_loot_item_locations (loot_map_id, source_type, location_key, game_version_id)
+         VALUES (9402, 'container', 'route-shared-detail-key', 1)`,
+      ),
+    ]);
+  });
+
+  it("returns LIVE items when channel absent", async () => {
+    const res = await SELF.fetch(
+      "http://localhost/api/loot/locations/container/route-shared-detail-key",
+    );
+    expect(res.status).toBe(200);
+    const body = (await res.json()) as { items: Array<{ name: string }> };
+    const names = body.items.map((i) => i.name);
+    expect(names).toContain("Route LIVE Detail Loc Item");
+    expect(names).not.toContain("Route PTU Detail Loc Item");
+  });
+
+  it("returns PTU items when ?channel=PTU", async () => {
+    const res = await SELF.fetch(
+      "http://localhost/api/loot/locations/container/route-shared-detail-key?channel=PTU",
+    );
+    expect(res.status).toBe(200);
+    const body = (await res.json()) as { items: Array<{ name: string }> };
+    const names = body.items.map((i) => i.name);
+    expect(names).toContain("Route PTU Detail Loc Item");
+    expect(names).not.toContain("Route LIVE Detail Loc Item");
   });
 });

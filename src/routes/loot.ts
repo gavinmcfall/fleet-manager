@@ -20,6 +20,7 @@ import {
 } from "../db/queries";
 import { validate } from "../lib/validation";
 import { cachedJson, cacheSlug } from "../lib/cache";
+import { getActiveChannel, isPTUChannel } from "../lib/ptu";
 
 // Auth middleware — reused for collection and wishlist sub-paths
 async function requireUser(c: Context<HonoEnv>, next: Next): Promise<Response | void> {
@@ -35,8 +36,10 @@ export function lootRoutes() {
 
   // GET /api/loot — all items (public), no JSON blobs
   app.get("/", async (c) => {
-    return cachedJson(c, `loot:items`, () =>
-      getLootItems(c.env.DB),
+    const channel = getActiveChannel(c);
+    const isPTU = isPTUChannel(channel);
+    return cachedJson(c, `loot:items:${channel.toLowerCase()}`, () =>
+      getLootItems(c.env.DB, isPTU),
     );
   });
 
@@ -108,7 +111,9 @@ export function lootRoutes() {
   // GET /api/loot/wishlist — current user's wishlisted items with location JSON
   app.get("/wishlist", async (c) => {
     const user = getAuthUser(c);
-    const items = await getUserLootWishlist(c.env.DB, user.id);
+    const channel = getActiveChannel(c);
+    const isPTU = isPTUChannel(channel);
+    const items = await getUserLootWishlist(c.env.DB, user.id, isPTU);
     return c.json(items);
   });
 
@@ -166,8 +171,10 @@ export function lootRoutes() {
 
   // GET /api/loot/locations — lightweight summary for POI directory (public)
   app.get("/locations", async (c) => {
-    return cachedJson(c, `loot:loc-summary`, () =>
-      getLootLocationSummary(c.env.DB),
+    const channel = getActiveChannel(c);
+    const isPTU = isPTUChannel(channel);
+    return cachedJson(c, `loot:loc-summary:${channel.toLowerCase()}`, () =>
+      getLootLocationSummary(c.env.DB, isPTU),
     );
   });
 
@@ -184,15 +191,27 @@ export function lootRoutes() {
       return c.json({ error: "Invalid location type" }, 400);
     }
     const slug = decodeURIComponent(c.req.param("slug"));
-    return cachedJson(c, `loot:loc-detail:${type}:${cacheSlug(slug)}`, () =>
-      getLootLocationDetail(c.env.DB, type as "container" | "shop" | "npc" | "contract", slug),
+    const channel = getActiveChannel(c);
+    const isPTU = isPTUChannel(channel);
+    return cachedJson(
+      c,
+      `loot:loc-detail:${type}:${cacheSlug(slug)}:${channel.toLowerCase()}`,
+      () =>
+        getLootLocationDetail(
+          c.env.DB,
+          type as "container" | "shop" | "npc" | "contract",
+          slug,
+          isPTU,
+        ),
     );
   });
 
   // GET /api/loot/sets — list all armor sets (public)
   app.get("/sets", async (c) => {
-    return cachedJson(c, `loot:sets`, () =>
-      getLootSets(c.env.DB),
+    const channel = getActiveChannel(c);
+    const isPTU = isPTUChannel(channel);
+    return cachedJson(c, `loot:sets:${channel.toLowerCase()}`, () =>
+      getLootSets(c.env.DB, isPTU),
     );
   });
 
@@ -200,23 +219,29 @@ export function lootRoutes() {
   app.get("/sets/:setSlug", async (c) => {
     const setSlug = c.req.param("setSlug");
     if (setSlug.length > 200) return c.json({ error: "Not found" }, 404);
-    return cachedJson(c, `loot:set-detail:${cacheSlug(setSlug)}`, async () => {
-      const set = await getLootSetBySlug(c.env.DB, setSlug);
-      if (!set) return null;
+    const channel = getActiveChannel(c);
+    const isPTU = isPTUChannel(channel);
+    return cachedJson(
+      c,
+      `loot:set-detail:${cacheSlug(setSlug)}:${channel.toLowerCase()}`,
+      async () => {
+        const set = await getLootSetBySlug(c.env.DB, setSlug, isPTU);
+        if (!set) return null;
 
-      const rewardTexts = SET_SLUG_REWARD_TEXTS[setSlug];
-      let awardingContracts: { id: number; title: string; giver_slug: string }[] = [];
-      if (rewardTexts && rewardTexts.length > 0) {
-        const placeholders = rewardTexts.map(() => "?").join(",");
-        const result = await c.env.DB
-          .prepare(`SELECT id, title, giver_slug FROM contracts WHERE reward_text IN (${placeholders})`)
-          .bind(...rewardTexts)
-          .all<{ id: number; title: string; giver_slug: string }>();
-        awardingContracts = result.results ?? [];
-      }
+        const rewardTexts = SET_SLUG_REWARD_TEXTS[setSlug];
+        let awardingContracts: { id: number; title: string; giver_slug: string }[] = [];
+        if (rewardTexts && rewardTexts.length > 0) {
+          const placeholders = rewardTexts.map(() => "?").join(",");
+          const result = await c.env.DB
+            .prepare(`SELECT id, title, giver_slug FROM contracts WHERE reward_text IN (${placeholders})`)
+            .bind(...rewardTexts)
+            .all<{ id: number; title: string; giver_slug: string }>();
+          awardingContracts = result.results ?? [];
+        }
 
-      return { ...set, awardingContracts };
-    });
+        return { ...set, awardingContracts };
+      },
+    );
   });
 
   // GET /api/loot/:uuid — full detail + location data (public)
@@ -224,8 +249,12 @@ export function lootRoutes() {
   app.get("/:uuid", async (c) => {
     const uuid = c.req.param("uuid");
     if (uuid.length > 50) return c.json({ error: "Not found" }, 404);
-    return cachedJson(c, `loot:detail:${cacheSlug(uuid)}`, () =>
-      getLootByUuid(c.env.DB, uuid),
+    const channel = getActiveChannel(c);
+    const isPTU = isPTUChannel(channel);
+    return cachedJson(
+      c,
+      `loot:detail:${cacheSlug(uuid)}:${channel.toLowerCase()}`,
+      () => getLootByUuid(c.env.DB, uuid, isPTU),
     );
   });
 
