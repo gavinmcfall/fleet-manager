@@ -16,24 +16,18 @@ async function seed() {
      VALUES ('test-bp-uuid-1', 'BP_CRAFT_TEST_RIFLE', 'Test Rifle', 'weapons', 'rifle', 60)`
   ).run();
   const bp = await db.prepare("SELECT id FROM crafting_blueprints WHERE uuid = 'test-bp-uuid-1'").first<{ id: number }>();
-  // Three duplicate slot rows for the same (bp_id, slot_index = 0)
-  // Column is 'name' per migration 0129 schema
-  for (let i = 0; i < 3; i++) {
-    await db.prepare(
-      `INSERT INTO crafting_blueprint_slots (crafting_blueprint_id, slot_index, name, resource_name, quantity, min_quality)
-       VALUES (?, 0, 'Barrel', 'Steel', 1, 0)`
-    ).bind(bp!.id).run();
-  }
-  // Three duplicate modifier rows for each slot, for crafting_property_id=1 (weapon_recoil_handling — seeded by 0129)
-  const slots = await db.prepare("SELECT id FROM crafting_blueprint_slots WHERE crafting_blueprint_id = ?").bind(bp!.id).all<{ id: number }>();
-  for (const s of slots.results) {
-    for (let i = 0; i < 3; i++) {
-      await db.prepare(
-        `INSERT INTO crafting_slot_modifiers (crafting_blueprint_slot_id, crafting_property_id, start_quality, end_quality, modifier_at_start, modifier_at_end)
-         VALUES (?, 1, 0, 1000, 1.0, 1.5)`
-      ).bind(s.id).run();
-    }
-  }
+  // One slot row — UNIQUE(crafting_blueprint_id, slot_index) enforced by migration 0216.
+  // Column is 'name' per migration 0129 schema.
+  await db.prepare(
+    `INSERT INTO crafting_blueprint_slots (crafting_blueprint_id, slot_index, name, resource_name, quantity, min_quality)
+     VALUES (?, 0, 'Barrel', 'Steel', 1, 0)`
+  ).bind(bp!.id).run();
+  // One modifier row — UNIQUE(crafting_blueprint_slot_id, crafting_property_id) enforced by migration 0216.
+  const slot = await db.prepare("SELECT id FROM crafting_blueprint_slots WHERE crafting_blueprint_id = ?").bind(bp!.id).first<{ id: number }>();
+  await db.prepare(
+    `INSERT INTO crafting_slot_modifiers (crafting_blueprint_slot_id, crafting_property_id, start_quality, end_quality, modifier_at_start, modifier_at_end)
+     VALUES (?, 1, 0, 1000, 1.0, 1.5)`
+  ).bind(slot!.id).run();
 }
 
 describe("crafting API dedupe", () => {
