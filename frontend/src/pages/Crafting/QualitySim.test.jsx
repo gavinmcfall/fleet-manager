@@ -51,4 +51,73 @@ describe('QualitySim', () => {
     const slider2 = screen.getByRole('slider')
     expect(slider2.value).toBe('500')
   })
+
+  it('renders mineral display name for item slots', () => {
+    const bp = {
+      id: 99,
+      base_stats: { item_name: 'Sniper', damage: 100, rounds_per_minute: 60, dps: 100 },
+      slots: [
+        {
+          slot_index: 0,
+          name: 'Frame',
+          resource_name: 'Iron',
+          slot_type: 'resource',
+          item_class: null,
+          modifiers: [{ key: 'weapon_damage', name: 'Damage', start_quality: 0, end_quality: 1000, modifier_at_start: 1, modifier_at_end: 1.2 }],
+        },
+        {
+          slot_index: 1,
+          name: 'Precision Parts',
+          resource_name: 'Hadanite',
+          slot_type: 'item',
+          item_class: 'harvestable_mineral_1h_hadanite',
+          modifiers: [{ key: 'weapon_damage', name: 'Damage', start_quality: 0, end_quality: 1000, modifier_at_start: 0.9, modifier_at_end: 1.1 }],
+        },
+      ],
+    }
+    render(<QualitySim blueprint={bp} />)
+    // Resource slot label visible
+    expect(screen.getByText('Iron')).toBeTruthy()
+    // Item slot's mineral name visible (rendered via QualitySlider)
+    expect(screen.getByText('Hadanite')).toBeTruthy()
+  })
+
+  it('marks item slots with a MINERAL badge so users can distinguish them', () => {
+    const bp = {
+      id: 100,
+      base_stats: { item_name: 'Sniper', damage: 100, rounds_per_minute: 60, dps: 100 },
+      slots: [
+        {
+          slot_index: 0,
+          name: 'Precision Parts',
+          resource_name: 'Hadanite',
+          slot_type: 'item',
+          item_class: 'harvestable_mineral_1h_hadanite',
+          modifiers: [{ key: 'weapon_damage', name: 'Damage', start_quality: 0, end_quality: 1000, modifier_at_start: 0.9, modifier_at_end: 1.1 }],
+        },
+      ],
+    }
+    render(<QualitySim blueprint={bp} />)
+    // The MINERAL badge text appears for item slots
+    expect(screen.getByText('MINERAL')).toBeTruthy()
+  })
+
+  it('does NOT show MINERAL badge on resource slots', () => {
+    const bp = {
+      id: 101,
+      base_stats: { item_name: 'Rifle', damage: 100, rounds_per_minute: 60, dps: 100 },
+      slots: [
+        {
+          slot_index: 0,
+          name: 'Frame',
+          resource_name: 'Iron',
+          slot_type: 'resource',
+          item_class: null,
+          modifiers: [{ key: 'weapon_damage', name: 'Damage', start_quality: 0, end_quality: 1000, modifier_at_start: 1, modifier_at_end: 1.2 }],
+        },
+      ],
+    }
+    render(<QualitySim blueprint={bp} />)
+    expect(screen.queryByText('MINERAL')).toBeNull()
+  })
 })

@@ -6,6 +6,7 @@ import {
   getStatLabel, getStatDescription,
   resourceColor, resourceBgColor, resourceBorderColor,
   computeActualValue, formatActualValue, computeDPS,
+  isItemSlot,
 } from './craftingUtils'
 
 function Tooltip({ text, children, position = 'top' }) {
@@ -62,17 +63,28 @@ function QualitySlider({ slot, value, onChange }) {
       <div className="flex items-center justify-between mb-1.5">
         <div className="flex items-center gap-2">
           <span className="text-xs font-medium text-gray-300">{slot.name}</span>
-          <span
-            className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded-full text-[10px] font-medium border"
-            style={{
-              backgroundColor: resourceBgColor(slot.resource_name),
-              borderColor: resourceBorderColor(slot.resource_name),
-              color: resourceColor(slot.resource_name),
-            }}
-          >
-            <Gem className="w-2.5 h-2.5" />
-            {slot.resource_name}
-          </span>
+          {isItemSlot(slot) ? (
+            <span
+              className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded-full text-[10px] font-medium border bg-violet-500/15 text-violet-300 border-violet-500/30"
+              title="This slot requires a specific harvestable mineral, not a generic resource. Quality slider works the same way."
+            >
+              <Gem className="w-2.5 h-2.5" />
+              {slot.resource_name}
+              <span className="ml-1 px-1 py-px rounded text-[8px] font-bold tracking-wider bg-violet-500/20 text-violet-200">MINERAL</span>
+            </span>
+          ) : (
+            <span
+              className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded-full text-[10px] font-medium border"
+              style={{
+                backgroundColor: resourceBgColor(slot.resource_name),
+                borderColor: resourceBorderColor(slot.resource_name),
+                color: resourceColor(slot.resource_name),
+              }}
+            >
+              <Gem className="w-2.5 h-2.5" />
+              {slot.resource_name}
+            </span>
+          )}
         </div>
         <input
           type="text"
