@@ -43,7 +43,8 @@ describe('QualitySim', () => {
     // Move slider on bp1 to 1000
     const slider1 = screen.getByRole('slider')
     fireEvent.change(slider1, { target: { value: '1000' } })
-    expect(screen.getAllByDisplayValue('1000').length).toBeGreaterThan(0)
+    // Both the range input and the text input in QualitySlider show the same value.
+    expect(screen.getAllByDisplayValue('1000')).toHaveLength(2)
 
     // Switch to bp2 — key change forces fresh state, slider resets to default 500
     rerender(<Wrapper blueprint={bp2} />)
