@@ -19,6 +19,13 @@ export default defineWorkersConfig(async () => {
       globals: true,
       include: ["test/**/*.test.ts"],
       hookTimeout: 30000,
+      // vitest-pool-workers' isolated-storage feature flakes occasionally
+      // with "Network connection lost" on heavy D1 workloads (gdpr-cascade
+      // is the most common victim). --max-workers=1 --no-isolate flags in
+      // package.json reduce the rate substantially but don't eliminate it.
+      // Auto-retry covers the residual flake without papering over real
+      // failures: a genuinely-broken test fails all 3 attempts.
+      retry: 2,
       poolOptions: {
         workers: {
           wrangler: { configPath: "./wrangler.toml" },
