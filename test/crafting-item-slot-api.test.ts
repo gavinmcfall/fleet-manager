@@ -54,4 +54,25 @@ describe("crafting API — slot_type and item_class fields", () => {
     expect(bp.slots[0].item_class).toBe("harvestable_mineral_1h_hadanite");
     expect(bp.slots[0].resource_name).toBe("Hadanite");
   });
+
+  it("omitting slot_type in INSERT yields slot_type='resource' in API response (legacy data shape)", async () => {
+    const db = env.DB as D1Database;
+    // Insert a slot the way pre-0217 pipeline code would have — no slot_type column.
+    // The DEFAULT 'resource' from migration 0217 backfills the column.
+    const bp = await db.prepare(
+      "SELECT id FROM crafting_blueprints WHERE uuid = 'api-bp-resource'"
+    ).first<{ id: number }>();
+    await db.prepare(
+      `INSERT INTO crafting_blueprint_slots (crafting_blueprint_id, slot_index, name, slot_name, resource_name, quantity, min_quality)
+       VALUES (?, 1, 'Legacy', 'Legacy', 'Quantanium', 1, 0)`
+    ).bind(bp!.id).run();
+
+    const res = await SELF.fetch("https://x/api/gamedata/crafting");
+    const body = await res.json() as { blueprints: Array<{ uuid: string; slots: Array<Record<string, unknown>> }> };
+    const bpResult = body.blueprints.find(b => b.uuid === "api-bp-resource")!;
+    const legacySlot = bpResult.slots.find(s => s.slot_index === 1);
+    expect(legacySlot).toBeDefined();
+    expect(legacySlot!.slot_type).toBe("resource");
+    expect(legacySlot!.item_class).toBeNull();
+  });
 });
