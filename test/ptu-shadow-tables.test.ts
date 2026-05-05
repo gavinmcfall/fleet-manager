@@ -544,3 +544,139 @@ describe("GET /api/loot/locations/:type/:slug honors ?channel=PTU", () => {
     expect(names).not.toContain("Route LIVE Detail Loc Item");
   });
 });
+
+// -------------------------------------------------------------------
+// Admin PTU purge: DELETE /api/admin/versions/ptu
+// -------------------------------------------------------------------
+//
+// The endpoint DROPs all ptu_* tables (VERSIONED_TABLES + child junctions),
+// NULLs build_number on the channel's game_versions row, and purges the
+// KV cache. Re-applying migration 0215 re-creates the empty ptu_* tables.
+//
+// We mount adminRoutes() in a fresh Hono app to bypass the auth middleware
+// configured in src/index.ts (which only fires for /api/admin/* paths there).
+
+describe("admin PTU purge - DELETE /api/admin/versions/ptu", () => {
+  beforeAll(async () => {
+    await setupTestDatabase(env.DB);
+    // Seed a PTU game_versions row with a build_number, plus a ptu_loot_map row
+    // so we have something concrete to drop and verify.
+    await env.DB.prepare(
+      `INSERT OR IGNORE INTO game_versions (uuid, code, channel, is_default, released_at, build_number)
+       VALUES ('test-ptu-version-purge', '4.8.0-ptu', 'PTU', 0, '2026-05-01', 'test-build-12345')`,
+    ).run();
+    // If the row already existed (from prior tests in same DB), make sure
+    // build_number is set so we can verify the NULL update.
+    await env.DB.prepare(
+      `UPDATE game_versions SET build_number = 'test-build-12345' WHERE channel = 'PTU'`,
+    ).run();
+    await env.DB.prepare(
+      `INSERT OR IGNORE INTO ptu_loot_map (uuid, name, type, rarity, category, game_version_id)
+       SELECT 'purgetest-aaaa-0001', 'PTU Purge Item', 'gear', 'common', 'gear', id
+       FROM game_versions WHERE channel = 'PTU' LIMIT 1`,
+    ).run();
+  });
+
+  it("seeded ptu_loot_map has the purge-test row before DELETE", async () => {
+    const tables = await env.DB
+      .prepare(
+        `SELECT name FROM sqlite_master WHERE type='table' AND name='ptu_loot_map'`,
+      )
+      .all<{ name: string }>();
+    expect(tables.results.length).toBe(1);
+    const row = await env.DB
+      .prepare(`SELECT name FROM ptu_loot_map WHERE uuid = 'purgetest-aaaa-0001'`)
+      .first<{ name: string }>();
+    expect(row?.name).toBe("PTU Purge Item");
+  });
+
+  it("DROPs all ptu_* tables and NULLs build_number when the endpoint is invoked", async () => {
+    // Pre-conditions: build_number is set
+    const before = await env.DB
+      .prepare(`SELECT build_number FROM game_versions WHERE channel = 'PTU' LIMIT 1`)
+      .first<{ build_number: string | null }>();
+    expect(before?.build_number).toBe("test-build-12345");
+
+    const ptuTablesBefore = await env.DB
+      .prepare(`SELECT name FROM sqlite_master WHERE type='table' AND name LIKE 'ptu_%'`)
+      .all<{ name: string }>();
+    expect(ptuTablesBefore.results.length).toBeGreaterThan(0);
+
+    // Mount adminRoutes() in a fresh Hono app to bypass /api/admin/* auth middleware.
+    const { Hono } = await import("hono");
+    const { adminRoutes } = await import("../src/routes/admin");
+    const app = new Hono();
+    app.route("/api/admin", adminRoutes());
+
+    // Provide a minimal env: real D1 + the SC_BRIDGE_CACHE KV from miniflare.
+    // miniflare exposes the KV namespace via env, but cloudflare:test only
+    // re-exports DB. Stub the KV with the methods purgeByPrefix needs.
+    const fakeKv = {
+      list: async () => ({ keys: [], list_complete: true, cursor: undefined }),
+      delete: async () => undefined,
+      get: async () => null,
+      put: async () => undefined,
+    };
+
+    const res = await app.request(
+      "/api/admin/versions/ptu",
+      {
+        method: "DELETE",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ channel: "PTU" }),
+      },
+      { DB: env.DB, SC_BRIDGE_CACHE: fakeKv } as unknown as Record<string, unknown>,
+    );
+
+    expect(res.status).toBe(200);
+    const body = (await res.json()) as { ok: boolean; tables_purged: number; channel: string };
+    expect(body.ok).toBe(true);
+    expect(body.channel).toBe("PTU");
+    expect(body.tables_purged).toBeGreaterThan(0);
+
+    // Post-conditions: ptu_loot_map (and all other ptu_*) tables are gone.
+    const ptuTablesAfter = await env.DB
+      .prepare(`SELECT name FROM sqlite_master WHERE type='table' AND name LIKE 'ptu_%'`)
+      .all<{ name: string }>();
+    expect(ptuTablesAfter.results.length).toBe(0);
+
+    // build_number cleared on the channel row.
+    const after = await env.DB
+      .prepare(`SELECT build_number FROM game_versions WHERE channel = 'PTU' LIMIT 1`)
+      .first<{ build_number: string | null }>();
+    expect(after?.build_number).toBeNull();
+  });
+
+  it("returns 404 when the requested channel has no game_versions row", async () => {
+    // Make sure no EPTU row exists for this assertion.
+    await env.DB
+      .prepare(`DELETE FROM game_versions WHERE channel = 'EPTU'`)
+      .run();
+
+    const { Hono } = await import("hono");
+    const { adminRoutes } = await import("../src/routes/admin");
+    const app = new Hono();
+    app.route("/api/admin", adminRoutes());
+
+    const fakeKv = {
+      list: async () => ({ keys: [], list_complete: true, cursor: undefined }),
+      delete: async () => undefined,
+      get: async () => null,
+      put: async () => undefined,
+    };
+
+    const res = await app.request(
+      "/api/admin/versions/ptu",
+      {
+        method: "DELETE",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ channel: "EPTU" }),
+      },
+      { DB: env.DB, SC_BRIDGE_CACHE: fakeKv } as unknown as Record<string, unknown>,
+    );
+
+    expect(res.status).toBe(404);
+    const body = (await res.json()) as { error: string };
+    expect(body.error).toContain("EPTU");
+  });
+});
