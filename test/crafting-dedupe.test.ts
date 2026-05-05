@@ -31,6 +31,15 @@ async function seed() {
 }
 
 describe("crafting API dedupe", () => {
+  // NOTE: This suite seeds exactly 1 slot and 1 modifier per blueprint.
+  // Migration 0216 added UNIQUE indexes on (crafting_blueprint_id, slot_index)
+  // and (crafting_blueprint_slot_id, crafting_property_id), so any attempt to
+  // insert duplicate rows at the DB level will now fail with a constraint
+  // violation. As a result, the GROUP BY clauses in the /api/gamedata/crafting
+  // query are defense-in-depth only — they cannot be exercised through the API
+  // in a correctly migrated database. Coverage for the dedupe-of-actual-dupes
+  // scenario (inserting rows before the UNIQUE index exists, then deduplicating)
+  // lives in test/migration-0216.test.ts.
   beforeAll(async () => {
     await setupTestDatabase(env.DB);
   });

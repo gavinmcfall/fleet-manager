@@ -67,7 +67,10 @@ CREATE TABLE IF NOT EXISTS ptu_crafting_slot_modifiers (
     start_quality INTEGER NOT NULL DEFAULT 0,
     end_quality INTEGER NOT NULL DEFAULT 1000,
     modifier_at_start REAL NOT NULL DEFAULT 1.0,
-    modifier_at_end REAL NOT NULL DEFAULT 1.0
+    modifier_at_end REAL NOT NULL DEFAULT 1.0,
+    blueprint_uuid TEXT,
+    property_id TEXT,
+    slot_index INTEGER
 );
 
 CREATE INDEX IF NOT EXISTS ptu_idx_crafting_slot_modifiers_slot
