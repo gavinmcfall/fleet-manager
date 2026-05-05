@@ -331,7 +331,7 @@ export default function QualitySimPage() {
           </div>
 
           {/* Quality Sim */}
-          <QualitySim blueprint={selectedBlueprint} />
+          <QualitySim key={selectedBlueprint.id} blueprint={selectedBlueprint} />
         </div>
       )}
     </div>
