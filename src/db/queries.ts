@@ -18,22 +18,29 @@ import { extractSetName, makeSetSlug } from "../lib/loot-sets";
 // --- Loot summary stats (category-aware card display) ---
 // LEFT JOINs to detail tables for key stats shown on item cards.
 // Each loot_map row has at most ONE FK set, so only one JOIN produces data per row.
-const LOOT_SUMMARY_JOINS = `
-        LEFT JOIN fps_weapons _fw ON _fw.id = lm.fps_weapon_id
-        LEFT JOIN fps_melee _fm ON _fm.id = lm.fps_melee_id
-        LEFT JOIN fps_armour _fa ON _fa.id = lm.fps_armour_id
-        LEFT JOIN fps_helmets _fh ON _fh.id = lm.fps_helmet_id
-        LEFT JOIN fps_clothing _fcl ON _fcl.id = lm.fps_clothing_id
-        LEFT JOIN fps_attachments _fat ON _fat.id = lm.fps_attachment_id
-        LEFT JOIN fps_utilities _fu ON _fu.id = lm.fps_utility_id
-        LEFT JOIN fps_carryables _fca ON _fca.id = lm.fps_carryable_id
-        LEFT JOIN vehicle_components _vc ON _vc.id = lm.vehicle_component_id
-        LEFT JOIN component_weapons _vcw ON _vcw.component_id = _vc.id
-        LEFT JOIN component_powerplants _vcp ON _vcp.component_id = _vc.id
-        LEFT JOIN component_coolers _vcc ON _vcc.component_id = _vc.id
-        LEFT JOIN component_shields _vcs ON _vcs.component_id = _vc.id
-        LEFT JOIN component_quantum_drives _vcq ON _vcq.component_id = _vc.id
-        LEFT JOIN ship_missiles _sm ON _sm.id = lm.ship_missile_id`;
+//
+// Channel-aware: when isPTU is true, every JOIN target resolves to its ptu_*
+// shadow table so summary stats stay within the channel and don't cross-pollinate
+// between LIVE and PTU data.
+function lootSummaryJoins(isPTU: boolean): string {
+  const t = (name: string) => (isPTU ? `ptu_${name}` : name);
+  return `
+        LEFT JOIN ${t("fps_weapons")} _fw ON _fw.id = lm.fps_weapon_id
+        LEFT JOIN ${t("fps_melee")} _fm ON _fm.id = lm.fps_melee_id
+        LEFT JOIN ${t("fps_armour")} _fa ON _fa.id = lm.fps_armour_id
+        LEFT JOIN ${t("fps_helmets")} _fh ON _fh.id = lm.fps_helmet_id
+        LEFT JOIN ${t("fps_clothing")} _fcl ON _fcl.id = lm.fps_clothing_id
+        LEFT JOIN ${t("fps_attachments")} _fat ON _fat.id = lm.fps_attachment_id
+        LEFT JOIN ${t("fps_utilities")} _fu ON _fu.id = lm.fps_utility_id
+        LEFT JOIN ${t("fps_carryables")} _fca ON _fca.id = lm.fps_carryable_id
+        LEFT JOIN ${t("vehicle_components")} _vc ON _vc.id = lm.vehicle_component_id
+        LEFT JOIN ${t("component_weapons")} _vcw ON _vcw.component_id = _vc.id
+        LEFT JOIN ${t("component_powerplants")} _vcp ON _vcp.component_id = _vc.id
+        LEFT JOIN ${t("component_coolers")} _vcc ON _vcc.component_id = _vc.id
+        LEFT JOIN ${t("component_shields")} _vcs ON _vcs.component_id = _vc.id
+        LEFT JOIN ${t("component_quantum_drives")} _vcq ON _vcq.component_id = _vc.id
+        LEFT JOIN ${t("ship_missiles")} _sm ON _sm.id = lm.ship_missile_id`;
+}
 
 const LOOT_SUMMARY_COLS = `
         COALESCE(_fw.dps, _vcw.dps) as dps,
@@ -62,21 +69,20 @@ const LOOT_SUMMARY_COLS = `
 // Reusable SQL fragment for SELECT clauses that compute boolean flags from JSON blob columns.
 // Each flag is 1 if the JSON column contains actual data, 0 otherwise.
 //
-// Channel-aware: when isPTU is true, EXISTS subqueries target ptu_loot_item_locations
-// instead of loot_item_locations. terminal_inventory is shared across channels (live
-// economy data), so it is NOT prefixed.
+// Channel-aware: when isPTU is true, every versioned table referenced here
+// (loot_item_locations, terminal_inventory) routes to its ptu_* shadow. This
+// keeps channel data hermetic — Task 2's pilot left terminal_inventory shared,
+// but terminal_inventory IS in VERSIONED_TABLES, and cross-channel mixing in
+// has_shops would silently surface PTU prices on LIVE pages (and vice versa).
 function lootHasFlags(isPTU: boolean): string {
   const lil = isPTU ? "ptu_loot_item_locations" : "loot_item_locations";
+  const ti = isPTU ? "ptu_terminal_inventory" : "terminal_inventory";
   return `
         EXISTS(SELECT 1 FROM ${lil} lil WHERE lil.loot_map_id = lm.id AND lil.source_type = 'container') as has_containers,
-        EXISTS(SELECT 1 FROM terminal_inventory ti WHERE ti.item_uuid = lm.uuid AND ti.latest_source IS NOT NULL AND (ti.latest_buy_price > 0 OR ti.latest_sell_price > 0)) as has_shops,
+        EXISTS(SELECT 1 FROM ${ti} ti WHERE ti.item_uuid = lm.uuid AND ti.latest_source IS NOT NULL AND (ti.latest_buy_price > 0 OR ti.latest_sell_price > 0)) as has_shops,
         EXISTS(SELECT 1 FROM ${lil} lil WHERE lil.loot_map_id = lm.id AND lil.source_type = 'npc') as has_npcs,
         EXISTS(SELECT 1 FROM ${lil} lil WHERE lil.loot_map_id = lm.id AND lil.source_type = 'contract') as has_contracts`;
 }
-
-// Backward-compat alias for callers that haven't been updated yet (Task 3 will migrate
-// these to lootHasFlags(isPTU)). Defaults to the LIVE channel.
-const LOOT_HAS_FLAGS = lootHasFlags(false);
 
 // --- Nullable helpers (mirror Go's nullableStr/nullableFloat/nullableInt) ---
 
@@ -1071,7 +1077,7 @@ export async function getLootItems(db: D1Database, isPTU = false): Promise<LootI
         ${lootHasFlags(isPTU)},
         ${LOOT_SUMMARY_COLS}
       FROM ${lm} lm
-      ${LOOT_SUMMARY_JOINS}
+      ${lootSummaryJoins(isPTU)}
       WHERE lm.name NOT IN ('<= PLACEHOLDER =>')
         AND lm.name NOT LIKE 'EntityClassDefinition.%'
         AND (lm.type IS NOT NULL AND lm.type != '' OR lm.category IS NOT NULL)
@@ -1093,9 +1099,14 @@ export async function getLootItems(db: D1Database, isPTU = false): Promise<LootI
   return result.results as unknown as LootItem[];
 }
 
-export async function getLootByUuid(db: D1Database, uuid: string): Promise<Record<string, unknown> | null> {
+export async function getLootByUuid(db: D1Database, uuid: string, isPTU = false): Promise<Record<string, unknown> | null> {
+  // Channel-aware table aliases. Every versioned table this function references
+  // routes through `t(...)`; non-versioned tables (npc_factions, user_*, etc.)
+  // stay unprefixed.
+  const t = (name: string) => (isPTU ? `ptu_${name}` : name);
+
   const sql = `SELECT lm.*
-      FROM loot_map lm
+      FROM ${t("loot_map")} lm
       WHERE lm.uuid = ?`;
   const row = await db.prepare(sql).bind(uuid).first();
   if (!row) return null;
@@ -1112,55 +1123,55 @@ export async function getLootByUuid(db: D1Database, uuid: string): Promise<Recor
         fw.projectile_speed, fw.effective_range, fw.dps,
         COALESCE(fa.display_name, fa.name) as magazine_name, fa.magazine_capacity as magazine_size,
         mag_lm.uuid as magazine_loot_uuid
-        FROM fps_weapons fw
-        LEFT JOIN fps_ammo_types fa ON fa.uuid = fw.magazine_uuid
-        LEFT JOIN loot_map mag_lm ON mag_lm.uuid = fw.magazine_uuid
+        FROM ${t("fps_weapons")} fw
+        LEFT JOIN ${t("fps_ammo_types")} fa ON fa.uuid = fw.magazine_uuid
+        LEFT JOIN ${t("loot_map")} mag_lm ON mag_lm.uuid = fw.magazine_uuid
         WHERE fw.id = ?`)
       .bind(item.fps_weapon_id)
       .first() as Record<string, unknown> | null;
   } else if (item.fps_melee_id) {
     details = await db
-      .prepare("SELECT name, sub_type as type, size, description, damage, heavy_damage, damage_type, attack_types, can_block, can_takedown FROM fps_melee WHERE id = ?")
+      .prepare(`SELECT name, sub_type as type, size, description, damage, heavy_damage, damage_type, attack_types, can_block, can_takedown FROM ${t("fps_melee")} WHERE id = ?`)
       .bind(item.fps_melee_id)
       .first() as Record<string, unknown> | null;
   } else if (item.fps_armour_id) {
     details = await db
-      .prepare("SELECT name, sub_type as type, size, grade, description, resist_physical, resist_energy, resist_distortion, resist_thermal, resist_biochemical, resist_stun, ir_emission, em_emission, item_port_count FROM fps_armour WHERE id = ?")
+      .prepare(`SELECT name, sub_type as type, size, grade, description, resist_physical, resist_energy, resist_distortion, resist_thermal, resist_biochemical, resist_stun, ir_emission, em_emission, item_port_count FROM ${t("fps_armour")} WHERE id = ?`)
       .bind(item.fps_armour_id)
       .first() as Record<string, unknown> | null;
   } else if (item.fps_attachment_id) {
     details = await db
-      .prepare("SELECT name, sub_type as type, size, description, zoom_scale, second_zoom_scale, damage_multiplier, sound_radius_multiplier FROM fps_attachments WHERE id = ?")
+      .prepare(`SELECT name, sub_type as type, size, description, zoom_scale, second_zoom_scale, damage_multiplier, sound_radius_multiplier FROM ${t("fps_attachments")} WHERE id = ?`)
       .bind(item.fps_attachment_id)
       .first() as Record<string, unknown> | null;
   } else if (item.fps_utility_id) {
     details = await db
-      .prepare("SELECT name, sub_type as type, description, heal_amount, effect_duration, consumable_type, damage, blast_radius, fuse_time, device_type FROM fps_utilities WHERE id = ?")
+      .prepare(`SELECT name, sub_type as type, description, heal_amount, effect_duration, consumable_type, damage, blast_radius, fuse_time, device_type FROM ${t("fps_utilities")} WHERE id = ?`)
       .bind(item.fps_utility_id)
       .first() as Record<string, unknown> | null;
   } else if (item.fps_helmet_id) {
     details = await db
-      .prepare("SELECT name, sub_type as type, size, grade, description, resist_physical, resist_energy, resist_distortion, resist_thermal, resist_biochemical, resist_stun, ir_emission, em_emission, item_port_count, atmosphere_capacity FROM fps_helmets WHERE id = ?")
+      .prepare(`SELECT name, sub_type as type, size, grade, description, resist_physical, resist_energy, resist_distortion, resist_thermal, resist_biochemical, resist_stun, ir_emission, em_emission, item_port_count, atmosphere_capacity FROM ${t("fps_helmets")} WHERE id = ?`)
       .bind(item.fps_helmet_id)
       .first() as Record<string, unknown> | null;
   } else if (item.fps_clothing_id) {
     details = await db
-      .prepare("SELECT name, slot, sub_type, size, grade, description, resist_physical, resist_energy, resist_distortion, resist_thermal, resist_biochemical, resist_stun, ir_emission, em_emission, storage_capacity, temperature_range_min, temperature_range_max FROM fps_clothing WHERE id = ?")
+      .prepare(`SELECT name, slot, sub_type, size, grade, description, resist_physical, resist_energy, resist_distortion, resist_thermal, resist_biochemical, resist_stun, ir_emission, em_emission, storage_capacity, temperature_range_min, temperature_range_max FROM ${t("fps_clothing")} WHERE id = ?`)
       .bind(item.fps_clothing_id)
       .first() as Record<string, unknown> | null;
   } else if (item.fps_carryable_id) {
     details = await db
-      .prepare("SELECT name, sub_type as type, description, mass, interaction_type, value FROM fps_carryables WHERE id = ?")
+      .prepare(`SELECT name, sub_type as type, description, mass, interaction_type, value FROM ${t("fps_carryables")} WHERE id = ?`)
       .bind(item.fps_carryable_id)
       .first() as Record<string, unknown> | null;
   } else if (item.consumable_id) {
     details = await db
-      .prepare("SELECT name, type, sub_type, description, uuid FROM consumables WHERE id = ?")
+      .prepare(`SELECT name, type, sub_type, description, uuid FROM ${t("consumables")} WHERE id = ?`)
       .bind(item.consumable_id)
       .first() as Record<string, unknown> | null;
     if (details?.uuid) {
       const effects = await db
-        .prepare(`SELECT effect_key, magnitude, duration_seconds FROM consumable_effects WHERE consumable_uuid = ?`)
+        .prepare(`SELECT effect_key, magnitude, duration_seconds FROM ${t("consumable_effects")} WHERE consumable_uuid = ?`)
         .bind(details.uuid as string)
         .all();
       (details as Record<string, unknown>).effects = effects.results;
@@ -1171,7 +1182,7 @@ export async function getLootByUuid(db: D1Database, uuid: string): Promise<Recor
   // Fallback: magazines have no FK from loot_map — match by UUID to fps_ammo_types
   if (!details && item.sub_type === 'Magazine') {
     details = await db
-      .prepare(`SELECT COALESCE(fa.display_name, fa.name) as name, fa.caliber, fa.damage_per_round, fa.damage_type, fa.projectile_speed, fa.magazine_capacity FROM fps_ammo_types fa WHERE fa.uuid = ?`)
+      .prepare(`SELECT COALESCE(fa.display_name, fa.name) as name, fa.caliber, fa.damage_per_round, fa.damage_type, fa.projectile_speed, fa.magazine_capacity FROM ${t("fps_ammo_types")} fa WHERE fa.uuid = ?`)
       .bind(uuid)
       .first() as Record<string, unknown> | null;
   }
@@ -1180,7 +1191,7 @@ export async function getLootByUuid(db: D1Database, uuid: string): Promise<Recor
   // (medical pens exist in consumable_effects but not in the consumables table)
   if (!details?.effects && (item.type === 'FPS_Consumable' || item.category === 'Consumable')) {
     const effects = await db
-      .prepare(`SELECT effect_key, magnitude, duration_seconds FROM consumable_effects WHERE consumable_uuid = ?`)
+      .prepare(`SELECT effect_key, magnitude, duration_seconds FROM ${t("consumable_effects")} WHERE consumable_uuid = ?`)
       .bind(uuid)
       .all();
     if (effects.results.length > 0) {
@@ -1191,12 +1202,12 @@ export async function getLootByUuid(db: D1Database, uuid: string): Promise<Recor
 
   if (item.harvestable_id) {
     details = await db
-      .prepare("SELECT name, sub_type as type, description FROM harvestables WHERE id = ?")
+      .prepare(`SELECT name, sub_type as type, description FROM ${t("harvestables")} WHERE id = ?`)
       .bind(item.harvestable_id)
       .first() as Record<string, unknown> | null;
   } else if (item.props_id) {
     details = await db
-      .prepare("SELECT name, type, sub_type, description FROM props WHERE id = ?")
+      .prepare(`SELECT name, type, sub_type, description FROM ${t("props")} WHERE id = ?`)
       .bind(item.props_id)
       .first() as Record<string, unknown> | null;
   } else if (item.vehicle_component_id) {
@@ -1216,22 +1227,22 @@ export async function getLootByUuid(db: D1Database, uuid: string): Promise<Recor
         cth.thrust_force, cth.fuel_burn_rate,
         cr.radar_range, cr.radar_angle,
         ce.qed_range, ce.qed_strength
-      FROM vehicle_components vc
-      LEFT JOIN component_powerplants cp ON cp.component_id = vc.id
-      LEFT JOIN component_coolers cc ON cc.component_id = vc.id
-      LEFT JOIN component_shields cs ON cs.component_id = vc.id
-      LEFT JOIN component_quantum_drives cq ON cq.component_id = vc.id
-      LEFT JOIN component_weapons cw ON cw.component_id = vc.id
-      LEFT JOIN component_turrets ct ON ct.component_id = vc.id
-      LEFT JOIN component_thrusters cth ON cth.component_id = vc.id
-      LEFT JOIN component_radar cr ON cr.component_id = vc.id
-      LEFT JOIN component_qed ce ON ce.component_id = vc.id
+      FROM ${t("vehicle_components")} vc
+      LEFT JOIN ${t("component_powerplants")} cp ON cp.component_id = vc.id
+      LEFT JOIN ${t("component_coolers")} cc ON cc.component_id = vc.id
+      LEFT JOIN ${t("component_shields")} cs ON cs.component_id = vc.id
+      LEFT JOIN ${t("component_quantum_drives")} cq ON cq.component_id = vc.id
+      LEFT JOIN ${t("component_weapons")} cw ON cw.component_id = vc.id
+      LEFT JOIN ${t("component_turrets")} ct ON ct.component_id = vc.id
+      LEFT JOIN ${t("component_thrusters")} cth ON cth.component_id = vc.id
+      LEFT JOIN ${t("component_radar")} cr ON cr.component_id = vc.id
+      LEFT JOIN ${t("component_qed")} ce ON ce.component_id = vc.id
       WHERE vc.id = ?`)
       .bind(item.vehicle_component_id)
       .first() as Record<string, unknown> | null;
   } else if (item.ship_missile_id) {
     details = await db
-      .prepare("SELECT name, type, sub_type, size, grade, description, missile_type, lock_time, tracking_signal, damage, damage_type, blast_radius, speed, lock_range, ammo_count FROM ship_missiles WHERE id = ?")
+      .prepare(`SELECT name, type, sub_type, size, grade, description, missile_type, lock_time, tracking_signal, damage, damage_type, blast_radius, speed, lock_range, ammo_count FROM ${t("ship_missiles")} WHERE id = ?`)
       .bind(item.ship_missile_id)
       .first() as Record<string, unknown> | null;
   }
@@ -1239,7 +1250,7 @@ export async function getLootByUuid(db: D1Database, uuid: string): Promise<Recor
   // Fallback: undersuit without FK — match by UUID to fps_armour (undersuits are extracted as armour)
   if (!details && item.category === 'undersuit') {
     details = await db
-      .prepare("SELECT name, sub_type as type, size, grade, description, resist_physical, resist_energy, resist_distortion, resist_thermal, resist_biochemical, resist_stun, ir_emission, em_emission, item_port_count FROM fps_armour WHERE uuid = ?")
+      .prepare(`SELECT name, sub_type as type, size, grade, description, resist_physical, resist_energy, resist_distortion, resist_thermal, resist_biochemical, resist_stun, ir_emission, em_emission, item_port_count FROM ${t("fps_armour")} WHERE uuid = ?`)
       .bind(uuid)
       .first() as Record<string, unknown> | null;
   }
@@ -1247,7 +1258,7 @@ export async function getLootByUuid(db: D1Database, uuid: string): Promise<Recor
   // Fallback: prop without FK — try props table, then build from loot_map itself
   if (!details && item.category === 'prop') {
     details = await db
-      .prepare("SELECT name, type, sub_type, description FROM props WHERE uuid = ?")
+      .prepare(`SELECT name, type, sub_type, description FROM ${t("props")} WHERE uuid = ?`)
       .bind(uuid)
       .first() as Record<string, unknown> | null;
     if (!details) {
@@ -1270,11 +1281,11 @@ export async function getLootByUuid(db: D1Database, uuid: string): Promise<Recor
         cw.projectile_speed, cw.effective_range, cw.dps, cw.heat_per_shot, cw.fire_modes,
         cs.shield_hp, cs.shield_regen, cs.resist_physical, cs.resist_energy,
         cp.power_output, cq.quantum_speed, cq.quantum_range
-      FROM vehicle_components vc
-      LEFT JOIN component_weapons cw ON cw.component_id = vc.id
-      LEFT JOIN component_shields cs ON cs.component_id = vc.id
-      LEFT JOIN component_powerplants cp ON cp.component_id = vc.id
-      LEFT JOIN component_quantum_drives cq ON cq.component_id = vc.id
+      FROM ${t("vehicle_components")} vc
+      LEFT JOIN ${t("component_weapons")} cw ON cw.component_id = vc.id
+      LEFT JOIN ${t("component_shields")} cs ON cs.component_id = vc.id
+      LEFT JOIN ${t("component_powerplants")} cp ON cp.component_id = vc.id
+      LEFT JOIN ${t("component_quantum_drives")} cq ON cq.component_id = vc.id
       WHERE vc.uuid = ?`)
       .bind(uuid)
       .first() as Record<string, unknown> | null;
@@ -1301,10 +1312,10 @@ export async function getLootByUuid(db: D1Database, uuid: string): Promise<Recor
         lil.location_key
       ) as location_name,
       s.slug as shop_slug, s.location_label as shop_location
-    FROM loot_item_locations lil
-    LEFT JOIN shops s ON lil.source_type = 'shop' AND s.uuid = lil.location_key
-    LEFT JOIN star_map_locations sml ON lil.source_type = 'container' AND sml.uuid = lil.location_key
-    LEFT JOIN npc_loadouts nl ON lil.source_type = 'npc' AND nl.uuid = lil.location_key
+    FROM ${t("loot_item_locations")} lil
+    LEFT JOIN ${t("shops")} s ON lil.source_type = 'shop' AND s.uuid = lil.location_key
+    LEFT JOIN ${t("star_map_locations")} sml ON lil.source_type = 'container' AND sml.uuid = lil.location_key
+    LEFT JOIN ${t("npc_loadouts")} nl ON lil.source_type = 'npc' AND nl.uuid = lil.location_key
     WHERE lil.loot_map_id = ?
     ORDER BY lil.source_type, location_name
   `).bind(item.id).all();
@@ -1331,11 +1342,11 @@ export async function getLootByUuid(db: D1Database, uuid: string): Promise<Recor
            ti.latest_sell_price AS sell_price,
            s.name AS shop_name, s.slug AS shop_slug,
            s.location_label, s.display_name
-    FROM terminal_inventory ti
-    JOIN terminals t ON t.id = ti.terminal_id
-    JOIN shops s ON s.id = t.shop_id
+    FROM ${t("terminal_inventory")} ti
+    JOIN ${t("terminals")} term ON term.id = ti.terminal_id
+    JOIN ${t("shops")} s ON s.id = term.shop_id
     WHERE EXISTS (
-      SELECT 1 FROM loot_map lm
+      SELECT 1 FROM ${t("loot_map")} lm
       WHERE lm.uuid = ti.item_uuid AND lm.name = ?
     )
       AND ti.latest_source IS NOT NULL
@@ -1363,8 +1374,8 @@ export async function getLootByUuid(db: D1Database, uuid: string): Promise<Recor
     const npcLoadouts = await db.prepare(`
       SELECT nl.loadout_name, nf.name as faction_name, nf.code as faction_code,
              nli.port_name, nli.tag
-      FROM npc_loadout_items nli
-      JOIN npc_loadouts nl ON nl.id = nli.loadout_id
+      FROM ${t("npc_loadout_items")} nli
+      JOIN ${t("npc_loadouts")} nl ON nl.id = nli.loadout_id
       JOIN npc_factions nf ON nf.id = nl.faction_id
       WHERE nli.item_name = ?
       ORDER BY nf.name, nl.loadout_name
@@ -1419,17 +1430,19 @@ export async function removeFromLootCollection(db: D1Database, userId: string, l
     .run();
 }
 
-export async function getUserLootWishlist(db: D1Database, userId: string): Promise<WishlistItem[]> {
+export async function getUserLootWishlist(db: D1Database, userId: string, isPTU = false): Promise<WishlistItem[]> {
+  const lm = isPTU ? "ptu_loot_map" : "loot_map";
+  const lil = isPTU ? "ptu_loot_item_locations" : "loot_item_locations";
   const result = await db
     .prepare(
       `SELECT lm.id, lm.uuid, lm.name, lm.type, lm.sub_type, lm.rarity,
         lm.category, lm.manufacturer_name,
-        ${LOOT_HAS_FLAGS},
+        ${lootHasFlags(isPTU)},
         ${LOOT_SUMMARY_COLS},
         ulw.quantity as wishlist_quantity
       FROM user_loot_wishlist ulw
-      JOIN loot_map lm ON lm.id = ulw.loot_map_id
-      ${LOOT_SUMMARY_JOINS}
+      JOIN ${lm} lm ON lm.id = ulw.loot_map_id
+      ${lootSummaryJoins(isPTU)}
       WHERE ulw.user_id = ?
       ORDER BY lm.name ASC`,
     )
@@ -1447,7 +1460,7 @@ export async function getUserLootWishlist(db: D1Database, userId: string): Promi
       per_container, per_roll, rolls, loot_table,
       actor, faction, slot, probability,
       weight
-    FROM loot_item_locations WHERE loot_map_id IN (${placeholders})`
+    FROM ${lil} WHERE loot_map_id IN (${placeholders})`
   ).bind(...ids).all();
 
   // Group locations by loot_map_id then source_type
@@ -1510,9 +1523,11 @@ export interface LootSetDetail {
 
 export async function getLootSets(
   db: D1Database,
+  isPTU = false,
 ): Promise<LootSetSummary[]> {
+  const lm = isPTU ? "ptu_loot_map" : "loot_map";
   const sql = `SELECT lm.id, lm.uuid, lm.name, lm.category, lm.manufacturer_name
-    FROM loot_map lm
+    FROM ${lm} lm
     WHERE lm.category IN ('armour', 'helmet', 'undersuit')
       AND lm.name NOT IN ('<= PLACEHOLDER =>')
       AND lm.category IS NOT NULL AND lm.category != ''
@@ -1555,10 +1570,15 @@ export async function getLootSets(
 export async function getLootSetBySlug(
   db: D1Database,
   setSlug: string,
+  isPTU = false,
 ): Promise<LootSetDetail | null> {
+  const lmTable = isPTU ? "ptu_loot_map" : "loot_map";
+  const fpsArmour = isPTU ? "ptu_fps_armour" : "fps_armour";
+  const fpsHelmets = isPTU ? "ptu_fps_helmets" : "fps_helmets";
+  const lilTable = isPTU ? "ptu_loot_item_locations" : "loot_item_locations";
   const sql = `SELECT lm.*,
-      ${LOOT_HAS_FLAGS}
-    FROM loot_map lm
+      ${lootHasFlags(isPTU)}
+    FROM ${lmTable} lm
     WHERE lm.category IN ('armour', 'helmet', 'undersuit')
       AND lm.name NOT IN ('<= PLACEHOLDER =>')
       AND lm.category IS NOT NULL AND lm.category != ''
@@ -1599,7 +1619,7 @@ export async function getLootSetBySlug(
     const placeholders = armourIds.map(() => "?").join(",");
     const rows = await db
       .prepare(
-        `SELECT id, name, sub_type as type, size, grade, description, resist_physical, resist_energy, resist_distortion, resist_thermal, resist_biochemical, resist_stun, ir_emission, em_emission, item_port_count FROM fps_armour WHERE id IN (${placeholders})`
+        `SELECT id, name, sub_type as type, size, grade, description, resist_physical, resist_energy, resist_distortion, resist_thermal, resist_biochemical, resist_stun, ir_emission, em_emission, item_port_count FROM ${fpsArmour} WHERE id IN (${placeholders})`
       )
       .bind(...armourIds)
       .all();
@@ -1612,7 +1632,7 @@ export async function getLootSetBySlug(
     const placeholders = helmetIds.map(() => "?").join(",");
     const rows = await db
       .prepare(
-        `SELECT id, name, sub_type as type, size, grade, description, resist_physical, resist_energy, resist_distortion, resist_thermal, resist_biochemical, resist_stun, ir_emission, em_emission, item_port_count, atmosphere_capacity FROM fps_helmets WHERE id IN (${placeholders})`
+        `SELECT id, name, sub_type as type, size, grade, description, resist_physical, resist_energy, resist_distortion, resist_thermal, resist_biochemical, resist_stun, ir_emission, em_emission, item_port_count, atmosphere_capacity FROM ${fpsHelmets} WHERE id IN (${placeholders})`
       )
       .bind(...helmetIds)
       .all();
@@ -1629,7 +1649,7 @@ export async function getLootSetBySlug(
     const locResult = await db.prepare(
       `SELECT loot_map_id, source_type, location_key, container_type,
         per_container, actor, faction, slot, probability
-      FROM loot_item_locations WHERE loot_map_id IN (${locPlaceholders})`
+      FROM ${lilTable} WHERE loot_map_id IN (${locPlaceholders})`
     ).bind(...pieceIds).all();
 
     for (const loc of locResult.results) {
@@ -1847,7 +1867,11 @@ const LOOT_EXCLUSION_FILTER = `lm.name NOT IN ('<= PLACEHOLDER =>')
  * not a user-facing identifier); the resulting entry carries faction code as key
  * and faction display name so the "NPC Factions" tab has meaningful labels.
  */
-export async function getLootLocationSummary(db: D1Database): Promise<LootLocationSummaryResult> {
+export async function getLootLocationSummary(db: D1Database, isPTU = false): Promise<LootLocationSummaryResult> {
+  const lm = isPTU ? "ptu_loot_map" : "loot_map";
+  const lil = isPTU ? "ptu_loot_item_locations" : "loot_item_locations";
+  const nl = isPTU ? "ptu_npc_loadouts" : "npc_loadouts";
+
   const rarityAgg = `
     SUM(CASE WHEN COALESCE(lm.rarity, 'Common') = 'Common' THEN 1 ELSE 0 END) as r_Common,
     SUM(CASE WHEN lm.rarity = 'Uncommon' THEN 1 ELSE 0 END) as r_Uncommon,
@@ -1858,8 +1882,8 @@ export async function getLootLocationSummary(db: D1Database): Promise<LootLocati
   // Containers + shops: group by location_key (stable friendly identifier).
   const containerShopSql = `SELECT lil.source_type, lil.location_key as key, NULL as name,
       COUNT(DISTINCT lil.loot_map_id) as itemCount,${rarityAgg}
-    FROM loot_item_locations lil
-    JOIN loot_map lm ON lm.id = lil.loot_map_id
+    FROM ${lil} lil
+    JOIN ${lm} lm ON lm.id = lil.loot_map_id
     WHERE lil.location_key != ''
       AND lil.source_type IN ('container', 'shop')
       AND ${LOOT_EXCLUSION_FILTER}
@@ -1868,13 +1892,15 @@ export async function getLootLocationSummary(db: D1Database): Promise<LootLocati
   // NPCs: collapse per-loadout UUIDs up to their parent faction so the POI
   // directory shows "Nine Tails / Outlaws / Advocacy" instead of 2,668 UUIDs.
   // Loadouts without a resolvable faction bucket as 'unknown'.
+  // npc_factions is NOT in VERSIONED_TABLES (factions reference data is shared
+  // across channels), so it stays unprefixed.
   const npcFactionSql = `SELECT 'npc' as source_type,
       COALESCE(nf.code, 'unknown') as key,
       COALESCE(nf.name, 'Unknown') as name,
       COUNT(DISTINCT lil.loot_map_id) as itemCount,${rarityAgg}
-    FROM loot_item_locations lil
-    JOIN loot_map lm ON lm.id = lil.loot_map_id
-    LEFT JOIN npc_loadouts nl ON nl.uuid = lil.location_key
+    FROM ${lil} lil
+    JOIN ${lm} lm ON lm.id = lil.loot_map_id
+    LEFT JOIN ${nl} nl ON nl.uuid = lil.location_key
     LEFT JOIN npc_factions nf ON nf.id = nl.faction_id
     WHERE lil.location_key != ''
       AND lil.source_type = 'npc'
@@ -1936,12 +1962,16 @@ export async function getLootLocationDetail(
   db: D1Database,
   locType: "container" | "shop" | "npc" | "contract",
   slug: string,
+  isPTU = false,
 ): Promise<LocationDetailResult> {
   // Shops use the three-layer model (shops → terminals → terminal_inventory)
   // rather than loot_item_locations, matching the loot detail enrichment pattern
   if (locType === "shop") {
-    return getShopLocationDetail(db, slug);
+    return getShopLocationDetail(db, slug, isPTU);
   }
+
+  const lm = isPTU ? "ptu_loot_map" : "loot_map";
+  const lil = isPTU ? "ptu_loot_item_locations" : "loot_item_locations";
 
   const sourceType = locType; // 'container', 'npc', 'contract' — matches junction table values
 
@@ -1954,8 +1984,8 @@ export async function getLootLocationDetail(
   const sql = `SELECT DISTINCT
       lm.uuid, lm.name, lm.type, lm.sub_type, lm.rarity, lm.category
       ${extraCols}
-    FROM loot_item_locations lil
-    JOIN loot_map lm ON lm.id = lil.loot_map_id
+    FROM ${lil} lil
+    JOIN ${lm} lm ON lm.id = lil.loot_map_id
     WHERE lil.source_type = ?
       AND lil.location_key = ?
       AND ${LOOT_EXCLUSION_FILTER}
@@ -2006,16 +2036,22 @@ export async function getLootLocationDetail(
 async function getShopLocationDetail(
   db: D1Database,
   slug: string,
+  isPTU = false,
 ): Promise<LocationDetailResult> {
+  const ti = isPTU ? "ptu_terminal_inventory" : "terminal_inventory";
+  const term = isPTU ? "ptu_terminals" : "terminals";
+  const shops = isPTU ? "ptu_shops" : "shops";
+  const lm = isPTU ? "ptu_loot_map" : "loot_map";
+
   const sql = `SELECT DISTINCT
       COALESCE(lm.uuid, ti.item_uuid) as uuid,
       COALESCE(lm.name, ti.item_name) as name,
       lm.type, lm.sub_type, lm.rarity, lm.category,
       ti.latest_buy_price as buy_price, ti.latest_sell_price as sell_price
-    FROM terminal_inventory ti
-    JOIN terminals t ON t.id = ti.terminal_id
-    JOIN shops s ON s.id = t.shop_id
-    LEFT JOIN loot_map lm ON lm.uuid = ti.item_uuid
+    FROM ${ti} ti
+    JOIN ${term} t ON t.id = ti.terminal_id
+    JOIN ${shops} s ON s.id = t.shop_id
+    LEFT JOIN ${lm} lm ON lm.uuid = ti.item_uuid
     WHERE (s.slug = ? OR s.name = ?)
       AND ti.latest_source IS NOT NULL
       AND (ti.latest_buy_price > 0 OR ti.latest_sell_price > 0)
