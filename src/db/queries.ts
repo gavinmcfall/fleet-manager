@@ -61,11 +61,22 @@ const LOOT_SUMMARY_COLS = `
 // --- Loot JSON "has_*" column expressions ---
 // Reusable SQL fragment for SELECT clauses that compute boolean flags from JSON blob columns.
 // Each flag is 1 if the JSON column contains actual data, 0 otherwise.
-const LOOT_HAS_FLAGS = `
-        EXISTS(SELECT 1 FROM loot_item_locations lil WHERE lil.loot_map_id = lm.id AND lil.source_type = 'container') as has_containers,
+//
+// Channel-aware: when isPTU is true, EXISTS subqueries target ptu_loot_item_locations
+// instead of loot_item_locations. terminal_inventory is shared across channels (live
+// economy data), so it is NOT prefixed.
+function lootHasFlags(isPTU: boolean): string {
+  const lil = isPTU ? "ptu_loot_item_locations" : "loot_item_locations";
+  return `
+        EXISTS(SELECT 1 FROM ${lil} lil WHERE lil.loot_map_id = lm.id AND lil.source_type = 'container') as has_containers,
         EXISTS(SELECT 1 FROM terminal_inventory ti WHERE ti.item_uuid = lm.uuid AND ti.latest_source IS NOT NULL AND (ti.latest_buy_price > 0 OR ti.latest_sell_price > 0)) as has_shops,
-        EXISTS(SELECT 1 FROM loot_item_locations lil WHERE lil.loot_map_id = lm.id AND lil.source_type = 'npc') as has_npcs,
-        EXISTS(SELECT 1 FROM loot_item_locations lil WHERE lil.loot_map_id = lm.id AND lil.source_type = 'contract') as has_contracts`;
+        EXISTS(SELECT 1 FROM ${lil} lil WHERE lil.loot_map_id = lm.id AND lil.source_type = 'npc') as has_npcs,
+        EXISTS(SELECT 1 FROM ${lil} lil WHERE lil.loot_map_id = lm.id AND lil.source_type = 'contract') as has_contracts`;
+}
+
+// Backward-compat alias for callers that haven't been updated yet (Task 3 will migrate
+// these to lootHasFlags(isPTU)). Defaults to the LIVE channel.
+const LOOT_HAS_FLAGS = lootHasFlags(false);
 
 // --- Nullable helpers (mirror Go's nullableStr/nullableFloat/nullableInt) ---
 
@@ -1053,12 +1064,13 @@ export async function getGameVersions(db: D1Database): Promise<{ code: string; c
   return result.results;
 }
 
-export async function getLootItems(db: D1Database): Promise<LootItem[]> {
+export async function getLootItems(db: D1Database, isPTU = false): Promise<LootItem[]> {
+  const lm = isPTU ? "ptu_loot_map" : "loot_map";
   const sql = `SELECT lm.id, lm.uuid, lm.name, lm.type, lm.sub_type, lm.rarity,
         lm.category, lm.manufacturer_name,
-        ${LOOT_HAS_FLAGS},
+        ${lootHasFlags(isPTU)},
         ${LOOT_SUMMARY_COLS}
-      FROM loot_map lm
+      FROM ${lm} lm
       ${LOOT_SUMMARY_JOINS}
       WHERE lm.name NOT IN ('<= PLACEHOLDER =>')
         AND lm.name NOT LIKE 'EntityClassDefinition.%'
