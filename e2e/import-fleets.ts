@@ -31,7 +31,7 @@ interface FleetEntry {
 function d1Execute(sql: string): string {
   const escaped = sql.replace(/'/g, "'\\''");
   return execSync(
-    `. ~/.secrets && npx wrangler d1 execute sc-companion --remote --command '${escaped}' --json`,
+    `. ~/.secrets && npx wrangler d1 execute scbridge-staging --remote --env staging --config wrangler.toml --command '${escaped}' --json`,
     { encoding: "utf-8", maxBuffer: 10 * 1024 * 1024, shell: "/bin/bash" },
   );
 }

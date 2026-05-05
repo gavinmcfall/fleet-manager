@@ -3,19 +3,18 @@
  * Create test persona accounts directly in D1 via wrangler.
  * Bypasses the auth UI (no 2FA needed) — inserts into user, account, session tables.
  *
- * Usage (default — NERDZ production, legacy):
- *   source ~/.secrets && npx tsx e2e/setup-accounts.ts
- *
- * Usage (SC Bridge staging):
+ * Usage (default — SC Bridge staging):
  *   source ~/.secrets && export CLOUDFLARE_API_TOKEN=$CLOUDFLARE_API_TOKEN_SCBRIDGE
- *   export CLOUDFLARE_ACCOUNT_ID=92557ddeffaf43d64db74acf783ec49d
- *   D1_DB=scbridge-staging WRANGLER_ENV=staging WRANGLER_CONFIG=wrangler.toml \
- *     npx tsx e2e/setup-accounts.ts
+ *   npx tsx e2e/setup-accounts.ts
+ *
+ * Usage (SC Bridge production — be careful):
+ *   source ~/.secrets && export CLOUDFLARE_API_TOKEN=$CLOUDFLARE_API_TOKEN_SCBRIDGE
+ *   D1_DB=scbridge-production WRANGLER_ENV=production npx tsx e2e/setup-accounts.ts
  *
  * Env vars:
- *   D1_DB          — D1 database name (default "sc-companion", legacy NERDZ prod)
- *   WRANGLER_ENV   — wrangler --env flag value (default unset)
- *   WRANGLER_CONFIG — wrangler --config flag (default unset; required when using --env)
+ *   D1_DB          — D1 database name (default "scbridge-staging")
+ *   WRANGLER_ENV   — wrangler --env flag value (default "staging")
+ *   WRANGLER_CONFIG — wrangler --config flag (default "wrangler.toml")
  *
  * Idempotent — skips accounts that already exist.
  * Does NOT import fleets — that requires the import API (separate step).
@@ -24,9 +23,9 @@ import { execSync } from "child_process";
 import { PERSONAS } from "../test/fixtures/personas";
 import { randomUUID } from "crypto";
 
-const D1_DB = process.env.D1_DB ?? "sc-companion";
-const WRANGLER_ENV = process.env.WRANGLER_ENV ?? "";
-const WRANGLER_CONFIG = process.env.WRANGLER_CONFIG ?? "";
+const D1_DB = process.env.D1_DB ?? "scbridge-staging";
+const WRANGLER_ENV = process.env.WRANGLER_ENV ?? "staging";
+const WRANGLER_CONFIG = process.env.WRANGLER_CONFIG ?? "wrangler.toml";
 const WRANGLER_FLAGS = [
   WRANGLER_ENV ? `--env ${WRANGLER_ENV}` : "",
   WRANGLER_CONFIG ? `--config ${WRANGLER_CONFIG}` : "",

@@ -53,6 +53,9 @@ frontend/dist/
 .wrangler/
 .dev.vars
 
+# Local D1 snapshots (large; never commit)
+.local/
+
 # Logs
 *.log
 logs/
@@ -95,3 +98,4 @@ frontend/mockups/
 # SQLite
 *.sqlite
 *.sqlite3
+scripts/__pycache__/

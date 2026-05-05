@@ -1,1 +1,1 @@
-npm run typecheck && npx vitest run --reporter=dot
+npm run typecheck && npx vitest run --max-workers=1 --no-isolate --reporter=dot

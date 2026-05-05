@@ -99,7 +99,7 @@ async function main() {
   let rawOutput: string;
   try {
     rawOutput = execSync(
-      `. ~/.secrets && npx wrangler d1 execute sc-companion --remote --command "${sql}" --json`,
+      `. ~/.secrets && npx wrangler d1 execute scbridge-production --remote --env production --config wrangler.toml --command "${sql}" --json`,
       { encoding: "utf-8", maxBuffer: 10 * 1024 * 1024, shell: "/bin/bash" },
     );
   } catch (err) {

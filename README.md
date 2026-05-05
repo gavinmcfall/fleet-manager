@@ -109,7 +109,10 @@ Push to `main` deploys to production. Push to `staging` deploys to staging.
 
 ```bash
 source ~/.secrets
-npx wrangler d1 migrations apply sc-companion --remote
+# Staging
+npx wrangler d1 migrations apply scbridge-staging --remote --env staging --config wrangler.toml
+# Production
+npx wrangler d1 migrations apply scbridge-production --remote --env production --config wrangler.toml
 ```
 
 Migrations in `src/db/migrations/`. Conventions in `src/db/CONVENTIONS.md`.
@@ -119,8 +122,8 @@ Migrations in `src/db/migrations/`. Conventions in `src/db/CONVENTIONS.md`.
 | | Production | Staging |
 |-|-----------|---------|
 | **URL** | scbridge.app | staging.scbridge.app |
-| **Worker** | sc-bridge | sc-bridge-staging |
-| **D1** | sc-companion | sc-companion-staging |
+| **Worker** | scbridge | scbridge-staging |
+| **D1** | scbridge-production | scbridge-staging |
 | **Deploy** | push to `main` | push to `staging` |
 
 ## License

@@ -667,7 +667,7 @@ describe("Loadout API — Asgard golden data", () => {
     expect(topLeft1!.weapon_count).toBe(1);
   });
 
-  it("resolves pilot turret with PC2 dual mount (2× grandchild weapons)", async () => {
+  it("resolves pilot turret with PC2 dual mount (2x grandchild weapons)", async () => {
     const res = await SELF.fetch("http://localhost/api/loadout/asgard/components");
     const data = (await res.json()) as Record<string, unknown>[];
 

@@ -128,7 +128,8 @@ FK from the referencing table: `production_status_id INTEGER REFERENCES producti
 ## Migrations
 
 - Files: `src/db/migrations/NNNN_description.sql` (zero-padded 4-digit sequence)
-- Apply: `npx wrangler d1 migrations apply sc-companion --remote`
+- Apply (staging): `npx wrangler d1 migrations apply scbridge-staging --remote --env staging --config wrangler.toml`
+- Apply (production): `npx wrangler d1 migrations apply scbridge-production --remote --env production --config wrangler.toml`
 - Never skip numbers or reuse applied migration names
 - **Never alter PK or UNIQUE constraints in-place** — create new table, copy data, drop old
 - D1 tracks applied migrations in `d1_migrations` table automatically
