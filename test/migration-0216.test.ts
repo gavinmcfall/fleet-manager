@@ -88,7 +88,8 @@ WHERE id NOT IN (
     quantity REAL NOT NULL DEFAULT 0,
     min_quality INTEGER NOT NULL DEFAULT 0,
     blueprint_uuid TEXT,
-    slot_name TEXT
+    slot_name TEXT,
+    data_source TEXT, is_deleted INTEGER DEFAULT 0, deleted_at TEXT, deleted_in_patch TEXT
   )`,
   `CREATE INDEX IF NOT EXISTS ptu_idx_crafting_blueprint_slots_blueprint
   ON ptu_crafting_blueprint_slots(crafting_blueprint_id)`,
@@ -101,7 +102,11 @@ WHERE id NOT IN (
     start_quality INTEGER NOT NULL DEFAULT 0,
     end_quality INTEGER NOT NULL DEFAULT 1000,
     modifier_at_start REAL NOT NULL DEFAULT 1.0,
-    modifier_at_end REAL NOT NULL DEFAULT 1.0
+    modifier_at_end REAL NOT NULL DEFAULT 1.0,
+    blueprint_uuid TEXT,
+    property_id TEXT,
+    slot_index INTEGER,
+    data_source TEXT, is_deleted INTEGER DEFAULT 0, deleted_at TEXT, deleted_in_patch TEXT
   )`,
   `CREATE INDEX IF NOT EXISTS ptu_idx_crafting_slot_modifiers_slot
   ON ptu_crafting_slot_modifiers(crafting_blueprint_slot_id)`,
