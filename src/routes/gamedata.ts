@@ -935,7 +935,7 @@ return cachedJson(c, `gd:crafting`, async () => {
            ORDER BY cb.type, cb.sub_type, cb.name`
         ).all(),
         db.prepare(
-          `SELECT MIN(cbs.id) AS id, cbs.crafting_blueprint_id, cbs.slot_index, cbs.slot_name AS name,
+          `SELECT MIN(cbs.id) AS id, cbs.crafting_blueprint_id, cbs.slot_index, COALESCE(cbs.slot_name, cbs.name) AS name,
                   cbs.resource_name, cbs.quantity, cbs.min_quality
            FROM crafting_blueprint_slots cbs
            JOIN crafting_blueprints cb ON cb.id = cbs.crafting_blueprint_id
