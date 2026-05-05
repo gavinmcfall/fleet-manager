@@ -430,6 +430,13 @@ export const ROCK_TIER_INFO = {
 // tools/scripts/extraction_pipeline_v2/enrich/crafting.py. Keep the
 // prefix list and underscore handling in sync between the two so the
 // display names match across language boundaries.
+//
+// In the QualitySim today, the API's `slot.resource_name` field is the
+// authoritative display label — the Python extractor has already derived
+// the readable name from `item_class` server-side. `mineralDisplayName`
+// is exported for client-side derivation if a future component needs to
+// show the readable name from a raw `item_class` string (e.g. a tooltip
+// that didn't go through the API's slot SELECT, or a debug surface).
 
 export function isItemSlot(slot) {
   return slot?.slot_type === 'item'
