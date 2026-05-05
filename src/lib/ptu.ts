@@ -6,6 +6,8 @@
  * Query routing: isPTU ? `ptu_vehicles` : `vehicles`.
  */
 
+import type { Context } from "hono";
+
 /**
  * All 86 versioned game-data tables, in FK-safe deletion order
  * (children before parents). Used for PTU table creation and purge.
@@ -66,4 +68,30 @@ export const VERSIONED_TABLES = [
 /** Returns the table name for the given context (live or PTU). */
 export function resolveTable(table: string, isPTU: boolean): string {
   return isPTU ? `ptu_${table}` : table;
+}
+
+export type Channel = "LIVE" | "PTU" | "EPTU";
+
+const VALID_CHANNELS: ReadonlySet<string> = new Set(["LIVE", "PTU", "EPTU"]);
+
+/** Returns true if the given channel is a PTU/EPTU preview channel. */
+export function isPTUChannel(channel: string): boolean {
+  return channel === "PTU" || channel === "EPTU";
+}
+
+/**
+ * Resolve the active channel for a request.
+ *
+ * Order of precedence:
+ *   1. ?channel= query param (case-insensitive)
+ *   2. (future) authenticated user's adminPreviewPatch setting
+ *   3. Default: LIVE
+ */
+export function getActiveChannel(c: Context): Channel {
+  const raw = c.req.query("channel");
+  if (raw) {
+    const upper = raw.toUpperCase();
+    if (VALID_CHANNELS.has(upper)) return upper as Channel;
+  }
+  return "LIVE";
 }

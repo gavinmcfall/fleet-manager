@@ -1,7 +1,7 @@
 import { env } from "cloudflare:test";
 import { beforeAll, describe, expect, it } from "vitest";
 import { setupTestDatabase } from "./apply-migrations";
-import { VERSIONED_TABLES } from "../src/lib/ptu";
+import { VERSIONED_TABLES, getActiveChannel, isPTUChannel } from "../src/lib/ptu";
 import {
   getLootItems,
   getLootByUuid,
@@ -307,5 +307,38 @@ describe("getUserLootWishlist channel routing", () => {
     const names = items.map((i) => i.name);
     expect(names).toContain("PTU Wishlist Item");
     expect(names).not.toContain("LIVE Wishlist Item");
+  });
+});
+
+describe("getActiveChannel", () => {
+  function makeContext(url: string): any {
+    const req = new Request(url);
+    return { req: { raw: req, query: (k: string) => new URL(url).searchParams.get(k) } };
+  }
+
+  it("returns LIVE when no query param", () => {
+    expect(getActiveChannel(makeContext("https://x/api/loot"))).toBe("LIVE");
+  });
+
+  it("returns PTU for ?channel=PTU", () => {
+    expect(getActiveChannel(makeContext("https://x/api/loot?channel=PTU"))).toBe("PTU");
+  });
+
+  it("returns PTU for ?channel=ptu (case-insensitive)", () => {
+    expect(getActiveChannel(makeContext("https://x/api/loot?channel=ptu"))).toBe("PTU");
+  });
+
+  it("ignores unknown values, falls back to LIVE", () => {
+    expect(getActiveChannel(makeContext("https://x/api/loot?channel=garbage"))).toBe("LIVE");
+  });
+});
+
+describe("isPTUChannel", () => {
+  it("returns true for PTU and EPTU", () => {
+    expect(isPTUChannel("PTU")).toBe(true);
+    expect(isPTUChannel("EPTU")).toBe(true);
+  });
+  it("returns false for LIVE", () => {
+    expect(isPTUChannel("LIVE")).toBe(false);
   });
 });
