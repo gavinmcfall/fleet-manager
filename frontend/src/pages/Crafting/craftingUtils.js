@@ -418,3 +418,31 @@ export const ROCK_TIER_INFO = {
   Epic:      { label: 'Epic',      color: 'text-purple-400', bg: 'bg-purple-500/10', border: 'border-purple-500/20' },
   Legendary: { label: 'Legendary', color: 'text-amber-400',  bg: 'bg-amber-500/10',  border: 'border-amber-500/20' },
 }
+
+// ── Item-type slot helpers ───────────────────────────────────────────
+// Item slots (slot_type='item') reference a specific harvestable mineral
+// (e.g. Hadanite) rather than a generic resource type. They behave the
+// same way as resource slots for crafting math (quality slider + modifier
+// curves), but render with mineral-distinct visuals so users know to
+// hunt down a specific item rather than a generic resource.
+//
+// The Python counterpart is _derive_item_display_name in
+// tools/scripts/extraction_pipeline_v2/enrich/crafting.py. Keep the
+// prefix list and underscore handling in sync between the two so the
+// display names match across language boundaries.
+
+export function isItemSlot(slot) {
+  return slot?.slot_type === 'item'
+}
+
+export function mineralDisplayName(itemClass) {
+  if (!itemClass) return ''
+  const prefixes = ['harvestable_mineral_1h_', 'harvestable_ore_1h_', 'harvestable_gas_1h_']
+  for (const p of prefixes) {
+    if (itemClass.startsWith(p)) {
+      const tail = itemClass.slice(p.length)
+      return tail.replace(/_/g, ' ').replace(/\b\w/g, c => c.toUpperCase())
+    }
+  }
+  return itemClass.replace(/_/g, ' ').replace(/\b\w/g, c => c.toUpperCase())
+}

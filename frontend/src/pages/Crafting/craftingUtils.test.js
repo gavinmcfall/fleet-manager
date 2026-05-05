@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest'
-import { formatCraftTime, formatTime } from './craftingUtils'
+import { formatCraftTime, formatTime, isItemSlot, mineralDisplayName } from './craftingUtils'
 
 describe('formatCraftTime (mm:ss for Crafting v2)', () => {
   it('formats 270 seconds as 4:30', () => {
@@ -46,5 +46,44 @@ describe('formatTime (legacy, still used by v1)', () => {
   })
   it('outputs "Ns" for under a minute', () => {
     expect(formatTime(45)).toBe('45s')
+  })
+})
+
+describe('isItemSlot', () => {
+  it('returns true for slot_type="item"', () => {
+    expect(isItemSlot({ slot_type: 'item' })).toBe(true)
+  })
+  it('returns false for slot_type="resource"', () => {
+    expect(isItemSlot({ slot_type: 'resource' })).toBe(false)
+  })
+  it('returns false when slot_type is missing (legacy data)', () => {
+    expect(isItemSlot({})).toBe(false)
+    expect(isItemSlot({ slot_type: undefined })).toBe(false)
+  })
+  it('returns false for null slot', () => {
+    expect(isItemSlot(null)).toBe(false)
+    expect(isItemSlot(undefined)).toBe(false)
+  })
+})
+
+describe('mineralDisplayName', () => {
+  it('strips harvestable_mineral_1h_ prefix and title-cases the tail', () => {
+    expect(mineralDisplayName('harvestable_mineral_1h_hadanite')).toBe('Hadanite')
+    expect(mineralDisplayName('harvestable_mineral_1h_dolivine')).toBe('Dolivine')
+  })
+  it('strips harvestable_ore_1h_ prefix', () => {
+    expect(mineralDisplayName('harvestable_ore_1h_saldyniumore')).toBe('Saldyniumore')
+  })
+  it('handles multi-word tail through prefix path', () => {
+    // Matches the Python implementation's behaviour for multi-word tails
+    expect(mineralDisplayName('harvestable_mineral_1h_foo_bar')).toBe('Foo Bar')
+  })
+  it('falls back to title-cased identifier when prefix is unknown', () => {
+    expect(mineralDisplayName('some_other_thing')).toBe('Some Other Thing')
+  })
+  it('returns empty string for null/undefined/empty', () => {
+    expect(mineralDisplayName(null)).toBe('')
+    expect(mineralDisplayName(undefined)).toBe('')
+    expect(mineralDisplayName('')).toBe('')
   })
 })
