@@ -114,7 +114,13 @@ describe("migration 0217 — crafting_blueprint_slots item slots", () => {
     expect(itemClass!.notnull).toBe(0);
   });
 
-  it("backfills existing rows to slot_type='resource'", async () => {
+  it("INSERTs that omit slot_type get DEFAULT 'resource' (and item_class=NULL)", async () => {
+    // SQLite's ALTER TABLE ADD COLUMN with DEFAULT applies the default to
+    // pre-existing rows in the same way that an INSERT omitting the column
+    // applies the default to new rows. This test exercises the latter path
+    // (which is what miniflare's auto-applied migration produces) and that
+    // result is identical to the post-migration state of any row that
+    // existed before the ALTER ran.
     const db = env.DB as D1Database;
     // Seed a blueprint then a slot using only pre-0217 columns.
     await db
