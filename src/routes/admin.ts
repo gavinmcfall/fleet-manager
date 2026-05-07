@@ -595,7 +595,8 @@ export function adminRoutes() {
     // PTU data lives in ptu_* shadow tables. Purge = DROP all of them.
     const { VERSIONED_TABLES } = await import("../lib/ptu");
 
-    // Child tables without game_version_id that shadow ptu_* parents
+    // Child tables without game_version_id that shadow ptu_* parents,
+    // plus tables added after migration 0215 (not in VERSIONED_TABLES).
     const ptuChildTables = [
       "ptu_crafting_slot_modifiers",
       "ptu_crafting_blueprint_slots",
@@ -603,6 +604,11 @@ export function adminRoutes() {
       "ptu_salvageable_ship_components",
       "ptu_paint_vehicles",
       "ptu_npc_factions",
+      // 4.8 new types (added in migration 0219)
+      "ptu_crafting_quality_quantization",
+      "ptu_transport_carriage_announcements",
+      "ptu_transport_destination_categories",
+      "ptu_unified_shake_params",
     ];
 
     const dropStatements: D1PreparedStatement[] = [
