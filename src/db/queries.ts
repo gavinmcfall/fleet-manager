@@ -477,13 +477,15 @@ export async function getShipLoadout(db: D1Database, slug: string): Promise<Reco
   return result.results as Record<string, unknown>[];
 }
 
-export async function getShipModules(db: D1Database, slug: string): Promise<Record<string, unknown>[]> {
+export async function getShipModules(db: D1Database, slug: string, isPTU = false): Promise<Record<string, unknown>[]> {
+  const vm = isPTU ? "ptu_vehicle_modules" : "vehicle_modules";
+  const v = isPTU ? "ptu_vehicles" : "vehicles";
   const result = await db
     .prepare(
       `SELECT vm.id, vm.uuid, vm.port_name, vm.class_name, vm.display_name,
               vm.size, vm.is_default, vm.has_loadout
-       FROM vehicle_modules vm
-       WHERE vm.vehicle_id IN (SELECT v.id FROM vehicles v WHERE v.slug = ? OR v.short_slug = ?)
+       FROM ${vm} vm
+       WHERE vm.vehicle_id IN (SELECT v.id FROM ${v} v WHERE v.slug = ? OR v.short_slug = ?)
        ORDER BY vm.port_name, vm.is_default DESC, vm.display_name`
     )
     .bind(slug, slug)

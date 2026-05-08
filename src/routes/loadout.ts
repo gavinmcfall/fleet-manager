@@ -74,8 +74,9 @@ export function loadoutRoutes() {
   // GET /api/loadout/:slug/modules — available modules for module ports
   app.get("/:slug/modules", async (c) => {
     const slug = c.req.param("slug");
+    const isPTU = isPTUChannel(getActiveChannel(c));
     return cachedJson(c, `loadout:modules:${cacheSlug(slug)}`, async () => {
-      return getShipModules(c.env.DB, slug);
+      return getShipModules(c.env.DB, slug, isPTU);
     });
   });
 
