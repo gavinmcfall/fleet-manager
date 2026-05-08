@@ -155,6 +155,12 @@ export default function QualitySim({ blueprint }) {
 
   const baseStats = blueprint.base_stats || null
 
+  // Some blueprints (notably ship-mounted vehicle weapons) have crafting
+  // slots but no modifier rows — moving the quality sliders has no effect
+  // on stats. Detect this so we can show an explainer banner instead of
+  // letting users wonder why nothing changes.
+  const hasAnyModifiers = slots.some(s => s.modifiers && s.modifiers.length > 0)
+
   // Compute multipliers for each stat
   const { statPreview, dmgMultiplier, rpmMultiplier } = useMemo(() => {
     const statMap = new Map()
@@ -299,6 +305,14 @@ export default function QualitySim({ blueprint }) {
 
   return (
     <div className="space-y-5">
+      {!hasAnyModifiers && (
+        <div className="rounded-lg border border-amber-500/30 bg-amber-500/[0.04] px-4 py-3 text-xs text-amber-200/90">
+          <span className="font-semibold">No quality scaling for this blueprint.</span>{' '}
+          Stats are fixed at the base values shown below — sliders below have
+          no effect. This is currently common for ship-mounted vehicle weapons.
+        </div>
+      )}
+
       {/* Quality sliders — full width */}
       <div>
         <div className="flex items-center justify-between mb-2">
