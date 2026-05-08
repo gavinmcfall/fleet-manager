@@ -5,7 +5,8 @@ import {
   Rocket, Zap, Box, Package, Palette, LayoutGrid, List,
   Tag, DollarSign, Calendar, PenLine, ArrowUpRight, CircleDot,
 } from 'lucide-react'
-import { useShip, useShipLoadout, useShipPaints, useShipSalvage, useWeaponRacks, useSuitLockers, useFleet, useFleetEntryUpgrades } from '../hooks/useAPI'
+import { useShip, useShipLoadout, useShipPaints, useShipSalvage, useWeaponRacks, useSuitLockers, useFleet, useFleetEntryUpgrades, useShipModules, useOwnedModules } from '../hooks/useAPI'
+import ModulesSection from './Loadout/ModulesSection'
 import { useSession } from '../lib/auth-client'
 import ShipImage from '../components/ShipImage'
 import StatusBadge from '../components/StatusBadge'
@@ -557,6 +558,9 @@ function PledgeSection({ ship }) {
 // ─── Overview ─────────────────────────────────────────────────────────────────
 
 function OverviewTab({ ship, isAuthed }) {
+  const { data: modules } = useShipModules(ship.slug)
+  const { data: ownedModules } = useOwnedModules(ship.slug)
+
   const crewValue = ship.crew_min != null && ship.crew_max != null
     ? ship.crew_min === ship.crew_max ? String(ship.crew_min) : `${ship.crew_min} – ${ship.crew_max}`
     : null
@@ -613,6 +617,10 @@ function OverviewTab({ ship, isAuthed }) {
             <div className="panel-header">Description</div>
             <p className="p-4 text-sm text-gray-400 leading-relaxed whitespace-pre-line">{ship.description.replace(/\\n/g, '\n')}</p>
           </div>
+        )}
+
+        {modules?.length > 0 && (
+          <ModulesSection modules={modules} ownedTitles={ownedModules} />
         )}
       </div>
 
