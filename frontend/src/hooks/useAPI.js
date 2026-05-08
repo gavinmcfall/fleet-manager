@@ -77,11 +77,11 @@ export function useStatus() {
 }
 
 export function useShips() {
-  // Default to pledgeable-only — NPC/AI variants (Vanduul Mauler, Idris-P AI,
-  // etc.) are extracted into vehicles for completeness but should not appear
-  // in the public ship browser. Tools that genuinely need every entity can
-  // call useAPI('/ships') directly with no filter.
-  return useAPI('/ships?pledgeable=1')
+  // Server defaults to is_npc_only=0 (hides Vanduul/AI/defendship variants).
+  // Player-obtainable but non-pledgeable ships (Drake Command Module, Krig
+  // L-22 Wikelo War Special, BIS variants) stay visible. Pages that need
+  // every entity including NPC spawns can call useAPI('/ships?include_npc=1').
+  return useAPI('/ships')
 }
 
 export function useContracts() {

@@ -14,21 +14,33 @@ import { getActiveChannel, isPTUChannel, resolveTable } from "../lib/ptu";
 export function vehicleRoutes<E extends HonoEnv>() {
   const routes = new Hono<E>();
 
-  // GET /api/ships — list all vehicles
+  // GET /api/ships — list all player-relevant vehicles
   // Query params:
   //   ?pledgeable=1   — only ships currently available on the RSI pledge store
   //                    (excludes in-game-only variants like PYAM Exec, Best In
   //                     Show editions, mission-reward variants, etc.)
+  //   ?include_npc=1  — include NPC-only variants (Vanduul Mauler, AI patrol
+  //                    spawns, defendship variants). Default hides them.
+  //
+  // NPC vs not-pledgeable distinction (per migration 0221):
+  //   • is_pledgeable=1: ships listed on the RSI store right now.
+  //   • is_npc_only=1:  AI/spawn variants with no player-obtainable path.
+  //   Examples that are is_pledgeable=0 BUT is_npc_only=0 (so still shown):
+  //     - Drake Command Module (detachable from Caterpillar/Ironclad)
+  //     - Krig L-22 Wikelo War Special (mission reward)
+  //     - Best In Show / PYAM Exec variants
   routes.get("/", async (c) => {
     const db = c.env.DB;
     const pledgeableOnly = c.req.query("pledgeable") === "1";
+    const includeNpc = c.req.query("include_npc") === "1";
     const isPTU = isPTUChannel(getActiveChannel(c));
     const vehiclesT = resolveTable("vehicles", isPTU);
     const manufacturersT = resolveTable("manufacturers", isPTU);
-    const cacheKey = `ships:list${pledgeableOnly ? ":pledgeable" : ""}`;
+    const cacheKey = `ships:list${pledgeableOnly ? ":pledgeable" : ""}${includeNpc ? ":all" : ""}`;
     return cachedJson(c, cacheKey, async () => {
       const whereClauses = ["v.is_paint_variant = 0", "v.removed = 0"];
       if (pledgeableOnly) whereClauses.push("v.is_pledgeable = 1");
+      if (!includeNpc) whereClauses.push("v.is_npc_only = 0");
       const result = await db
         .prepare(
           `SELECT v.id, v.uuid, v.slug, v.name, v.class_name,
