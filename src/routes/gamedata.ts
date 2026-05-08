@@ -967,18 +967,22 @@ return cachedJson(c, `gd:crafting`, async () => {
         slotsByBp.get(bpId)!.push(enriched)
       }
 
-      // Look up base stats for weapon/armour blueprints by matching
-      // blueprint tag (BP_CRAFT_xxx) → fps_weapons/fps_armour class_name (xxx)
+      // Look up base stats for weapon/armour blueprints by matching the
+      // blueprint tag (BP_CRAFT_xxx) → class_name (xxx). Lowercase both
+      // sides because vehicle weapon class_names ship uppercase in tags
+      // (BP_CRAFT_BANU_TachyonCannon_S1) but lowercase in vehicle_components
+      // (banu_tachyoncannon_s1), while FPS weapons are lowercase on both.
       const weaponTags = bpResult.results
         .filter((bp) => bp.type === "weapons")
-        .map((bp) => (bp.tag as string).replace("BP_CRAFT_", ""))
+        .map((bp) => (bp.tag as string).replace("BP_CRAFT_", "").toLowerCase())
       const armourTags = bpResult.results
         .filter((bp) => bp.type === "armour")
-        .map((bp) => (bp.tag as string).replace("BP_CRAFT_", ""))
+        .map((bp) => (bp.tag as string).replace("BP_CRAFT_", "").toLowerCase())
 
       const baseStatsMap = new Map<string, Record<string, unknown>>()
 
       if (weaponTags.length > 0) {
+        // FPS handheld weapons (FS-9 LMG, Arclight Pistol, etc.)
         const weaponResult = await db.prepare(`SELECT fw.class_name, fw.name, fw.rounds_per_minute, fw.damage, fw.dps,
                   fw.effective_range, fw.projectile_speed, fw.ammo_capacity,
                   fw.spread_min, fw.spread_max, fw.damage_type, fw.fire_modes
@@ -986,7 +990,7 @@ return cachedJson(c, `gd:crafting`, async () => {
           `
         ).all()
         for (const w of weaponResult.results) {
-          const cn = w.class_name as string
+          const cn = (w.class_name as string).toLowerCase()
           if (weaponTags.includes(cn) && !baseStatsMap.has(cn)) {
             baseStatsMap.set(cn, {
               item_name: w.name,
@@ -998,6 +1002,31 @@ return cachedJson(c, `gd:crafting`, async () => {
               ammo_capacity: w.ammo_capacity,
               spread_min: w.spread_min,
               spread_max: w.spread_max,
+              damage_type: w.damage_type,
+              fire_modes: w.fire_modes,
+            })
+          }
+        }
+
+        // Vehicle weapons (ship-mounted cannons/repeaters/gatlings). These
+        // join through vehicle_components — component_weapons keys on
+        // component_id, not class_name directly.
+        const vehicleWeaponResult = await db.prepare(`SELECT vc.class_name, vc.name,
+                  cw.rounds_per_minute, cw.damage_per_shot, cw.dps,
+                  cw.effective_range, cw.projectile_speed, cw.damage_type, cw.fire_modes
+           FROM ${t("component_weapons")} cw
+           JOIN ${t("vehicle_components")} vc ON vc.id = cw.component_id`
+        ).all()
+        for (const w of vehicleWeaponResult.results) {
+          const cn = (w.class_name as string).toLowerCase()
+          if (weaponTags.includes(cn) && !baseStatsMap.has(cn)) {
+            baseStatsMap.set(cn, {
+              item_name: w.name,
+              rounds_per_minute: w.rounds_per_minute,
+              damage: w.damage_per_shot,
+              dps: w.dps,
+              effective_range: w.effective_range,
+              projectile_speed: w.projectile_speed,
               damage_type: w.damage_type,
               fire_modes: w.fire_modes,
             })
@@ -1020,7 +1049,7 @@ return cachedJson(c, `gd:crafting`, async () => {
           ).all(),
         ])
         for (const a of armourResult.results) {
-          const cn = a.class_name as string
+          const cn = (a.class_name as string).toLowerCase()
           if (armourTags.includes(cn) && !baseStatsMap.has(cn)) {
             baseStatsMap.set(cn, {
               item_name: a.name,
@@ -1035,7 +1064,7 @@ return cachedJson(c, `gd:crafting`, async () => {
           }
         }
         for (const h of helmetResult.results) {
-          const cn = h.class_name as string
+          const cn = (h.class_name as string).toLowerCase()
           if (armourTags.includes(cn) && !baseStatsMap.has(cn)) {
             baseStatsMap.set(cn, { item_name: h.name })
           }
@@ -1044,7 +1073,10 @@ return cachedJson(c, `gd:crafting`, async () => {
 
       const blueprints = bpResult.results.map((bp) => {
         const tag = bp.tag as string
-        const className = tag.replace("BP_CRAFT_", "")
+        // Lowercase to match the lowercased keys in baseStatsMap. Vehicle
+        // weapon tags ship uppercase (BANU_TachyonCannon_S1) but their
+        // class_names are lowercase in vehicle_components.
+        const className = tag.replace("BP_CRAFT_", "").toLowerCase()
         // Strip variant suffixes to find the base weapon
         // e.g. behr_lmg_ballistic_01_tint01 → behr_lmg_ballistic_01
         let baseStats = baseStatsMap.get(className)
@@ -1058,8 +1090,16 @@ return cachedJson(c, `gd:crafting`, async () => {
             }
           }
         }
+        // `$templates` is a CIG localization key that occasionally leaks
+        // into the sub_type column for ship-weapon blueprints (e.g. Banu
+        // Tachyoncannon). It's not a real category — strip it so the UI
+        // shows just the type label.
+        const subType = (bp.sub_type as string | null)?.startsWith("$")
+          ? null
+          : bp.sub_type
         return {
           ...bp,
+          sub_type: subType,
           slots: slotsByBp.get(bp.id as number) ?? [],
           ...(baseStats ? { base_stats: baseStats } : {}),
         }
