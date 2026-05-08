@@ -220,10 +220,10 @@ export default function ShipDB() {
               hoverZoom
             />
             <div className="p-4">
-              <div className="flex items-start justify-between gap-2 h-14 overflow-hidden mb-2">
+              <div className="flex items-start justify-between gap-2 min-h-[3.75rem] mb-2">
                 <div className="min-w-0">
-                  <h3 className="font-display font-semibold text-white text-sm line-clamp-2">{ship.name}</h3>
-                  <span className="text-xs text-gray-400">{ship.manufacturer_name}</span>
+                  <h3 className="font-display font-semibold text-white text-sm line-clamp-2 leading-tight">{ship.name}</h3>
+                  <span className="text-xs text-gray-400 mt-1 block">{ship.manufacturer_name}</span>
                 </div>
                 <span className="badge badge-size shrink-0">{ship.size_label}</span>
               </div>
@@ -238,7 +238,11 @@ export default function ShipDB() {
                 </div>
                 <div className="min-w-0">
                   <span className="font-semibold text-sc-accent2 block">Crew</span>
-                  <span className="block truncate">{ship.min_crew}-{ship.max_crew}</span>
+                  <span className="block truncate">{
+                    ship.crew_min != null && ship.crew_max != null
+                      ? (ship.crew_min === ship.crew_max ? `${ship.crew_min}` : `${ship.crew_min}-${ship.crew_max}`)
+                      : '-'
+                  }</span>
                 </div>
               </div>
               <div className="mt-3 pt-2 border-t border-sc-border/30">
