@@ -534,3 +534,12 @@ export async function updateUserBlueprint(id, { nickname, craftedQuantity, quali
 export async function deleteUserBlueprint(id) {
   return apiFetch('DELETE', `/blueprints/${id}`)
 }
+
+/**
+ * Toggle owned/wishlist state for a blueprint by uuid. Either or both of
+ * `owned` and `wishlist` may be passed; missing flags are left unchanged.
+ * Returns { ok, owned, wishlist } reflecting the new server state.
+ */
+export async function setBlueprintState({ blueprintUuid, owned, wishlist }) {
+  return putJSON('/blueprints/state', { blueprintUuid, owned, wishlist })
+}

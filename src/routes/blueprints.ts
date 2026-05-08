@@ -4,24 +4,30 @@ import { getAuthUser, type HonoEnv } from "../lib/types";
 import { validate } from "../lib/validation";
 
 /**
- * /api/blueprints/* — User saved blueprints (crafting tracker)
+ * /api/blueprints/* — User-saved blueprints (owned / wishlist / crafting tracker)
+ *
+ * Identifier: blueprint_uuid (channel-stable across LIVE and PTU). The legacy
+ * crafting_blueprint_id column is still populated for backwards compatibility
+ * with the existing quality-sim save flow, but new flows key on uuid.
  */
 export function blueprintRoutes() {
   const routes = new Hono<HonoEnv>();
 
-  // ── GET / — list user's saved blueprints ────────────────────────
+  // ── GET / — list user's saved blueprints (owned + wishlist) ──────
   routes.get("/", async (c) => {
     const db = c.env.DB;
     const userId = getAuthUser(c).id;
 
     const rows = await db
       .prepare(
-        `SELECT ub.id, ub.crafting_blueprint_id, ub.nickname, ub.crafted_quantity,
+        `SELECT ub.id, ub.crafting_blueprint_id, ub.blueprint_uuid,
+                ub.is_owned, ub.is_wishlist,
+                ub.nickname, ub.crafted_quantity,
                 ub.quality_config_json, ub.source, ub.updated_at,
                 cb.name as blueprint_name, cb.tag, cb.type, cb.sub_type,
                 cb.craft_time_seconds
          FROM user_blueprints ub
-         JOIN crafting_blueprints cb ON cb.id = ub.crafting_blueprint_id
+         LEFT JOIN crafting_blueprints cb ON cb.id = ub.crafting_blueprint_id
          WHERE ub.user_id = ?
          ORDER BY ub.updated_at DESC`,
       )
@@ -31,6 +37,8 @@ export function blueprintRoutes() {
     return c.json({
       items: rows.results.map((r) => ({
         ...r,
+        is_owned: r.is_owned === 1,
+        is_wishlist: r.is_wishlist === 1,
         quality_config: r.quality_config_json
           ? JSON.parse(r.quality_config_json as string)
           : null,
@@ -39,7 +47,116 @@ export function blueprintRoutes() {
     });
   });
 
-  // ── POST / — save a blueprint with quality config ───────────────
+  // ── PUT /state — toggle owned/wishlist by blueprint uuid ─────────
+  // Sets absolute state. If both flags become false, the row is deleted
+  // (no point keeping an empty marker). Resolves crafting_blueprint_id
+  // for backwards compatibility with the quality-sim save flow.
+  routes.put(
+    "/state",
+    validate(
+      "json",
+      z.object({
+        blueprintUuid: z.string().uuid(),
+        owned: z.boolean().optional(),
+        wishlist: z.boolean().optional(),
+      }),
+    ),
+    async (c) => {
+      const db = c.env.DB;
+      const userId = getAuthUser(c).id;
+      const { blueprintUuid, owned, wishlist } = c.req.valid("json");
+
+      // Read current state so we can compute the new state when only
+      // one flag is provided.
+      const existing = await db
+        .prepare(
+          `SELECT id, is_owned, is_wishlist FROM user_blueprints
+           WHERE user_id = ? AND blueprint_uuid = ?`,
+        )
+        .bind(userId, blueprintUuid)
+        .first<{ id: number; is_owned: number; is_wishlist: number }>();
+
+      const nextOwned = owned ?? (existing ? existing.is_owned === 1 : false);
+      const nextWishlist =
+        wishlist ?? (existing ? existing.is_wishlist === 1 : false);
+
+      // Both flags off → delete the row. But keep rows that have
+      // crafted_quantity > 0 or a saved quality_config (the user has
+      // attached crafting work to this BP and we shouldn't drop it).
+      if (!nextOwned && !nextWishlist) {
+        const detail = existing
+          ? await db
+              .prepare(
+                `SELECT crafted_quantity, quality_config_json
+                 FROM user_blueprints WHERE id = ?`,
+              )
+              .bind(existing.id)
+              .first<{
+                crafted_quantity: number | null;
+                quality_config_json: string | null;
+              }>()
+          : null;
+        const hasWork =
+          (detail?.crafted_quantity ?? 0) > 0 ||
+          !!detail?.quality_config_json;
+        if (!hasWork && existing) {
+          await db
+            .prepare("DELETE FROM user_blueprints WHERE id = ?")
+            .bind(existing.id)
+            .run();
+          return c.json({ ok: true, owned: false, wishlist: false });
+        }
+        // Otherwise just clear the flags — keep the row.
+        await db
+          .prepare(
+            `UPDATE user_blueprints
+             SET is_owned = 0, is_wishlist = 0, updated_at = datetime('now')
+             WHERE user_id = ? AND blueprint_uuid = ?`,
+          )
+          .bind(userId, blueprintUuid)
+          .run();
+        return c.json({ ok: true, owned: false, wishlist: false });
+      }
+
+      // Resolve the legacy FK column from the active LIVE blueprint
+      // table (PTU-only blueprints leave it NULL — uuid is the source
+      // of truth either way).
+      const bpRow = await db
+        .prepare("SELECT id FROM crafting_blueprints WHERE uuid = ? LIMIT 1")
+        .bind(blueprintUuid)
+        .first<{ id: number }>();
+      const legacyId = bpRow?.id ?? null;
+
+      await db
+        .prepare(
+          `INSERT INTO user_blueprints
+             (user_id, crafting_blueprint_id, blueprint_uuid,
+              is_owned, is_wishlist, source, updated_at)
+           VALUES (?, ?, ?, ?, ?, 'manual', datetime('now'))
+           ON CONFLICT(user_id, blueprint_uuid) DO UPDATE SET
+             is_owned = excluded.is_owned,
+             is_wishlist = excluded.is_wishlist,
+             crafting_blueprint_id =
+               COALESCE(user_blueprints.crafting_blueprint_id, excluded.crafting_blueprint_id),
+             updated_at = datetime('now')`,
+        )
+        .bind(
+          userId,
+          legacyId,
+          blueprintUuid,
+          nextOwned ? 1 : 0,
+          nextWishlist ? 1 : 0,
+        )
+        .run();
+
+      return c.json({ ok: true, owned: nextOwned, wishlist: nextWishlist });
+    },
+  );
+
+  // ── POST / — save quality-sim config for a blueprint ────────────
+  // Legacy route used by the quality simulator. Implicitly marks the
+  // blueprint as owned because saving a sim config means the user is
+  // working with this blueprint.
   routes.post(
     "/",
     validate(
@@ -61,16 +178,32 @@ export function blueprintRoutes() {
 
       const configJson = qualityConfig ? JSON.stringify(qualityConfig) : null;
 
+      // Look up the uuid for the new uniqueness key.
+      const bp = await db
+        .prepare("SELECT uuid FROM crafting_blueprints WHERE id = ?")
+        .bind(craftingBlueprintId)
+        .first<{ uuid: string }>();
+
       await db
         .prepare(
-          `INSERT INTO user_blueprints (user_id, crafting_blueprint_id, nickname, quality_config_json, source, updated_at)
-           VALUES (?, ?, ?, ?, 'manual', datetime('now'))
-           ON CONFLICT(user_id, crafting_blueprint_id) DO UPDATE SET
+          `INSERT INTO user_blueprints
+             (user_id, crafting_blueprint_id, blueprint_uuid,
+              nickname, quality_config_json, is_owned, source, updated_at)
+           VALUES (?, ?, ?, ?, ?, 1, 'manual', datetime('now'))
+           ON CONFLICT(user_id, blueprint_uuid) DO UPDATE SET
              nickname = COALESCE(excluded.nickname, user_blueprints.nickname),
-             quality_config_json = COALESCE(excluded.quality_config_json, user_blueprints.quality_config_json),
+             quality_config_json =
+               COALESCE(excluded.quality_config_json, user_blueprints.quality_config_json),
+             is_owned = 1,
              updated_at = datetime('now')`,
         )
-        .bind(userId, craftingBlueprintId, nickname ?? null, configJson)
+        .bind(
+          userId,
+          craftingBlueprintId,
+          bp?.uuid ?? null,
+          nickname ?? null,
+          configJson,
+        )
         .run();
 
       return c.json({ ok: true });
@@ -97,7 +230,6 @@ export function blueprintRoutes() {
       const id = parseInt(c.req.param("id"));
       const body = c.req.valid("json");
 
-      // Verify ownership
       const row = await db
         .prepare("SELECT id FROM user_blueprints WHERE id = ? AND user_id = ?")
         .bind(id, userId)

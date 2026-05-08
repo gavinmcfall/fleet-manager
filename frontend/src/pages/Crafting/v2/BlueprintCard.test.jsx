@@ -88,22 +88,26 @@ describe('BlueprintCard', () => {
     expect(article.textContent).toMatch(/rifle/i)
   })
 
-  it('invokes the fav, sim, and compare callbacks when buttons are clicked', async () => {
-    const onFav = vi.fn()
+  it('invokes the owned, wishlist, sim, and compare callbacks when buttons are clicked', async () => {
+    const onOwned = vi.fn()
+    const onWishlist = vi.fn()
     const onSim = vi.fn()
     const onCompare = vi.fn()
     render(
       <BlueprintCard
         blueprint={WEAPON_BP}
-        onFavorite={onFav}
+        onToggleOwned={onOwned}
+        onToggleWishlist={onWishlist}
         onQualitySim={onSim}
         onCompare={onCompare}
       />
     )
-    await userEvent.click(screen.getByRole('button', { name: /favorite/i }))
+    await userEvent.click(screen.getByRole('button', { name: /mark as owned/i }))
+    await userEvent.click(screen.getByRole('button', { name: /add to wishlist/i }))
     await userEvent.click(screen.getByRole('button', { name: /sim/i }))
     await userEvent.click(screen.getByRole('button', { name: /compare/i }))
-    expect(onFav).toHaveBeenCalledWith(WEAPON_BP)
+    expect(onOwned).toHaveBeenCalledWith(WEAPON_BP)
+    expect(onWishlist).toHaveBeenCalledWith(WEAPON_BP)
     expect(onSim).toHaveBeenCalledWith(WEAPON_BP)
     expect(onCompare).toHaveBeenCalledWith(WEAPON_BP)
   })
@@ -111,6 +115,20 @@ describe('BlueprintCard', () => {
   it('marks the card as selected when isInCompare is true', () => {
     render(<BlueprintCard blueprint={WEAPON_BP} isInCompare={true} />)
     const article = screen.getByRole('article')
+    expect(article).toHaveAttribute('data-selected', 'true')
+  })
+
+  it('shows OWNED ribbon when isOwned is true and not in compare', () => {
+    render(<BlueprintCard blueprint={WEAPON_BP} isOwned={true} />)
+    const article = screen.getByRole('article')
+    expect(article).toHaveAttribute('data-owned', 'true')
+    expect(article.textContent).toMatch(/Owned/i)
+  })
+
+  it('hides OWNED ribbon when also in compare (compare wins)', () => {
+    render(<BlueprintCard blueprint={WEAPON_BP} isOwned={true} isInCompare={true} />)
+    const article = screen.getByRole('article')
+    expect(article).toHaveAttribute('data-owned', 'true')
     expect(article).toHaveAttribute('data-selected', 'true')
   })
 })

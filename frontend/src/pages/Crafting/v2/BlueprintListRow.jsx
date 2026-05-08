@@ -1,10 +1,11 @@
 import React from 'react'
-import { Star, SlidersHorizontal, Repeat, Clock } from 'lucide-react'
+import { Star, SlidersHorizontal, Repeat, Clock, Box, Check } from 'lucide-react'
 import { resolveStats } from './statConfig'
 import { formatCraftTime } from '../craftingUtils'
 
+// Two toggles in the leading column: Owned, Wishlist (each 22px wide).
 const GRID_TEMPLATE =
-  '4px 32px minmax(140px, 1fr) 68px 68px 68px 68px 68px 68px 96px 108px'
+  '4px 50px minmax(140px, 1fr) 68px 68px 68px 68px 68px 68px 96px 108px'
 
 const STRIP_BG = {
   weapons: 'bg-[var(--type-weapon)]',
@@ -29,36 +30,53 @@ const TYPE_LABEL = { weapons: 'Weapon', armour: 'Armour', ammo: 'Ammo' }
 export default function BlueprintListRow({
   blueprint,
   isInCompare = false,
-  isFavorite = false,
-  onFavorite = () => {},
+  isOwned = false,
+  isWishlist = false,
+  onToggleOwned = () => {},
+  onToggleWishlist = () => {},
   onQualitySim = () => {},
   onCompare = () => {},
 }) {
   const stats = resolveStats(blueprint)
   const name = blueprint.base_stats?.item_name || blueprint.name
+  // Owned wins over wishlist as a row tint, compare wins over both.
   const selectedStyle = isInCompare
     ? { backgroundColor: 'var(--selected-bg)', boxShadow: 'inset 3px 0 0 var(--sc-accent)' }
+    : isOwned
+    ? { boxShadow: 'inset 3px 0 0 rgb(52, 211, 153), inset 0 0 0 1px rgba(52, 211, 153, 0.08)' }
     : undefined
 
   return (
     <div
       role="row"
       data-selected={isInCompare ? 'true' : 'false'}
+      data-owned={isOwned ? 'true' : 'false'}
+      data-wishlist={isWishlist ? 'true' : 'false'}
       className="grid items-stretch border-b border-[var(--separator-subtle)] transition-colors duration-150 hover:bg-[var(--surface-card-hover)] cursor-pointer"
-      style={{ gridTemplateColumns: GRID_TEMPLATE, minWidth: '760px', ...selectedStyle }}
+      style={{ gridTemplateColumns: GRID_TEMPLATE, minWidth: '780px', ...selectedStyle }}
     >
       {/* Strip */}
       <div className={`h-full ${STRIP_BG[blueprint.type] || ''}`} />
 
-      {/* Favorite toggle */}
-      <div className="flex items-center justify-center px-1 py-3 min-w-0">
+      {/* Owned + Wishlist toggles */}
+      <div className="flex items-center justify-center gap-1 px-1 py-3 min-w-0">
         <button
           type="button"
-          aria-label="Favorite"
-          onClick={(e) => { e.stopPropagation(); onFavorite(blueprint) }}
-          className={isFavorite ? 'text-[var(--sc-warn)]' : 'text-[var(--text-subtle)] hover:text-[var(--text-tertiary)]'}
+          aria-label={isOwned ? 'Remove from owned' : 'Mark as owned'}
+          onClick={(e) => { e.stopPropagation(); onToggleOwned(blueprint) }}
+          className={isOwned ? 'text-[rgb(52,211,153)]' : 'text-[var(--text-subtle)] hover:text-[var(--text-tertiary)]'}
         >
-          <Star className="w-[14px] h-[14px]" fill={isFavorite ? 'currentColor' : 'none'} />
+          {isOwned
+            ? <Check className="w-[13px] h-[13px]" />
+            : <Box className="w-[13px] h-[13px]" />}
+        </button>
+        <button
+          type="button"
+          aria-label={isWishlist ? 'Remove from wishlist' : 'Add to wishlist'}
+          onClick={(e) => { e.stopPropagation(); onToggleWishlist(blueprint) }}
+          className={isWishlist ? 'text-[var(--sc-warn)]' : 'text-[var(--text-subtle)] hover:text-[var(--text-tertiary)]'}
+        >
+          <Star className="w-[13px] h-[13px]" fill={isWishlist ? 'currentColor' : 'none'} />
         </button>
       </div>
 

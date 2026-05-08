@@ -31,8 +31,10 @@ export default function BlueprintListView({
   blueprints,
   activeType,
   compareItems = [],
-  favorites = new Set(),
-  onFavorite = () => {},
+  ownedSet = new Set(),
+  wishlistSet = new Set(),
+  onToggleOwned = () => {},
+  onToggleWishlist = () => {},
   onQualitySim = () => {},
   onCompare = () => {},
   maxHeight = 'calc(100vh - 280px)',
@@ -66,8 +68,10 @@ export default function BlueprintListView({
           key={bp.id}
           blueprint={bp}
           isInCompare={inCompare(bp)}
-          isFavorite={favorites.has(bp.id)}
-          onFavorite={onFavorite}
+          isOwned={!!bp.uuid && ownedSet.has(bp.uuid)}
+          isWishlist={!!bp.uuid && wishlistSet.has(bp.uuid)}
+          onToggleOwned={onToggleOwned}
+          onToggleWishlist={onToggleWishlist}
           onQualitySim={onQualitySim}
           onCompare={onCompare}
         />
