@@ -77,7 +77,11 @@ export function useStatus() {
 }
 
 export function useShips() {
-  return useAPI('/ships')
+  // Default to pledgeable-only — NPC/AI variants (Vanduul Mauler, Idris-P AI,
+  // etc.) are extracted into vehicles for completeness but should not appear
+  // in the public ship browser. Tools that genuinely need every entity can
+  // call useAPI('/ships') directly with no filter.
+  return useAPI('/ships?pledgeable=1')
 }
 
 export function useContracts() {
