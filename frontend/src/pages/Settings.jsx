@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react'
-import { useLLMConfig, setLLMConfig, testLLMConnection, usePreferences } from '../hooks/useAPI'
-import { Key, CheckCircle, XCircle, Loader, Trash2, Eye, EyeOff, Type, Globe, Shield } from 'lucide-react'
+import { useLLMConfig, setLLMConfig, testLLMConnection, usePreferences, setPreferences } from '../hooks/useAPI'
+import { Key, CheckCircle, XCircle, Loader, Trash2, Eye, EyeOff, Type, Globe, Shield, FlaskConical } from 'lucide-react'
 import PageHeader from '../components/PageHeader'
 import PanelSection from '../components/PanelSection'
 import ProviderLogo, { PROVIDER_INFO } from '../components/ProviderLogo'
@@ -127,6 +127,67 @@ export default function Settings() {
           {notification.msg}
         </div>
       )}
+
+      <PanelSection title="Preview Channel" icon={FlaskConical}>
+        <div className="p-5 space-y-4">
+          <p className="text-sm text-gray-400">
+            Switch which game-version data the site shows. <strong>LIVE</strong> is the
+            currently-released patch. <strong>PTU</strong> previews unreleased data
+            from CIG's Public Test Universe — handy for verifying upcoming ships,
+            crafting recipes, and items before they go live.
+          </p>
+          <div className="space-y-2">
+            {[
+              { key: null, label: 'LIVE', desc: 'Current released patch (default)' },
+              { key: '4.8.0-ptu', label: 'PTU 4.8.0', desc: 'Public Test Universe — preview data' },
+            ].map((c) => {
+              const checked = (preferences?.adminPreviewPatch || null) === c.key
+              return (
+                <label
+                  key={c.key ?? 'live'}
+                  className={`block p-4 rounded border-2 cursor-pointer transition-colors ${
+                    checked
+                      ? 'border-sc-accent bg-sc-accent/10'
+                      : 'border-sc-border hover:border-sc-accent2/40'
+                  }`}
+                >
+                  <div className="flex items-center gap-3">
+                    <input
+                      type="radio"
+                      name="preview-channel"
+                      value={c.key ?? ''}
+                      checked={checked}
+                      onChange={async () => {
+                        try {
+                          await setPreferences({ adminPreviewPatch: c.key })
+                          await refetchPrefs()
+                          showNotification(`Preview channel: ${c.label}`, 'success')
+                          // Reload so cached page data switches channel
+                          setTimeout(() => window.location.reload(), 300)
+                        } catch (err) {
+                          showNotification('Failed to switch channel: ' + err.message, 'error')
+                        }
+                      }}
+                      className="mr-1"
+                    />
+                    <div className="flex-1">
+                      <span className="text-white font-medium">{c.label}</span>
+                      <span className="text-xs text-gray-500 ml-2">{c.desc}</span>
+                    </div>
+                  </div>
+                </label>
+              )
+            })}
+          </div>
+          {preferences?.adminPreviewPatch && (
+            <p className="text-xs text-amber-400">
+              ⚠ You're previewing PTU data. Some entries may be incomplete or
+              change before going live. Switch back to LIVE for the released
+              patch.
+            </p>
+          )}
+        </div>
+      </PanelSection>
 
       <PanelSection title="Display" icon={Type}>
         <div className="p-5 space-y-4">

@@ -186,13 +186,11 @@ export function settingsRoutes() {
 
     const body = c.req.valid("json");
 
-    // Only super_admins can set adminPreviewPatch
-    if (body.adminPreviewPatch !== undefined) {
-      const userRecord = await db.prepare("SELECT role FROM user WHERE id = ?").bind(userID).first<{ role: string | null }>();
-      if (userRecord?.role !== "super_admin") {
-        delete body.adminPreviewPatch;
-      }
-    }
+    // adminPreviewPatch (Preview Channel): any authenticated user can opt in.
+    // The legacy super_admin gate was removed 2026-05-08 — PTU data is just
+    // game info, no security implications. PTU shadow tables only exist on
+    // staging anyway; on production the toggle has no effect (no ptu_* data
+    // present, so the channelMiddleware fallback would just keep showing LIVE).
 
     // Load existing prefs for old-value comparison
     const existingRows = await db

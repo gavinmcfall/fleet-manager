@@ -66,9 +66,51 @@ export const VERSIONED_TABLES = [
   "vehicles", "manufacturers",
 ] as const;
 
-/** Returns the table name for the given context (live or PTU). */
+/** Returns the table name for the given context (live or PTU).
+ *
+ * Use for write operations and for read operations where you ONLY want PTU
+ * rows (no LIVE fallback). For most read operations in PTU mode you should
+ * use `resolveTableForRead` instead so the user sees a superset of LIVE +
+ * PTU instead of just what the pipeline chose to ship in 4.8.
+ */
 export function resolveTable(table: string, isPTU: boolean): string {
   return isPTU ? `ptu_${table}` : table;
+}
+
+/**
+ * Returns a SQL fragment for read queries that should expose a SUPERSET of
+ * LIVE + PTU when in PTU channel.
+ *
+ * On LIVE: returns the bare table name (`shops`).
+ * On PTU: returns a parenthesised UNION-ALL derived table that pulls every
+ *   row from `ptu_<table>` plus every row from `<table>` whose <keyCol> is
+ *   not present in PTU. The result is suitable for use after FROM/JOIN.
+ *
+ * Why: the pipeline emits only the entities present in the 4.8 game data.
+ * Concept ships, shops at removed locations, and NPCs that exist in 4.7
+ * but weren't re-extracted for 4.8 would otherwise vanish when a tester
+ * switches to PTU mode. We want them to see a 4.8.x-flavoured superset.
+ *
+ * Caveats:
+ * - Schemas of base/PTU table must match column-for-column (true for the
+ *   tables created by migration 0215 and friends).
+ * - Autoincrement `id` values come from different namespaces in base vs
+ *   PTU and may collide in the merged result. Public-facing endpoints key
+ *   on slug/uuid, so this rarely matters; if you need stable id semantics
+ *   stick with `resolveTable`.
+ * - Use the returned fragment as a derived table only — it's wrapped in
+ *   parens with no alias, so the caller writes `FROM ${tFR("shops")} s`.
+ */
+export function resolveTableForRead(
+  table: string,
+  isPTU: boolean,
+  keyCol: string = "uuid",
+): string {
+  if (!isPTU) return table;
+  return `(SELECT * FROM ptu_${table} ` +
+         `UNION ALL ` +
+         `SELECT * FROM ${table} WHERE ${keyCol} IS NOT NULL ` +
+         `AND ${keyCol} NOT IN (SELECT ${keyCol} FROM ptu_${table} WHERE ${keyCol} IS NOT NULL))`;
 }
 
 export type Channel = "LIVE" | "PTU" | "EPTU";
@@ -150,7 +192,10 @@ export const channelMiddleware: MiddlewareHandler<HonoEnv> = async (c, next) => 
   }
 
   const user = c.get("user");
-  if (user?.role === "super_admin") {
+  if (user) {
+    // Any authenticated user can opt into a preview channel via Settings →
+    // Preview Channel. (Legacy super_admin gate removed 2026-05-08 — PTU is
+    // just game data, and only staging has ptu_* tables populated anyway.)
     try {
       const row = await c.env.DB
         .prepare(
