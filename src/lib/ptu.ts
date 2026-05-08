@@ -52,8 +52,14 @@ export const VERSIONED_TABLES = [
   "contract_generator_blueprint_pools", "contract_generator_careers",
   "contract_generator_contracts", "contract_generators",
   "contract_blueprint_reward_pools", "contracts",
-  // Crafting
+  // Crafting (children before parents — slot_modifiers → slots → blueprints)
+  "crafting_slot_modifiers", "crafting_blueprint_slots",
+  "crafting_blueprint_reward_pool_items",
   "crafting_blueprint_reward_pools", "crafting_resources", "crafting_blueprints",
+  // 4.8 PTU additions (no FK to other ptu_* tables)
+  "crafting_quality_quantization",
+  "transport_carriage_announcements", "transport_destination_categories",
+  "unified_shake_params",
   // Reference tables
   "armor_resistance_profiles",
   "jurisdiction_infraction_overrides", "law_jurisdictions", "law_infractions",

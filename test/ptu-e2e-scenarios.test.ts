@@ -301,19 +301,28 @@ describe("Scenario: major LIVE drop ends PTU cycle", () => {
 
     // applyD1Migrations is idempotent against the d1_migrations meta table —
     // it won't re-run a migration that's already recorded as applied. So to
-    // verify the migration's CREATE statements are themselves idempotent and
-    // can recreate dropped tables, we replay the 0215 migration's queries
-    // directly. (This is what the admin purge → next PTU load cycle does
-    // in production: the loader pipeline re-runs the migration manually.)
-    const ptuMigration = env.TEST_MIGRATIONS.find((m) =>
-      m.name.includes("0215_ptu_shadow_tables"),
-    );
-    expect(ptuMigration).toBeDefined();
-    for (const q of ptuMigration!.queries) {
-      // Skip empty/whitespace-only statements that survived parsing.
-      if (q.trim().length === 0) continue;
-      await env.DB.prepare(q).run();
+    // verify the CREATE statements are themselves idempotent and can recreate
+    // dropped tables, we replay every migration that creates/alters ptu_*
+    // shadows. 0215 is the bulk batch; later migrations add tables (e.g.
+    // 0216 crafting slots, 0222 reward_pool_items) and columns (0221) that
+    // are also part of the steady-state schema after a major LIVE drop.
+    // Replay every individual query that mentions a ptu_* object. Filtering
+    // at the query level (not migration level) avoids re-running base-table
+    // ALTERs that ship alongside ptu_* ALTERs in the same migration file
+    // (e.g. 0217 mirrors slot_type onto both tables; 0218/0221 do likewise).
+    // VERSIONED_TABLES covers every ptu_* shadow table created across all
+    // migrations, so the prior DROP step left the slate clean for replay.
+    let replayed = 0;
+    for (const m of env.TEST_MIGRATIONS as { name: string; queries: string[] }[]) {
+      for (const q of m.queries) {
+        const trimmed = q.trim();
+        if (trimmed.length === 0) continue;
+        if (!/\bptu_/i.test(trimmed)) continue;
+        await env.DB.prepare(trimmed).run();
+        replayed += 1;
+      }
     }
+    expect(replayed).toBeGreaterThan(0);
 
     const r = await env.DB
       .prepare(`SELECT COUNT(*) as c FROM ptu_loot_map`)
