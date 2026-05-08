@@ -1,6 +1,6 @@
 import React, { useState, useMemo, useEffect, useCallback } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { FlaskConical } from 'lucide-react'
+import { FlaskConical, Search, X } from 'lucide-react'
 import { useCrafting, useUserBlueprints, setBlueprintState } from '../../../hooks/useAPI'
 import LoadingState from '../../../components/LoadingState'
 import ErrorState from '../../../components/ErrorState'
@@ -43,6 +43,8 @@ export default function CraftingV2() {
 
   const [view, setView] = useState(readStoredView)
   const [activeType, setActiveType] = useState(readStoredType)
+  const [search, setSearch] = useState('')
+  const [stateFilter, setStateFilter] = useState('all') // 'all' | 'owned' | 'wishlist' | 'sim'
   const compare = useCompareTray()
 
   useEffect(() => { localStorage.setItem(VIEW_STORAGE_KEY, view) }, [view])
@@ -75,10 +77,46 @@ export default function CraftingV2() {
     return s
   }, [userBp.data, wishlistOverlay])
 
+  // Blueprints with a saved quality-sim config — surfaced as a small
+  // indicator on the card so users know "I have a custom config saved here."
+  const simSet = useMemo(() => {
+    const s = new Set()
+    for (const item of userBp.data?.items || []) {
+      if (item.has_quality_config && item.blueprint_uuid) s.add(item.blueprint_uuid)
+    }
+    return s
+  }, [userBp.data])
+
+  const counts = useMemo(() => ({
+    all: data?.blueprints?.length ?? 0,
+    owned: ownedSet.size,
+    wishlist: wishlistSet.size,
+    sim: simSet.size,
+  }), [data, ownedSet, wishlistSet, simSet])
+
+  const normSearch = search.trim().toLowerCase()
+
   const blueprints = useMemo(() => {
     if (!data?.blueprints) return []
-    return data.blueprints.filter(bp => bp.type === activeType)
-  }, [data, activeType])
+    return data.blueprints.filter(bp => {
+      if (bp.type !== activeType) return false
+
+      if (stateFilter === 'owned' && !(bp.uuid && ownedSet.has(bp.uuid))) return false
+      if (stateFilter === 'wishlist' && !(bp.uuid && wishlistSet.has(bp.uuid))) return false
+      if (stateFilter === 'sim' && !(bp.uuid && simSet.has(bp.uuid))) return false
+
+      if (normSearch) {
+        const haystack = [
+          bp.base_stats?.item_name,
+          bp.name,
+          bp.tag,
+          bp.sub_type,
+        ].filter(Boolean).join(' ').toLowerCase()
+        if (!haystack.includes(normSearch)) return false
+      }
+      return true
+    })
+  }, [data, activeType, stateFilter, ownedSet, wishlistSet, simSet, normSearch])
 
   const handleQualitySim = (bp) => navigate(`/crafting/${bp.id}?tab=quality`)
 
@@ -137,10 +175,65 @@ export default function CraftingV2() {
         </h1>
       </div>
 
-      {/* Controls */}
-      <div className="flex items-center justify-between mb-4 flex-wrap gap-3">
+      {/* Controls — type / search / view */}
+      <div className="flex items-center justify-between mb-3 flex-wrap gap-3">
         <TypeSwitcher activeType={activeType} onChange={setActiveType} />
+
+        {/* Search */}
+        <div className="relative flex-1 min-w-[180px] max-w-[320px]">
+          <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-[var(--text-subtle)] pointer-events-none" />
+          <input
+            type="text"
+            value={search}
+            onChange={(e) => setSearch(e.target.value)}
+            placeholder="Search blueprints..."
+            aria-label="Search blueprints"
+            className="w-full bg-white/[0.03] border border-white/[0.08] rounded-md pl-8 pr-7 py-1.5 text-[12px] text-gray-200 placeholder-[var(--text-subtle)] focus:outline-none focus:border-[var(--sc-accent)]/40 transition-colors"
+          />
+          {search && (
+            <button
+              type="button"
+              onClick={() => setSearch('')}
+              aria-label="Clear search"
+              className="absolute right-2 top-1/2 -translate-y-1/2 text-[var(--text-subtle)] hover:text-white"
+            >
+              <X className="w-3.5 h-3.5" />
+            </button>
+          )}
+        </div>
+
         <ViewToggle value={view} onChange={setView} />
+      </div>
+
+      {/* Filter chips */}
+      <div className="flex items-center gap-1.5 mb-4 flex-wrap font-mono text-[10px] uppercase tracking-[0.05em]">
+        <FilterChip active={stateFilter === 'all'} onClick={() => setStateFilter('all')}>
+          All <span className="opacity-60">· {counts.all}</span>
+        </FilterChip>
+        <FilterChip
+          active={stateFilter === 'owned'}
+          tint="success"
+          onClick={() => setStateFilter('owned')}
+          disabled={counts.owned === 0}
+        >
+          Owned <span className="opacity-60">· {counts.owned}</span>
+        </FilterChip>
+        <FilterChip
+          active={stateFilter === 'wishlist'}
+          tint="warn"
+          onClick={() => setStateFilter('wishlist')}
+          disabled={counts.wishlist === 0}
+        >
+          Wishlist <span className="opacity-60">· {counts.wishlist}</span>
+        </FilterChip>
+        <FilterChip
+          active={stateFilter === 'sim'}
+          tint="accent"
+          onClick={() => setStateFilter('sim')}
+          disabled={counts.sim === 0}
+        >
+          Saved Sim <span className="opacity-60">· {counts.sim}</span>
+        </FilterChip>
       </div>
 
       {/* Grid or list */}
@@ -158,6 +251,7 @@ export default function CraftingV2() {
               isInCompare={compare.isInTray(bp)}
               isOwned={!!bp.uuid && ownedSet.has(bp.uuid)}
               isWishlist={!!bp.uuid && wishlistSet.has(bp.uuid)}
+              hasSavedSim={!!bp.uuid && simSet.has(bp.uuid)}
               onToggleOwned={handleToggleOwned}
               onToggleWishlist={handleToggleWishlist}
               onQualitySim={handleQualitySim}
@@ -172,6 +266,7 @@ export default function CraftingV2() {
           compareItems={compare.items}
           ownedSet={ownedSet}
           wishlistSet={wishlistSet}
+          simSet={simSet}
           onToggleOwned={handleToggleOwned}
           onToggleWishlist={handleToggleWishlist}
           onQualitySim={handleQualitySim}
@@ -185,5 +280,27 @@ export default function CraftingV2() {
         onClear={compare.clear}
       />
     </div>
+  )
+}
+
+function FilterChip({ active, onClick, disabled = false, tint = 'accent', children }) {
+  const tintMap = {
+    accent: { active: 'bg-[var(--hover-bg)] border-[var(--sc-accent)]/40 text-[var(--sc-accent)]' },
+    success: { active: 'bg-[rgba(52,211,153,0.08)] border-[rgba(52,211,153,0.45)] text-[rgb(52,211,153)]' },
+    warn: { active: 'bg-[rgba(245,166,35,0.06)] border-[var(--sc-warn)]/40 text-[var(--sc-warn)]' },
+  }
+  const activeCls = tintMap[tint]?.active || tintMap.accent.active
+  const idleCls =
+    'bg-white/[0.02] border-white/[0.08] text-[var(--text-muted)] hover:bg-white/[0.05] hover:text-white'
+  const disabledCls = 'opacity-40 cursor-not-allowed hover:bg-white/[0.02] hover:text-[var(--text-muted)]'
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      disabled={disabled}
+      className={`px-3 py-1 rounded-full border transition-colors duration-150 ${active ? activeCls : idleCls} ${disabled ? disabledCls : ''}`}
+    >
+      {children}
+    </button>
   )
 }

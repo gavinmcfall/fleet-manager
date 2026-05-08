@@ -14,6 +14,12 @@ export function blueprintRoutes() {
   const routes = new Hono<HonoEnv>();
 
   // ── GET / — list user's saved blueprints (owned + wishlist) ──────
+  // Resolves blueprint metadata by uuid against BOTH the LIVE and PTU
+  // tables so PTU-only blueprints (Banu Tachyoncannon, Wikelo variants)
+  // still render with name/tag/type when the user marks them owned. We
+  // also surface a derived `has_quality_config` flag so the UI can show
+  // a "saved sim" indicator without parsing the full config blob client
+  // side.
   routes.get("/", async (c) => {
     const db = c.env.DB;
     const userId = getAuthUser(c).id;
@@ -24,10 +30,16 @@ export function blueprintRoutes() {
                 ub.is_owned, ub.is_wishlist,
                 ub.nickname, ub.crafted_quantity,
                 ub.quality_config_json, ub.source, ub.updated_at,
-                cb.name as blueprint_name, cb.tag, cb.type, cb.sub_type,
-                cb.craft_time_seconds
+                COALESCE(lcb.name, pcb.name) AS blueprint_name,
+                COALESCE(lcb.tag, pcb.tag) AS tag,
+                COALESCE(lcb.type, pcb.type) AS type,
+                COALESCE(lcb.sub_type, pcb.sub_type) AS sub_type,
+                COALESCE(lcb.craft_time_seconds, pcb.craft_time_seconds) AS craft_time_seconds,
+                COALESCE(lcb.id, ub.crafting_blueprint_id) AS resolved_blueprint_id,
+                CASE WHEN lcb.id IS NULL AND pcb.id IS NOT NULL THEN 1 ELSE 0 END AS is_ptu_only
          FROM user_blueprints ub
-         LEFT JOIN crafting_blueprints cb ON cb.id = ub.crafting_blueprint_id
+         LEFT JOIN crafting_blueprints lcb ON lcb.uuid = ub.blueprint_uuid
+         LEFT JOIN ptu_crafting_blueprints pcb ON pcb.uuid = ub.blueprint_uuid
          WHERE ub.user_id = ?
          ORDER BY ub.updated_at DESC`,
       )
@@ -39,10 +51,16 @@ export function blueprintRoutes() {
         ...r,
         is_owned: r.is_owned === 1,
         is_wishlist: r.is_wishlist === 1,
+        is_ptu_only: r.is_ptu_only === 1,
+        has_quality_config: !!r.quality_config_json,
+        // crafting_blueprint_id may be null (PTU-only BP). Use the
+        // resolved id for navigation links to the LIVE detail page.
+        crafting_blueprint_id: r.resolved_blueprint_id,
         quality_config: r.quality_config_json
           ? JSON.parse(r.quality_config_json as string)
           : null,
         quality_config_json: undefined,
+        resolved_blueprint_id: undefined,
       })),
     });
   });

@@ -33,6 +33,7 @@ export default function BlueprintListView({
   compareItems = [],
   ownedSet = new Set(),
   wishlistSet = new Set(),
+  simSet = new Set(),
   onToggleOwned = () => {},
   onToggleWishlist = () => {},
   onQualitySim = () => {},
@@ -70,6 +71,7 @@ export default function BlueprintListView({
           isInCompare={inCompare(bp)}
           isOwned={!!bp.uuid && ownedSet.has(bp.uuid)}
           isWishlist={!!bp.uuid && wishlistSet.has(bp.uuid)}
+          hasSavedSim={!!bp.uuid && simSet.has(bp.uuid)}
           onToggleOwned={onToggleOwned}
           onToggleWishlist={onToggleWishlist}
           onQualitySim={onQualitySim}

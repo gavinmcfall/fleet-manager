@@ -32,6 +32,7 @@ export default function BlueprintListRow({
   isInCompare = false,
   isOwned = false,
   isWishlist = false,
+  hasSavedSim = false,
   onToggleOwned = () => {},
   onToggleWishlist = () => {},
   onQualitySim = () => {},
@@ -107,8 +108,21 @@ export default function BlueprintListRow({
 
       {/* Actions */}
       <div className="flex items-center justify-end gap-1 pr-3 py-3 min-w-0">
-        <IconAction label="Quality Sim" onClick={() => onQualitySim(blueprint)}>
-          <SlidersHorizontal className="w-3 h-3" />
+        <IconAction
+          label={hasSavedSim ? 'Quality Sim (saved config)' : 'Quality Sim'}
+          active={hasSavedSim}
+          onClick={() => onQualitySim(blueprint)}
+        >
+          <span className="relative inline-flex">
+            <SlidersHorizontal className="w-3 h-3" />
+            {hasSavedSim && (
+              <span
+                className="absolute -top-1 -right-1 w-1.5 h-1.5 rounded-full bg-[var(--sc-accent)]"
+                style={{ boxShadow: '0 0 4px var(--sc-accent)' }}
+                aria-hidden
+              />
+            )}
+          </span>
         </IconAction>
         <IconAction label="Compare" active={isInCompare} onClick={() => onCompare(blueprint)}>
           <Repeat className="w-3 h-3" />

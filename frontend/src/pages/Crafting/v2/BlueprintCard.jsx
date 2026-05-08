@@ -26,6 +26,7 @@ export default function BlueprintCard({
   isInCompare = false,
   isOwned = false,
   isWishlist = false,
+  hasSavedSim = false,
   onToggleOwned = () => {},
   onToggleWishlist = () => {},
   onQualitySim = () => {},
@@ -155,9 +156,22 @@ export default function BlueprintCard({
           divider
         />
         <ActionButton
-          icon={<SlidersHorizontal className="w-3 h-3" />}
-          label="Sim"
-          aria-label="Quality Sim"
+          icon={
+            <span className="relative inline-flex">
+              <SlidersHorizontal className="w-3 h-3" />
+              {hasSavedSim && (
+                <span
+                  className="absolute -top-1 -right-1 w-1.5 h-1.5 rounded-full bg-[var(--sc-accent)]"
+                  style={{ boxShadow: '0 0 4px var(--sc-accent)' }}
+                  aria-hidden
+                />
+              )}
+            </span>
+          }
+          label={hasSavedSim ? 'Sim ✓' : 'Sim'}
+          aria-label={hasSavedSim ? 'Quality Sim (saved config)' : 'Quality Sim'}
+          active={hasSavedSim}
+          activeTint="accent"
           onClick={() => onQualitySim(blueprint)}
           divider
         />
