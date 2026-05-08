@@ -25,7 +25,7 @@ export function vehicleRoutes<E extends HonoEnv>() {
     const isPTU = isPTUChannel(getActiveChannel(c));
     const vehiclesT = resolveTable("vehicles", isPTU);
     const manufacturersT = resolveTable("manufacturers", isPTU);
-    const cacheKey = `ships:list${pledgeableOnly ? ":pledgeable" : ""}${isPTU ? ":ptu" : ""}`;
+    const cacheKey = `ships:list${pledgeableOnly ? ":pledgeable" : ""}`;
     return cachedJson(c, cacheKey, async () => {
       const whereClauses = ["v.is_paint_variant = 0", "v.removed = 0"];
       if (pledgeableOnly) whereClauses.push("v.is_pledgeable = 1");
@@ -61,8 +61,7 @@ export function vehicleRoutes<E extends HonoEnv>() {
     const isPTU = isPTUChannel(getActiveChannel(c));
     const vehiclesT = resolveTable("vehicles", isPTU);
     const manufacturersT = resolveTable("manufacturers", isPTU);
-    const cacheSuffix = isPTU ? ":ptu" : "";
-    return cachedJson(c, `ships:detail:${cacheSlug(slug)}${cacheSuffix}`, async () => {
+    return cachedJson(c, `ships:detail:${cacheSlug(slug)}`, async () => {
       const vehicle = await db
         .prepare(
           `SELECT v.id, v.uuid, v.slug, v.name, v.class_name,

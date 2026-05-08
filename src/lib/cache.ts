@@ -30,6 +30,17 @@ export async function cachedJson<T>(
   const ttl = options?.ttl ?? DEFAULT_TTL;
   const cacheControl = options?.cacheControl ?? "public, s-maxage=0, max-age=300";
 
+  // Auto-namespace cache keys by active channel so LIVE and PTU never share
+  // payloads. Resolved by channelMiddleware (sync read from context).
+  // Defensive: c.get may not be wired in tests; default to "live" namespace.
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const channel = (typeof (c as any).get === "function"
+    ? ((c as any).get("channel") as string | undefined)
+    : undefined) ?? "LIVE";
+  if (channel !== "LIVE") {
+    cacheKey = `${channel.toLowerCase()}:${cacheKey}`;
+  }
+
   // Skip cache in test environment — KV persists across test files and caches
   // stale empty results before data is seeded
   if (c.env.ENVIRONMENT === "test") {
