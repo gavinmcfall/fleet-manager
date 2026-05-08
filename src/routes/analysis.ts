@@ -1,6 +1,7 @@
 import { Hono } from "hono";
 import { z } from "zod";
 import { getAuthUser, type HonoEnv, type UserFleetEntry, type Vehicle, type FleetAnalysis } from "../lib/types";
+import { getActiveChannel, isPTUChannel, resolveTable } from "../lib/ptu";
 import { decrypt } from "../lib/crypto";
 import { logEvent } from "../lib/logger";
 import { ANALYSIS_PROMPT } from "../lib/analysis-prompt";
@@ -15,16 +16,17 @@ export function analysisRoutes() {
 
   // GET /api/analysis — fleet gap analysis, redundancies, insurance summary
   routes.get("/analysis", async (c) => {
+    const isPTU = isPTUChannel(getActiveChannel(c));
+    const t = (n: string) => resolveTable(n, isPTU);
     const db = c.env.DB;
     const userID = getAuthUser(c).id;
 
     const fleet = await getFleetForAnalysis(db, userID);
 
     const allVehiclesResult = await db
-      .prepare(
-        `SELECT v.id, v.slug, v.name, v.focus, v.size_label, v.classification,
+      .prepare(`SELECT v.id, v.slug, v.name, v.focus, v.size_label, v.classification,
           ps.key as production_status
-        FROM vehicles v
+        FROM ${t("vehicles")} v
         LEFT JOIN production_statuses ps ON ps.id = v.production_status_id
         WHERE v.removed = 0
         ORDER BY v.name`,
@@ -36,8 +38,7 @@ export function analysisRoutes() {
     // Total pledge value from user_pledges (all pledges, not just ships)
     // This is the real total spent — ships, paints, add-ons, upgrades
     const pledgeTotal = await db
-      .prepare(
-        `SELECT COALESCE(SUM(CASE WHEN value_cents > 0 AND currency NOT LIKE '%UEC%' THEN value_cents ELSE 0 END), 0) / 100.0 as total
+      .prepare(`SELECT COALESCE(SUM(CASE WHEN value_cents > 0 AND currency NOT LIKE '%UEC%' THEN value_cents ELSE 0 END), 0) / 100.0 as total
          FROM user_pledges WHERE user_id = ?`,
       )
       .bind(userID)
@@ -51,8 +52,7 @@ export function analysisRoutes() {
     // Accurate enough to keep the Fleet Value card from showing $0 (F216/F230).
     if (totalPledgeValue === 0) {
       const fleetCostSum = await db
-        .prepare(
-          `SELECT COALESCE(SUM(
+        .prepare(`SELECT COALESCE(SUM(
              CASE
                WHEN pledge_cost IS NULL THEN 0
                WHEN pledge_cost LIKE '%UEC%' THEN 0

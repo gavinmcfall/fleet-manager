@@ -1,11 +1,17 @@
 import { Hono } from "hono";
-import type { Env } from "../lib/types";
+import type { HonoEnv } from "../lib/types";
 import { cachedJson, cacheSlug } from "../lib/cache";
+import { getActiveChannel, isPTUChannel, resolveTable } from "../lib/ptu";
 
 /**
  * /api/ships/* — Ship reference database (all vehicles in the game)
+ *
+ * Channel-aware: when the active channel is PTU/EPTU, queries route to the
+ * `ptu_vehicles` + `ptu_manufacturers` shadow tables instead of LIVE.
+ * `production_statuses` is reference data (not patch-versioned) and stays
+ * on the base table for both channels.
  */
-export function vehicleRoutes<E extends { Bindings: Env }>() {
+export function vehicleRoutes<E extends HonoEnv>() {
   const routes = new Hono<E>();
 
   // GET /api/ships — list all vehicles
@@ -16,7 +22,10 @@ export function vehicleRoutes<E extends { Bindings: Env }>() {
   routes.get("/", async (c) => {
     const db = c.env.DB;
     const pledgeableOnly = c.req.query("pledgeable") === "1";
-    const cacheKey = pledgeableOnly ? `ships:list:pledgeable` : `ships:list`;
+    const isPTU = isPTUChannel(getActiveChannel(c));
+    const vehiclesT = resolveTable("vehicles", isPTU);
+    const manufacturersT = resolveTable("manufacturers", isPTU);
+    const cacheKey = `ships:list${pledgeableOnly ? ":pledgeable" : ""}${isPTU ? ":ptu" : ""}`;
     return cachedJson(c, cacheKey, async () => {
       const whereClauses = ["v.is_paint_variant = 0", "v.removed = 0"];
       if (pledgeableOnly) whereClauses.push("v.is_pledgeable = 1");
@@ -32,10 +41,10 @@ export function vehicleRoutes<E extends { Bindings: Env }>() {
             m.name as manufacturer_name, m.code as manufacturer_code,
             CASE WHEN v.parent_vehicle_id IS NOT NULL AND pps.key IS NOT NULL
               THEN pps.key ELSE ps.key END as production_status
-          FROM vehicles v
-          LEFT JOIN manufacturers m ON m.id = v.manufacturer_id
+          FROM ${vehiclesT} v
+          LEFT JOIN ${manufacturersT} m ON m.id = v.manufacturer_id
           LEFT JOIN production_statuses ps ON ps.id = v.production_status_id
-          LEFT JOIN vehicles pv ON pv.id = v.parent_vehicle_id
+          LEFT JOIN ${vehiclesT} pv ON pv.id = v.parent_vehicle_id
           LEFT JOIN production_statuses pps ON pps.id = pv.production_status_id
           WHERE ${whereClauses.join(" AND ")}
           ORDER BY v.name`,
@@ -49,7 +58,11 @@ export function vehicleRoutes<E extends { Bindings: Env }>() {
   routes.get("/:slug", async (c) => {
     const slug = c.req.param("slug");
     const db = c.env.DB;
-    return cachedJson(c,`ships:detail:${cacheSlug(slug)}`, async () => {
+    const isPTU = isPTUChannel(getActiveChannel(c));
+    const vehiclesT = resolveTable("vehicles", isPTU);
+    const manufacturersT = resolveTable("manufacturers", isPTU);
+    const cacheSuffix = isPTU ? ":ptu" : "";
+    return cachedJson(c, `ships:detail:${cacheSlug(slug)}${cacheSuffix}`, async () => {
       const vehicle = await db
         .prepare(
           `SELECT v.id, v.uuid, v.slug, v.name, v.class_name,
@@ -74,10 +87,10 @@ export function vehicleRoutes<E extends { Bindings: Env }>() {
             m.name as manufacturer_name, m.code as manufacturer_code,
             CASE WHEN v.parent_vehicle_id IS NOT NULL AND pps.key IS NOT NULL
               THEN pps.key ELSE ps.key END as production_status
-          FROM vehicles v
-          LEFT JOIN manufacturers m ON m.id = v.manufacturer_id
+          FROM ${vehiclesT} v
+          LEFT JOIN ${manufacturersT} m ON m.id = v.manufacturer_id
           LEFT JOIN production_statuses ps ON ps.id = v.production_status_id
-          LEFT JOIN vehicles pv ON pv.id = v.parent_vehicle_id
+          LEFT JOIN ${vehiclesT} pv ON pv.id = v.parent_vehicle_id
           LEFT JOIN production_statuses pps ON pps.id = pv.production_status_id
           WHERE (v.slug = ? OR v.short_slug = ?) AND v.is_paint_variant = 0
           ORDER BY CASE WHEN v.slug = ? THEN 0 ELSE 1 END

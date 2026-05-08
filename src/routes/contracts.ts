@@ -1,5 +1,6 @@
 import { Hono } from "hono"
 import type { HonoEnv } from "../lib/types"
+import { getActiveChannel, isPTUChannel, resolveTable } from "../lib/ptu";
 import { ARMOR_SET_REWARD_MAP } from "../lib/loot-sets"
 import { cachedJson, cacheSlug } from "../lib/cache"
 
@@ -11,6 +12,8 @@ export function contractRoutes<E extends HonoEnv>() {
 
   // GET /api/contracts?giver=wikelo|gfs|ruto
   app.get("/", async (c) => {
+    const isPTU = isPTUChannel(getActiveChannel(c));
+    const t = (n: string) => resolveTable(n, isPTU);
     const db = c.env.DB
     const giver = c.req.query("giver")
     if (giver && giver.length > 100) {
@@ -20,8 +23,8 @@ export function contractRoutes<E extends HonoEnv>() {
     return cachedJson(c, `contracts:${cacheSlug(giver ?? "all")}`, async () => {
       let query = `SELECT c.*,
           COALESCE(c.reward_vehicle_slug, v.slug) AS reward_vehicle_slug
-        FROM contracts c
-        LEFT JOIN vehicles v ON v.name = c.reward_text AND c.reward_vehicle_slug IS NULL
+        FROM ${t("contracts")} c
+        LEFT JOIN ${t("vehicles")} v ON v.name = c.reward_text AND c.reward_vehicle_slug IS NULL
         WHERE c.is_active = 1`
       const params: string[] = []
 

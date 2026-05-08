@@ -1,5 +1,6 @@
 import { Hono } from "hono";
 import type { HonoEnv } from "../lib/types";
+import { getActiveChannel, isPTUChannel, resolveTable } from "../lib/ptu";
 
 /**
  * /api/debug/* — Debug endpoints
@@ -9,10 +10,12 @@ export function debugRoutes() {
 
   // GET /api/debug/imports — debug import state
   routes.get("/imports", async (c) => {
+    const isPTU = isPTUChannel(getActiveChannel(c));
+    const t = (n: string) => resolveTable(n, isPTU);
     const db = c.env.DB;
 
     const vehicleCount = await db
-      .prepare(`SELECT COUNT(*) as count FROM vehicles v`)
+      .prepare(`SELECT COUNT(*) as count FROM ${t("vehicles")} v`)
       .first<{ count: number }>();
 
     // Show fleet counts for all users (admin view)
@@ -22,11 +25,10 @@ export function debugRoutes() {
 
     // Sample fleet entries — vehicle/insurance data only, no user PII (user_id, custom_name)
     const sampleResult = await db
-      .prepare(
-        `SELECT uf.id, uf.vehicle_id, v.name as vehicle_name, v.slug as vehicle_slug,
+      .prepare(`SELECT uf.id, uf.vehicle_id, v.name as vehicle_name, v.slug as vehicle_slug,
           it.label as insurance
         FROM user_fleet uf
-        JOIN vehicles v ON v.id = uf.vehicle_id
+        JOIN ${t("vehicles")} v ON v.id = uf.vehicle_id
         LEFT JOIN insurance_types it ON it.id = uf.insurance_type_id
         ORDER BY v.name
         LIMIT 5`,

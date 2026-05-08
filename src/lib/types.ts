@@ -58,6 +58,12 @@ export type HonoEnv = {
       banExpires?: Date | null;
     } | null;
     session: { id: string; userId: string; expiresAt: Date; impersonatedBy?: string | null } | null;
+    /**
+     * Active channel for game-data queries on this request. Resolved by
+     * `channelMiddleware` from `?channel=` query param or the authenticated
+     * super_admin's `adminPreviewPatch` user_settings row. Defaults to "LIVE".
+     */
+    channel?: "LIVE" | "PTU" | "EPTU";
   };
 };
 

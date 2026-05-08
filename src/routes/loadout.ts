@@ -1,6 +1,7 @@
 import { Hono } from "hono";
 import { z } from "zod";
 import { getAuthUser, type HonoEnv } from "../lib/types";
+import { getActiveChannel, isPTUChannel, resolveTable } from "../lib/ptu";
 import { validate } from "../lib/validation";
 import { PORT_TYPE_TO_COMPONENT_TYPE, STAT_SORT_KEY } from "../lib/constants";
 import { cachedJson, cacheSlug } from "../lib/cache";
@@ -91,6 +92,8 @@ export function loadoutRoutes() {
 
   // GET /api/loadout/:slug/compatible?port_id=N&patch=X — all components fitting a port
   app.get("/:slug/compatible", async (c) => {
+    const isPTU = isPTUChannel(getActiveChannel(c));
+    const t = (n: string) => resolveTable(n, isPTU);
     const db = c.env.DB;
     const portIdStr = c.req.query("port_id");
 
@@ -100,9 +103,8 @@ export function loadoutRoutes() {
 
     // Get port info (type + size range)
     const port = await db
-      .prepare(
-        `SELECT vp.port_type, COALESCE(vp.min_size, vp.size_min) as min_size, COALESCE(vp.max_size, vp.size_max) as max_size, vp.equipped_item_uuid
-         FROM vehicle_ports vp
+      .prepare(`SELECT vp.port_type, COALESCE(vp.min_size, vp.size_min) as min_size, COALESCE(vp.max_size, vp.size_max) as max_size, vp.equipped_item_uuid
+         FROM ${t("vehicle_ports")} vp
          WHERE vp.id = ?`,
       )
       .bind(portId)
@@ -115,7 +117,7 @@ export function loadoutRoutes() {
     let resolvedPortType = port.port_type;
     if (!resolvedPortType) {
       const portInfo = await db
-        .prepare("SELECT COALESCE(port_name, name) as port_name FROM vehicle_ports WHERE id = ?")
+        .prepare(`SELECT COALESCE(port_name, name) as port_name FROM ${t("vehicle_ports")} WHERE id = ?`)
         .bind(portId)
         .first<{ port_name: string }>();
       const pn = (portInfo?.port_name || "").toLowerCase();
@@ -160,7 +162,7 @@ export function loadoutRoutes() {
     let resolvedComponentType: string | null = null;
     if (port.equipped_item_uuid) {
       const equipped = await db
-        .prepare(`SELECT type FROM vehicle_components WHERE uuid = ?`)
+        .prepare(`SELECT type FROM ${t("vehicle_components")} WHERE uuid = ?`)
         .bind(port.equipped_item_uuid)
         .first<{ type: string }>();
       resolvedComponentType = equipped?.type || null;
@@ -184,12 +186,12 @@ export function loadoutRoutes() {
              CASE WHEN grandchild.id IS NOT NULL THEN COALESCE(grandchild.max_size, grandchild.size_max)
                   WHEN child.id IS NOT NULL THEN COALESCE(child.max_size, child.size_max)
                   ELSE COALESCE(p.max_size, p.size_max) END as child_max_size
-           FROM vehicle_ports p
-           LEFT JOIN vehicle_components mount ON mount.uuid = p.equipped_item_uuid
-           LEFT JOIN vehicle_ports child ON child.parent_port_id = p.id
-           LEFT JOIN vehicle_components childcomp ON childcomp.uuid = child.equipped_item_uuid
-           LEFT JOIN vehicle_ports grandchild ON grandchild.parent_port_id = child.id
-           LEFT JOIN vehicle_components gccomp ON gccomp.uuid = grandchild.equipped_item_uuid
+           FROM ${t("vehicle_ports")} p
+           LEFT JOIN ${t("vehicle_components")} mount ON mount.uuid = p.equipped_item_uuid
+           LEFT JOIN ${t("vehicle_ports")} child ON child.parent_port_id = p.id
+           LEFT JOIN ${t("vehicle_components")} childcomp ON childcomp.uuid = child.equipped_item_uuid
+           LEFT JOIN ${t("vehicle_ports")} grandchild ON grandchild.parent_port_id = child.id
+           LEFT JOIN ${t("vehicle_components")} gccomp ON gccomp.uuid = grandchild.equipped_item_uuid
            WHERE p.id = ?
            ORDER BY CASE WHEN gccomp.type IS NOT NULL THEN 0 WHEN childcomp.type IS NOT NULL THEN 1 ELSE 2 END
            LIMIT 1`
@@ -217,8 +219,7 @@ export function loadoutRoutes() {
 
     // Fetch all compatible components (version-aware)
     const components = await db
-      .prepare(
-        `SELECT vc.id, vc.uuid, vc.name, vc.slug, vc.class_name, vc.type, vc.sub_type,
+      .prepare(`SELECT vc.id, vc.uuid, vc.name, vc.slug, vc.class_name, vc.type, vc.sub_type,
                 vc.size, vc.grade, vc.class,
                 cp.power_output, cp.overpower_performance, cp.overclock_performance,
                 vc.thermal_output, cc.cooling_rate, cc.max_temperature,
@@ -236,16 +237,16 @@ export function loadoutRoutes() {
                 vc.em_signature, vc.mass, vc.hp, cc.overheat_temperature,
                 vc.base_heat_generation, vc.distortion_max,
                 m.name AS manufacturer_name, m.code AS manufacturer_code
-         FROM vehicle_components vc
-         LEFT JOIN manufacturers m ON m.id = vc.manufacturer_id
-         LEFT JOIN component_powerplants cp ON cp.component_id = vc.id
-         LEFT JOIN component_coolers cc ON cc.component_id = vc.id
-         LEFT JOIN component_shields cs ON cs.component_id = vc.id
-         LEFT JOIN component_quantum_drives cq ON cq.component_id = vc.id
-         LEFT JOIN component_weapons cw ON cw.component_id = vc.id
-         LEFT JOIN component_radar cr ON cr.component_id = vc.id
-         LEFT JOIN component_qed ce ON ce.component_id = vc.id
-         LEFT JOIN component_missiles cm ON cm.component_id = vc.id
+         FROM ${t("vehicle_components")} vc
+         LEFT JOIN ${t("manufacturers")} m ON m.id = vc.manufacturer_id
+         LEFT JOIN ${t("component_powerplants")} cp ON cp.component_id = vc.id
+         LEFT JOIN ${t("component_coolers")} cc ON cc.component_id = vc.id
+         LEFT JOIN ${t("component_shields")} cs ON cs.component_id = vc.id
+         LEFT JOIN ${t("component_quantum_drives")} cq ON cq.component_id = vc.id
+         LEFT JOIN ${t("component_weapons")} cw ON cw.component_id = vc.id
+         LEFT JOIN ${t("component_radar")} cr ON cr.component_id = vc.id
+         LEFT JOIN ${t("component_qed")} ce ON ce.component_id = vc.id
+         LEFT JOIN ${t("component_missiles")} cm ON cm.component_id = vc.id
          WHERE vc.type IN (${typePlaceholders})
            ${resolvedSizeMin === 0 && resolvedSizeMax === 0 ? "" : "AND vc.size BETWEEN ? AND ?"}
            AND vc.name NOT LIKE '%Template%'
@@ -271,10 +272,10 @@ export function loadoutRoutes() {
                   t.shop_name_key AS location_key,
                   ROUND(COALESCE(ti.latest_buy_price, ti.base_buy_price)) AS buy_price,
                   s.display_name AS shop_name, s.location_label
-           FROM terminal_inventory ti
-           JOIN loot_map lm ON lm.uuid = ti.item_uuid
-           JOIN terminals t ON t.id = ti.terminal_id
-           LEFT JOIN shops s ON s.id = t.shop_id
+           FROM ${t("terminal_inventory")} ti
+           JOIN ${t("loot_map")} lm ON lm.uuid = ti.item_uuid
+           JOIN ${t("terminals")} t ON t.id = ti.terminal_id
+           LEFT JOIN ${t("shops")} s ON s.id = t.shop_id
            WHERE COALESCE(ti.latest_buy_price, ti.base_buy_price) > 0
              AND REPLACE(lm.class_name, 'EntityClassDefinition.', '') IN (${ph})`,
       );
@@ -306,7 +307,7 @@ export function loadoutRoutes() {
             (ph) =>
               `SELECT DISTINCT lm.class_name
                FROM user_loot_collection ulc
-               JOIN loot_map lm ON lm.id = ulc.loot_item_id
+               JOIN ${t("loot_map")} lm ON lm.id = ulc.loot_item_id
                WHERE ulc.user_id = ? AND lm.class_name IN (${ph})`,
             [user.id],
           );
@@ -324,8 +325,8 @@ export function loadoutRoutes() {
               `SELECT vp.equipped_item_uuid, uf.id AS fleet_id,
                       uf.custom_name, v.name AS ship_name
                FROM user_fleet uf
-               JOIN vehicles v ON v.id = uf.vehicle_id
-               JOIN vehicle_ports vp ON vp.vehicle_id = v.id
+               JOIN ${t("vehicles")} v ON v.id = uf.vehicle_id
+               JOIN ${t("vehicle_ports")} vp ON vp.vehicle_id = v.id
                WHERE uf.user_id = ?
                  AND vp.equipped_item_uuid IN (${ph})`,
             [user.id],
@@ -356,11 +357,10 @@ export function loadoutRoutes() {
     const isTurretHousing = !directComponentType || directComponentType === "UtilityTurret" || directComponentType === "TurretBase" || directComponentType === "Turret";
     if (stockUuid && isTurretHousing) {
       const deepest = await db
-        .prepare(
-          `SELECT COALESCE(grandchild.equipped_item_uuid, child.equipped_item_uuid, p.equipped_item_uuid) AS deep_uuid
-           FROM vehicle_ports p
-           LEFT JOIN vehicle_ports child ON child.parent_port_id = p.id
-           LEFT JOIN vehicle_ports grandchild ON grandchild.parent_port_id = child.id
+        .prepare(`SELECT COALESCE(grandchild.equipped_item_uuid, child.equipped_item_uuid, p.equipped_item_uuid) AS deep_uuid
+           FROM ${t("vehicle_ports")} p
+           LEFT JOIN ${t("vehicle_ports")} child ON child.parent_port_id = p.id
+           LEFT JOIN ${t("vehicle_ports")} grandchild ON grandchild.parent_port_id = child.id
            WHERE p.id = ?
            ORDER BY CASE WHEN grandchild.equipped_item_uuid IS NOT NULL THEN 0
                          WHEN child.equipped_item_uuid IS NOT NULL THEN 1 ELSE 2 END
@@ -396,13 +396,14 @@ export function loadoutRoutes() {
 
   // GET /api/loadout/fleet/:id — get custom loadout for a fleet ship
   app.get("/fleet/:id", async (c) => {
+    const isPTU = isPTUChannel(getActiveChannel(c));
+    const t = (n: string) => resolveTable(n, isPTU);
     const user = getAuthUser(c);
     const fleetId = parseInt(c.req.param("id"), 10);
     if (isNaN(fleetId)) return c.json({ error: "Invalid fleet ID" }, 400);
 
     const overrides = await c.env.DB
-      .prepare(
-        `SELECT ufl.id, ufl.port_id, ufl.component_id,
+      .prepare(`SELECT ufl.id, ufl.port_id, ufl.component_id,
                 vc.name AS component_name, vc.uuid AS component_uuid,
                 vc.type, vc.sub_type, vc.size, vc.grade, vc.class,
                 cp.power_output, cc.cooling_rate, cs.shield_hp, cs.shield_regen,
@@ -412,14 +413,14 @@ export function loadoutRoutes() {
                 cr.radar_range, vc.power_draw, vc.thermal_output,
                 m.name AS manufacturer_name
          FROM user_fleet_loadout ufl
-         JOIN vehicle_components vc ON vc.id = ufl.component_id
-         LEFT JOIN manufacturers m ON m.id = vc.manufacturer_id
-         LEFT JOIN component_powerplants cp ON cp.component_id = vc.id
-         LEFT JOIN component_coolers cc ON cc.component_id = vc.id
-         LEFT JOIN component_shields cs ON cs.component_id = vc.id
-         LEFT JOIN component_quantum_drives cq ON cq.component_id = vc.id
-         LEFT JOIN component_weapons cw ON cw.component_id = vc.id
-         LEFT JOIN component_radar cr ON cr.component_id = vc.id
+         JOIN ${t("vehicle_components")} vc ON vc.id = ufl.component_id
+         LEFT JOIN ${t("manufacturers")} m ON m.id = vc.manufacturer_id
+         LEFT JOIN ${t("component_powerplants")} cp ON cp.component_id = vc.id
+         LEFT JOIN ${t("component_coolers")} cc ON cc.component_id = vc.id
+         LEFT JOIN ${t("component_shields")} cs ON cs.component_id = vc.id
+         LEFT JOIN ${t("component_quantum_drives")} cq ON cq.component_id = vc.id
+         LEFT JOIN ${t("component_weapons")} cw ON cw.component_id = vc.id
+         LEFT JOIN ${t("component_radar")} cr ON cr.component_id = vc.id
          WHERE ufl.user_id = ? AND ufl.user_fleet_id = ?`,
       )
       .bind(user.id, fleetId)
@@ -501,10 +502,11 @@ export function loadoutRoutes() {
 
   // GET /api/loadout/cart — user's shopping cart
   app.get("/cart", async (c) => {
+    const isPTU = isPTUChannel(getActiveChannel(c));
+    const t = (n: string) => resolveTable(n, isPTU);
     const user = getAuthUser(c);
     const rows = await c.env.DB
-      .prepare(
-        `SELECT ulc.id, ulc.component_id, ulc.shop_id, ulc.quantity, ulc.source_fleet_id,
+      .prepare(`SELECT ulc.id, ulc.component_id, ulc.shop_id, ulc.quantity, ulc.source_fleet_id,
                 vc.name AS component_name, vc.uuid AS component_uuid, vc.class_name, vc.type, vc.size, vc.grade,
                 m.name AS manufacturer_name,
                 cheapest.shop_display_name AS shop_name,
@@ -513,8 +515,8 @@ export function loadoutRoutes() {
                 uf.custom_name AS fleet_custom_name,
                 v.name AS fleet_ship_name
          FROM user_loadout_cart ulc
-         JOIN vehicle_components vc ON vc.id = ulc.component_id
-         LEFT JOIN manufacturers m ON m.id = vc.manufacturer_id
+         JOIN ${t("vehicle_components")} vc ON vc.id = ulc.component_id
+         LEFT JOIN ${t("manufacturers")} m ON m.id = vc.manufacturer_id
          LEFT JOIN (
            SELECT REPLACE(lm.class_name, 'EntityClassDefinition.', '') AS class_name,
                   COALESCE(s.display_name, REPLACE(REPLACE(t.shop_name_key, 'Inv_', ''), '_', ' ')) AS shop_display_name,
@@ -524,14 +526,14 @@ export function loadoutRoutes() {
                     PARTITION BY lm.class_name
                     ORDER BY COALESCE(ti.latest_buy_price, ti.base_buy_price) ASC
                   ) AS rn
-           FROM terminal_inventory ti
-           JOIN loot_map lm ON lm.uuid = ti.item_uuid
-           JOIN terminals t ON t.id = ti.terminal_id
-           LEFT JOIN shops s ON s.id = t.shop_id
+           FROM ${t("terminal_inventory")} ti
+           JOIN ${t("loot_map")} lm ON lm.uuid = ti.item_uuid
+           JOIN ${t("terminals")} t ON t.id = ti.terminal_id
+           LEFT JOIN ${t("shops")} s ON s.id = t.shop_id
            WHERE COALESCE(ti.latest_buy_price, ti.base_buy_price) > 0
          ) cheapest ON cheapest.class_name = vc.class_name AND cheapest.rn = 1
          LEFT JOIN user_fleet uf ON uf.id = ulc.source_fleet_id
-         LEFT JOIN vehicles v ON v.id = uf.vehicle_id
+         LEFT JOIN ${t("vehicles")} v ON v.id = uf.vehicle_id
          WHERE ulc.user_id = ?
          ORDER BY vc.type, vc.name`,
       )
@@ -543,19 +545,20 @@ export function loadoutRoutes() {
 
   // GET /api/loadout/cart/shops?class_name=X — all shops selling a component
   app.get("/cart/shops", async (c) => {
+    const isPTU = isPTUChannel(getActiveChannel(c));
+    const t = (n: string) => resolveTable(n, isPTU);
     const className = c.req.query("class_name");
     if (!className) return c.json({ error: "class_name required" }, 400);
 
     const rows = await c.env.DB
-      .prepare(
-        `SELECT t.shop_name_key AS location_key,
+      .prepare(`SELECT t.shop_name_key AS location_key,
                 ROUND(COALESCE(ti.latest_buy_price, ti.base_buy_price)) AS buy_price,
                 COALESCE(s.display_name, REPLACE(REPLACE(t.shop_name_key, 'Inv_', ''), '_', ' ')) AS shop_name,
                 s.location_label
-         FROM terminal_inventory ti
-         JOIN loot_map lm ON lm.uuid = ti.item_uuid
-         JOIN terminals t ON t.id = ti.terminal_id
-         LEFT JOIN shops s ON s.id = t.shop_id
+         FROM ${t("terminal_inventory")} ti
+         JOIN ${t("loot_map")} lm ON lm.uuid = ti.item_uuid
+         JOIN ${t("terminals")} t ON t.id = ti.terminal_id
+         LEFT JOIN ${t("shops")} s ON s.id = t.shop_id
          WHERE COALESCE(ti.latest_buy_price, ti.base_buy_price) > 0
            AND REPLACE(lm.class_name, 'EntityClassDefinition.', '') = ?
          ORDER BY COALESCE(ti.latest_buy_price, ti.base_buy_price) ASC`,
@@ -654,15 +657,16 @@ export function loadoutRoutes() {
 
   // POST /api/loadout/cart/optimize — assign optimal shops (minimum shops algorithm)
   app.post("/cart/optimize", async (c) => {
+    const isPTU = isPTUChannel(getActiveChannel(c));
+    const t = (n: string) => resolveTable(n, isPTU);
     const user = getAuthUser(c);
     const db = c.env.DB;
 
     // Get all cart items
     const cartItems = await db
-      .prepare(
-        `SELECT ulc.id, vc.uuid AS component_uuid
+      .prepare(`SELECT ulc.id, vc.uuid AS component_uuid
          FROM user_loadout_cart ulc
-         JOIN vehicle_components vc ON vc.id = ulc.component_id
+         JOIN ${t("vehicle_components")} vc ON vc.id = ulc.component_id
          WHERE ulc.user_id = ?`,
       )
       .bind(user.id)
@@ -679,7 +683,7 @@ export function loadoutRoutes() {
       (ph) =>
         `SELECT si.item_uuid, s.id AS shop_id
          FROM shop_inventory si
-         JOIN shops s ON s.id = si.shop_id
+         JOIN ${t("shops")} s ON s.id = si.shop_id
          WHERE si.item_uuid IN (${ph})
            AND si.buy_price IS NOT NULL`,
     );

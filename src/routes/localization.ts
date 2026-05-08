@@ -1,6 +1,7 @@
 import { Hono } from "hono";
 import { z } from "zod";
 import { getAuthUser, type HonoEnv } from "../lib/types";
+import { getActiveChannel, isPTUChannel, resolveTable } from "../lib/ptu";
 import { validate } from "../lib/validation";
 import {
   type AsopEntry,
@@ -133,14 +134,15 @@ export function localizationRoutes() {
   // ── GET /ship-order — user's ASOP ordering ────────────────────────
 
   routes.get("/ship-order", async (c) => {
+    const isPTU = isPTUChannel(getActiveChannel(c));
+    const t = (n: string) => resolveTable(n, isPTU);
     const db = c.env.DB;
     const userId = getAuthUser(c).id;
 
     const rows = await db
-      .prepare(
-        `SELECT o.vehicle_id, o.sort_position, o.custom_label, v.name as vehicle_name, v.class_name
+      .prepare(`SELECT o.vehicle_id, o.sort_position, o.custom_label, v.name as vehicle_name, v.class_name
          FROM user_localization_ship_order o
-         JOIN vehicles v ON v.id = o.vehicle_id
+         JOIN ${t("vehicles")} v ON v.id = o.vehicle_id
          WHERE o.user_id = ?
          ORDER BY o.sort_position`,
       )
@@ -231,6 +233,7 @@ export function localizationRoutes() {
   // ── GET /preview — preview override key/value pairs ───────────────
 
   routes.get("/preview", async (c) => {
+    const isPTU = isPTUChannel(getActiveChannel(c));
     const db = c.env.DB;
     const kv = c.env.LOCALIZATION_KV;
     const userId = getAuthUser(c).id;
@@ -272,7 +275,7 @@ export function localizationRoutes() {
       packOverrideCount = packOverrides.size;
     }
 
-    const personalOverrides = await buildOverrides(db, userId, config);
+    const personalOverrides = await buildOverrides(db, userId, config, undefined, isPTU);
 
     return c.json({
       config,
@@ -291,6 +294,7 @@ export function localizationRoutes() {
   // ── GET /download — generate and download merged global.ini ───────
 
   routes.get("/download", async (c) => {
+    const isPTU = isPTUChannel(getActiveChannel(c));
     const db = c.env.DB;
     const kv = c.env.LOCALIZATION_KV;
     const userId = getAuthUser(c).id;
@@ -376,7 +380,7 @@ export function localizationRoutes() {
 
     // 2. Generate personal overrides (highest priority — overwrites packs)
     // All overrideMap keys are lowercased for case-insensitive merge.
-    const overrideList = await buildOverrides(db, userId, config, validKeys);
+    const overrideList = await buildOverrides(db, userId, config, validKeys, isPTU);
     for (const o of overrideList) {
       overrideMap.set(o.key.toLowerCase(), o.value);
     }
@@ -460,8 +464,10 @@ async function buildOverrides(
   userId: string,
   config: LocalizationConfig,
   validKeys?: Map<string, string>,
+  isPTU = false,
 ): Promise<LabelOverride[]> {
   const overrides: LabelOverride[] = [];
+  const t = (n: string) => resolveTable(n, isPTU);
 
   // ASOP ordering
   if (config.asopEnabled) {
@@ -469,7 +475,7 @@ async function buildOverrides(
       .prepare(
         `SELECT o.vehicle_id, o.sort_position, o.custom_label, v.name as vehicle_name, v.class_name
          FROM user_localization_ship_order o
-         JOIN vehicles v ON v.id = o.vehicle_id
+         JOIN ${t("vehicles")} v ON v.id = o.vehicle_id
          WHERE o.user_id = ?
          ORDER BY o.sort_position`,
       )
@@ -553,7 +559,7 @@ async function buildOverrides(
   if (config.enhanceContrabandWarnings) {
     const rows = await db
       .prepare(
-        `SELECT class_name, name FROM trade_commodities
+        `SELECT class_name, name FROM ${t("trade_commodities")}
          WHERE category IN ('vice', 'counterfeit')
          AND is_deleted = 0
          AND class_name IS NOT NULL`,
@@ -573,7 +579,7 @@ async function buildOverrides(
     // Query both trade commodities (minerals/metals) and mineable elements
     const tradeRows = await db
       .prepare(
-        `SELECT class_name, name FROM trade_commodities
+        `SELECT class_name, name FROM ${t("trade_commodities")}
          WHERE category IN ('minerals', 'metals', 'mixedmining')
          AND is_deleted = 0
          AND class_name IS NOT NULL`,
@@ -582,7 +588,7 @@ async function buildOverrides(
 
     const mineableRows = await db
       .prepare(
-        `SELECT class_name, name FROM mineable_elements
+        `SELECT class_name, name FROM ${t("mineable_elements")}
          WHERE is_deleted = 0
          AND class_name IS NOT NULL`,
       )
@@ -603,14 +609,14 @@ async function buildOverrides(
       .prepare(
         `SELECT DISTINCT cgc.desc_loc_key,
                 COALESCE(fw.name, fa.name, fh.name, fam.name, cb.name) as blueprint_name
-         FROM contract_generator_blueprint_pools cgbp
-         JOIN contract_generator_contracts cgc ON cgc.id = cgbp.contract_generator_contract_id
-         JOIN crafting_blueprint_reward_pool_items cbri ON cbri.crafting_blueprint_reward_pool_id = cgbp.crafting_blueprint_reward_pool_id
-         JOIN crafting_blueprints cb ON cb.id = cbri.crafting_blueprint_id
-         LEFT JOIN fps_weapons fw ON fw.class_name = REPLACE(cb.tag, 'BP_CRAFT_', '') AND fw.is_deleted = 0
-         LEFT JOIN fps_armour fa ON fa.class_name = REPLACE(cb.tag, 'BP_CRAFT_', '') AND fa.is_deleted = 0
-         LEFT JOIN fps_helmets fh ON fh.class_name = REPLACE(cb.tag, 'BP_CRAFT_', '') AND fh.is_deleted = 0
-         LEFT JOIN fps_ammo_types fam ON fam.class_name = REPLACE(cb.tag, 'BP_CRAFT_', '') AND fam.is_deleted = 0
+         FROM ${t("contract_generator_blueprint_pools")} cgbp
+         JOIN ${t("contract_generator_contracts")} cgc ON cgc.id = cgbp.contract_generator_contract_id
+         JOIN ${t("crafting_blueprint_reward_pool_items")} cbri ON cbri.crafting_blueprint_reward_pool_id = cgbp.crafting_blueprint_reward_pool_id
+         JOIN ${t("crafting_blueprints")} cb ON cb.id = cbri.crafting_blueprint_id
+         LEFT JOIN ${t("fps_weapons")} fw ON fw.class_name = REPLACE(cb.tag, 'BP_CRAFT_', '') AND fw.is_deleted = 0
+         LEFT JOIN ${t("fps_armour")} fa ON fa.class_name = REPLACE(cb.tag, 'BP_CRAFT_', '') AND fa.is_deleted = 0
+         LEFT JOIN ${t("fps_helmets")} fh ON fh.class_name = REPLACE(cb.tag, 'BP_CRAFT_', '') AND fh.is_deleted = 0
+         LEFT JOIN ${t("fps_ammo_types")} fam ON fam.class_name = REPLACE(cb.tag, 'BP_CRAFT_', '') AND fam.is_deleted = 0
          WHERE cgc.is_deleted = 0
          AND cgc.desc_loc_key IS NOT NULL AND cgc.desc_loc_key != ''`,
       )

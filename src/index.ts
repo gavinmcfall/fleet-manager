@@ -219,6 +219,14 @@ app.use("/api/*", async (c, next) => {
   return next();
 });
 
+// --- Channel resolution middleware ---
+// Runs after the session middleware so c.get("user") is populated. Stashes
+// the active channel ("LIVE" / "PTU" / "EPTU") on the request context based
+// on ?channel= override or super_admin's adminPreviewPatch user setting.
+// Routes downstream read it via getActiveChannel(c).
+import { channelMiddleware } from "./lib/ptu";
+app.use("/api/*", channelMiddleware);
+
 // --- Route protection ---
 
 // Public routes (no auth required): /api/health, /api/auth/**, /api/ships/*, /api/status

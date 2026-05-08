@@ -1,5 +1,6 @@
 import { Hono } from "hono"
 import type { HonoEnv } from "../lib/types"
+import { getActiveChannel, isPTUChannel, resolveTable } from "../lib/ptu";
 import { cachedJson, cacheSlug } from "../lib/cache"
 import { resolvePOISlug } from "../lib/poi"
 import { getPOIDetail, getPOIChildren } from "../db/queries"
@@ -7,8 +8,9 @@ import { getPOIDetail, getPOIChildren } from "../db/queries"
 /** SQL expression for shop display name — populated by extraction scripts */
 const SHOP_DISPLAY_NAME_EXPR = `COALESCE(s.display_name, REPLACE(REPLACE(REPLACE(s.name, 'Inv ', ''), '_', ' '), '  ', ' '))`
 
-/** Build the inventory query for a set of shop IDs */
-function buildInventoryQuery(placeholders: string): string {
+/** Build the inventory query for a set of shop IDs (channel-aware). */
+function buildInventoryQuery(placeholders: string, isPTU: boolean): string {
+  const t = (n: string) => resolveTable(n, isPTU);
   return `SELECT t.shop_id, ti.item_uuid, ti.item_name,
        ti.latest_buy_price as buy_price,
        ti.latest_sell_price as sell_price,
@@ -20,11 +22,11 @@ function buildInventoryQuery(placeholders: string): string {
          WHEN v.id IS NOT NULL THEN 'vehicle'
          ELSE 'other'
        END as item_category
-     FROM terminal_inventory ti
-     JOIN terminals t ON t.id = ti.terminal_id
-     LEFT JOIN loot_map fi ON fi.uuid = ti.item_uuid
-     LEFT JOIN trade_commodities tc ON tc.uuid = ti.item_uuid
-     LEFT JOIN vehicles v ON v.uuid = ti.item_uuid
+     FROM ${t("terminal_inventory")} ti
+     JOIN ${t("terminals")} t ON t.id = ti.terminal_id
+     LEFT JOIN ${t("loot_map")} fi ON fi.uuid = ti.item_uuid
+     LEFT JOIN ${t("trade_commodities")} tc ON tc.uuid = ti.item_uuid
+     LEFT JOIN ${t("vehicles")} v ON v.uuid = ti.item_uuid
      WHERE t.shop_id IN (${placeholders})
      ORDER BY COALESCE(fi.name, tc.name, v.name, ti.item_name)`
 }
@@ -61,23 +63,25 @@ export function gamedataRoutes<E extends HonoEnv>() {
 
   // GET /api/gamedata/careers — vehicle careers + roles with linked vehicles
   app.get("/careers", async (c) => {
+    const isPTU = isPTUChannel(getActiveChannel(c));
+    const t = (n: string) => resolveTable(n, isPTU);
     const db = c.env.DB
     return cachedJson(c, `gd:careers`, async () => {
       const [careersResult, rolesResult, careerAssignments, roleAssignments] = await Promise.all([
-        db.prepare("SELECT * FROM vehicle_careers WHERE name != '<= PLACEHOLDER =>' ORDER BY name").all(),
-        db.prepare("SELECT * FROM vehicle_roles WHERE name != '<= PLACEHOLDER =>' AND name NOT LIKE '%Haymaker%' ORDER BY name").all(),
+        db.prepare(`SELECT * FROM ${t("vehicle_careers")} WHERE name != '<= PLACEHOLDER =>' ORDER BY name`).all(),
+        db.prepare(`SELECT * FROM ${t("vehicle_roles")} WHERE name != '<= PLACEHOLDER =>' AND name NOT LIKE '%Haymaker%' ORDER BY name`).all(),
         db.prepare(`
           SELECT vca.career_id, v.id, v.name, v.slug, v.image_url, m.name as manufacturer_name, v.size_label, v.focus, v.classification
           FROM vehicle_career_assignments vca
-          JOIN vehicles v ON v.id = vca.vehicle_id
-          LEFT JOIN manufacturers m ON m.id = v.manufacturer_id
+          JOIN ${t("vehicles")} v ON v.id = vca.vehicle_id
+          LEFT JOIN ${t("manufacturers")} m ON m.id = v.manufacturer_id
           ORDER BY v.name
         `).all(),
         db.prepare(`
           SELECT vra.role_id, v.id, v.name, v.slug, v.image_url, m.name as manufacturer_name, v.size_label, v.focus, v.classification
           FROM vehicle_role_assignments vra
-          JOIN vehicles v ON v.id = vra.vehicle_id
-          LEFT JOIN manufacturers m ON m.id = v.manufacturer_id
+          JOIN ${t("vehicles")} v ON v.id = vra.vehicle_id
+          LEFT JOIN ${t("manufacturers")} m ON m.id = v.manufacturer_id
           ORDER BY v.name
         `).all(),
       ])
@@ -114,11 +118,12 @@ export function gamedataRoutes<E extends HonoEnv>() {
 
   // GET /api/gamedata/reputation — reputation scopes with nested standings
   app.get("/reputation", async (c) => {
+    const isPTU = isPTUChannel(getActiveChannel(c));
+    const t = (n: string) => resolveTable(n, isPTU);
     const db = c.env.DB
     return cachedJson(c, `gd:reputation`, async () => {
 const { results: scopes } = await db
-        .prepare(
-          `SELECT rsc2.* FROM reputation_scopes rsc2
+        .prepare(`SELECT rsc2.* FROM ${t("reputation_scopes")} rsc2
            
            WHERE rsc2.name NOT LIKE '%PLACEHOLDER%'
            ORDER BY rsc2.name`,
@@ -126,21 +131,19 @@ const { results: scopes } = await db
         .all()
 
       const { results: standings } = await db
-        .prepare(
-          `SELECT rs.*, rsc.name as scope_name, rsc.uuid as scope_uuid
-           FROM reputation_standings rs
+        .prepare(`SELECT rs.*, rsc.name as scope_name, rsc.uuid as scope_uuid
+           FROM ${t("reputation_standings")} rs
            
-           JOIN reputation_scopes rsc ON rsc.id = rs.scope_id
+           JOIN ${t("reputation_scopes")} rsc ON rsc.id = rs.scope_id
            WHERE rs.name != '<= PLACEHOLDER =>'
            ORDER BY rs.scope_id, rs.sort_order`,
         )
         .all()
 
       const { results: factionLinks } = await db
-        .prepare(
-          `SELECT frs.reputation_scope_id, frs.is_primary, f.id as faction_id, f.name as faction_name, f.slug as faction_slug
-           FROM faction_reputation_scopes frs
-           JOIN factions f ON f.id = frs.faction_id
+        .prepare(`SELECT frs.reputation_scope_id, frs.is_primary, f.id as faction_id, f.name as faction_name, f.slug as faction_slug
+           FROM ${t("faction_reputation_scopes")} frs
+           JOIN ${t("factions")} f ON f.id = frs.faction_id
            ORDER BY frs.is_primary DESC, f.name`,
         )
         .all()
@@ -171,34 +174,33 @@ const { results: scopes } = await db
 
   // GET /api/gamedata/law — infractions, jurisdictions, overrides
   app.get("/law", async (c) => {
+    const isPTU = isPTUChannel(getActiveChannel(c));
+    const t = (n: string) => resolveTable(n, isPTU);
     const db = c.env.DB
     return cachedJson(c, `gd:law`, async () => {
 const [infractions, jurisdictions, overrides] = await Promise.all([
         db
-          .prepare(
-            `SELECT li2.* FROM law_infractions li2
+          .prepare(`SELECT li2.* FROM ${t("law_infractions")} li2
              
              ORDER BY li2.name`,
           )
           .all(),
         db
-          .prepare(
-            `SELECT lj2.* FROM law_jurisdictions lj2
+          .prepare(`SELECT lj2.* FROM ${t("law_jurisdictions")} lj2
              
              ORDER BY lj2.name`,
           )
           .all(),
         db
-          .prepare(
-            `SELECT jio.*,
+          .prepare(`SELECT jio.*,
                li.name as infraction_name,
                lj.name as jurisdiction_name,
                li.description as infraction_description,
                li.severity as infraction_severity,
                jio.overrides_json
-             FROM jurisdiction_infraction_overrides jio
-             JOIN law_infractions li ON li.id = jio.infraction_id
-             JOIN law_jurisdictions lj ON lj.id = jio.jurisdiction_id`,
+             FROM ${t("jurisdiction_infraction_overrides")} jio
+             JOIN ${t("law_infractions")} li ON li.id = jio.infraction_id
+             JOIN ${t("law_jurisdictions")} lj ON lj.id = jio.jurisdiction_id`,
           )
           .all(),
       ])
@@ -214,6 +216,8 @@ const [infractions, jurisdictions, overrides] = await Promise.all([
   // GET /api/gamedata/mining — full mining data: elements, compositions, refining,
   // locations, deposits, quality distributions, clustering, equipment
   app.get("/mining", async (c) => {
+    const isPTU = isPTUChannel(getActiveChannel(c));
+    const t = (n: string) => resolveTable(n, isPTU);
     const db = c.env.DB
     return cachedJson(c, `gd:mining`, async () => {
 const [
@@ -230,8 +234,7 @@ const [
         gadgets,
       ] = await Promise.all([
         db
-          .prepare(
-            `SELECT me.* FROM mineable_elements me
+          .prepare(`SELECT me.* FROM ${t("mineable_elements")} me
              
              WHERE me.name NOT LIKE '%Template%'
                AND me.name NOT LIKE '%Testelement%'
@@ -239,68 +242,58 @@ const [
           )
           .all(),
         db
-          .prepare(
-            `SELECT rc2.* FROM rock_compositions rc2
+          .prepare(`SELECT rc2.* FROM ${t("rock_compositions")} rc2
              
              ORDER BY rc2.name`,
           )
           .all(),
         db
-          .prepare(
-            `SELECT rp.* FROM refining_processes rp
+          .prepare(`SELECT rp.* FROM ${t("refining_processes")} rp
              
              ORDER BY rp.name`,
           )
           .all(),
         db
-          .prepare(
-            `SELECT * FROM mining_locations
+          .prepare(`SELECT * FROM ${t("mining_locations")}
              ORDER BY system, name`,
           )
           .all(),
         db
-          .prepare(
-            `SELECT d.*, rc.id as rock_composition_id, rc.name as composition_name,
+          .prepare(`SELECT d.*, rc.id as rock_composition_id, rc.name as composition_name,
                     rc.rock_type, rc.composition_json
              FROM mining_location_deposits d
-             JOIN mining_locations ml ON ml.id = d.mining_location_id
-             LEFT JOIN rock_compositions rc ON rc.uuid = d.composition_guid
+             JOIN ${t("mining_locations")} ml ON ml.id = d.mining_location_id
+             LEFT JOIN ${t("rock_compositions")} rc ON rc.uuid = d.composition_guid
              ORDER BY d.mining_location_id, d.group_name`,
           )
           .all(),
         db
-          .prepare(
-            `SELECT * FROM mining_quality_distributions`,
+          .prepare(`SELECT * FROM ${t("mining_quality_distributions")}`,
           )
           .all(),
         db
-          .prepare(
-            `SELECT * FROM mining_clustering_presets
+          .prepare(`SELECT * FROM ${t("mining_clustering_presets")}
              ORDER BY name`,
           )
           .all(),
         db
-          .prepare(
-            `SELECT mcp.* FROM mining_clustering_params mcp
-             JOIN mining_clustering_presets p ON p.id = mcp.mining_clustering_preset_id
+          .prepare(`SELECT mcp.* FROM mining_clustering_params mcp
+             JOIN ${t("mining_clustering_presets")} p ON p.id = mcp.mining_clustering_preset_id
              ORDER BY mcp.mining_clustering_preset_id, mcp.relative_probability DESC`,
           )
           .all(),
         db
-          .prepare(
-            `SELECT * FROM mining_lasers
+          .prepare(`SELECT * FROM ${t("mining_lasers")}
              ORDER BY size, name`,
           )
           .all(),
         db
-          .prepare(
-            `SELECT * FROM mining_modules
+          .prepare(`SELECT * FROM ${t("mining_modules")}
              ORDER BY type, size, name`,
           )
           .all(),
         db
-          .prepare(
-            `SELECT * FROM mining_gadgets
+          .prepare(`SELECT * FROM ${t("mining_gadgets")}
              ORDER BY name`,
           )
           .all(),
@@ -335,6 +328,8 @@ const [
 
   // GET /api/gamedata/shops — shop list with item counts
   app.get("/shops", async (c) => {
+    const isPTU = isPTUChannel(getActiveChannel(c));
+    const t = (n: string) => resolveTable(n, isPTU);
     const db = c.env.DB
     return cachedJson(c, `gd:shops`, async () => {
       // F404: exclude shops whose `location_label` is a raw internal CIG
@@ -345,12 +340,11 @@ const [
       // rows. Shops with clean location labels (Orison, Lorville, Area18,
       // etc.) stay visible.
       const { results } = await db
-        .prepare(
-          `SELECT s.*,
+        .prepare(`SELECT s.*,
              ${SHOP_DISPLAY_NAME_EXPR} as display_name,
-             (SELECT COUNT(*) FROM terminal_inventory ti JOIN terminals t ON t.id = ti.terminal_id WHERE t.shop_id = s.id) as item_count,
+             (SELECT COUNT(*) FROM ${t("terminal_inventory")} ti JOIN ${t("terminals")} t ON t.id = ti.terminal_id WHERE t.shop_id = s.id) as item_count,
              s.location_label as location_name
-           FROM shops s
+           FROM ${t("shops")} s
            WHERE COALESCE(s.shop_type, '') != 'admin'
              AND (s.location_label IS NULL
                   OR (
@@ -381,29 +375,30 @@ const [
 
   // GET /api/gamedata/shops/:slug/inventory — inventory for a specific shop
   app.get("/shops/:slug/inventory", async (c) => {
+    const isPTU = isPTUChannel(getActiveChannel(c));
+    const t = (n: string) => resolveTable(n, isPTU);
     const slug = c.req.param("slug")
     if (slug.length > 100) return c.json({ error: "Not found" }, 404)
     const db = c.env.DB
     // Verify shop exists before caching (prevents cache pollution with fake slugs)
     const shop = await db
-      .prepare(`SELECT s.id FROM shops s WHERE s.slug = ?`)
+      .prepare(`SELECT s.id FROM ${t("shops")} s WHERE s.slug = ?`)
       .bind(slug)
       .first()
     if (!shop) return c.json({ error: "Not found" }, 404)
 
     return cachedJson(c, `gd:shop-inv:${cacheSlug(slug)}`, async () => {
       const { results } = await db
-        .prepare(
-          `SELECT ti.item_uuid, ti.item_name,
+        .prepare(`SELECT ti.item_uuid, ti.item_name,
              ti.latest_buy_price as buy_price,
              ti.latest_sell_price as sell_price,
              ti.base_inventory, ti.max_inventory,
              COALESCE(fi.name, v.name, ti.item_name) as resolved_name
-           FROM terminal_inventory ti
-           JOIN terminals t ON t.id = ti.terminal_id
-           JOIN shops s ON s.id = t.shop_id
-           LEFT JOIN loot_map fi ON fi.uuid = ti.item_uuid
-           LEFT JOIN vehicles v ON v.uuid = ti.item_uuid
+           FROM ${t("terminal_inventory")} ti
+           JOIN ${t("terminals")} t ON t.id = ti.terminal_id
+           JOIN ${t("shops")} s ON s.id = t.shop_id
+           LEFT JOIN ${t("loot_map")} fi ON fi.uuid = ti.item_uuid
+           LEFT JOIN ${t("vehicles")} v ON v.uuid = ti.item_uuid
            WHERE s.slug = ?
            ORDER BY COALESCE(fi.name, v.name, ti.item_name),
                     ti.latest_buy_price DESC`,
@@ -417,29 +412,29 @@ const [
 
   // GET /api/gamedata/trade — trade commodities with per-shop buy/sell/stock data
   app.get("/trade", async (c) => {
+    const isPTU = isPTUChannel(getActiveChannel(c));
+    const t = (n: string) => resolveTable(n, isPTU);
     const db = c.env.DB
 return cachedJson(c, `gd:trade`, async () => {
       const [commoditiesResult, listingsResult] = await Promise.all([
         db
-          .prepare(
-            `SELECT tc2.* FROM trade_commodities tc2
+          .prepare(`SELECT tc2.* FROM ${t("trade_commodities")} tc2
              
              ORDER BY tc2.category, tc2.name`,
           )
           .all(),
         db
-          .prepare(
-            `SELECT ti.item_uuid,
+          .prepare(`SELECT ti.item_uuid,
                ti.latest_buy_price as buy_price,
                ti.latest_sell_price as sell_price,
                ti.base_inventory, ti.max_inventory,
                s.name as shop_name, s.slug as shop_slug,
                ${SHOP_DISPLAY_NAME_EXPR} as shop_display_name,
                s.location_label
-             FROM terminal_inventory ti
-             JOIN terminals t ON t.id = ti.terminal_id
-             JOIN shops s ON s.id = t.shop_id
-             JOIN trade_commodities tc ON tc.uuid = ti.item_uuid
+             FROM ${t("terminal_inventory")} ti
+             JOIN ${t("terminals")} t ON t.id = ti.terminal_id
+             JOIN ${t("shops")} s ON s.id = t.shop_id
+             JOIN ${t("trade_commodities")} tc ON tc.uuid = ti.item_uuid
              WHERE s.shop_type = 'admin'
              ORDER BY s.location_label, s.name`,
           )
@@ -502,13 +497,14 @@ return cachedJson(c, `gd:trade`, async () => {
 
   // GET /api/gamedata/locations/:slug/shops — shops at a location with inventory
   app.get("/locations/:slug/shops", async (c) => {
+    const isPTU = isPTUChannel(getActiveChannel(c));
+    const t = (n: string) => resolveTable(n, isPTU);
     const slug = c.req.param("slug")
     const db = c.env.DB
 return cachedJson(c, `gd:loc-shops:${cacheSlug(slug)}`, async () => {
       const location = await db
-        .prepare(
-          `SELECT sml.id, sml.name, sml.slug, sml.location_type
-           FROM star_map_locations sml
+        .prepare(`SELECT sml.id, sml.name, sml.slug, sml.location_type
+           FROM ${t("star_map_locations")} sml
            
            WHERE sml.slug = ?
            LIMIT 1`,
@@ -525,9 +521,8 @@ return cachedJson(c, `gd:loc-shops:${cacheSlug(slug)}`, async () => {
         // not real in-game shops players can visit.
         const labelSlug = slug.replace(/-/g, ' ')
         const { results: labelShops } = await db
-          .prepare(
-            `SELECT s.id, s.name, s.slug, s.shop_type, s.location_label, NULL as placement_name
-             FROM shops s
+          .prepare(`SELECT s.id, s.name, s.slug, s.shop_type, s.location_label, NULL as placement_name
+             FROM ${t("shops")} s
              WHERE LOWER(REPLACE(s.location_label, ' ', '')) = LOWER(REPLACE(?, ' ', ''))
                AND COALESCE(s.shop_type, '') != 'admin'
                AND s.name NOT LIKE 'Stanton%'
@@ -546,18 +541,17 @@ return cachedJson(c, `gd:loc-shops:${cacheSlug(slug)}`, async () => {
         const labelShopIds = labelShops.map((s) => s.id as number)
         const labelPlaceholders = labelShopIds.map(() => "?").join(",")
         const { results: labelInv } = await db
-          .prepare(buildInventoryQuery(labelPlaceholders))
+          .prepare(buildInventoryQuery(labelPlaceholders, isPTU))
           .bind(...labelShopIds)
           .all()
 
         return { location: { name: labelShops[0].location_label, slug }, shops: nestInventoryUnderShops(labelShops, labelInv) }
       }
       const { results: childLocations } = await db
-        .prepare(
-          `SELECT sml2.id FROM star_map_locations sml2
+        .prepare(`SELECT sml2.id FROM ${t("star_map_locations")} sml2
            
            WHERE (sml2.id = ? OR sml2.parent_uuid = (
-             SELECT sml3.uuid FROM star_map_locations sml3 WHERE sml3.id = ?
+             SELECT sml3.uuid FROM ${t("star_map_locations")} sml3 WHERE sml3.id = ?
            ))`,
         )
         .bind(location.id, location.id)
@@ -576,15 +570,14 @@ return cachedJson(c, `gd:loc-shops:${cacheSlug(slug)}`, async () => {
       // but shop_locations only connects 4 internal routing rows. Falling
       // back to the label match recovers the real inventory.
       const { results: shops } = await db
-        .prepare(
-          `SELECT DISTINCT s.id, s.name, s.slug, s.shop_type, s.location_label,
+        .prepare(`SELECT DISTINCT s.id, s.name, s.slug, s.shop_type, s.location_label,
              COALESCE(sl.placement_name, s.location_label) AS placement_name
-           FROM shops s
-           LEFT JOIN shop_locations sl ON sl.shop_id = s.id
+           FROM ${t("shops")} s
+           LEFT JOIN ${t("shop_locations")} sl ON sl.shop_id = s.id
              AND sl.location_id IN (${placeholders})
            WHERE (
                sl.location_id IN (${placeholders})
-               OR s.location_label = (SELECT name FROM star_map_locations WHERE id = ?)
+               OR s.location_label = (SELECT name FROM ${t("star_map_locations")} WHERE id = ?)
              )
              AND COALESCE(s.shop_type, '') != 'admin'
              AND s.name NOT LIKE 'Stanton%'
@@ -601,9 +594,8 @@ return cachedJson(c, `gd:loc-shops:${cacheSlug(slug)}`, async () => {
 
       if (shops.length === 0) {
         const { results: directShops } = await db
-          .prepare(
-            `SELECT s.id, s.name, s.slug, s.shop_type, s.location_label, NULL as placement_name
-             FROM shops s
+          .prepare(`SELECT s.id, s.name, s.slug, s.shop_type, s.location_label, NULL as placement_name
+             FROM ${t("shops")} s
              WHERE s.location_id IN (${placeholders})
                AND COALESCE(s.shop_type, '') != 'admin'
                AND s.name NOT LIKE 'Stanton%'
@@ -624,7 +616,7 @@ return cachedJson(c, `gd:loc-shops:${cacheSlug(slug)}`, async () => {
         const directShopIds = directShops.map((s) => s.id as number)
         const invPlaceholders = directShopIds.map(() => "?").join(",")
         const { results: inventory } = await db
-          .prepare(buildInventoryQuery(invPlaceholders))
+          .prepare(buildInventoryQuery(invPlaceholders, isPTU))
           .bind(...directShopIds)
           .all()
 
@@ -634,7 +626,7 @@ return cachedJson(c, `gd:loc-shops:${cacheSlug(slug)}`, async () => {
       const shopIds = shops.map((s) => s.id as number)
       const invPlaceholders = shopIds.map(() => "?").join(",")
       const { results: inventory } = await db
-        .prepare(buildInventoryQuery(invPlaceholders))
+        .prepare(buildInventoryQuery(invPlaceholders, isPTU))
         .bind(...shopIds)
         .all()
 
@@ -644,16 +636,17 @@ return cachedJson(c, `gd:loc-shops:${cacheSlug(slug)}`, async () => {
 
   // GET /api/gamedata/weapon-racks — vehicle weapon racks grouped by vehicle
   app.get("/weapon-racks", async (c) => {
+    const isPTU = isPTUChannel(getActiveChannel(c));
+    const t = (n: string) => resolveTable(n, isPTU);
     const db = c.env.DB
     return cachedJson(c, `gd:weapon-racks`, async () => {
       const { results } = await db
-        .prepare(
-          `SELECT wr.*, v.name as vehicle_name, v.slug as vehicle_slug,
+        .prepare(`SELECT wr.*, v.name as vehicle_name, v.slug as vehicle_slug,
              m.name as manufacturer_name, m.code as manufacturer_code
-           FROM vehicle_weapon_racks wr
+           FROM ${t("vehicle_weapon_racks")} wr
            
-           LEFT JOIN vehicles v ON v.id = wr.vehicle_id
-           LEFT JOIN manufacturers m ON m.id = v.manufacturer_id
+           LEFT JOIN ${t("vehicles")} v ON v.id = wr.vehicle_id
+           LEFT JOIN ${t("manufacturers")} m ON m.id = v.manufacturer_id
            ORDER BY v.name, wr.rack_label`,
         )
         .all()
@@ -663,16 +656,17 @@ return cachedJson(c, `gd:loc-shops:${cacheSlug(slug)}`, async () => {
 
   // GET /api/gamedata/suit-lockers — vehicle suit lockers grouped by vehicle
   app.get("/suit-lockers", async (c) => {
+    const isPTU = isPTUChannel(getActiveChannel(c));
+    const t = (n: string) => resolveTable(n, isPTU);
     const db = c.env.DB
     return cachedJson(c, `gd:suit-lockers`, async () => {
       const { results } = await db
-        .prepare(
-          `SELECT sl.*, v.name as vehicle_name, v.slug as vehicle_slug,
+        .prepare(`SELECT sl.*, v.name as vehicle_name, v.slug as vehicle_slug,
              m.name as manufacturer_name, m.code as manufacturer_code
-           FROM vehicle_suit_lockers sl
+           FROM ${t("vehicle_suit_lockers")} sl
            
-           LEFT JOIN vehicles v ON v.id = sl.vehicle_id
-           LEFT JOIN manufacturers m ON m.id = v.manufacturer_id
+           LEFT JOIN ${t("vehicles")} v ON v.id = sl.vehicle_id
+           LEFT JOIN ${t("manufacturers")} m ON m.id = v.manufacturer_id
            ORDER BY v.name, sl.locker_label`,
         )
         .all()
@@ -683,15 +677,16 @@ return cachedJson(c, `gd:loc-shops:${cacheSlug(slug)}`, async () => {
 
   // GET /api/gamedata/npc-loadouts — list all factions with loadout counts
   app.get("/npc-loadouts", async (c) => {
+    const isPTU = isPTUChannel(getActiveChannel(c));
+    const t = (n: string) => resolveTable(n, isPTU);
     const db = c.env.DB
     return cachedJson(c, `gd:npc-loadouts`, async () => {
       const { results: factions } = await db
-        .prepare(
-          `SELECT f.id, f.code, f.name,
+        .prepare(`SELECT f.id, f.code, f.name,
              COUNT(nl.id) as loadout_count,
              SUM(nl.visible_item_count) as item_count
            FROM npc_factions f
-           JOIN npc_loadouts nl ON nl.faction_id = f.id
+           JOIN ${t("npc_loadouts")} nl ON nl.faction_id = f.id
            
            WHERE nl.visible_item_count > 0
            GROUP BY f.id
@@ -704,6 +699,8 @@ return cachedJson(c, `gd:loc-shops:${cacheSlug(slug)}`, async () => {
 
   // GET /api/gamedata/npc-loadouts/:faction — paginated loadouts for a faction with nested items
   app.get("/npc-loadouts/:faction", async (c) => {
+    const isPTU = isPTUChannel(getActiveChannel(c));
+    const t = (n: string) => resolveTable(n, isPTU);
     const factionCode = c.req.param("faction")
     const page = Math.max(1, parseInt(c.req.query("page") || "1", 10) || 1)
     const perPage = Math.min(100, Math.max(1, parseInt(c.req.query("per_page") || "50", 10) || 50))
@@ -718,8 +715,7 @@ return cachedJson(c, `gd:loc-shops:${cacheSlug(slug)}`, async () => {
 
       // Count total visible loadouts (those with at least one non-hidden item)
       const countRow = await db
-        .prepare(
-          `SELECT COUNT(*) as total FROM npc_loadouts nl
+        .prepare(`SELECT COUNT(*) as total FROM ${t("npc_loadouts")} nl
            
            WHERE nl.faction_id = ?
              AND nl.visible_item_count > 0`,
@@ -733,9 +729,8 @@ return cachedJson(c, `gd:loc-shops:${cacheSlug(slug)}`, async () => {
 
       // Fetch paginated loadouts — only those with visible items
       const { results: loadouts } = await db
-        .prepare(
-          `SELECT nl.*
-           FROM npc_loadouts nl
+        .prepare(`SELECT nl.*
+           FROM ${t("npc_loadouts")} nl
            
            WHERE nl.faction_id = ?
              AND nl.visible_item_count > 0
@@ -752,9 +747,8 @@ return cachedJson(c, `gd:loc-shops:${cacheSlug(slug)}`, async () => {
         const loadoutIds = loadouts.map((l) => l.id as number)
         const placeholders = loadoutIds.map(() => "?").join(",")
         const { results } = await db
-          .prepare(
-            `SELECT nli.*, nli.loot_map_uuid as loot_uuid
-             FROM npc_loadout_items nli
+          .prepare(`SELECT nli.*, nli.loot_map_uuid as loot_uuid
+             FROM ${t("npc_loadout_items")} nli
              WHERE nli.loadout_id IN (${placeholders})
                AND nli.is_hidden = 0
              ORDER BY nli.loadout_id, nli.id`,
@@ -791,29 +785,28 @@ return cachedJson(c, `gd:loc-shops:${cacheSlug(slug)}`, async () => {
   // NOTE: intentionally API-only for now (no frontend page). The data exists (38 mission
   // types) and is returned correctly; a Missions page is deferred to a future milestone.
   app.get("/missions", async (c) => {
+    const isPTU = isPTUChannel(getActiveChannel(c));
+    const t = (n: string) => resolveTable(n, isPTU);
     const db = c.env.DB
 return cachedJson(c, `gd:missions`, async () => {
       const [typesResult, giversResult, missionsResult, prereqResult, repReqResult] = await Promise.all([
-        db.prepare(
-          `SELECT mt.* FROM mission_types mt
+        db.prepare(`SELECT mt.* FROM ${t("mission_types")} mt
            
            WHERE mt.name != '<= PLACEHOLDER =>'
            ORDER BY mt.name`,
         ).all(),
-        db.prepare(
-          `SELECT mg.*,
+        db.prepare(`SELECT mg.*,
              f.name as faction_name, f.slug as faction_slug,
              sml.name as location_name
-           FROM mission_givers mg
+           FROM ${t("mission_givers")} mg
            
-           LEFT JOIN factions f ON f.id = mg.faction_id
-           LEFT JOIN star_map_locations sml ON sml.id = mg.location_id
+           LEFT JOIN ${t("factions")} f ON f.id = mg.faction_id
+           LEFT JOIN ${t("star_map_locations")} sml ON sml.id = mg.location_id
            WHERE mg.name != '<= PLACEHOLDER =>'
              AND mg.name != '<= UNINITIALIZED =>'
            ORDER BY mg.name`,
         ).all(),
-        db.prepare(
-          `SELECT m.id, m.uuid, m.slug,
+        db.prepare(`SELECT m.id, m.uuid, m.slug,
              COALESCE(m.title, m.name) as title,
              -- Giver is separate from the mission title; don't fall back to
              -- display_name (which is just the localised title). If the
@@ -857,19 +850,17 @@ return cachedJson(c, `gd:missions`, async () => {
                  OR (m.description LIKE '%{%}%')
                THEN 1 ELSE 0
              END as is_template
-           FROM missions m
+           FROM ${t("missions")} m
            WHERE COALESCE(m.not_for_release, 0) = 0
            ORDER BY COALESCE(m.category, m.mission_type), COALESCE(m.reward_amount, m.reward_min, 0) DESC`,
         ).all(),
-        db.prepare(
-          `SELECT mp.mission_id, m_req.uuid as required_uuid, COALESCE(m_req.title, m_req.name) as required_title
-           FROM mission_prerequisites mp
-           JOIN missions m_req ON m_req.id = mp.required_mission_id`,
+        db.prepare(`SELECT mp.mission_id, m_req.uuid as required_uuid, COALESCE(m_req.title, m_req.name) as required_title
+           FROM ${t("mission_prerequisites")} mp
+           JOIN ${t("missions")} m_req ON m_req.id = mp.required_mission_id`,
         ).all(),
-        db.prepare(
-          `SELECT mrr.mission_id, mrr.faction_slug, mrr.scope_slug,
+        db.prepare(`SELECT mrr.mission_id, mrr.faction_slug, mrr.scope_slug,
                   mrr.comparison, mrr.standing_slug
-           FROM mission_reputation_requirements mrr`,
+           FROM ${t("mission_reputation_requirements")} mrr`,
         ).all(),
       ])
 
@@ -925,37 +916,35 @@ return cachedJson(c, `gd:missions`, async () => {
 
   // GET /api/gamedata/crafting — all blueprints with slots and modifiers
   app.get("/crafting", async (c) => {
+    const isPTU = isPTUChannel(getActiveChannel(c));
+    const t = (n: string) => resolveTable(n, isPTU);
     const db = c.env.DB
 return cachedJson(c, `gd:crafting`, async () => {
       const [bpResult, slotResult, modResult, propResult, resResult] = await Promise.all([
-        db.prepare(
-          `SELECT cb.id, cb.uuid, cb.tag, cb.name, cb.type, cb.sub_type, cb.craft_time_seconds
-           FROM crafting_blueprints cb
+        db.prepare(`SELECT cb.id, cb.uuid, cb.tag, cb.name, cb.type, cb.sub_type, cb.craft_time_seconds
+           FROM ${t("crafting_blueprints")} cb
            
            ORDER BY cb.type, cb.sub_type, cb.name`
         ).all(),
-        db.prepare(
-          `SELECT MIN(cbs.id) AS id, cbs.crafting_blueprint_id, cbs.slot_index, COALESCE(cbs.slot_name, cbs.name) AS name,
+        db.prepare(`SELECT MIN(cbs.id) AS id, cbs.crafting_blueprint_id, cbs.slot_index, COALESCE(cbs.slot_name, cbs.name) AS name,
                   cbs.resource_name, cbs.quantity, cbs.min_quality,
                   cbs.slot_type, cbs.item_class
-           FROM crafting_blueprint_slots cbs
-           JOIN crafting_blueprints cb ON cb.id = cbs.crafting_blueprint_id
+           FROM ${t("crafting_blueprint_slots")} cbs
+           JOIN ${t("crafting_blueprints")} cb ON cb.id = cbs.crafting_blueprint_id
            GROUP BY cbs.crafting_blueprint_id, cbs.slot_index
            ORDER BY cbs.crafting_blueprint_id, cbs.slot_index`
         ).all(),
-        db.prepare(
-          `SELECT csm.crafting_blueprint_slot_id, cp.key, cp.name, cp.unit, cp.category,
+        db.prepare(`SELECT csm.crafting_blueprint_slot_id, cp.key, cp.name, cp.unit, cp.category,
                   MIN(csm.start_quality) AS start_quality, MIN(csm.end_quality) AS end_quality,
                   MIN(csm.modifier_at_start) AS modifier_at_start, MIN(csm.modifier_at_end) AS modifier_at_end
-           FROM crafting_slot_modifiers csm
+           FROM ${t("crafting_slot_modifiers")} csm
            JOIN crafting_properties cp ON cp.id = csm.crafting_property_id
-           JOIN crafting_blueprint_slots cbs ON cbs.id = csm.crafting_blueprint_slot_id
-           JOIN crafting_blueprints cb ON cb.id = cbs.crafting_blueprint_id
+           JOIN ${t("crafting_blueprint_slots")} cbs ON cbs.id = csm.crafting_blueprint_slot_id
+           JOIN ${t("crafting_blueprints")} cb ON cb.id = cbs.crafting_blueprint_id
            GROUP BY csm.crafting_blueprint_slot_id, csm.crafting_property_id`
         ).all(),
         db.prepare(`SELECT id, key, name, unit, category FROM crafting_properties ORDER BY id`).all(),
-        db.prepare(
-          `SELECT cr.name FROM crafting_resources cr
+        db.prepare(`SELECT cr.name FROM ${t("crafting_resources")} cr
            
            ORDER BY cr.name`
         ).all(),
@@ -990,11 +979,10 @@ return cachedJson(c, `gd:crafting`, async () => {
       const baseStatsMap = new Map<string, Record<string, unknown>>()
 
       if (weaponTags.length > 0) {
-        const weaponResult = await db.prepare(
-          `SELECT fw.class_name, fw.name, fw.rounds_per_minute, fw.damage, fw.dps,
+        const weaponResult = await db.prepare(`SELECT fw.class_name, fw.name, fw.rounds_per_minute, fw.damage, fw.dps,
                   fw.effective_range, fw.projectile_speed, fw.ammo_capacity,
                   fw.spread_min, fw.spread_max, fw.damage_type, fw.fire_modes
-           FROM fps_weapons fw
+           FROM ${t("fps_weapons")} fw
           `
         ).all()
         for (const w of weaponResult.results) {
@@ -1020,16 +1008,14 @@ return cachedJson(c, `gd:crafting`, async () => {
       if (armourTags.length > 0) {
 // Query fps_armour (body pieces + undersuits) and fps_helmets in parallel
         const [armourResult, helmetResult] = await Promise.all([
-          db.prepare(
-            `SELECT fa.class_name, fa.name, fa.sub_type,
+          db.prepare(`SELECT fa.class_name, fa.name, fa.sub_type,
                     fa.resist_physical, fa.resist_energy, fa.resist_distortion,
                     fa.resist_thermal, fa.resist_biochemical, fa.resist_stun
-             FROM fps_armour fa
+             FROM ${t("fps_armour")} fa
             `
           ).all(),
-          db.prepare(
-            `SELECT fh.class_name, fh.name
-             FROM fps_helmets fh
+          db.prepare(`SELECT fh.class_name, fh.name
+             FROM ${t("fps_helmets")} fh
             `
           ).all(),
         ])
@@ -1080,15 +1066,14 @@ return cachedJson(c, `gd:crafting`, async () => {
       })
 
       // Fetch blueprint acquisition sources via contract generator system
-      const acquisitionResult = await db.prepare(
-        `SELECT DISTINCT rpi.crafting_blueprint_id,
+      const acquisitionResult = await db.prepare(`SELECT DISTINCT rpi.crafting_blueprint_id,
                 cg.generator_key, cg.display_name, cg.faction_name, cg.mission_type
-         FROM crafting_blueprint_reward_pool_items rpi
-         JOIN crafting_blueprint_reward_pools rp ON rp.id = rpi.crafting_blueprint_reward_pool_id
-         JOIN contract_generator_blueprint_pools cgbp ON cgbp.crafting_blueprint_reward_pool_id = rp.id
-         JOIN contract_generator_contracts cgc ON cgc.id = cgbp.contract_generator_contract_id
-         JOIN contract_generator_careers cgca ON cgca.id = cgc.career_id
-         JOIN contract_generators cg ON cg.id = cgca.contract_generator_id`
+         FROM ${t("crafting_blueprint_reward_pool_items")} rpi
+         JOIN ${t("crafting_blueprint_reward_pools")} rp ON rp.id = rpi.crafting_blueprint_reward_pool_id
+         JOIN ${t("contract_generator_blueprint_pools")} cgbp ON cgbp.crafting_blueprint_reward_pool_id = rp.id
+         JOIN ${t("contract_generator_contracts")} cgc ON cgc.id = cgbp.contract_generator_contract_id
+         JOIN ${t("contract_generator_careers")} cgca ON cgca.id = cgc.career_id
+         JOIN ${t("contract_generators")} cg ON cg.id = cgca.contract_generator_id`
       ).all()
 
       // Build acquisition map: blueprint_id → [{ source, generator_key, display_name, ... }]
@@ -1132,28 +1117,25 @@ return cachedJson(c, `gd:crafting`, async () => {
       const [compositionResult, depositLocResult, qualityResult] = await Promise.all([
         // Latest compositions per class_name (for element data)
         db
-          .prepare(
-            `SELECT rc.class_name, rc.composition_json
-             FROM rock_compositions rc
+          .prepare(`SELECT rc.class_name, rc.composition_json
+             FROM ${t("rock_compositions")} rc
              WHERE ${classNameFilters}
              ORDER BY rc.id DESC`
           )
           .all(),
         // Deposits with location data (may use earlier version's deposit links)
         db
-          .prepare(
-            `SELECT rc.class_name,
+          .prepare(`SELECT rc.class_name,
                     ml.name as location_name, ml.system, ml.location_type
              FROM mining_location_deposits mld
-             JOIN rock_compositions rc ON rc.id = mld.rock_composition_id
-             JOIN mining_locations ml ON ml.id = mld.mining_location_id
+             JOIN ${t("rock_compositions")} rc ON rc.id = mld.rock_composition_id
+             JOIN ${t("mining_locations")} ml ON ml.id = mld.mining_location_id
              WHERE ${classNameFilters}`
           )
           .all(),
         db
-          .prepare(
-            `SELECT name, min_quality, max_quality, mean, stddev
-             FROM mining_quality_distributions
+          .prepare(`SELECT name, min_quality, max_quality, mean, stddev
+             FROM ${t("mining_quality_distributions")}
              WHERE (name LIKE '%ShipMineable%' OR name LIKE '%Mineable%' OR name LIKE '%GroundMineable%')`
           )
           .all(),
@@ -1323,47 +1305,45 @@ return cachedJson(c, `gd:crafting`, async () => {
 
   // GET /api/gamedata/mission/:key — contract generator detail with blueprint pools
   app.get("/mission/:key", async (c) => {
+    const isPTU = isPTUChannel(getActiveChannel(c));
+    const t = (n: string) => resolveTable(n, isPTU);
     const db = c.env.DB
     const key = c.req.param("key")
     return cachedJson(c, `gd:mission:${cacheSlug(key)}`, async () => {
       // Get generator
-      const gen = await db.prepare(
-        `SELECT * FROM contract_generators WHERE generator_key = ? ORDER BY id DESC LIMIT 1`
+      const gen = await db.prepare(`SELECT * FROM ${t("contract_generators")} WHERE generator_key = ? ORDER BY id DESC LIMIT 1`
       ).bind(key).first()
       if (!gen) return null
 
       const genId = gen.id as number
 
       // Get careers
-      const careers = await db.prepare(
-        `SELECT * FROM contract_generator_careers WHERE contract_generator_id = ? ORDER BY system, debug_name`
+      const careers = await db.prepare(`SELECT * FROM ${t("contract_generator_careers")} WHERE contract_generator_id = ? ORDER BY system, debug_name`
       ).bind(genId).all()
 
       // Get contracts for all careers
       const careerIds = careers.results.map(c => c.id as number)
       const contracts = careerIds.length > 0
-        ? await db.prepare(
-            `SELECT * FROM contract_generator_contracts WHERE career_id IN (${careerIds.join(",")}) ORDER BY career_id, difficulty`
+        ? await db.prepare(`SELECT * FROM ${t("contract_generator_contracts")} WHERE career_id IN (${careerIds.join(",")}) ORDER BY career_id, difficulty`
           ).all()
         : { results: [] }
 
       // Get blueprint pools for all contracts
       const contractIds = contracts.results.map(c => c.id as number)
       const bpPools = contractIds.length > 0
-        ? await db.prepare(
-            `SELECT cgbp.contract_generator_contract_id, cgbp.chance,
+        ? await db.prepare(`SELECT cgbp.contract_generator_contract_id, cgbp.chance,
                     rp.key as pool_key, rp.name as pool_name,
                     rpi.crafting_blueprint_id, cb.name as blueprint_name,
                     COALESCE(fw.name, fa.name, fh.name, fam.name) as item_name,
                     cb.type as blueprint_type, cb.sub_type as blueprint_sub_type
-             FROM contract_generator_blueprint_pools cgbp
-             JOIN crafting_blueprint_reward_pools rp ON rp.id = cgbp.crafting_blueprint_reward_pool_id
-             JOIN crafting_blueprint_reward_pool_items rpi ON rpi.crafting_blueprint_reward_pool_id = rp.id
-             JOIN crafting_blueprints cb ON cb.id = rpi.crafting_blueprint_id
-             LEFT JOIN fps_weapons fw ON fw.class_name = REPLACE(cb.tag, 'BP_CRAFT_', '')
-             LEFT JOIN fps_armour fa ON fa.class_name = REPLACE(cb.tag, 'BP_CRAFT_', '')
-             LEFT JOIN fps_helmets fh ON fh.class_name = REPLACE(cb.tag, 'BP_CRAFT_', '')
-             LEFT JOIN fps_ammo_types fam ON fam.class_name = REPLACE(cb.tag, 'BP_CRAFT_', '')
+             FROM ${t("contract_generator_blueprint_pools")} cgbp
+             JOIN ${t("crafting_blueprint_reward_pools")} rp ON rp.id = cgbp.crafting_blueprint_reward_pool_id
+             JOIN ${t("crafting_blueprint_reward_pool_items")} rpi ON rpi.crafting_blueprint_reward_pool_id = rp.id
+             JOIN ${t("crafting_blueprints")} cb ON cb.id = rpi.crafting_blueprint_id
+             LEFT JOIN ${t("fps_weapons")} fw ON fw.class_name = REPLACE(cb.tag, 'BP_CRAFT_', '')
+             LEFT JOIN ${t("fps_armour")} fa ON fa.class_name = REPLACE(cb.tag, 'BP_CRAFT_', '')
+             LEFT JOIN ${t("fps_helmets")} fh ON fh.class_name = REPLACE(cb.tag, 'BP_CRAFT_', '')
+             LEFT JOIN ${t("fps_ammo_types")} fam ON fam.class_name = REPLACE(cb.tag, 'BP_CRAFT_', '')
              WHERE cgbp.contract_generator_contract_id IN (${contractIds.join(",")})`
           ).all()
         : { results: [] }
@@ -1438,11 +1418,10 @@ return cachedJson(c, `gd:crafting`, async () => {
       const factionSlug = gen.faction_slug as string | null
       let missionGiver: Record<string, unknown> | undefined
       if (factionSlug) {
-        const giverRes = await db.prepare(
-          `SELECT mg.biography, mg.occupation, mg.association,
+        const giverRes = await db.prepare(`SELECT mg.biography, mg.occupation, mg.association,
                   mg.portrait_url, mg.is_lawful as giver_is_lawful,
                   mg.allies_json, mg.enemies_json
-           FROM mission_givers mg
+           FROM ${t("mission_givers")} mg
            WHERE mg.slug = ?
            ORDER BY mg.id DESC LIMIT 1`
         ).bind(factionSlug).all()
@@ -1478,21 +1457,22 @@ return cachedJson(c, `gd:crafting`, async () => {
 
   // GET /api/gamedata/mission-givers — faction cards for the missions listing page
   app.get("/mission-givers", async (c) => {
+    const isPTU = isPTUChannel(getActiveChannel(c));
+    const t = (n: string) => resolveTable(n, isPTU);
     const db = c.env.DB
     return cachedJson(c, `gd:mission-givers`, async () => {
-      const rows = await db.prepare(
-        `SELECT cg.generator_key, cg.display_name, cg.faction_name, cg.guild,
+      const rows = await db.prepare(`SELECT cg.generator_key, cg.display_name, cg.faction_name, cg.guild,
                 cg.mission_type, cg.focus, cg.description, cg.faction_slug,
                 mg.portrait_url as giver_portrait_url,
                 mg.biography as giver_biography,
                 GROUP_CONCAT(DISTINCT cgca.system) as systems_csv,
                 COUNT(DISTINCT rpi.crafting_blueprint_id) as blueprint_count
-         FROM contract_generators cg
-         LEFT JOIN contract_generator_careers cgca ON cgca.contract_generator_id = cg.id
-         LEFT JOIN contract_generator_contracts cgc ON cgc.career_id = cgca.id
-         LEFT JOIN contract_generator_blueprint_pools cgbp ON cgbp.contract_generator_contract_id = cgc.id
-         LEFT JOIN crafting_blueprint_reward_pool_items rpi ON rpi.crafting_blueprint_reward_pool_id = cgbp.crafting_blueprint_reward_pool_id
-         LEFT JOIN mission_givers mg ON mg.slug = cg.faction_slug
+         FROM ${t("contract_generators")} cg
+         LEFT JOIN ${t("contract_generator_careers")} cgca ON cgca.contract_generator_id = cg.id
+         LEFT JOIN ${t("contract_generator_contracts")} cgc ON cgc.career_id = cgca.id
+         LEFT JOIN ${t("contract_generator_blueprint_pools")} cgbp ON cgbp.contract_generator_contract_id = cgc.id
+         LEFT JOIN ${t("crafting_blueprint_reward_pool_items")} rpi ON rpi.crafting_blueprint_reward_pool_id = cgbp.crafting_blueprint_reward_pool_id
+         LEFT JOIN ${t("mission_givers")} mg ON mg.slug = cg.faction_slug
 
          GROUP BY cg.id
          ORDER BY blueprint_count DESC, cg.display_name`
@@ -1518,6 +1498,8 @@ return cachedJson(c, `gd:crafting`, async () => {
 
   // GET /api/gamedata/fps-gear — all equippable FPS items for loadout builder
   app.get("/fps-gear", async (c) => {
+    const isPTU = isPTUChannel(getActiveChannel(c));
+    const t = (n: string) => resolveTable(n, isPTU);
     const db = c.env.DB
 return cachedJson(c, `gd:fps-gear`, async () => {
       // Run queries in parallel — avoids D1 query size limit from a 7-table UNION
@@ -1533,9 +1515,9 @@ return cachedJson(c, `gd:fps-gear`, async () => {
           m.name as manufacturer_name, lm.rarity,
           w.damage, w.dps, w.rounds_per_minute, w.ammo_capacity,
           w.effective_range, w.damage_type, w.fire_modes
-          FROM fps_weapons w
-          LEFT JOIN manufacturers m ON m.id = w.manufacturer_id
-          LEFT JOIN loot_map lm ON lm.fps_weapon_id = w.id`).all(),
+          FROM ${t("fps_weapons")} w
+          LEFT JOIN ${t("manufacturers")} m ON m.id = w.manufacturer_id
+          LEFT JOIN ${t("loot_map")} lm ON lm.fps_weapon_id = w.id`).all(),
         db.prepare(`SELECT CASE
             WHEN a.sub_type IN ('Arms','arms') THEN 'arms'
             WHEN a.sub_type IN ('Legs','legs') THEN 'legs'
@@ -1548,18 +1530,18 @@ return cachedJson(c, `gd:fps-gear`, async () => {
           m.name as manufacturer_name, lm.rarity, a.grade,
           a.resist_physical, a.resist_energy, a.resist_distortion,
           a.resist_thermal, a.resist_biochemical, a.resist_stun
-          FROM fps_armour a
-          LEFT JOIN manufacturers m ON m.id = a.manufacturer_id
-          LEFT JOIN loot_map lm ON lm.fps_armour_id = a.id`).all(),
+          FROM ${t("fps_armour")} a
+          LEFT JOIN ${t("manufacturers")} m ON m.id = a.manufacturer_id
+          LEFT JOIN ${t("loot_map")} lm ON lm.fps_armour_id = a.id`).all(),
         db.prepare(`SELECT 'helmet' as slot, 'fps_helmets' as source_table,
           'Armor' as category, 'Helmets' as sub_category,
           h.id, h.uuid, h.name, h.class_name, h.sub_type, h.size,
           m.name as manufacturer_name, lm.rarity, h.grade,
           h.resist_physical, h.resist_energy, h.resist_distortion,
           h.resist_thermal, h.resist_biochemical, h.resist_stun
-          FROM fps_helmets h
-          LEFT JOIN manufacturers m ON m.id = h.manufacturer_id
-          LEFT JOIN loot_map lm ON lm.fps_helmet_id = h.id`).all(),
+          FROM ${t("fps_helmets")} h
+          LEFT JOIN ${t("manufacturers")} m ON m.id = h.manufacturer_id
+          LEFT JOIN ${t("loot_map")} lm ON lm.fps_helmet_id = h.id`).all(),
         db.prepare(`SELECT CASE
             WHEN cl.slot = 'Backpack' THEN 'backpack'
             WHEN cl.slot = 'Eyes' THEN 'glasses'
@@ -1580,16 +1562,16 @@ return cachedJson(c, `gd:fps-gear`, async () => {
           cl.id, cl.uuid, cl.name, cl.class_name, cl.slot as sub_type, cl.size,
           m.name as manufacturer_name, lm.rarity, cl.grade,
           cl.slot as slot_name
-          FROM fps_clothing cl
-          LEFT JOIN manufacturers m ON m.id = cl.manufacturer_id
-          LEFT JOIN loot_map lm ON lm.fps_clothing_id = cl.id`).all(),
+          FROM ${t("fps_clothing")} cl
+          LEFT JOIN ${t("manufacturers")} m ON m.id = cl.manufacturer_id
+          LEFT JOIN ${t("loot_map")} lm ON lm.fps_clothing_id = cl.id`).all(),
         db.prepare(`SELECT 'attachment' as slot, 'fps_attachments' as source_table,
           'Utility' as category, 'Attachments' as sub_category,
           at.id, at.uuid, at.name, at.class_name, at.sub_type, at.size,
           m.name as manufacturer_name, lm.rarity
-          FROM fps_attachments at
-          LEFT JOIN manufacturers m ON m.id = at.manufacturer_id
-          LEFT JOIN loot_map lm ON lm.fps_attachment_id = at.id`).all(),
+          FROM ${t("fps_attachments")} at
+          LEFT JOIN ${t("manufacturers")} m ON m.id = at.manufacturer_id
+          LEFT JOIN ${t("loot_map")} lm ON lm.fps_attachment_id = at.id`).all(),
         db.prepare(`SELECT 'gadget' as slot, 'fps_utilities' as source_table,
           'Utility' as category,
           CASE WHEN u.sub_type IN ('Medical','MedPack') THEN 'Medical'
@@ -1599,15 +1581,15 @@ return cachedJson(c, `gd:fps-gear`, async () => {
                ELSE 'Gadgets' END as sub_category,
           u.id, u.uuid, u.name, u.class_name, u.sub_type,
           m.name as manufacturer_name, lm.rarity
-          FROM fps_utilities u
-          LEFT JOIN manufacturers m ON m.id = u.manufacturer_id
-          LEFT JOIN loot_map lm ON lm.fps_utility_id = u.id`).all(),
+          FROM ${t("fps_utilities")} u
+          LEFT JOIN ${t("manufacturers")} m ON m.id = u.manufacturer_id
+          LEFT JOIN ${t("loot_map")} lm ON lm.fps_utility_id = u.id`).all(),
         db.prepare(`SELECT 'melee' as slot, 'fps_melee' as source_table,
           'Weapons' as category, 'Melee' as sub_category,
           me.id, me.uuid, me.name, me.class_name, me.sub_type, me.size,
           m.name as manufacturer_name, me.damage, me.damage_type
-          FROM fps_melee me
-          LEFT JOIN manufacturers m ON m.id = me.manufacturer_id`).all(),
+          FROM ${t("fps_melee")} me
+          LEFT JOIN ${t("manufacturers")} m ON m.id = me.manufacturer_id`).all(),
         db.prepare(`SELECT 'carryable' as slot, 'fps_carryables' as source_table,
           CASE WHEN ca.sub_type IN ('Drink','Bar','Bottle','Glass','Can','Sachet') THEN 'Sustenance'
                WHEN ca.sub_type IN ('Consumable','Small','Tin') THEN 'Consumables'
@@ -1628,7 +1610,7 @@ return cachedJson(c, `gd:fps-gear`, async () => {
                ELSE 'All' END as sub_category,
           ca.id, ca.uuid, ca.name, ca.class_name, ca.sub_type, NULL as size,
           NULL as manufacturer_name, NULL as rarity
-          FROM fps_carryables ca
+          FROM ${t("fps_carryables")} ca
           `).all(),
       ])
 
@@ -1651,6 +1633,8 @@ return cachedJson(c, `gd:fps-gear`, async () => {
 
   // GET /api/gamedata/faction/:slug — unified faction page: generators + pu_missions + contracts
   app.get("/faction/:slug", async (c) => {
+    const isPTU = isPTUChannel(getActiveChannel(c));
+    const t = (n: string) => resolveTable(n, isPTU);
     const db = c.env.DB
     const slug = c.req.param("slug")
     // Map of giver_name variants → faction_slug
@@ -1669,8 +1653,7 @@ return cachedJson(c, `gd:fps-gear`, async () => {
 
     return cachedJson(c, `gd:faction:${cacheSlug(slug)}`, async () => {
       // Get all generators for this faction slug
-      const generators = await db.prepare(
-        `SELECT * FROM contract_generators WHERE faction_slug = ? ORDER BY mission_type`
+      const generators = await db.prepare(`SELECT * FROM ${t("contract_generators")} WHERE faction_slug = ? ORDER BY mission_type`
       ).bind(slug).all()
 
       if (generators.results.length === 0) {
@@ -1685,35 +1668,32 @@ return cachedJson(c, `gd:fps-gear`, async () => {
       let genData: Record<string, unknown>[] = []
 
       if (genIds.length > 0) {
-        const careers = await db.prepare(
-          `SELECT cgca.*, cg.generator_key, cg.mission_type
-           FROM contract_generator_careers cgca
-           JOIN contract_generators cg ON cg.id = cgca.contract_generator_id
+        const careers = await db.prepare(`SELECT cgca.*, cg.generator_key, cg.mission_type
+           FROM ${t("contract_generator_careers")} cgca
+           JOIN ${t("contract_generators")} cg ON cg.id = cgca.contract_generator_id
            WHERE cgca.contract_generator_id IN (${genIds.join(",")})
            ORDER BY cg.mission_type, cgca.system`
         ).all()
 
         const careerIds = careers.results.map(c => c.id as number)
-        const contracts = careerIds.length > 0 ? await db.prepare(
-          `SELECT * FROM contract_generator_contracts
+        const contracts = careerIds.length > 0 ? await db.prepare(`SELECT * FROM ${t("contract_generator_contracts")}
            WHERE career_id IN (${careerIds.join(",")}) ORDER BY career_id, difficulty`
         ).all() : { results: [] }
 
         const contractIds = contracts.results.map(c => c.id as number)
-        const bpPools = contractIds.length > 0 ? await db.prepare(
-          `SELECT cgbp.contract_generator_contract_id, cgbp.chance,
+        const bpPools = contractIds.length > 0 ? await db.prepare(`SELECT cgbp.contract_generator_contract_id, cgbp.chance,
                   rp.key as pool_key, rp.name as pool_name,
                   rpi.crafting_blueprint_id, cb.name as blueprint_name,
                   COALESCE(fw.name, fa.name, fh.name, fam.name) as item_name,
                   cb.type as blueprint_type, cb.sub_type as blueprint_sub_type
-           FROM contract_generator_blueprint_pools cgbp
-           JOIN crafting_blueprint_reward_pools rp ON rp.id = cgbp.crafting_blueprint_reward_pool_id
-           JOIN crafting_blueprint_reward_pool_items rpi ON rpi.crafting_blueprint_reward_pool_id = rp.id
-           JOIN crafting_blueprints cb ON cb.id = rpi.crafting_blueprint_id
-           LEFT JOIN fps_weapons fw ON fw.class_name = REPLACE(cb.tag, 'BP_CRAFT_', '')
-           LEFT JOIN fps_armour fa ON fa.class_name = REPLACE(cb.tag, 'BP_CRAFT_', '')
-           LEFT JOIN fps_helmets fh ON fh.class_name = REPLACE(cb.tag, 'BP_CRAFT_', '')
-           LEFT JOIN fps_ammo_types fam ON fam.class_name = REPLACE(cb.tag, 'BP_CRAFT_', '')
+           FROM ${t("contract_generator_blueprint_pools")} cgbp
+           JOIN ${t("crafting_blueprint_reward_pools")} rp ON rp.id = cgbp.crafting_blueprint_reward_pool_id
+           JOIN ${t("crafting_blueprint_reward_pool_items")} rpi ON rpi.crafting_blueprint_reward_pool_id = rp.id
+           JOIN ${t("crafting_blueprints")} cb ON cb.id = rpi.crafting_blueprint_id
+           LEFT JOIN ${t("fps_weapons")} fw ON fw.class_name = REPLACE(cb.tag, 'BP_CRAFT_', '')
+           LEFT JOIN ${t("fps_armour")} fa ON fa.class_name = REPLACE(cb.tag, 'BP_CRAFT_', '')
+           LEFT JOIN ${t("fps_helmets")} fh ON fh.class_name = REPLACE(cb.tag, 'BP_CRAFT_', '')
+           LEFT JOIN ${t("fps_ammo_types")} fam ON fam.class_name = REPLACE(cb.tag, 'BP_CRAFT_', '')
            WHERE cgbp.contract_generator_contract_id IN (${contractIds.join(",")})`
         ).all() : { results: [] }
 
@@ -1775,8 +1755,7 @@ return cachedJson(c, `gd:fps-gear`, async () => {
       }
 
       // Get pu_missions for this faction (by giver_name → slug matching)
-      const puMissions = await db.prepare(
-        `SELECT m.id, COALESCE(m.title, m.name) as title, m.description,
+      const puMissions = await db.prepare(`SELECT m.id, COALESCE(m.title, m.name) as title, m.description,
                 COALESCE(NULLIF(m.reward_amount, 0), m.reward_min, 0) as reward_amount, m.reward_currency,
                 COALESCE(m.is_lawful, 0) as is_lawful, m.difficulty,
                 COALESCE(m.category, m.mission_type) as category,
@@ -1789,7 +1768,7 @@ return cachedJson(c, `gd:fps-gear`, async () => {
                 m.wanted_level_min, m.wanted_level_max,
                 m.buy_in_amount, m.reward_max, m.has_standing_bonus,
                 m.location_ref, m.locality
-         FROM missions m
+         FROM ${t("missions")} m
          ORDER BY m.reward_amount DESC`
       ).all()
 
@@ -1803,15 +1782,13 @@ return cachedJson(c, `gd:fps-gear`, async () => {
       // Get prerequisites and rep requirements for the faction's pu_missions
       const factionMissionIds = new Set(factionPuMissions.map(m => m.id as number))
       const [factionPrereqResult, factionRepReqResult] = await Promise.all([
-        db.prepare(
-          `SELECT mp.mission_id, m_req.uuid as required_uuid, COALESCE(m_req.title, m_req.name) as required_title
-           FROM mission_prerequisites mp
-           JOIN missions m_req ON m_req.id = mp.required_mission_id`,
+        db.prepare(`SELECT mp.mission_id, m_req.uuid as required_uuid, COALESCE(m_req.title, m_req.name) as required_title
+           FROM ${t("mission_prerequisites")} mp
+           JOIN ${t("missions")} m_req ON m_req.id = mp.required_mission_id`,
         ).all(),
-        db.prepare(
-          `SELECT mrr.mission_id, mrr.faction_slug, mrr.scope_slug,
+        db.prepare(`SELECT mrr.mission_id, mrr.faction_slug, mrr.scope_slug,
                   mrr.comparison, mrr.standing_slug
-           FROM mission_reputation_requirements mrr`,
+           FROM ${t("mission_reputation_requirements")} mrr`,
         ).all(),
       ])
 
@@ -1848,17 +1825,15 @@ return cachedJson(c, `gd:fps-gear`, async () => {
       const contractGiverSlug = SLUG_TO_GIVER_SLUG[slug]
       let npcContracts: Record<string, unknown>[] = []
       if (contractGiverSlug) {
-        const contractResult = await db.prepare(
-          `SELECT * FROM contracts WHERE giver_slug = ? AND is_active = 1 ORDER BY sequence_num, id`
+        const contractResult = await db.prepare(`SELECT * FROM ${t("contracts")} WHERE giver_slug = ? AND is_active = 1 ORDER BY sequence_num, id`
         ).bind(contractGiverSlug).all()
         npcContracts = contractResult.results as Record<string, unknown>[]
       }
 
       // Look up enriched mission giver data (portrait, bio, etc.)
-      const giverResult = await db.prepare(
-        `SELECT mg.biography, mg.occupation, mg.association, mg.headquarters as giver_headquarters,
+      const giverResult = await db.prepare(`SELECT mg.biography, mg.occupation, mg.association, mg.headquarters as giver_headquarters,
                 mg.portrait_url, mg.is_lawful as giver_is_lawful, mg.allies_json, mg.enemies_json
-         FROM mission_givers mg
+         FROM ${t("mission_givers")} mg
          WHERE mg.slug = ?
          ORDER BY mg.id DESC LIMIT 1`
       ).bind(slug).all()
@@ -1868,9 +1843,8 @@ return cachedJson(c, `gd:fps-gear`, async () => {
       let repLadder: { scope_name: string; standings: { name: string; slug: string | null; min_reputation: number; is_gated: number; perk_description: string | null; perks: { perk_name: string; display_name: string | null; description: string | null }[] }[] } | null = null
 
       // Find the faction_id via mission_givers (slug match) or factions table directly
-      const factionIdResult = await db.prepare(
-        `SELECT f.id as faction_id FROM factions f
-         JOIN mission_givers mg ON mg.faction_id = f.id
+      const factionIdResult = await db.prepare(`SELECT f.id as faction_id FROM ${t("factions")} f
+         JOIN ${t("mission_givers")} mg ON mg.faction_id = f.id
          WHERE mg.slug = ?
          ORDER BY mg.id DESC LIMIT 1`
       ).bind(slug).all()
@@ -1878,10 +1852,9 @@ return cachedJson(c, `gd:fps-gear`, async () => {
       const factionId = factionIdResult.results[0]?.faction_id as number | undefined
       if (factionId) {
         // Get primary reputation scope for this faction
-        const scopeResult = await db.prepare(
-          `SELECT rs.id as scope_id, rs.name as scope_name
-           FROM faction_reputation_scopes frs
-           JOIN reputation_scopes rs ON rs.id = frs.reputation_scope_id
+        const scopeResult = await db.prepare(`SELECT rs.id as scope_id, rs.name as scope_name
+           FROM ${t("faction_reputation_scopes")} frs
+           JOIN ${t("reputation_scopes")} rs ON rs.id = frs.reputation_scope_id
            WHERE frs.faction_id = ? AND frs.is_primary = 1
            LIMIT 1`
         ).bind(factionId).all()
@@ -1892,9 +1865,8 @@ return cachedJson(c, `gd:fps-gear`, async () => {
           const scopeName = scopeRow.scope_name as string
 
           // Get standings for this scope
-          const standingsResult = await db.prepare(
-            `SELECT rs2.name, rs2.slug, rs2.min_reputation, rs2.is_gated, rs2.perk_description, rs2.id as standing_id
-             FROM reputation_standings rs2
+          const standingsResult = await db.prepare(`SELECT rs2.name, rs2.slug, rs2.min_reputation, rs2.is_gated, rs2.perk_description, rs2.id as standing_id
+             FROM ${t("reputation_standings")} rs2
              
              WHERE rs2.scope_id = ? AND rs2.name != '<= PLACEHOLDER =>'
              ORDER BY rs2.min_reputation ASC, rs2.sort_order ASC`
@@ -1904,9 +1876,8 @@ return cachedJson(c, `gd:fps-gear`, async () => {
           const standingIds = standingsResult.results.map(s => s.standing_id as number)
           let perksByStanding = new Map<number, { perk_name: string; display_name: string | null; description: string | null }[]>()
           if (standingIds.length > 0) {
-            const perksResult = await db.prepare(
-              `SELECT rp.standing_id, rp.perk_name, rp.display_name, rp.description
-               FROM reputation_perks rp
+            const perksResult = await db.prepare(`SELECT rp.standing_id, rp.perk_name, rp.display_name, rp.description
+               FROM ${t("reputation_perks")} rp
                WHERE rp.scope_id = ? AND rp.standing_id IN (${standingIds.join(",")})`
             ).bind(scopeId).all()
             for (const p of perksResult.results) {
