@@ -172,5 +172,15 @@ export const SUB_FILTERS = {
         'mininglaser', 'tractorbeam', 'salvage',
       ],
     },
+    {
+      key: 'ship_component_size',
+      label: 'Size',
+      // CIG ship-component tags use zero-padded suffixes: _S00, _S01,
+      // _S02, _S03, _S04. parseSize captures the digits and returns the
+      // integer (so S00 → 0, S04 → 4). The display label drops the pad.
+      extract: parseSize,
+      format: (v) => `S${v}`,
+      order: [0, 1, 2, 3, 4, 5, 6, 7],
+    },
   ],
 }
