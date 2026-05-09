@@ -4,6 +4,7 @@ import { getAuthUser } from "../lib/types";
 import { slugFromShipCode, slugFromName, compactSlug } from "../lib/slug";
 import { loadInsuranceTypes } from "../db/queries";
 import { logEvent } from "../lib/logger";
+import { inferKind } from "../lib/pledgeKind";
 import { logUserChange } from "../lib/change-history";
 import { validate, HangarXplorImportSchema, HangarSyncPayloadSchema, SYNC_ANOMALY_THRESHOLDS } from "../lib/validation";
 import { isTrustedExtension } from "../lib/constants";
@@ -816,7 +817,7 @@ export function importRoutes() {
               userID,
               userPledgeId,
               item.title || "",
-              item.kind || null,
+              item.kind || inferKind(item.title) || null,
               item.manufacturerCode || null,
               item.manufacturer || null,
               item.image || null,
