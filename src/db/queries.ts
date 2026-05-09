@@ -14,6 +14,7 @@ import type {
   AIAnalysis,
 } from "../lib/types";
 import { extractSetName, makeSetSlug } from "../lib/loot-sets";
+import { normaliseTitle } from "../lib/titleNorm";
 
 // --- Loot summary stats (category-aware card display) ---
 // LEFT JOINs to detail tables for key stats shown on item cards.
@@ -591,8 +592,8 @@ export async function upsertPaint(
   await db
     .prepare(
       `INSERT INTO paints (uuid, name, slug, class_name, description,
-        image_url, image_url_small, image_url_medium, image_url_large, raw_data, updated_at)
-      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, datetime('now'))
+        image_url, image_url_small, image_url_medium, image_url_large, raw_data, title_norm, updated_at)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, datetime('now'))
       ON CONFLICT(class_name) DO UPDATE SET
         name=excluded.name,
         slug=COALESCE(excluded.slug, paints.slug),
@@ -602,12 +603,13 @@ export async function upsertPaint(
         image_url_medium=COALESCE(excluded.image_url_medium, paints.image_url_medium),
         image_url_large=COALESCE(excluded.image_url_large, paints.image_url_large),
         raw_data=COALESCE(excluded.raw_data, paints.raw_data),
+        title_norm=excluded.title_norm,
         updated_at=excluded.updated_at`,
     )
     .bind(
       n(p.uuid), p.name, n(p.slug), n(p.class_name), n(p.description),
       n(p.image_url), n(p.image_url_small), n(p.image_url_medium), n(p.image_url_large),
-      null,
+      null, normaliseTitle(p.name),
     )
     .run();
 

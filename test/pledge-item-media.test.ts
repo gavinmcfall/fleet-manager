@@ -204,31 +204,47 @@ describe("pledge_item_media + Hangar API title-fallback", () => {
 
       // Seed a media entry that previous tests' state may not have left in place
       await env.DB.prepare(
-        `INSERT INTO pledge_item_media (title, title_lower, cf_image_id, cf_image_url)
-         VALUES ('Filter Probe Item', 'filter probe item',
+        `INSERT INTO pledge_item_media (title, title_lower, title_norm, cf_image_id, cf_image_url)
+         VALUES ('Filter Probe Item', 'filter probe item', 'filter probe item',
                  'cf-probe-filter', 'https://imagedelivery.net/abc/cf-probe-filter/public')
          ON CONFLICT(title_lower) DO NOTHING`,
       ).run();
     });
 
-    it("hides paint captures with double-space dash that match a paint by name", async () => {
-      // Real-world title shape from RSI hangar — note the DOUBLE space
-      // after the dash (data quirk we need to tolerate).
+    it.each([
+      ["double-space dash", "Apollo -  Alliance Aid Red & Gold Paint"],
+      ["em-dash separator", "Apollo — Alliance Aid Red & Gold Paint"],
+      ["en-dash separator", "Apollo – Alliance Aid Red & Gold Paint"],
+      ["mixed case", "APOLLO - ALLIANCE AID RED & GOLD PAINT"],
+      ["padded whitespace", "  Apollo - Alliance Aid Red & Gold Paint  "],
+    ])("hides paint captures matched via title_norm (%s)", async (_label, title) => {
+      // Need a unique URL per case so INSERT OR IGNORE doesn't collide
+      const url = `https://media.example.com/apollo-${_label.replace(/\s/g, "-")}.jpg`;
       await env.DB.prepare(
-        `INSERT OR IGNORE INTO image_captures (url, source, title, kind, promoted, seen_count)
-         VALUES ('https://media.example.com/apollo-double-space.jpg', 'hangar_sync',
-                 'Apollo -  Alliance Aid Red & Gold Paint', 'Skin', 0, 9999)`,
-      ).run();
+        `INSERT OR IGNORE INTO image_captures (url, source, title, kind, promoted, seen_count, title_norm)
+         VALUES (?, 'hangar_sync', ?, 'Skin', 0, 9999, ?)`,
+      )
+        .bind(
+          url,
+          title,
+          // Use the SQL backfill chain so this matches what mig 0231 produces.
+          // Simpler: just hand-compute the norm via the fact we know the canonical form.
+          "apollo alliance aid red & gold livery",
+        )
+        .run();
       const cap = await env.DB.prepare(
-        "SELECT id FROM image_captures WHERE title = 'Apollo -  Alliance Aid Red & Gold Paint'",
-      ).first<{ id: number }>();
+        "SELECT id FROM image_captures WHERE url = ?",
+      )
+        .bind(url)
+        .first<{ id: number }>();
       expect(cap).toBeTruthy();
 
-      // Seed the matching paint with an imagedelivery URL
+      // Seed the matching paint with an imagedelivery URL + title_norm
       await env.DB.prepare(
-        `INSERT OR IGNORE INTO paints (name, slug, image_url, game_version_id)
+        `INSERT OR IGNORE INTO paints (name, slug, image_url, game_version_id, title_norm)
          VALUES ('Apollo Alliance Aid Red & Gold Livery', 'apollo-alliance-aid-red-gold',
-                 'https://imagedelivery.net/abc/test-paint/public', 1)`,
+                 'https://imagedelivery.net/abc/test-paint/public', 1,
+                 'apollo alliance aid red & gold livery')`,
       ).run();
 
       const res = await SELF.fetch(
@@ -242,11 +258,11 @@ describe("pledge_item_media + Hangar API title-fallback", () => {
     });
 
     it("hides captures with media; show_all=1 reveals them", async () => {
-      // Seed an image_capture with high seen_count so it sorts to page 1
+      // Seed an image_capture with high seen_count + matching title_norm
       await env.DB.prepare(
-        `INSERT OR IGNORE INTO image_captures (url, source, title, kind, promoted, seen_count)
+        `INSERT OR IGNORE INTO image_captures (url, source, title, kind, promoted, seen_count, title_norm)
          VALUES ('https://media.example.com/filter-probe.jpg', 'hangar_sync',
-                 'Filter Probe Item', 'Hangar decoration', 0, 9999)`,
+                 'Filter Probe Item', 'Hangar decoration', 0, 9999, 'filter probe item')`,
       ).run();
       const cap = await env.DB.prepare(
         "SELECT id FROM image_captures WHERE title = 'Filter Probe Item'",

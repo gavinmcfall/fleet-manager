@@ -5,6 +5,7 @@ import { slugFromShipCode, slugFromName, compactSlug } from "../lib/slug";
 import { loadInsuranceTypes } from "../db/queries";
 import { logEvent } from "../lib/logger";
 import { inferKind } from "../lib/pledgeKind";
+import { normaliseTitle } from "../lib/titleNorm";
 import { logUserChange } from "../lib/change-history";
 import { validate, HangarXplorImportSchema, HangarSyncPayloadSchema, SYNC_ANOMALY_THRESHOLDS } from "../lib/validation";
 import { isTrustedExtension } from "../lib/constants";
@@ -447,16 +448,17 @@ export function importRoutes() {
       const capStmts = imageCaptures.map((cap) =>
         db
           .prepare(
-            `INSERT INTO image_captures (url, source, vehicle_id, vehicle_slug, title, kind)
+            `INSERT INTO image_captures (url, source, vehicle_id, vehicle_slug, title, kind, title_norm)
             VALUES (?, 'hangar_sync',
               CASE WHEN ? IS NOT NULL THEN (SELECT id FROM vehicles WHERE slug = ? LIMIT 1) ELSE NULL END,
-              ?, ?, ?)
+              ?, ?, ?, ?)
             ON CONFLICT(url) DO UPDATE SET
               last_seen = datetime('now'),
               seen_count = seen_count + 1,
-              vehicle_slug = COALESCE(excluded.vehicle_slug, vehicle_slug)`,
+              vehicle_slug = COALESCE(excluded.vehicle_slug, vehicle_slug),
+              title_norm = excluded.title_norm`,
           )
-          .bind(cap.url, cap.slug, cap.slug, cap.slug, cap.title, cap.kind),
+          .bind(cap.url, cap.slug, cap.slug, cap.slug, cap.title, cap.kind, normaliseTitle(cap.title)),
       );
       // Fire-and-forget in background — don't block the sync response
       c.executionCtx.waitUntil(
@@ -476,7 +478,7 @@ export function importRoutes() {
               OR
               (kind = 'Skin' AND EXISTS (
                 SELECT 1 FROM paints p
-                WHERE p.name = REPLACE(REPLACE(image_captures.title, ' - ', ' '), ' Paint', ' Livery')
+                WHERE p.title_norm = image_captures.title_norm
                 AND p.image_url LIKE 'https://imagedelivery%'
               ))
             )`,
@@ -492,7 +494,7 @@ export function importRoutes() {
               OR
               (kind = 'Skin' AND EXISTS (
                 SELECT 1 FROM paints p
-                WHERE p.name = REPLACE(REPLACE(image_captures.title, ' - ', ' '), ' Paint', ' Livery')
+                WHERE p.title_norm = image_captures.title_norm
                 AND (p.image_url IS NULL OR p.image_url = '' OR p.image_url NOT LIKE 'https://imagedelivery%')
               ))
               OR

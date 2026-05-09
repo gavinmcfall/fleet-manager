@@ -6,6 +6,7 @@ import { getVehiclesNeedingCFUpload, setVehicleCFImagesID } from "../db/queries"
 import { concurrentMap } from "../lib/utils";
 import { validate } from "../lib/validation";
 import { purgeByPrefix } from "../lib/cache";
+import { normaliseTitle } from "../lib/titleNorm";
 
 /**
  * /api/admin/* — Admin-only management endpoints (super_admin required)
@@ -726,14 +727,12 @@ export function adminRoutes() {
 
     // Default: hide captures we already have a CDN image for.
     // (1) Linked vehicle has imagedelivery URL
-    // (2) Matching paint by name has imagedelivery URL
-    // (3) Title matches a pledge_item_media entry
+    // (2) Matching paint by title_norm has imagedelivery URL
+    // (3) title_norm matches a pledge_item_media entry
     //
-    // Title normalization for paint match: RSI's hangar markup
-    // sometimes includes a stray double-space after the dash (e.g.
-    // "Apollo -  Alliance Aid Red & Gold Paint") so we collapse
-    // whitespace, strip the dash, and case-fold both sides before
-    // comparison.
+    // title_norm is the canonical form produced by normaliseTitle()
+    // — handles unicode dashes, mixed whitespace, case, and the
+    // Paint/Skin → Livery rename.
     const alreadyHaveClause = !showAll
       ? `AND NOT EXISTS (
            SELECT 1 FROM vehicles v2
@@ -742,13 +741,14 @@ export function adminRoutes() {
          )
          AND NOT EXISTS (
            SELECT 1 FROM paints p2
-           WHERE LOWER(REPLACE(REPLACE(REPLACE(p2.name, '  ', ' '), '  ', ' '), '  ', ' '))
-               = LOWER(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(ic.title, ' - ', ' '), '  ', ' '), '  ', ' '), '  ', ' '), ' Paint', ' Livery'))
+           WHERE p2.title_norm = ic.title_norm
+             AND ic.title_norm != ''
              AND p2.image_url LIKE 'https://imagedelivery.net%'
          )
          AND NOT EXISTS (
            SELECT 1 FROM pledge_item_media pim
-           WHERE pim.title_lower = LOWER(ic.title)
+           WHERE pim.title_norm = ic.title_norm
+             AND ic.title_norm != ''
          )`
       : "";
 
@@ -761,16 +761,12 @@ export function adminRoutes() {
       .prepare(`SELECT ic.*,
         v.image_url as current_vehicle_image,
         (SELECT p.id FROM paints p
-           WHERE LOWER(REPLACE(REPLACE(REPLACE(p.name, '  ', ' '), '  ', ' '), '  ', ' '))
-               = LOWER(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(ic.title, ' - ', ' '), '  ', ' '), '  ', ' '), '  ', ' '), ' Paint', ' Livery'))
-           LIMIT 1) as matched_paint_id,
+           WHERE p.title_norm = ic.title_norm LIMIT 1) as matched_paint_id,
         (SELECT p.image_url FROM paints p
-           WHERE LOWER(REPLACE(REPLACE(REPLACE(p.name, '  ', ' '), '  ', ' '), '  ', ' '))
-               = LOWER(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(ic.title, ' - ', ' '), '  ', ' '), '  ', ' '), '  ', ' '), ' Paint', ' Livery'))
-           LIMIT 1) as matched_paint_image,
+           WHERE p.title_norm = ic.title_norm LIMIT 1) as matched_paint_image,
         (SELECT lm.id FROM loot_map lm WHERE LOWER(lm.name) = LOWER(ic.title) LIMIT 1) as matched_loot_id,
         (SELECT vc.id FROM vehicle_components vc WHERE LOWER(vc.name) = LOWER(ic.title) LIMIT 1) as matched_component_id,
-        (SELECT pim.id FROM pledge_item_media pim WHERE pim.title_lower = LOWER(ic.title) LIMIT 1) as matched_item_media_id
+        (SELECT pim.id FROM pledge_item_media pim WHERE pim.title_norm = ic.title_norm LIMIT 1) as matched_item_media_id
       FROM image_captures ic LEFT JOIN vehicles v ON v.id = ic.vehicle_id WHERE ${where} ${alreadyHaveClause} ORDER BY ic.seen_count DESC, ic.last_seen DESC LIMIT ? OFFSET ?`)
       .bind(...params, perPage, offset)
       .all();
@@ -939,22 +935,24 @@ export function adminRoutes() {
       const cfImageUrl = `https://imagedelivery.net/${accountHash}/${cfImagesId}/public`;
       const userId = c.get("user")?.id ?? null;
       const titleLower = title.toLowerCase();
+      const titleNorm = normaliseTitle(title);
 
       // Upsert by title_lower so re-uploading the same title replaces
       // (admin can swap a bad image for a better one).
       await c.env.DB
         .prepare(
-          `INSERT INTO pledge_item_media (title, title_lower, cf_image_id, cf_image_url, uploaded_by, notes)
-           VALUES (?, ?, ?, ?, ?, ?)
+          `INSERT INTO pledge_item_media (title, title_lower, title_norm, cf_image_id, cf_image_url, uploaded_by, notes)
+           VALUES (?, ?, ?, ?, ?, ?, ?)
            ON CONFLICT(title_lower) DO UPDATE SET
              title = excluded.title,
+             title_norm = excluded.title_norm,
              cf_image_id = excluded.cf_image_id,
              cf_image_url = excluded.cf_image_url,
              uploaded_by = excluded.uploaded_by,
              uploaded_at = datetime('now'),
              notes = excluded.notes`,
         )
-        .bind(title, titleLower, cfImagesId, cfImageUrl, userId, notes ?? null)
+        .bind(title, titleLower, titleNorm, cfImagesId, cfImageUrl, userId, notes ?? null)
         .run();
 
       return c.json({ ok: true, cf_image_id: cfImagesId, cf_image_url: cfImageUrl });
@@ -994,21 +992,23 @@ export function adminRoutes() {
     const cfImageUrl = `https://imagedelivery.net/${accountHash}/${cfImagesId}/public`;
     const userId = c.get("user")?.id ?? null;
     const titleLower = cap.title.toLowerCase();
+    const titleNorm = normaliseTitle(cap.title);
 
     await db.batch([
       db
         .prepare(
-          `INSERT INTO pledge_item_media (title, title_lower, cf_image_id, cf_image_url, source_capture_id, uploaded_by)
-           VALUES (?, ?, ?, ?, ?, ?)
+          `INSERT INTO pledge_item_media (title, title_lower, title_norm, cf_image_id, cf_image_url, source_capture_id, uploaded_by)
+           VALUES (?, ?, ?, ?, ?, ?, ?)
            ON CONFLICT(title_lower) DO UPDATE SET
              title = excluded.title,
+             title_norm = excluded.title_norm,
              cf_image_id = excluded.cf_image_id,
              cf_image_url = excluded.cf_image_url,
              source_capture_id = excluded.source_capture_id,
              uploaded_by = excluded.uploaded_by,
              uploaded_at = datetime('now')`,
         )
-        .bind(cap.title, titleLower, cfImagesId, cfImageUrl, cap.id, userId),
+        .bind(cap.title, titleLower, titleNorm, cfImagesId, cfImageUrl, cap.id, userId),
       db.prepare("UPDATE image_captures SET promoted = 1 WHERE id = ?").bind(id),
     ]);
 
