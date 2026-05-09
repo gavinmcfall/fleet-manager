@@ -1,7 +1,14 @@
 import React, { useMemo, useState } from 'react'
 import { Link } from 'react-router-dom'
-import { FlaskConical, Trash2, Edit3, Check, X, Plus, Minus, SlidersHorizontal, Box, Star } from 'lucide-react'
-import { useUserBlueprints, updateUserBlueprint, deleteUserBlueprint, setBlueprintState } from '../../hooks/useAPI'
+import { FlaskConical, Trash2, Edit3, Check, X, Plus, Minus, SlidersHorizontal, Box, Star, Bookmark } from 'lucide-react'
+import {
+  useUserBlueprints,
+  updateUserBlueprint,
+  deleteUserBlueprint,
+  setBlueprintState,
+  updateBlueprintBuild,
+  deleteBlueprintBuild,
+} from '../../hooks/useAPI'
 import LoadingState from '../../components/LoadingState'
 import ErrorState from '../../components/ErrorState'
 import PageHeader from '../../components/PageHeader'
@@ -229,22 +236,189 @@ function BlueprintRow({ item, onUpdate, onDelete }) {
   )
 }
 
+/**
+ * Renders a parent blueprint row plus zero-or-more nested build rows.
+ * The parent row is the ownership/wishlist marker. Each build is a
+ * named saved configuration of that blueprint.
+ */
+function BlueprintGroup({ item, onUpdate, onDelete }) {
+  const builds = item.builds || []
+  return (
+    <div className="space-y-1">
+      <BlueprintRow item={item} onUpdate={onUpdate} onDelete={onDelete} />
+      {builds.length > 0 && (
+        <div className="ml-6 border-l border-white/[0.06] pl-3 space-y-1">
+          {builds.map(build => (
+            <BuildRow
+              key={build.id}
+              item={item}
+              build={build}
+              onUpdate={onUpdate}
+            />
+          ))}
+        </div>
+      )}
+    </div>
+  )
+}
+
+/**
+ * One saved build (named Quality Sim configuration) under a blueprint.
+ * Compact row with: name, build count tracker, open-in-sim, edit, delete.
+ */
+function BuildRow({ item, build, onUpdate }) {
+  const [editing, setEditing] = useState(false)
+  const [name, setName] = useState(build.name)
+  const [crafted, setCrafted] = useState(build.crafted_quantity || 0)
+  const buildHref = item.crafting_blueprint_id
+    ? `/crafting/${item.crafting_blueprint_id}?tab=quality&build=${build.id}`
+    : null
+
+  const handleSaveName = async () => {
+    const trimmed = name.trim()
+    if (!trimmed || trimmed === build.name) {
+      setEditing(false)
+      return
+    }
+    try {
+      await updateBlueprintBuild(build.id, { name: trimmed })
+      setEditing(false)
+      onUpdate()
+    } catch (e) {
+      // Surface a tooltip-style error inline
+      console.error('Failed to rename build', e)
+      setName(build.name)
+      setEditing(false)
+    }
+  }
+
+  const handleAdjustCrafted = async (delta) => {
+    const next = Math.max(0, crafted + delta)
+    setCrafted(next)
+    try {
+      await updateBlueprintBuild(build.id, { craftedQuantity: next })
+      onUpdate()
+    } catch (e) {
+      console.error('Failed to update crafted count', e)
+    }
+  }
+
+  const handleDelete = async () => {
+    if (!confirm(`Delete the build "${build.name}"?`)) return
+    try {
+      await deleteBlueprintBuild(build.id)
+      onUpdate()
+    } catch (e) {
+      console.error('Failed to delete build', e)
+    }
+  }
+
+  return (
+    <div className="bg-white/[0.015] border border-white/[0.04] rounded p-2.5 hover:border-white/[0.08] transition-colors">
+      <div className="flex items-center justify-between gap-3">
+        <div className="flex-1 min-w-0 flex items-center gap-2">
+          <Bookmark className="w-3 h-3 text-sc-accent flex-shrink-0" />
+          {editing ? (
+            <input
+              type="text"
+              value={name}
+              onChange={e => setName(e.target.value)}
+              onBlur={handleSaveName}
+              onKeyDown={e => {
+                if (e.key === 'Enter') handleSaveName()
+                if (e.key === 'Escape') { setName(build.name); setEditing(false) }
+              }}
+              className="flex-1 max-w-64 text-xs bg-white/[0.04] border border-white/[0.08] rounded px-2 py-0.5 text-gray-200 focus:outline-none focus:border-sc-accent/40"
+              autoFocus
+              maxLength={100}
+            />
+          ) : (
+            buildHref ? (
+              <Link
+                to={buildHref}
+                className="text-xs font-medium text-gray-200 hover:text-sc-accent truncate"
+                title="Open this build in the Quality Sim"
+              >
+                {build.name}
+              </Link>
+            ) : (
+              <span className="text-xs font-medium text-gray-300 truncate">{build.name}</span>
+            )
+          )}
+        </div>
+
+        <div className="flex items-center gap-3">
+          <div className="flex items-center gap-1" title="Crafted count for this build">
+            <span className="text-[9px] uppercase tracking-wider text-gray-600">Crafted</span>
+            <button
+              onClick={() => handleAdjustCrafted(-1)}
+              disabled={crafted <= 0}
+              className="w-5 h-5 flex items-center justify-center rounded bg-white/[0.04] border border-white/[0.06] text-gray-500 hover:text-white hover:border-white/[0.12] transition-all disabled:opacity-30 disabled:cursor-not-allowed"
+            >
+              <Minus className="w-2.5 h-2.5" />
+            </button>
+            <span className={`w-6 text-center text-xs font-mono ${crafted > 0 ? 'text-sc-accent' : 'text-gray-600'}`}>{crafted}</span>
+            <button
+              onClick={() => handleAdjustCrafted(1)}
+              className="w-5 h-5 flex items-center justify-center rounded bg-white/[0.04] border border-white/[0.06] text-gray-500 hover:text-white hover:border-white/[0.12] transition-all"
+            >
+              <Plus className="w-2.5 h-2.5" />
+            </button>
+          </div>
+
+          <div className="flex items-center gap-1">
+            {buildHref && (
+              <Link
+                to={buildHref}
+                className="p-1 rounded text-gray-500 hover:text-sc-accent hover:bg-white/[0.04] transition-all"
+                title="Open in Quality Sim"
+              >
+                <SlidersHorizontal className="w-3 h-3" />
+              </Link>
+            )}
+            <button
+              onClick={() => setEditing(true)}
+              className="p-1 rounded text-gray-500 hover:text-gray-300 hover:bg-white/[0.04] transition-all"
+              title="Rename build"
+            >
+              <Edit3 className="w-3 h-3" />
+            </button>
+            <button
+              onClick={handleDelete}
+              className="p-1 rounded text-gray-500 hover:text-red-400 hover:bg-red-500/10 transition-all"
+              title="Delete build"
+            >
+              <Trash2 className="w-3 h-3" />
+            </button>
+          </div>
+        </div>
+      </div>
+    </div>
+  )
+}
+
 export default function SavedBlueprints() {
   const { data, loading, error, refetch } = useUserBlueprints()
   const [filter, setFilter] = useState('all') // 'all' | 'owned' | 'wishlist' | 'sim'
 
   const items = data?.items || []
+  // Total build count across all BPs — surfaced in the subtitle so users
+  // see "1 owned · 1 wishlist · 2 builds" instead of just BP-level totals.
+  const totalBuilds = useMemo(
+    () => items.reduce((sum, i) => sum + (i.build_count ?? (i.builds?.length ?? 0)), 0),
+    [items],
+  )
   const counts = useMemo(() => ({
     all: items.length,
     owned: items.filter(i => i.is_owned).length,
     wishlist: items.filter(i => i.is_wishlist).length,
-    sim: items.filter(i => i.has_quality_config).length,
+    sim: items.filter(i => i.has_quality_config || (i.build_count ?? 0) > 0).length,
   }), [items])
 
   const filtered = useMemo(() => {
     if (filter === 'owned') return items.filter(i => i.is_owned)
     if (filter === 'wishlist') return items.filter(i => i.is_wishlist)
-    if (filter === 'sim') return items.filter(i => i.has_quality_config)
+    if (filter === 'sim') return items.filter(i => i.has_quality_config || (i.build_count ?? 0) > 0)
     return items
   }, [items, filter])
 
@@ -258,7 +432,7 @@ export default function SavedBlueprints() {
       <PageHeader
         title="My Blueprints"
         subtitle={items.length > 0
-          ? `${counts.owned} owned · ${counts.wishlist} wishlist · ${counts.sim} with saved sim · ${totalCrafted} crafted`
+          ? `${counts.owned} owned · ${counts.wishlist} wishlist · ${totalBuilds} build${totalBuilds === 1 ? '' : 's'} · ${totalCrafted} crafted`
           : 'Mark blueprints as owned or add them to your wishlist'}
       />
 
@@ -301,7 +475,7 @@ export default function SavedBlueprints() {
       ) : (
         <div className="space-y-2">
           {filtered.map(item => (
-            <BlueprintRow
+            <BlueprintGroup
               key={item.id}
               item={item}
               onUpdate={refetch}

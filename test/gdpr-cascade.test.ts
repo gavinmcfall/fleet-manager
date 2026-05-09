@@ -84,8 +84,9 @@ const USER_TABLES = [
   // Loadout customization (0141)
   "user_fleet_loadout",
   "user_loadout_cart",
-  // Crafting blueprint ownership (0146)
+  // Crafting blueprint ownership (0146) + named saved builds (0226)
   "user_blueprints",
+  "user_blueprint_builds",
   // Character backup CHF files (0214) — CASCADE deletes metadata; R2 blobs cleaned by account deletion flow
   "user_characters",
 ] as const;
@@ -439,10 +440,19 @@ describe("GDPR — User Deletion Cascade", () => {
         .first<{ id: number }>();
       await db
         .prepare(
-          `INSERT INTO user_blueprints (user_id, crafting_blueprint_id, source)
-           VALUES (?, ?, 'test')`
+          `INSERT INTO user_blueprints (user_id, crafting_blueprint_id, blueprint_uuid, source)
+           VALUES (?, ?, 'test-bp-uuid-1', 'test')`
         )
         .bind(user.userId, bpRow!.id)
+        .run();
+
+      // user_blueprint_builds (migration 0226) — at least one named build
+      await db
+        .prepare(
+          `INSERT INTO user_blueprint_builds (user_id, blueprint_uuid, name, quality_config_json)
+           VALUES (?, 'test-bp-uuid-1', 'GDPR Test Build', '{"0":500}')`
+        )
+        .bind(user.userId)
         .run();
 
       // user_characters (migration 0214)

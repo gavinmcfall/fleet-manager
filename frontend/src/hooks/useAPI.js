@@ -548,3 +548,23 @@ export async function deleteUserBlueprint(id) {
 export async function setBlueprintState({ blueprintUuid, owned, wishlist }) {
   return putJSON('/blueprints/state', { blueprintUuid, owned, wishlist })
 }
+
+// --- Blueprint builds (multi-config per BP, mig 0226) ---
+
+/**
+ * Create a new build under a blueprint. Implicitly marks the BP owned.
+ * Returns { ok, id }.
+ */
+export async function createBlueprintBuild({ blueprintUuid, name, qualityConfig, notes }) {
+  return postJSON(`/blueprints/${blueprintUuid}/builds`, { name, qualityConfig, notes })
+}
+
+/** Update fields on an existing build. */
+export async function updateBlueprintBuild(id, { name, qualityConfig, craftedQuantity, notes }) {
+  return patchJSON(`/blueprints/builds/${id}`, { name, qualityConfig, craftedQuantity, notes })
+}
+
+/** Delete a build by id. */
+export async function deleteBlueprintBuild(id) {
+  return apiFetch('DELETE', `/blueprints/builds/${id}`)
+}

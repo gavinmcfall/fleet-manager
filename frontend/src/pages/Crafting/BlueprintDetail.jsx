@@ -303,7 +303,10 @@ export default function BlueprintDetail() {
       )}
 
       {activeTab === 'quality' && (
-        <QualitySim blueprint={blueprint} />
+        <QualitySim
+          blueprint={blueprint}
+          initialBuildId={searchParams.get('build') ? parseInt(searchParams.get('build'), 10) : null}
+        />
       )}
     </div>
   )

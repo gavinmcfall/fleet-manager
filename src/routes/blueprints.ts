@@ -13,16 +13,23 @@ import { validate } from "../lib/validation";
 export function blueprintRoutes() {
   const routes = new Hono<HonoEnv>();
 
-  // ── GET / — list user's saved blueprints (owned + wishlist) ──────
+  // ── GET / — list user's saved blueprints + builds ────────────────
   // Resolves blueprint metadata by uuid against BOTH the LIVE and PTU
   // tables so PTU-only blueprints (Banu Tachyoncannon, Wikelo variants)
-  // still render with name/tag/type when the user marks them owned. We
-  // also surface a derived `has_quality_config` flag so the UI can show
-  // a "saved sim" indicator without parsing the full config blob client
-  // side. The friendly product name (e.g. "Novia Crossbow") gets
-  // resolved via fps_weapons / fps_armour joined on class_name —
-  // crafting_blueprints.name is auto-derived from the BP_CRAFT tag and
-  // is not user-friendly on its own.
+  // still render with name/tag/type when the user marks them owned.
+  //
+  // Friendly product name resolution uses crafting_blueprints.output_item
+  // (the cleaned class_name CIG ships in the BP record) joined to every
+  // item table that could hold the localized in-game name:
+  //   - fps_weapons     ("Novia Crossbow", "FS-9 LMG", ...)
+  //   - fps_armour      ("Pembroke RG-46 Helmet", "Hardline AR2", ...)
+  //   - fps_helmets     (helmet-specific item table)
+  //   - fps_ammo_types  (magazine names: "Novia Bolt Magazine")
+  //   - vehicle_components (ship-mounted weapons + components)
+  // Each gets a LIVE + PTU pair. First non-null wins via COALESCE.
+  //
+  // Builds (mig 0226) are nested under each blueprint as `builds[]`
+  // — multiple named saved configs per BP per user.
   routes.get("/", async (c) => {
     const db = c.env.DB;
     const userId = getAuthUser(c).id;
@@ -38,45 +45,79 @@ export function blueprintRoutes() {
                 COALESCE(lcb.type, pcb.type) AS type,
                 COALESCE(lcb.sub_type, pcb.sub_type) AS sub_type,
                 COALESCE(lcb.craft_time_seconds, pcb.craft_time_seconds) AS craft_time_seconds,
+                COALESCE(lcb.output_item, pcb.output_item) AS output_item,
                 COALESCE(lcb.id, ub.crafting_blueprint_id) AS resolved_blueprint_id,
                 CASE WHEN lcb.id IS NULL AND pcb.id IS NOT NULL THEN 1 ELSE 0 END AS is_ptu_only,
-                -- Friendly product name resolution. Class_name keys are lowercase
-                -- in fps_weapons/fps_armour but may be uppercase in BP tags
-                -- (vehicle weapons). Try LIVE first, then PTU shadow.
-                COALESCE(lfw.name, pfw.name, lfa.name, pfa.name) AS item_name
+                COALESCE(
+                  lfw.name, pfw.name,
+                  lfa.name, pfa.name,
+                  lfh.name, pfh.name,
+                  lam.name, pam.name,
+                  lvc.name, pvc.name
+                ) AS item_name
          FROM user_blueprints ub
          LEFT JOIN crafting_blueprints lcb ON lcb.uuid = ub.blueprint_uuid
          LEFT JOIN ptu_crafting_blueprints pcb ON pcb.uuid = ub.blueprint_uuid
-         LEFT JOIN fps_weapons lfw
-           ON LOWER(lfw.class_name) = LOWER(REPLACE(COALESCE(lcb.tag, pcb.tag), 'BP_CRAFT_', ''))
-         LEFT JOIN ptu_fps_weapons pfw
-           ON LOWER(pfw.class_name) = LOWER(REPLACE(COALESCE(lcb.tag, pcb.tag), 'BP_CRAFT_', ''))
-         LEFT JOIN fps_armour lfa
-           ON LOWER(lfa.class_name) = LOWER(REPLACE(COALESCE(lcb.tag, pcb.tag), 'BP_CRAFT_', ''))
-         LEFT JOIN ptu_fps_armour pfa
-           ON LOWER(pfa.class_name) = LOWER(REPLACE(COALESCE(lcb.tag, pcb.tag), 'BP_CRAFT_', ''))
+         LEFT JOIN fps_weapons      lfw ON LOWER(lfw.class_name) = LOWER(COALESCE(lcb.output_item, pcb.output_item))
+         LEFT JOIN ptu_fps_weapons  pfw ON LOWER(pfw.class_name) = LOWER(COALESCE(lcb.output_item, pcb.output_item))
+         LEFT JOIN fps_armour       lfa ON LOWER(lfa.class_name) = LOWER(COALESCE(lcb.output_item, pcb.output_item))
+         LEFT JOIN ptu_fps_armour   pfa ON LOWER(pfa.class_name) = LOWER(COALESCE(lcb.output_item, pcb.output_item))
+         LEFT JOIN fps_helmets      lfh ON LOWER(lfh.class_name) = LOWER(COALESCE(lcb.output_item, pcb.output_item))
+         LEFT JOIN ptu_fps_helmets  pfh ON LOWER(pfh.class_name) = LOWER(COALESCE(lcb.output_item, pcb.output_item))
+         LEFT JOIN fps_ammo_types   lam ON LOWER(lam.class_name) = LOWER(COALESCE(lcb.output_item, pcb.output_item))
+         LEFT JOIN ptu_fps_ammo_types pam ON LOWER(pam.class_name) = LOWER(COALESCE(lcb.output_item, pcb.output_item))
+         LEFT JOIN vehicle_components     lvc ON LOWER(lvc.class_name) = LOWER(COALESCE(lcb.output_item, pcb.output_item))
+         LEFT JOIN ptu_vehicle_components pvc ON LOWER(pvc.class_name) = LOWER(COALESCE(lcb.output_item, pcb.output_item))
          WHERE ub.user_id = ?
          ORDER BY ub.updated_at DESC`,
       )
       .bind(userId)
       .all();
 
-    return c.json({
-      items: rows.results.map((r) => ({
-        ...r,
-        is_owned: r.is_owned === 1,
-        is_wishlist: r.is_wishlist === 1,
-        is_ptu_only: r.is_ptu_only === 1,
-        has_quality_config: !!r.quality_config_json,
-        // crafting_blueprint_id may be null (PTU-only BP). Use the
-        // resolved id for navigation links to the LIVE detail page.
-        crafting_blueprint_id: r.resolved_blueprint_id,
-        quality_config: r.quality_config_json
-          ? JSON.parse(r.quality_config_json as string)
+    // Fetch all builds for this user in a single query, group by uuid.
+    const buildsResult = await db
+      .prepare(
+        `SELECT id, blueprint_uuid, name, quality_config_json,
+                crafted_quantity, notes, created_at, updated_at
+         FROM user_blueprint_builds
+         WHERE user_id = ?
+         ORDER BY blueprint_uuid, name ASC`,
+      )
+      .bind(userId)
+      .all();
+    const buildsByBp = new Map<string, Record<string, unknown>[]>();
+    for (const row of buildsResult.results as Record<string, unknown>[]) {
+      const uuid = row.blueprint_uuid as string;
+      const built = {
+        ...row,
+        quality_config: row.quality_config_json
+          ? JSON.parse(row.quality_config_json as string)
           : null,
         quality_config_json: undefined,
-        resolved_blueprint_id: undefined,
-      })),
+      };
+      if (!buildsByBp.has(uuid)) buildsByBp.set(uuid, []);
+      buildsByBp.get(uuid)!.push(built);
+    }
+
+    return c.json({
+      items: rows.results.map((r) => {
+        const builds = buildsByBp.get(r.blueprint_uuid as string) ?? [];
+        return {
+          ...r,
+          is_owned: r.is_owned === 1,
+          is_wishlist: r.is_wishlist === 1,
+          is_ptu_only: r.is_ptu_only === 1,
+          has_quality_config: builds.length > 0 || !!r.quality_config_json,
+          builds,
+          build_count: builds.length,
+          crafting_blueprint_id: r.resolved_blueprint_id,
+          quality_config: r.quality_config_json
+            ? JSON.parse(r.quality_config_json as string)
+            : null,
+          quality_config_json: undefined,
+          resolved_blueprint_id: undefined,
+        };
+      }),
     });
   });
 
@@ -346,6 +387,173 @@ export function blueprintRoutes() {
       .bind(id, userId)
       .run();
 
+    return c.json({ ok: true });
+  });
+
+  // ── Builds — multiple named saved configs per blueprint ─────────
+  // Each build is one CrafterBobsCustom-with-a-name entry. Saving from
+  // the QualitySim creates or updates a build under the parent
+  // blueprint_uuid. The first build implicitly marks the BP as owned
+  // (saving a config means you're working with it).
+
+  // POST /:uuid/builds — create a new build under a blueprint
+  routes.post(
+    "/:uuid/builds",
+    validate(
+      "json",
+      z.object({
+        name: z.string().min(1).max(100),
+        qualityConfig: z.record(z.string(), z.number().int().min(0).max(1000)),
+        notes: z.string().max(2000).nullable().optional(),
+      }),
+    ),
+    async (c) => {
+      const db = c.env.DB;
+      const userId = getAuthUser(c).id;
+      const blueprintUuid = c.req.param("uuid");
+      const { name, qualityConfig, notes } = c.req.valid("json");
+
+      // Verify the blueprint exists in either channel.
+      const exists = await db
+        .prepare(
+          `SELECT 1 FROM crafting_blueprints WHERE uuid = ? LIMIT 1
+           UNION ALL
+           SELECT 1 FROM ptu_crafting_blueprints WHERE uuid = ? LIMIT 1`,
+        )
+        .bind(blueprintUuid, blueprintUuid)
+        .first();
+      if (!exists) return c.json({ error: "Blueprint not found" }, 404);
+
+      // Auto-mark owned + ensure a parent user_blueprints row exists.
+      const live = await db
+        .prepare("SELECT id FROM crafting_blueprints WHERE uuid = ? LIMIT 1")
+        .bind(blueprintUuid)
+        .first<{ id: number }>();
+      await db
+        .prepare(
+          `INSERT INTO user_blueprints
+             (user_id, crafting_blueprint_id, blueprint_uuid,
+              is_owned, source, updated_at)
+           VALUES (?, ?, ?, 1, 'manual', datetime('now'))
+           ON CONFLICT(user_id, blueprint_uuid) DO UPDATE SET
+             is_owned = 1,
+             updated_at = datetime('now')`,
+        )
+        .bind(userId, live?.id ?? null, blueprintUuid)
+        .run();
+
+      try {
+        const result = await db
+          .prepare(
+            `INSERT INTO user_blueprint_builds
+               (user_id, blueprint_uuid, name, quality_config_json, notes)
+             VALUES (?, ?, ?, ?, ?)
+             RETURNING id`,
+          )
+          .bind(
+            userId,
+            blueprintUuid,
+            name.trim(),
+            JSON.stringify(qualityConfig),
+            notes ?? null,
+          )
+          .first<{ id: number }>();
+        return c.json({ ok: true, id: result?.id });
+      } catch (e: unknown) {
+        const msg = (e as Error)?.message || "";
+        if (msg.includes("UNIQUE")) {
+          return c.json(
+            { error: "A build with that name already exists for this blueprint" },
+            409,
+          );
+        }
+        throw e;
+      }
+    },
+  );
+
+  // PATCH /builds/:id — update a build
+  routes.patch(
+    "/builds/:id",
+    validate(
+      "json",
+      z.object({
+        name: z.string().min(1).max(100).optional(),
+        qualityConfig: z.record(z.string(), z.number().int().min(0).max(1000)).optional(),
+        craftedQuantity: z.number().int().min(0).optional(),
+        notes: z.string().max(2000).nullable().optional(),
+      }),
+    ),
+    async (c) => {
+      const db = c.env.DB;
+      const userId = getAuthUser(c).id;
+      const id = parseInt(c.req.param("id"));
+      const body = c.req.valid("json");
+
+      const row = await db
+        .prepare(
+          "SELECT id FROM user_blueprint_builds WHERE id = ? AND user_id = ?",
+        )
+        .bind(id, userId)
+        .first();
+      if (!row) return c.json({ error: "Not found" }, 404);
+
+      const sets: string[] = [];
+      const vals: unknown[] = [];
+      if (body.name !== undefined) {
+        sets.push("name = ?");
+        vals.push(body.name.trim());
+      }
+      if (body.qualityConfig !== undefined) {
+        sets.push("quality_config_json = ?");
+        vals.push(JSON.stringify(body.qualityConfig));
+      }
+      if (body.craftedQuantity !== undefined) {
+        sets.push("crafted_quantity = ?");
+        vals.push(body.craftedQuantity);
+      }
+      if (body.notes !== undefined) {
+        sets.push("notes = ?");
+        vals.push(body.notes);
+      }
+      if (sets.length === 0) return c.json({ ok: true });
+
+      sets.push("updated_at = datetime('now')");
+      vals.push(id, userId);
+
+      try {
+        await db
+          .prepare(
+            `UPDATE user_blueprint_builds SET ${sets.join(", ")} WHERE id = ? AND user_id = ?`,
+          )
+          .bind(...vals)
+          .run();
+        return c.json({ ok: true });
+      } catch (e: unknown) {
+        const msg = (e as Error)?.message || "";
+        if (msg.includes("UNIQUE")) {
+          return c.json(
+            { error: "A build with that name already exists for this blueprint" },
+            409,
+          );
+        }
+        throw e;
+      }
+    },
+  );
+
+  // DELETE /builds/:id — remove a build
+  routes.delete("/builds/:id", async (c) => {
+    const db = c.env.DB;
+    const userId = getAuthUser(c).id;
+    const id = parseInt(c.req.param("id"));
+
+    await db
+      .prepare(
+        "DELETE FROM user_blueprint_builds WHERE id = ? AND user_id = ?",
+      )
+      .bind(id, userId)
+      .run();
     return c.json({ ok: true });
   });
 

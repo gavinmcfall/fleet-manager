@@ -1,6 +1,13 @@
 import React, { useState, useMemo, useEffect } from 'react'
-import { Gem, HelpCircle, Bookmark, Check, Trash2 } from 'lucide-react'
-import { saveUserBlueprint, useUserBlueprints, deleteUserBlueprint } from '../../hooks/useAPI'
+import { Gem, HelpCircle, Bookmark, Check, Trash2, Plus } from 'lucide-react'
+import {
+  saveUserBlueprint,
+  useUserBlueprints,
+  deleteUserBlueprint,
+  createBlueprintBuild,
+  updateBlueprintBuild,
+  deleteBlueprintBuild,
+} from '../../hooks/useAPI'
 import {
   interpolateModifier, multiplierToImprovement, formatImprovementWithWord,
   getStatLabel, getStatDescription,
@@ -142,41 +149,76 @@ function formatDescription(statKey, improvement) {
   return `${sign}${improvement.toFixed(1)}% ${formatImprovementWithWord(statKey, improvement).replace(/^\d+%\s*/, '')}`
 }
 
-export default function QualitySim({ blueprint }) {
+export default function QualitySim({ blueprint, initialBuildId = null }) {
   const slots = blueprint.slots || []
   const userBp = useUserBlueprints()
 
-  // Find the user's saved row for THIS blueprint (uuid-keyed). PTU-only
-  // BPs have a different `id` from their LIVE counterpart but share a
-  // uuid, so this works across channels.
+  // Find the user's saved row for THIS blueprint (uuid-keyed) and any
+  // builds attached to it.
   const savedRow = useMemo(() => {
     if (!blueprint?.uuid) return null
     return (userBp.data?.items || []).find(r => r.blueprint_uuid === blueprint.uuid) || null
   }, [userBp.data, blueprint?.uuid])
+  const builds = savedRow?.builds || []
 
-  const [qualities, setQualities] = useState(() =>
-    Object.fromEntries(slots.map((s, i) => [i, 500]))
-  )
+  const defaultQualities = () => Object.fromEntries(slots.map((s, i) => [i, 500]))
+
+  // currentBuildId: which saved build the editor is "tracking".
+  //   null    → unsaved scratch buffer (will create a new build on save)
+  //   number  → existing build id (Save = update; Save As = new copy)
+  const [currentBuildId, setCurrentBuildId] = useState(null)
+  const [qualities, setQualities] = useState(defaultQualities)
   const [nickname, setNickname] = useState('')
   const [hydrated, setHydrated] = useState(false)
 
-  // On first arrival of saved data, hydrate the editor with the user's
-  // saved values. Don't keep overwriting on subsequent renders — the
-  // user may be editing, and refetches would clobber their inputs.
+  // On first arrival, if `?build=:id` was provided, load that specific
+  // build. Otherwise pick the first build for this BP. Otherwise fall
+  // back to the legacy quality_config_json (pre-mig 0226 saves).
   useEffect(() => {
     if (hydrated || !savedRow) return
-    if (savedRow.quality_config) {
-      setQualities(prev => {
-        const next = { ...prev }
-        for (const [k, v] of Object.entries(savedRow.quality_config)) {
-          next[k] = v
-        }
-        return next
-      })
+    const target = initialBuildId
+      ? builds.find(b => b.id === initialBuildId)
+      : builds[0]
+    if (target) {
+      setCurrentBuildId(target.id)
+      setNickname(target.name || '')
+      if (target.quality_config) {
+        setQualities(prev => {
+          const next = { ...prev }
+          for (const [k, v] of Object.entries(target.quality_config)) next[k] = v
+          return next
+        })
+      }
+    } else if (savedRow.quality_config) {
+      // Legacy single-config row (will get migrated when the user re-saves).
+      if (savedRow.quality_config) {
+        setQualities(prev => {
+          const next = { ...prev }
+          for (const [k, v] of Object.entries(savedRow.quality_config)) next[k] = v
+          return next
+        })
+      }
+      if (savedRow.nickname) setNickname(savedRow.nickname)
     }
-    if (savedRow.nickname) setNickname(savedRow.nickname)
     setHydrated(true)
-  }, [savedRow, hydrated])
+  }, [savedRow, builds, hydrated])
+
+  // Switch to a different build (or scratch).
+  const loadBuild = (build) => {
+    if (!build) {
+      setCurrentBuildId(null)
+      setNickname('')
+      setQualities(defaultQualities())
+      return
+    }
+    setCurrentBuildId(build.id)
+    setNickname(build.name || '')
+    setQualities(prev => {
+      const next = defaultQualities()
+      for (const [k, v] of Object.entries(build.quality_config || {})) next[k] = v
+      return next
+    })
+  }
 
   const setSlotQuality = (index, value) => {
     setQualities(prev => ({ ...prev, [index]: value }))
@@ -318,22 +360,34 @@ export default function QualitySim({ blueprint }) {
   const [saveState, setSaveState] = useState('idle') // idle | saving | saved | error
   const [saveError, setSaveError] = useState(null)
 
+  // Save: if the editor is tracking an existing build (currentBuildId),
+  // PATCH it. Otherwise POST a new build under this blueprint.
   const handleSave = async () => {
-    if (!blueprint?.uuid && !blueprint?.id) return
+    if (!blueprint?.uuid) return
+    const trimmedName = nickname.trim()
+    if (!trimmedName) {
+      setSaveError('Build name is required')
+      setSaveState('error')
+      setTimeout(() => setSaveState('idle'), 3000)
+      return
+    }
     setSaveState('saving')
     setSaveError(null)
     try {
-      await saveUserBlueprint({
-        // Prefer uuid (channel-stable). Fall back to numeric id only when
-        // a uuid hasn't been threaded through (legacy callers).
-        blueprintUuid: blueprint.uuid,
-        craftingBlueprintId: blueprint.uuid ? undefined : blueprint.id,
-        nickname: nickname.trim() || null,
-        qualityConfig: qualities,
-      })
+      if (currentBuildId) {
+        await updateBlueprintBuild(currentBuildId, {
+          name: trimmedName,
+          qualityConfig: qualities,
+        })
+      } else {
+        const result = await createBlueprintBuild({
+          blueprintUuid: blueprint.uuid,
+          name: trimmedName,
+          qualityConfig: qualities,
+        })
+        if (result?.id) setCurrentBuildId(result.id)
+      }
       setSaveState('saved')
-      // Refetch the user's blueprints so the saved-sim dot indicator and
-      // My Blueprints page pick up the change.
       await userBp.refetch?.()
       setTimeout(() => setSaveState('idle'), 1800)
     } catch (e) {
@@ -343,18 +397,25 @@ export default function QualitySim({ blueprint }) {
     }
   }
 
-  const handleClearSaved = async () => {
-    if (!savedRow?.id) return
-    if (!confirm('Remove this saved configuration? Your slider state will reset on next visit.')) return
+  // Save As: always create a new build, even if the editor was tracking one.
+  const handleSaveAsNew = async () => {
+    setCurrentBuildId(null)
+    // Defer save — user must rename to avoid UNIQUE collision with the
+    // tracked build.
+    setNickname((n) => n ? `${n} (copy)` : '')
+  }
+
+  const handleDeleteCurrent = async () => {
+    if (!currentBuildId) return
+    if (!confirm('Delete this build? Your slider state will reset.')) return
     try {
-      await deleteUserBlueprint(savedRow.id)
+      await deleteBlueprintBuild(currentBuildId)
+      setCurrentBuildId(null)
       setNickname('')
-      setQualities(Object.fromEntries(slots.map((s, i) => [i, 500])))
-      setHydrated(false)
+      setQualities(defaultQualities())
       await userBp.refetch?.()
     } catch (e) {
-      // Errors here are quiet — the row may already be gone.
-      console.error('Failed to delete saved blueprint', e)
+      console.error('Failed to delete build', e)
     }
   }
 
@@ -368,58 +429,102 @@ export default function QualitySim({ blueprint }) {
         </div>
       )}
 
-      {/* Save panel — name + save + status + clear */}
-      <div className="rounded-lg border border-white/[0.06] bg-white/[0.02] p-3 flex items-center gap-3 flex-wrap">
-        <div className="flex-1 min-w-[180px]">
-          <label className="block text-[10px] uppercase tracking-wider text-gray-500 mb-1">
-            Build name
-          </label>
-          <input
-            type="text"
-            value={nickname}
-            onChange={(e) => setNickname(e.target.value)}
-            placeholder={savedRow ? 'Untitled build' : 'e.g. Max DPS, Stealth, Wishlist setup...'}
-            maxLength={100}
-            onKeyDown={(e) => { if (e.key === 'Enter') handleSave() }}
-            className="w-full bg-white/[0.04] border border-white/[0.08] rounded px-2.5 py-1.5 text-xs text-gray-200 placeholder-gray-600 focus:outline-none focus:border-sc-accent/40"
-          />
-        </div>
-        <div className="flex items-center gap-2 self-end">
-          {savedRow && (
+      {/* Save panel — build picker + name + Save / Save As / Delete */}
+      <div className="rounded-lg border border-white/[0.06] bg-white/[0.02] p-3 space-y-3">
+        {builds.length > 0 && (
+          <div className="flex items-center gap-2 flex-wrap">
+            <span className="text-[10px] uppercase tracking-wider text-gray-500 mr-1">
+              Builds
+            </span>
+            {builds.map(b => (
+              <button
+                key={b.id}
+                type="button"
+                onClick={() => loadBuild(b)}
+                className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded text-[10px] font-medium border transition-all ${
+                  currentBuildId === b.id
+                    ? 'bg-sc-accent/10 text-sc-accent border-sc-accent/40'
+                    : 'bg-white/[0.04] text-gray-400 border-white/[0.08] hover:text-white'
+                }`}
+              >
+                <Bookmark className="w-3 h-3" />
+                {b.name}
+              </button>
+            ))}
             <button
               type="button"
-              onClick={handleClearSaved}
-              className="inline-flex items-center gap-1.5 px-2.5 py-1.5 rounded text-[10px] font-medium border border-white/[0.06] text-gray-500 hover:text-red-400 hover:border-red-500/30 hover:bg-red-500/[0.04] transition-all"
-              title="Delete saved configuration"
+              onClick={() => loadBuild(null)}
+              className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded text-[10px] font-medium border transition-all ${
+                currentBuildId === null
+                  ? 'bg-emerald-500/10 text-emerald-400 border-emerald-500/30'
+                  : 'bg-white/[0.04] text-gray-500 border-white/[0.08] border-dashed hover:text-white'
+              }`}
+              title="Start a new build"
             >
-              <Trash2 className="w-3 h-3" />
-              Clear
+              <Plus className="w-3 h-3" />
+              New build
             </button>
-          )}
-          <button
-            type="button"
-            onClick={handleSave}
-            disabled={saveState === 'saving'}
-            className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded text-[10px] font-medium transition-all ${
-              saveState === 'saved'
-                ? 'bg-emerald-500/10 text-emerald-400 border border-emerald-500/20'
-                : saveState === 'error'
-                ? 'bg-red-500/10 text-red-400 border border-red-500/30'
-                : 'bg-sc-accent/10 text-sc-accent border border-sc-accent/30 hover:bg-sc-accent/15 cursor-pointer'
-            } ${saveState === 'saving' ? 'opacity-60' : ''}`}
-          >
-            {saveState === 'saved' ? <Check className="w-3 h-3" /> : <Bookmark className="w-3 h-3" />}
-            {saveState === 'saved' ? 'Saved' : saveState === 'saving' ? 'Saving...' : saveState === 'error' ? 'Failed' : savedRow ? 'Update' : 'Save Build'}
-          </button>
-        </div>
-        {savedRow && (
-          <p className="w-full text-[10px] text-gray-500 -mt-1">
-            Saved {savedRow.updated_at ? new Date(savedRow.updated_at).toLocaleString() : ''}
-            {' · '}This build is also marked Owned.
-          </p>
+          </div>
         )}
+
+        <div className="flex items-center gap-3 flex-wrap">
+          <div className="flex-1 min-w-[180px]">
+            <label className="block text-[10px] uppercase tracking-wider text-gray-500 mb-1">
+              {currentBuildId ? 'Editing build' : 'New build name'}
+            </label>
+            <input
+              type="text"
+              value={nickname}
+              onChange={(e) => setNickname(e.target.value)}
+              placeholder="e.g. Bang bang Bow, Max DPS, Stealth..."
+              maxLength={100}
+              onKeyDown={(e) => { if (e.key === 'Enter') handleSave() }}
+              className="w-full bg-white/[0.04] border border-white/[0.08] rounded px-2.5 py-1.5 text-xs text-gray-200 placeholder-gray-600 focus:outline-none focus:border-sc-accent/40"
+            />
+          </div>
+          <div className="flex items-center gap-2 self-end">
+            {currentBuildId && (
+              <>
+                <button
+                  type="button"
+                  onClick={handleSaveAsNew}
+                  className="inline-flex items-center gap-1.5 px-2.5 py-1.5 rounded text-[10px] font-medium border border-white/[0.06] text-gray-400 hover:text-sc-accent hover:border-sc-accent/30 transition-all"
+                  title="Save as a new build (rename first to avoid collision)"
+                >
+                  <Plus className="w-3 h-3" />
+                  Save As
+                </button>
+                <button
+                  type="button"
+                  onClick={handleDeleteCurrent}
+                  className="inline-flex items-center gap-1.5 px-2.5 py-1.5 rounded text-[10px] font-medium border border-white/[0.06] text-gray-500 hover:text-red-400 hover:border-red-500/30 hover:bg-red-500/[0.04] transition-all"
+                  title="Delete this build"
+                >
+                  <Trash2 className="w-3 h-3" />
+                  Delete
+                </button>
+              </>
+            )}
+            <button
+              type="button"
+              onClick={handleSave}
+              disabled={saveState === 'saving'}
+              className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded text-[10px] font-medium transition-all ${
+                saveState === 'saved'
+                  ? 'bg-emerald-500/10 text-emerald-400 border border-emerald-500/20'
+                  : saveState === 'error'
+                  ? 'bg-red-500/10 text-red-400 border border-red-500/30'
+                  : 'bg-sc-accent/10 text-sc-accent border border-sc-accent/30 hover:bg-sc-accent/15 cursor-pointer'
+              } ${saveState === 'saving' ? 'opacity-60' : ''}`}
+            >
+              {saveState === 'saved' ? <Check className="w-3 h-3" /> : <Bookmark className="w-3 h-3" />}
+              {saveState === 'saved' ? 'Saved' : saveState === 'saving' ? 'Saving...' : saveState === 'error' ? 'Failed' : currentBuildId ? 'Update' : 'Save Build'}
+            </button>
+          </div>
+        </div>
+
         {saveError && (
-          <p className="w-full text-[10px] text-red-400">{saveError}</p>
+          <p className="text-[10px] text-red-400">{saveError}</p>
         )}
       </div>
 
