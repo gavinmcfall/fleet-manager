@@ -1061,8 +1061,10 @@ export interface WishlistItem extends LootItem {
 }
 
 export interface CollectionEntry {
-  loot_map_id: number;
+  loot_uuid: string;
   quantity: number;
+  /** Legacy: best-effort LIVE id, may be null for PTU-only items. */
+  loot_map_id: number | null;
 }
 
 export async function getGameVersions(db: D1Database): Promise<{ code: string; channel: string; is_default: number; released_at: string; build_number: string | null }[]> {
@@ -1409,36 +1411,63 @@ export async function getLootByUuid(db: D1Database, uuid: string, isPTU = false)
 
 export async function getUserLootCollection(db: D1Database, userId: string): Promise<CollectionEntry[]> {
   const result = await db
-    .prepare("SELECT loot_map_id, quantity FROM user_loot_collection WHERE user_id = ?")
+    .prepare("SELECT loot_uuid, loot_map_id, quantity FROM user_loot_collection WHERE user_id = ?")
     .bind(userId)
     .all<CollectionEntry>();
   return result.results;
 }
 
-export async function addToLootCollection(db: D1Database, userId: string, lootMapId: number): Promise<void> {
+/**
+ * Resolve a best-effort LIVE loot_map_id for the given uuid. Returns
+ * null if the item only exists in PTU. Legacy column on
+ * user_loot_collection / user_loot_wishlist — kept for any consumers
+ * not yet migrated to uuid-based reads.
+ */
+async function resolveLiveLootMapId(db: D1Database, uuid: string): Promise<number | null> {
+  const row = await db
+    .prepare("SELECT id FROM loot_map WHERE uuid = ? LIMIT 1")
+    .bind(uuid)
+    .first<{ id: number }>();
+  return row?.id ?? null;
+}
+
+export async function addToLootCollection(db: D1Database, userId: string, uuid: string): Promise<void> {
+  const liveId = await resolveLiveLootMapId(db, uuid);
   await db
-    .prepare("INSERT OR IGNORE INTO user_loot_collection (user_id, loot_map_id, quantity) VALUES (?, ?, 1)")
-    .bind(userId, lootMapId)
+    .prepare(
+      "INSERT OR IGNORE INTO user_loot_collection (user_id, loot_uuid, loot_map_id, quantity) VALUES (?, ?, ?, 1)",
+    )
+    .bind(userId, uuid, liveId)
     .run();
 }
 
-export async function setLootCollectionQuantity(db: D1Database, userId: string, lootMapId: number, quantity: number): Promise<void> {
+export async function setLootCollectionQuantity(db: D1Database, userId: string, uuid: string, quantity: number): Promise<void> {
+  const liveId = await resolveLiveLootMapId(db, uuid);
   await db
-    .prepare("INSERT INTO user_loot_collection (user_id, loot_map_id, quantity) VALUES (?, ?, ?) ON CONFLICT (user_id, loot_map_id) DO UPDATE SET quantity = excluded.quantity")
-    .bind(userId, lootMapId, quantity)
+    .prepare(
+      `INSERT INTO user_loot_collection (user_id, loot_uuid, loot_map_id, quantity)
+       VALUES (?, ?, ?, ?)
+       ON CONFLICT (user_id, loot_uuid) DO UPDATE SET
+         quantity = excluded.quantity,
+         loot_map_id = COALESCE(user_loot_collection.loot_map_id, excluded.loot_map_id)`,
+    )
+    .bind(userId, uuid, liveId, quantity)
     .run();
 }
 
-export async function removeFromLootCollection(db: D1Database, userId: string, lootMapId: number): Promise<void> {
+export async function removeFromLootCollection(db: D1Database, userId: string, uuid: string): Promise<void> {
   await db
-    .prepare("DELETE FROM user_loot_collection WHERE user_id = ? AND loot_map_id = ?")
-    .bind(userId, lootMapId)
+    .prepare("DELETE FROM user_loot_collection WHERE user_id = ? AND loot_uuid = ?")
+    .bind(userId, uuid)
     .run();
 }
 
 export async function getUserLootWishlist(db: D1Database, userId: string, isPTU = false): Promise<WishlistItem[]> {
   const lm = isPTU ? "ptu_loot_map" : "loot_map";
   const lil = isPTU ? "ptu_loot_item_locations" : "loot_item_locations";
+  // JOIN by uuid so wishlist rows resolve against either channel's
+  // loot_map. Items that don't exist in the active channel just won't
+  // appear (they're not lost — switch channel and they'll show up).
   const result = await db
     .prepare(
       `SELECT lm.id, lm.uuid, lm.name, lm.type, lm.sub_type, lm.rarity,
@@ -1447,7 +1476,7 @@ export async function getUserLootWishlist(db: D1Database, userId: string, isPTU 
         ${LOOT_SUMMARY_COLS},
         ulw.quantity as wishlist_quantity
       FROM user_loot_wishlist ulw
-      JOIN ${lm} lm ON lm.id = ulw.loot_map_id
+      JOIN ${lm} lm ON lm.uuid = ulw.loot_uuid
       ${lootSummaryJoins(isPTU)}
       WHERE ulw.user_id = ?
       ORDER BY lm.name ASC`,
@@ -1489,24 +1518,34 @@ export async function getUserLootWishlist(db: D1Database, userId: string, isPTU 
   return items;
 }
 
-export async function addToLootWishlist(db: D1Database, userId: string, lootMapId: number): Promise<void> {
+export async function addToLootWishlist(db: D1Database, userId: string, uuid: string): Promise<void> {
+  const liveId = await resolveLiveLootMapId(db, uuid);
   await db
-    .prepare("INSERT OR IGNORE INTO user_loot_wishlist (user_id, loot_map_id, quantity) VALUES (?, ?, 1)")
-    .bind(userId, lootMapId)
+    .prepare(
+      "INSERT OR IGNORE INTO user_loot_wishlist (user_id, loot_uuid, loot_map_id, quantity) VALUES (?, ?, ?, 1)",
+    )
+    .bind(userId, uuid, liveId)
     .run();
 }
 
-export async function setLootWishlistQuantity(db: D1Database, userId: string, lootMapId: number, quantity: number): Promise<void> {
+export async function setLootWishlistQuantity(db: D1Database, userId: string, uuid: string, quantity: number): Promise<void> {
+  const liveId = await resolveLiveLootMapId(db, uuid);
   await db
-    .prepare("INSERT INTO user_loot_wishlist (user_id, loot_map_id, quantity) VALUES (?, ?, ?) ON CONFLICT (user_id, loot_map_id) DO UPDATE SET quantity = excluded.quantity")
-    .bind(userId, lootMapId, quantity)
+    .prepare(
+      `INSERT INTO user_loot_wishlist (user_id, loot_uuid, loot_map_id, quantity)
+       VALUES (?, ?, ?, ?)
+       ON CONFLICT (user_id, loot_uuid) DO UPDATE SET
+         quantity = excluded.quantity,
+         loot_map_id = COALESCE(user_loot_wishlist.loot_map_id, excluded.loot_map_id)`,
+    )
+    .bind(userId, uuid, liveId, quantity)
     .run();
 }
 
-export async function removeFromLootWishlist(db: D1Database, userId: string, lootMapId: number): Promise<void> {
+export async function removeFromLootWishlist(db: D1Database, userId: string, uuid: string): Promise<void> {
   await db
-    .prepare("DELETE FROM user_loot_wishlist WHERE user_id = ? AND loot_map_id = ?")
-    .bind(userId, lootMapId)
+    .prepare("DELETE FROM user_loot_wishlist WHERE user_id = ? AND loot_uuid = ?")
+    .bind(userId, uuid)
     .run();
 }
 

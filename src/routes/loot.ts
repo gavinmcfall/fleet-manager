@@ -29,31 +29,25 @@ async function requireUser(c: Context<HonoEnv>, next: Next): Promise<Response | 
 }
 
 /**
- * Resolve a loot_map row by uuid, trying LIVE first then PTU shadow.
- *
- * Used by collection/wishlist mutation routes so PTU testers don't 404
- * when marking PTU-only items. The id returned may be a PTU id when the
- * item exists only in ptu_loot_map — that's a known limitation: the row
- * gets stored against a PTU id, so a later GET on LIVE channel won't
- * surface it. The cleaner fix is a uuid column on user_loot_collection /
- * user_loot_wishlist (deferred — requires migration). For 99% of items
- * (which exist in BOTH tables), the LIVE id is what gets stored, so
- * cross-channel views work.
+ * Verify a uuid maps to a real loot_map row in either channel. Returns
+ * the matching channel for telemetry / 404 handling. The collection
+ * and wishlist tables now key on uuid (mig 0225), so we no longer need
+ * an id translation step — just confirm the uuid exists somewhere.
  */
-async function resolveLootMapId(
+async function lootUuidExists(
   db: D1Database,
   uuid: string,
-): Promise<{ id: number; channel: "live" | "ptu" } | null> {
+): Promise<"live" | "ptu" | null> {
   const live = await db
-    .prepare("SELECT id FROM loot_map WHERE uuid = ? LIMIT 1")
+    .prepare("SELECT 1 FROM loot_map WHERE uuid = ? LIMIT 1")
     .bind(uuid)
-    .first<{ id: number }>();
-  if (live) return { id: live.id, channel: "live" };
+    .first();
+  if (live) return "live";
   const ptu = await db
-    .prepare("SELECT id FROM ptu_loot_map WHERE uuid = ? LIMIT 1")
+    .prepare("SELECT 1 FROM ptu_loot_map WHERE uuid = ? LIMIT 1")
     .bind(uuid)
-    .first<{ id: number }>();
-  if (ptu) return { id: ptu.id, channel: "ptu" };
+    .first();
+  if (ptu) return "ptu";
   return null;
 }
 
@@ -90,10 +84,10 @@ export function lootRoutes() {
     const user = getAuthUser(c);
     const uuid = c.req.param("uuid");
 
-    const row = await resolveLootMapId(c.env.DB, uuid);
-    if (!row) return c.json({ error: "Item not found" }, 404);
-
-    await addToLootCollection(c.env.DB, user.id, row.id);
+    if (!(await lootUuidExists(c.env.DB, uuid))) {
+      return c.json({ error: "Item not found" }, 404);
+    }
+    await addToLootCollection(c.env.DB, user.id, uuid);
     return c.json({ ok: true });
   });
 
@@ -105,13 +99,13 @@ export function lootRoutes() {
     const uuid = c.req.param("uuid");
     const { quantity } = c.req.valid("json");
 
-    const row = await resolveLootMapId(c.env.DB, uuid);
-    if (!row) return c.json({ error: "Item not found" }, 404);
-
+    if (!(await lootUuidExists(c.env.DB, uuid))) {
+      return c.json({ error: "Item not found" }, 404);
+    }
     if (quantity === 0) {
-      await removeFromLootCollection(c.env.DB, user.id, row.id);
+      await removeFromLootCollection(c.env.DB, user.id, uuid);
     } else {
-      await setLootCollectionQuantity(c.env.DB, user.id, row.id, quantity);
+      await setLootCollectionQuantity(c.env.DB, user.id, uuid, quantity);
     }
     return c.json({ ok: true });
   });
@@ -121,10 +115,8 @@ export function lootRoutes() {
     const user = getAuthUser(c);
     const uuid = c.req.param("uuid");
 
-    const row = await resolveLootMapId(c.env.DB, uuid);
-    if (!row) return c.json({ error: "Item not found" }, 404);
-
-    await removeFromLootCollection(c.env.DB, user.id, row.id);
+    // No existence check on DELETE — idempotent
+    await removeFromLootCollection(c.env.DB, user.id, uuid);
     return c.json({ ok: true });
   });
 
@@ -142,10 +134,10 @@ export function lootRoutes() {
     const user = getAuthUser(c);
     const uuid = c.req.param("uuid");
 
-    const row = await resolveLootMapId(c.env.DB, uuid);
-    if (!row) return c.json({ error: "Item not found" }, 404);
-
-    await addToLootWishlist(c.env.DB, user.id, row.id);
+    if (!(await lootUuidExists(c.env.DB, uuid))) {
+      return c.json({ error: "Item not found" }, 404);
+    }
+    await addToLootWishlist(c.env.DB, user.id, uuid);
     return c.json({ ok: true });
   });
 
@@ -157,13 +149,13 @@ export function lootRoutes() {
     const uuid = c.req.param("uuid");
     const { quantity } = c.req.valid("json");
 
-    const row = await resolveLootMapId(c.env.DB, uuid);
-    if (!row) return c.json({ error: "Item not found" }, 404);
-
+    if (!(await lootUuidExists(c.env.DB, uuid))) {
+      return c.json({ error: "Item not found" }, 404);
+    }
     if (quantity === 0) {
-      await removeFromLootWishlist(c.env.DB, user.id, row.id);
+      await removeFromLootWishlist(c.env.DB, user.id, uuid);
     } else {
-      await setLootWishlistQuantity(c.env.DB, user.id, row.id, quantity);
+      await setLootWishlistQuantity(c.env.DB, user.id, uuid, quantity);
     }
     return c.json({ ok: true });
   });
@@ -173,10 +165,8 @@ export function lootRoutes() {
     const user = getAuthUser(c);
     const uuid = c.req.param("uuid");
 
-    const row = await resolveLootMapId(c.env.DB, uuid);
-    if (!row) return c.json({ error: "Item not found" }, 404);
-
-    await removeFromLootWishlist(c.env.DB, user.id, row.id);
+    // No existence check on DELETE — idempotent
+    await removeFromLootWishlist(c.env.DB, user.id, uuid);
     return c.json({ ok: true });
   });
 

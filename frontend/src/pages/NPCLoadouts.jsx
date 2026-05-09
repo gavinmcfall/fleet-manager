@@ -387,11 +387,11 @@ export default function NPCLoadouts() {
 
   const collected = useMemo(() => {
     if (!collectionIds) return new Map()
-    return new Map(collectionIds.map(e => [e.loot_map_id, e.quantity]))
+    return new Map(collectionIds.map(e => [e.loot_uuid, e.quantity]))
   }, [collectionIds])
 
   const wishlistIds = useMemo(
-    () => new Set(wishlistItems?.map(i => i.id) ?? []),
+    () => new Set(wishlistItems?.map(i => i.uuid) ?? []),
     [wishlistItems]
   )
 
@@ -465,9 +465,9 @@ export default function NPCLoadouts() {
         <DetailPanel
           uuid={detailUuid}
           manufacturerName={null}
-          collectionQty={collected.get(detailItemId) ?? 0}
+          collectionQty={collected.get(detailUuid) ?? 0}
           onSetCollectionQty={handleSetCollectionQty}
-          wishlisted={wishlistIds.has(detailItemId)}
+          wishlisted={wishlistIds.has(detailUuid)}
           onToggleWishlist={handleToggleWishlist}
           isAuthed={isAuthed}
           onClose={() => { setDetailUuid(null); setDetailItemId(null) }}

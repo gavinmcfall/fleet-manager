@@ -175,7 +175,7 @@ describe("GDPR — User Deletion Cascade", () => {
         .first<{ id: number }>();
       await db
         .prepare(
-          "INSERT INTO user_loot_collection (user_id, loot_map_id) VALUES (?, ?)"
+          "INSERT INTO user_loot_collection (user_id, loot_uuid, loot_map_id) VALUES (?, 'loot-uuid-1', ?)"
         )
         .bind(user.userId, lootRow!.id)
         .run();
@@ -183,7 +183,7 @@ describe("GDPR — User Deletion Cascade", () => {
       // user_loot_wishlist
       await db
         .prepare(
-          "INSERT INTO user_loot_wishlist (user_id, loot_map_id) VALUES (?, ?)"
+          "INSERT INTO user_loot_wishlist (user_id, loot_uuid, loot_map_id) VALUES (?, 'loot-uuid-1', ?)"
         )
         .bind(user.userId, lootRow!.id)
         .run();

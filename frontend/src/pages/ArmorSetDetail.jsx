@@ -173,7 +173,7 @@ export default function ArmorSetDetail() {
 
   const collectionMap = {}
   if (collection) {
-    for (const c of collection) collectionMap[c.loot_map_id] = c.quantity
+    for (const c of collection) collectionMap[c.loot_uuid] = c.quantity
   }
 
   const handleSetQty = async (uuid, qty) => {
@@ -239,7 +239,7 @@ export default function ArmorSetDetail() {
             <PieceCard
               key={piece.uuid}
               piece={piece}
-              collectionQty={collectionMap[piece.id] || 0}
+              collectionQty={collectionMap[piece.uuid] || 0}
               onSetQty={isAuthed ? handleSetQty : null}
             />
           ))}

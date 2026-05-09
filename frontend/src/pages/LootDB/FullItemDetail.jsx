@@ -112,8 +112,8 @@ export default function FullItemDetail() {
   const { data: collectionIds, refetch: refetchCollection } = useLootCollection(isAuthed)
   const { data: wishlistItems, refetch: refetchWishlist } = useLootWishlist(isAuthed)
 
-  const collected = new Map((collectionIds || []).map(e => [e.loot_map_id, e.quantity]))
-  const wishlistIds = new Set((wishlistItems || []).map(i => i.id))
+  const collected = new Map((collectionIds || []).map(e => [e.loot_uuid, e.quantity]))
+  const wishlistIds = new Set((wishlistItems || []).map(i => i.uuid))
 
   if (loading) return <LoadingState message="Loading item..." />
   if (error) return <ErrorState message={error} />
@@ -124,8 +124,8 @@ export default function FullItemDetail() {
   const catStyle = CATEGORY_BADGE_STYLES[eCat] || CATEGORY_BADGE_STYLES.unknown
   const catLabel = CATEGORY_LABELS[eCat] || eCat
   const det = item.item_details || {}
-  const collectionQty = collected.get(item.id) ?? 0
-  const isWishlisted = wishlistIds.has(item.id)
+  const collectionQty = collected.get(item.uuid) ?? 0
+  const isWishlisted = wishlistIds.has(item.uuid)
 
   const locationData = (type) => item?.locations?.[type] || []
   const npcEntries = locationData('npcs')

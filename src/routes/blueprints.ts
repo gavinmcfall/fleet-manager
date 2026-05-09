@@ -19,7 +19,10 @@ export function blueprintRoutes() {
   // still render with name/tag/type when the user marks them owned. We
   // also surface a derived `has_quality_config` flag so the UI can show
   // a "saved sim" indicator without parsing the full config blob client
-  // side.
+  // side. The friendly product name (e.g. "Novia Crossbow") gets
+  // resolved via fps_weapons / fps_armour joined on class_name —
+  // crafting_blueprints.name is auto-derived from the BP_CRAFT tag and
+  // is not user-friendly on its own.
   routes.get("/", async (c) => {
     const db = c.env.DB;
     const userId = getAuthUser(c).id;
@@ -36,10 +39,22 @@ export function blueprintRoutes() {
                 COALESCE(lcb.sub_type, pcb.sub_type) AS sub_type,
                 COALESCE(lcb.craft_time_seconds, pcb.craft_time_seconds) AS craft_time_seconds,
                 COALESCE(lcb.id, ub.crafting_blueprint_id) AS resolved_blueprint_id,
-                CASE WHEN lcb.id IS NULL AND pcb.id IS NOT NULL THEN 1 ELSE 0 END AS is_ptu_only
+                CASE WHEN lcb.id IS NULL AND pcb.id IS NOT NULL THEN 1 ELSE 0 END AS is_ptu_only,
+                -- Friendly product name resolution. Class_name keys are lowercase
+                -- in fps_weapons/fps_armour but may be uppercase in BP tags
+                -- (vehicle weapons). Try LIVE first, then PTU shadow.
+                COALESCE(lfw.name, pfw.name, lfa.name, pfa.name) AS item_name
          FROM user_blueprints ub
          LEFT JOIN crafting_blueprints lcb ON lcb.uuid = ub.blueprint_uuid
          LEFT JOIN ptu_crafting_blueprints pcb ON pcb.uuid = ub.blueprint_uuid
+         LEFT JOIN fps_weapons lfw
+           ON LOWER(lfw.class_name) = LOWER(REPLACE(COALESCE(lcb.tag, pcb.tag), 'BP_CRAFT_', ''))
+         LEFT JOIN ptu_fps_weapons pfw
+           ON LOWER(pfw.class_name) = LOWER(REPLACE(COALESCE(lcb.tag, pcb.tag), 'BP_CRAFT_', ''))
+         LEFT JOIN fps_armour lfa
+           ON LOWER(lfa.class_name) = LOWER(REPLACE(COALESCE(lcb.tag, pcb.tag), 'BP_CRAFT_', ''))
+         LEFT JOIN ptu_fps_armour pfa
+           ON LOWER(pfa.class_name) = LOWER(REPLACE(COALESCE(lcb.tag, pcb.tag), 'BP_CRAFT_', ''))
          WHERE ub.user_id = ?
          ORDER BY ub.updated_at DESC`,
       )

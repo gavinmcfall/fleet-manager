@@ -23,8 +23,15 @@ function BlueprintRow({ item, onUpdate, onDelete }) {
   const [saving, setSaving] = useState(false)
 
   const typeColor = TYPE_COLORS[item.type] || { bg: 'bg-gray-500/15', text: 'text-gray-400', border: 'border-gray-500/30' }
-  const displayName = item.blueprint_name || prettyNameFromTag(item.tag)
+  // Friendly product name from the joined fps_weapons / fps_armour
+  // table (e.g. "Novia Crossbow") wins over the auto-derived BP name
+  // (e.g. "Utfl Crossbow Ballistic 01"), with a final tag-pretty
+  // fallback for blueprints whose item record is missing.
+  const displayName = item.item_name || item.blueprint_name || prettyNameFromTag(item.tag)
   const isPtuOnly = item.is_ptu_only
+  const detailHref = item.crafting_blueprint_id
+    ? `/crafting/${item.crafting_blueprint_id}?tab=quality`
+    : null
 
   const handleSave = async () => {
     setSaving(true)
@@ -98,15 +105,26 @@ function BlueprintRow({ item, onUpdate, onDelete }) {
             )}
           </div>
 
-          {item.crafting_blueprint_id ? (
+          {detailHref ? (
             <Link
-              to={`/crafting/${item.crafting_blueprint_id}`}
-              className="text-sm font-medium text-gray-200 hover:text-sc-accent transition-colors"
+              to={detailHref}
+              className="block text-sm font-medium text-gray-200 hover:text-sc-accent transition-colors"
+              title="Open Quality Sim"
             >
               {displayName}
             </Link>
           ) : (
-            <span className="text-sm font-medium text-gray-300">{displayName}</span>
+            <span
+              className="text-sm font-medium text-gray-300"
+              title="Detail page unavailable for PTU-only blueprints"
+            >
+              {displayName}
+            </span>
+          )}
+          {item.item_name && item.blueprint_name && item.item_name !== item.blueprint_name && (
+            <p className="text-[10px] text-gray-600 mt-0.5 font-mono">
+              BP: {item.blueprint_name}
+            </p>
           )}
 
           {editing ? (
@@ -135,8 +153,12 @@ function BlueprintRow({ item, onUpdate, onDelete }) {
         </div>
 
         <div className="flex items-center gap-3">
-          {/* Quantity stepper */}
-          <div className="flex items-center gap-1">
+          {/* Crafted-quantity stepper. Labelled explicitly because a bare
+              "0" was getting mistaken for an ownership status indicator —
+              this is a tracker for "how many have you actually crafted",
+              independent of the OWNED flag. */}
+          <div className="flex items-center gap-1.5" title="Crafted count — track how many you've actually built">
+            <span className="text-[9px] uppercase tracking-wider text-gray-500 font-mono">Crafted</span>
             <button
               onClick={() => adjustQuantity(-1)}
               disabled={quantity <= 0}
@@ -144,7 +166,7 @@ function BlueprintRow({ item, onUpdate, onDelete }) {
             >
               <Minus className="w-3 h-3" />
             </button>
-            <span className="w-8 text-center text-sm font-mono text-sc-accent">{quantity}</span>
+            <span className={`w-7 text-center text-sm font-mono ${quantity > 0 ? 'text-sc-accent' : 'text-gray-600'}`}>{quantity}</span>
             <button
               onClick={() => adjustQuantity(1)}
               className="w-6 h-6 flex items-center justify-center rounded bg-white/[0.04] border border-white/[0.06] text-gray-500 hover:text-white hover:border-white/[0.12] transition-all"

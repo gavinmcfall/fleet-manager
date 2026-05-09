@@ -269,29 +269,32 @@ describe("getLootLocationDetail channel routing", () => {
 });
 
 describe("getUserLootWishlist channel routing", () => {
+  // Post-mig-0225 contract: user_loot_wishlist is keyed by loot_uuid
+  // (channel-stable). The same item uuid lives in BOTH loot_map and
+  // ptu_loot_map (with potentially different names if CIG renamed it
+  // between LIVE and PTU). The channel param picks which table's
+  // metadata gets surfaced.
+  const SHARED_UUID = "22220000-0000-0000-0000-000000000001";
+
   beforeAll(async () => {
     await setupTestDatabase(env.DB);
-    // Seed loot_map rows in both channels with the same internal id so the
-    // wishlist FK matches in either case. user_loot_wishlist is a user table
-    // (not channel-aware), but the JOINed loot_map IS — and that's the row
-    // whose name we read.
     await env.DB.batch([
       env.DB.prepare(
         `INSERT INTO loot_map (id, uuid, name, type, rarity, category, game_version_id) VALUES
-         (9201, '22220000-0000-0000-0000-000000000001', 'LIVE Wishlist Item', 'gear', 'Common', 'gear', 1)`,
-      ),
+         (9201, ?, 'LIVE Wishlist Item', 'gear', 'Common', 'gear', 1)`,
+      ).bind(SHARED_UUID),
       env.DB.prepare(
         `INSERT INTO ptu_loot_map (id, uuid, name, type, rarity, category, game_version_id) VALUES
-         (9201, '22220000-0000-0000-0000-000000000002', 'PTU Wishlist Item', 'gear', 'Common', 'gear', 1)`,
-      ),
+         (9301, ?, 'PTU Wishlist Item', 'gear', 'Common', 'gear', 1)`,
+      ).bind(SHARED_UUID),
       env.DB.prepare(
         `INSERT INTO "user" (id, name, email, emailVerified, createdAt, updatedAt)
          VALUES ('wishlist-user', 'Wishlist User', 'wishlist@test', 1, datetime('now'), datetime('now'))`,
       ),
       env.DB.prepare(
-        `INSERT INTO user_loot_wishlist (user_id, loot_map_id, quantity)
-         VALUES ('wishlist-user', 9201, 1)`,
-      ),
+        `INSERT INTO user_loot_wishlist (user_id, loot_uuid, loot_map_id, quantity)
+         VALUES ('wishlist-user', ?, 9201, 1)`,
+      ).bind(SHARED_UUID),
     ]);
   });
 

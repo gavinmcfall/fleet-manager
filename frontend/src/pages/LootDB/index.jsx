@@ -127,19 +127,21 @@ export default function LootDB() {
   const { data: collectionIds, refetch: refetchCollection } = useLootCollection(isAuthed)
   const { data: wishlistItems, refetch: refetchWishlist } = useLootWishlist(isAuthed)
 
-  // Map<loot_map_id, quantity> — backend now returns [{loot_map_id, quantity}]
+  // Map<loot_uuid, quantity> — uuid-keyed since 0225 so the lookup
+  // works across LIVE and PTU channels (loot_map ids differ between
+  // tables; uuid is stable).
   const collected = useMemo(() => {
     if (!collectionIds) return new Map()
-    return new Map(collectionIds.map(e => [e.loot_map_id, e.quantity]))
+    return new Map(collectionIds.map(e => [e.loot_uuid, e.quantity]))
   }, [collectionIds])
 
-  // Map<loot_map_id, wishlist_quantity>
+  // Map<loot_uuid, wishlist_quantity>
   const wishlistMap = useMemo(
-    () => new Map(wishlistItems?.map(i => [i.id, i.wishlist_quantity ?? 1]) ?? []),
+    () => new Map(wishlistItems?.map(i => [i.uuid, i.wishlist_quantity ?? 1]) ?? []),
     [wishlistItems]
   )
   const wishlistIds = useMemo(
-    () => new Set(wishlistItems?.map(i => i.id) ?? []),
+    () => new Set(wishlistItems?.map(i => i.uuid) ?? []),
     [wishlistItems]
   )
 
@@ -345,11 +347,11 @@ export default function LootDB() {
 
     // Show filter (collection/wishlist overlay)
     if (show === 'collected') {
-      items = items.filter((i) => collected.has(i.id))
+      items = items.filter((i) => collected.has(i.uuid))
     } else if (show === 'uncollected') {
-      items = items.filter((i) => !collected.has(i.id))
+      items = items.filter((i) => !collected.has(i.uuid))
     } else if (show === 'wishlisted') {
-      items = items.filter((i) => wishlistIds.has(i.id))
+      items = items.filter((i) => wishlistIds.has(i.uuid))
     }
 
     if (search.trim()) {
@@ -411,7 +413,7 @@ export default function LootDB() {
       const cat = effectiveCategory(item)
       if (!stats[cat]) stats[cat] = { total: 0, collected: 0 }
       stats[cat].total++
-      if (collected.has(item.id)) stats[cat].collected++
+      if (collected.has(item.uuid)) stats[cat].collected++
     }
     return stats
   }, [allItems, collected])
@@ -847,9 +849,9 @@ export default function LootDB() {
                 <ItemCard
                   key={item.id}
                   item={item}
-                  collectionQty={collected.get(item.id) ?? 0}
+                  collectionQty={collected.get(item.uuid) ?? 0}
                   onSetCollectionQty={handleSetCollectionQty}
-                  wishlisted={wishlistIds.has(item.id)}
+                  wishlisted={wishlistIds.has(item.uuid)}
                   onToggleWishlist={handleToggleWishlist}
                   isAuthed={isAuthed}
                   onSelect={setDetailUuid}
@@ -863,8 +865,8 @@ export default function LootDB() {
                 const eCat = effectiveCategory(item)
                 const catStyle = CATEGORY_BADGE_STYLES[eCat] || CATEGORY_BADGE_STYLES.unknown
                 const catLabel = CATEGORY_LABELS[eCat] || eCat
-                const itemCollectionQty = collected.get(item.id) ?? 0
-                const isWishlisted = wishlistIds.has(item.id)
+                const itemCollectionQty = collected.get(item.uuid) ?? 0
+                const isWishlisted = wishlistIds.has(item.uuid)
                 return (
                   <div
                     key={item.id}
