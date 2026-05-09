@@ -1,9 +1,15 @@
 import React from 'react'
 
+// Five categories. The 'category' key is what the parent filters on
+// (added in index.jsx via deriveCategory). Colours map to the type-color
+// CSS vars where they exist; the new ship_* categories share the weapon
+// + accent palette.
 const TYPES = [
-  { key: 'weapons', label: 'Weapons', activeClass: 'type-switcher-pill--weapons' },
-  { key: 'armour',  label: 'Armour',  activeClass: 'type-switcher-pill--armour' },
-  { key: 'ammo',    label: 'Ammo',    activeClass: 'type-switcher-pill--ammo' },
+  { key: 'fps_weapon',     label: 'FPS Weapons' },
+  { key: 'fps_armour',     label: 'FPS Armour' },
+  { key: 'fps_ammo',       label: 'Ammo' },
+  { key: 'ship_weapon',    label: 'Ship Weapons' },
+  { key: 'ship_component', label: 'Ship Components' },
 ]
 
 const BASE_CLS =
@@ -27,16 +33,26 @@ const ACTIVE_AMMO =
   'text-[var(--type-ammo)] shadow-[0_0_12px_rgba(46,196,182,0.15)] ' +
   'hover:border-[rgba(46,196,182,0.45)]'
 
+const ACTIVE_SHIP_WEAPON =
+  'bg-[rgba(245,166,35,0.08)] border-[rgba(245,166,35,0.35)] ' +
+  'text-[rgb(245,200,90)] shadow-[0_0_12px_rgba(245,166,35,0.1)] ' +
+  'hover:border-[rgba(245,166,35,0.35)]'
+
+const ACTIVE_SHIP_COMPONENT =
+  'bg-[rgba(34,211,238,0.10)] border-[rgba(34,211,238,0.40)] ' +
+  'text-[var(--sc-accent)] shadow-[0_0_12px_rgba(34,211,238,0.15)] ' +
+  'hover:border-[rgba(34,211,238,0.40)]'
+
 const ACTIVE_BY_TYPE = {
-  weapons: ACTIVE_WEAPON,
-  armour:  ACTIVE_ARMOUR,
-  ammo:    ACTIVE_AMMO,
+  fps_weapon:     ACTIVE_WEAPON,
+  fps_armour:     ACTIVE_ARMOUR,
+  fps_ammo:       ACTIVE_AMMO,
+  ship_weapon:    ACTIVE_SHIP_WEAPON,
+  ship_component: ACTIVE_SHIP_COMPONENT,
 }
 
 /**
- * Three-pill segmented control. Exactly one pill is always active — clicking
- * the already-active pill is a no-op. Blueprints is one-type-at-a-time, so
- * there's no "All Types" fallback.
+ * Five-pill segmented control. Exactly one pill is always active.
  */
 export default function TypeSwitcher({ activeType, onChange }) {
   const handleClick = (type) => {

@@ -4,6 +4,19 @@ import BlueprintListRow from './BlueprintListRow'
 import useSortState from './useSortState'
 import { STAT_CONFIG, readStat } from './statConfig'
 
+// Map from the category keys used by the Crafting browser to the
+// stat-config keys (which still match the raw bp.type domain). Ship
+// weapons share weapon stats. Ship components have no shared stat
+// schema yet — fall back to weapons config so the list still renders;
+// columns will simply be blank.
+const STAT_KEY_FOR_CATEGORY = {
+  fps_weapon: 'weapons',
+  fps_armour: 'armour',
+  fps_ammo:   'ammo',
+  ship_weapon: 'weapons',
+  ship_component: 'weapons',
+}
+
 /**
  * Selector builder — given a column key like 'dps_base' or 'rpm_max' or
  * 'craft' or 'name', return a function that extracts that value from a row.
@@ -41,7 +54,11 @@ export default function BlueprintListView({
   maxHeight = 'calc(100vh - 280px)',
 }) {
   const sort = useSortState('craft', 'desc')
-  const statConfig = STAT_CONFIG[activeType]
+  // activeType is now a category key (fps_weapon, ship_weapon, …) — translate
+  // to a stat-config key. Legacy callers that still pass raw type strings
+  // (weapons/armour/ammo) keep working via the direct fallback.
+  const statKey = STAT_KEY_FOR_CATEGORY[activeType] ?? activeType
+  const statConfig = STAT_CONFIG[statKey]
 
   // Deps use the primitives sort.column and sort.direction rather than the
   // whole sort object — the object identity is new each render (plain object
@@ -59,7 +76,7 @@ export default function BlueprintListView({
       style={{ maxHeight }}
     >
       <BlueprintListHeader
-        type={activeType}
+        type={statKey}
         sortColumn={sort.column}
         sortDir={sort.direction}
         onSort={sort.toggle}
