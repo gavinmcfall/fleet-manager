@@ -349,6 +349,9 @@ function ImageCapturePanel() {
   const [total, setTotal] = useState(0)
   const [page, setPage] = useState(1)
   const [kindFilter, setKindFilter] = useState('')
+  // Default: hide captures we already have a CDN image for elsewhere
+  // (linked vehicle, matched paint, or pledge_item_media entry).
+  const [showAll, setShowAll] = useState(false)
   const [loading, setLoading] = useState(false)
   const [preview, setPreview] = useState(null)
   // F278: confirm promote + ignore actions to prevent single-click mistakes
@@ -360,6 +363,7 @@ function ImageCapturePanel() {
     try {
       const params = new URLSearchParams({ page: String(page), promoted: '0' })
       if (kindFilter) params.set('kind', kindFilter)
+      if (showAll) params.set('show_all', '1')
       const res = await fetch(`/api/admin/image-captures?${params}`, { credentials: 'same-origin' })
       const data = await res.json()
       setCaptures(data.captures || [])
@@ -367,7 +371,7 @@ function ImageCapturePanel() {
       setKinds(data.kinds || [])
     } catch { /* ignore */ }
     setLoading(false)
-  }, [page, kindFilter])
+  }, [page, kindFilter, showAll])
 
   useEffect(() => { fetchCaptures() }, [fetchCaptures])
 
@@ -386,7 +390,7 @@ function ImageCapturePanel() {
   const totalPages = Math.ceil(total / 50)
 
   return (
-    <PanelSection title={`Image Captures (${total} pending)`} icon={Image}>
+    <PanelSection title={`Image Captures (${total} ${showAll ? 'pending' : 'unseen'})`} icon={Image}>
       {/* Kind filter pills */}
       <div className="px-4 pt-3 pb-2 flex items-center gap-2 flex-wrap">
         <button
@@ -400,6 +404,17 @@ function ImageCapturePanel() {
             className={`px-2.5 py-1 text-xs rounded transition-colors cursor-pointer ${kindFilter === k.kind ? 'bg-sc-accent/20 text-sc-accent border border-sc-accent/30' : 'bg-white/[0.04] text-gray-500 border border-white/[0.06] hover:text-gray-300'}`}
           >{k.kind || 'Unknown'} <span className="text-gray-600 ml-1">{k.cnt}</span></button>
         ))}
+        <div className="ml-auto flex items-center gap-2">
+          <label className="flex items-center gap-1.5 cursor-pointer text-[11px] text-gray-500 hover:text-gray-300 transition-colors">
+            <input
+              type="checkbox"
+              checked={showAll}
+              onChange={e => { setShowAll(e.target.checked); setPage(1) }}
+              className="cursor-pointer"
+            />
+            Show captures we already have
+          </label>
+        </div>
       </div>
 
       {loading ? (

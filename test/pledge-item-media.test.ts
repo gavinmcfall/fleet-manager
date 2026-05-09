@@ -194,4 +194,74 @@ describe("pledge_item_media + Hangar API title-fallback", () => {
       expect([401, 403]).toContain(res.status);
     });
   });
+
+  describe("/api/admin/image-captures hides already-captured rows by default", () => {
+    let adminToken: string;
+
+    beforeAll(async () => {
+      const admin = await createTestUser(env.DB, { role: "super_admin" });
+      adminToken = admin.sessionToken;
+
+      // Seed a media entry that previous tests' state may not have left in place
+      await env.DB.prepare(
+        `INSERT INTO pledge_item_media (title, title_lower, cf_image_id, cf_image_url)
+         VALUES ('Filter Probe Item', 'filter probe item',
+                 'cf-probe-filter', 'https://imagedelivery.net/abc/cf-probe-filter/public')
+         ON CONFLICT(title_lower) DO NOTHING`,
+      ).run();
+    });
+
+    it("hides captures with media; show_all=1 reveals them", async () => {
+      // Seed an image_capture with high seen_count so it sorts to page 1
+      await env.DB.prepare(
+        `INSERT OR IGNORE INTO image_captures (url, source, title, kind, promoted, seen_count)
+         VALUES ('https://media.example.com/filter-probe.jpg', 'hangar_sync',
+                 'Filter Probe Item', 'Hangar decoration', 0, 9999)`,
+      ).run();
+      const cap = await env.DB.prepare(
+        "SELECT id FROM image_captures WHERE title = 'Filter Probe Item'",
+      ).first<{ id: number }>();
+      expect(cap).toBeTruthy();
+      const media = await env.DB.prepare(
+        "SELECT id FROM pledge_item_media WHERE title_lower = 'filter probe item'",
+      ).first();
+      expect(media).toBeTruthy();
+
+      // Default — should be hidden
+      const hidden = await SELF.fetch(
+        "http://localhost/api/admin/image-captures?promoted=0",
+        { headers: await authHeaders(adminToken) },
+      );
+      expect(hidden.status).toBe(200);
+      const hiddenBody = (await hidden.json()) as { captures: Array<{ id: number }> };
+      expect(hiddenBody.captures.find((c) => c.id === cap!.id)).toBeUndefined();
+
+      // show_all=1 — should reveal
+      const all = await SELF.fetch(
+        "http://localhost/api/admin/image-captures?promoted=0&show_all=1",
+        { headers: await authHeaders(adminToken) },
+      );
+      expect(all.status).toBe(200);
+      const allBody = (await all.json()) as { captures: Array<{ id: number }> };
+      expect(allBody.captures.find((c) => c.id === cap!.id)).toBeTruthy();
+    });
+
+    it("still shows captures with no canonical image yet", async () => {
+      // Seed a capture for a title that has no media + no vehicle
+      await env.DB.prepare(
+        `INSERT INTO image_captures (url, source, title, kind, promoted)
+         VALUES ('https://media.example.com/test2.jpg', 'hangar_sync',
+                 'Brand New Item No Media', 'Hangar decoration', 0)
+         ON CONFLICT(url) DO NOTHING`,
+      ).run();
+
+      const res = await SELF.fetch(
+        "http://localhost/api/admin/image-captures?promoted=0",
+        { headers: await authHeaders(adminToken) },
+      );
+      const body = (await res.json()) as { captures: Array<{ title: string }> };
+      const found = body.captures.find((c) => c.title === "Brand New Item No Media");
+      expect(found).toBeTruthy();
+    });
+  });
 });

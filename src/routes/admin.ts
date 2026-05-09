@@ -701,13 +701,20 @@ export function adminRoutes() {
   // ── Image captures (CDN review) ──────────────────────────────────
 
   /**
-   * GET /api/admin/image-captures?kind=Ship&promoted=0&page=1
+   * GET /api/admin/image-captures?kind=Ship&promoted=0&page=1&show_all=0
+   *
    * List captured image URLs for review.
+   *
+   * By default, hides captures where we already have a canonical
+   * CF Images URL elsewhere (linked vehicle, matched paint, or a
+   * pledge_item_media entry by lowercase title) — these don't need
+   * promotion. Pass `?show_all=1` to override the filter.
    */
   routes.get("/image-captures", async (c) => {
     const db = c.env.DB;
     const kind = c.req.query("kind");
     const promoted = c.req.query("promoted");
+    const showAll = c.req.query("show_all") === "1";
     const page = parseInt(c.req.query("page") || "1", 10) || 1;
     const perPage = 50;
     const offset = (page - 1) * perPage;
@@ -717,8 +724,29 @@ export function adminRoutes() {
     if (kind) { where += " AND kind = ?"; params.push(kind); }
     if (promoted !== undefined && promoted !== "") { where += " AND promoted = ?"; params.push(parseInt(promoted, 10)); }
 
+    // Default: hide captures we already have a CDN image for.
+    // (1) Linked vehicle has imagedelivery URL
+    // (2) Matching paint by name has imagedelivery URL
+    // (3) Title matches a pledge_item_media entry
+    const alreadyHaveClause = !showAll
+      ? `AND NOT EXISTS (
+           SELECT 1 FROM vehicles v2
+           WHERE v2.id = ic.vehicle_id
+             AND v2.image_url LIKE 'https://imagedelivery.net%'
+         )
+         AND NOT EXISTS (
+           SELECT 1 FROM paints p2
+           WHERE p2.name = REPLACE(REPLACE(ic.title, ' - ', ' '), ' Paint', ' Livery')
+             AND p2.image_url LIKE 'https://imagedelivery.net%'
+         )
+         AND NOT EXISTS (
+           SELECT 1 FROM pledge_item_media pim
+           WHERE pim.title_lower = LOWER(ic.title)
+         )`
+      : "";
+
     const countRow = await db
-      .prepare(`SELECT COUNT(*) as total FROM image_captures WHERE ${where}`)
+      .prepare(`SELECT COUNT(*) as total FROM image_captures ic WHERE ${where} ${alreadyHaveClause}`)
       .bind(...params)
       .first<{ total: number }>();
 
@@ -728,8 +756,9 @@ export function adminRoutes() {
         (SELECT p.id FROM paints p WHERE p.name = REPLACE(REPLACE(ic.title, ' - ', ' '), ' Paint', ' Livery') LIMIT 1) as matched_paint_id,
         (SELECT p.image_url FROM paints p WHERE p.name = REPLACE(REPLACE(ic.title, ' - ', ' '), ' Paint', ' Livery') LIMIT 1) as matched_paint_image,
         (SELECT lm.id FROM loot_map lm WHERE LOWER(lm.name) = LOWER(ic.title) LIMIT 1) as matched_loot_id,
-        (SELECT vc.id FROM vehicle_components vc WHERE LOWER(vc.name) = LOWER(ic.title) LIMIT 1) as matched_component_id
-      FROM image_captures ic LEFT JOIN vehicles v ON v.id = ic.vehicle_id WHERE ${where} ORDER BY ic.seen_count DESC, ic.last_seen DESC LIMIT ? OFFSET ?`)
+        (SELECT vc.id FROM vehicle_components vc WHERE LOWER(vc.name) = LOWER(ic.title) LIMIT 1) as matched_component_id,
+        (SELECT pim.id FROM pledge_item_media pim WHERE pim.title_lower = LOWER(ic.title) LIMIT 1) as matched_item_media_id
+      FROM image_captures ic LEFT JOIN vehicles v ON v.id = ic.vehicle_id WHERE ${where} ${alreadyHaveClause} ORDER BY ic.seen_count DESC, ic.last_seen DESC LIMIT ? OFFSET ?`)
       .bind(...params, perPage, offset)
       .all();
 
