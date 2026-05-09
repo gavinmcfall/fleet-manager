@@ -1,5 +1,5 @@
 import React from 'react'
-import { CheckCircle, AlertCircle, Loader, RefreshCw, Plug } from 'lucide-react'
+import { CheckCircle, AlertCircle, Loader, RefreshCw, Plug, ExternalLink } from 'lucide-react'
 
 export default function SyncSection({ sync, syncCategories, onSyncClick, SYNC_CATEGORIES }) {
   return (
@@ -88,6 +88,29 @@ export default function SyncSection({ sync, syncCategories, onSyncClick, SYNC_CA
               ? 'The extension is gathering your hangar data. This may take a minute.'
               : 'Uploading your data to SC Bridge...'}
           </p>
+
+          {/* Hangar-tab hint — appears after 8s of `collecting` with no
+              response. Most "stuck" syncs are because the user doesn't
+              have the RSI hangar tab open; the extension's hangar.content
+              script only injects on /account/pledges*. */}
+          {sync.status === 'collecting' && sync.showHangarHint && (
+            <div className="mt-3 p-3 rounded border border-sc-warn/30 bg-sc-warn/[0.04] space-y-2">
+              <p className="text-xs text-amber-200/90">
+                <span className="font-semibold">Still waiting on the extension.</span>{' '}
+                The scrape only runs when your RSI hangar is open in another tab.
+                If you don't already have it open, open it now and the sync
+                will continue automatically.
+              </p>
+              <button
+                type="button"
+                onClick={() => sync.openHangarTab && sync.openHangarTab()}
+                className="inline-flex items-center gap-1.5 px-2.5 py-1.5 rounded text-[11px] font-medium bg-sc-warn/15 text-amber-200 border border-sc-warn/40 hover:bg-sc-warn/25 transition-colors"
+              >
+                <ExternalLink className="w-3 h-3" />
+                Open RSI hangar (account/pledges)
+              </button>
+            </div>
+          )}
         </div>
       )}
     </div>
