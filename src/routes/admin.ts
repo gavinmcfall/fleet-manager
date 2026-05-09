@@ -749,6 +749,29 @@ export function adminRoutes() {
            SELECT 1 FROM pledge_item_media pim
            WHERE pim.title_norm = ic.title_norm
              AND ic.title_norm != ''
+         )
+         /* Ship-name divergence resolver: pledge titles like
+            "Ares - Aspire Paint" don't title_norm-match
+            "Ares Star Fighter Aspire Livery" because the pledge
+            uses a short ship name. Resolve by:
+              - extracting variant (everything after " - ", minus
+                trailing " Paint"/" Livery")
+              - extracting ship (everything before " - ")
+              - JOIN paints + paint_vehicles + vehicles
+              - paint.name contains variant + vehicle.name contains ship
+                + paint has imagedelivery URL
+            Only fires for kind='Skin' captures with " - " in title. */
+         AND NOT (
+           ic.kind = 'Skin'
+           AND ic.title LIKE '% - %'
+           AND EXISTS (
+             SELECT 1 FROM paints p3
+             JOIN paint_vehicles pv ON pv.paint_id = p3.id
+             JOIN vehicles vp ON vp.id = pv.vehicle_id
+             WHERE p3.image_url LIKE 'https://imagedelivery.net%'
+               AND LOWER(p3.name) LIKE '%' || LOWER(TRIM(REPLACE(REPLACE(SUBSTR(ic.title, INSTR(ic.title, ' - ') + 3), ' Paint', ''), ' Livery', ''))) || '%'
+               AND LOWER(vp.name) LIKE '%' || LOWER(TRIM(SUBSTR(ic.title, 1, INSTR(ic.title, ' - ') - 1))) || '%'
+           )
          )`
       : "";
 
