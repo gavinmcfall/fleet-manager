@@ -346,18 +346,50 @@ export function parseValueCents(raw: string | null | undefined): number | null {
 }
 
 /**
- * Insert-then-swap pattern for fleet imports.
+ * Fleet sync — UPSERT + cleanup-by-import-tag pattern.
  *
- * Inserts all new entries first, then deletes old ones. This avoids data loss
- * if a batch fails partway through — old entries remain until all new entries
- * are confirmed. IDs are AUTOINCREMENT so new entries always have higher IDs.
+ * Replaces the insert-then-swap pattern (which allowed duplicates on
+ * concurrent imports or partial-failure retries — see migration 0224).
+ *
+ * 1. Caller stamps every INSERT with the SAME imported_at timestamp,
+ *    passed in here as `importTag`.
+ * 2. Statements are INSERT ... ON CONFLICT(user_id, pledge_id, vehicle_id)
+ *    DO UPDATE so re-imports refresh existing rows in place.
+ * 3. After all UPSERTs land, we delete rows whose imported_at predates
+ *    this import — those are entries the current hangar no longer
+ *    contains (sold, gifted, melted).
+ *
+ * Failure modes:
+ * - Insert batch fails partway: old rows still tagged with their old
+ *   imported_at values, our cleanup step won't touch them. Safe.
+ * - Cleanup step fails: stale rows linger but the new ones are correct;
+ *   next successful import cleans up.
+ * - Concurrent imports: both UPSERT into the same rows; the partial
+ *   UNIQUE index from 0224 prevents duplicates at the DB level.
+ *
+ * `pledge_id IS NULL` rows (unmatched ships) bypass the UNIQUE constraint.
+ * They're still cleaned up by the imported_at sweep.
  */
 export async function executeFleetSwap(
   db: D1Database,
   userID: string,
   insertStmts: D1PreparedStatement[],
+  importTag: string,
 ): Promise<void> {
-  await executeTableSwap(db, "user_fleet", userID, insertStmts, 1000);
+  if (insertStmts.length === 0) return;
+
+  const batchSize = 1000;
+  for (let i = 0; i < insertStmts.length; i += batchSize) {
+    await db.batch(insertStmts.slice(i, i + batchSize));
+  }
+
+  // Sweep entries the current hangar no longer contains.
+  await db
+    .prepare(
+      "DELETE FROM user_fleet WHERE user_id = ? AND imported_at < ?",
+    )
+    .bind(userID, importTag)
+    .run();
 }
 
 /**

@@ -50,6 +50,11 @@ export function importRoutes() {
 
     const entries: HangarXplorEntry[] = c.req.valid("json");
 
+    // Single timestamp for every row in this import — used by
+    // executeFleetSwap to delete rows the current hangar no longer
+    // contains (anything imported_at < importTag is stale).
+    const importTag = new Date().toISOString().replace("T", " ").replace(/\.\d+Z$/, "");
+
     // Preload all vehicle slugs+names into memory (avoids per-entry queries)
     const vehicleMap = await preloadVehicleMap(db);
     const insuranceMap = await loadInsuranceTypes(db);
@@ -116,14 +121,25 @@ export function importRoutes() {
         }
       }
 
-      // Queue fleet insert
+      // Queue fleet UPSERT. UNIQUE(user_id, pledge_id, vehicle_id)
+      // (partial WHERE pledge_id IS NOT NULL, mig 0224) means re-imports
+      // refresh the existing row rather than creating a duplicate.
       insertStmts.push(
         db
           .prepare(
             `INSERT INTO user_fleet (user_id, vehicle_id, insurance_type_id, warbond, is_loaner,
               pledge_id, pledge_name, pledge_cost, pledge_date, custom_name, imported_at)
             VALUES (?, (SELECT id FROM vehicles WHERE slug = ? LIMIT 1), ?, ?, ?,
-              ?, ?, ?, ?, ?, datetime('now'))`,
+              ?, ?, ?, ?, ?, ?)
+            ON CONFLICT(user_id, pledge_id, vehicle_id) WHERE pledge_id IS NOT NULL
+            DO UPDATE SET
+              insurance_type_id = excluded.insurance_type_id,
+              warbond = excluded.warbond,
+              pledge_name = excluded.pledge_name,
+              pledge_cost = excluded.pledge_cost,
+              pledge_date = excluded.pledge_date,
+              custom_name = COALESCE(user_fleet.custom_name, excluded.custom_name),
+              imported_at = excluded.imported_at`,
           )
           .bind(
             userID,
@@ -136,6 +152,7 @@ export function importRoutes() {
             entry.pledge_cost || null,
             entry.pledge_date || null,
             customName || null,
+            importTag,
           ),
       );
     }
@@ -149,8 +166,8 @@ export function importRoutes() {
       });
     }
 
-    // Insert-then-swap using shared helper
-    await executeFleetSwap(db, userID, insertStmts);
+    // UPSERT + cleanup-by-import-tag (replaces old insert-then-swap).
+    await executeFleetSwap(db, userID, insertStmts, importTag);
     const imported = insertStmts.length;
 
     console.log(`[import] HangarXplor import complete: ${imported}/${entries.length}, ${skippedShips.length} skipped`);
@@ -208,6 +225,11 @@ export function importRoutes() {
         return c.json({ error: "Sync rate limited — please wait 5 minutes between syncs" }, 429);
       }
     }
+
+    // Single timestamp for every row in this sync — used by
+    // executeFleetSwap to delete rows the current hangar no longer
+    // contains (anything imported_at < importTag is stale).
+    const importTag = new Date().toISOString().replace("T", " ").replace(/\.\d+Z$/, "");
 
     // --- Anomaly detection ---
     const totalFleetValueCents = payload.pledges.reduce(
@@ -319,7 +341,16 @@ export function importRoutes() {
               `INSERT INTO user_fleet (user_id, vehicle_id, insurance_type_id, warbond, is_loaner,
                 pledge_id, pledge_name, pledge_cost, pledge_date, custom_name, imported_at)
               VALUES (?, (SELECT id FROM vehicles WHERE slug = ? LIMIT 1), ?, ?, ?,
-                ?, ?, ?, ?, ?, datetime('now'))`,
+                ?, ?, ?, ?, ?, ?)
+              ON CONFLICT(user_id, pledge_id, vehicle_id) WHERE pledge_id IS NOT NULL
+              DO UPDATE SET
+                insurance_type_id = excluded.insurance_type_id,
+                warbond = excluded.warbond,
+                pledge_name = excluded.pledge_name,
+                pledge_cost = excluded.pledge_cost,
+                pledge_date = excluded.pledge_date,
+                custom_name = COALESCE(user_fleet.custom_name, excluded.custom_name),
+                imported_at = excluded.imported_at`,
             )
             .bind(
               userID,
@@ -332,6 +363,7 @@ export function importRoutes() {
               pledgeCost,
               pledge.date || null,
               customName,
+              importTag,
             ),
         );
       }
@@ -347,9 +379,9 @@ export function importRoutes() {
       });
     }
 
-    // Fleet swap
+    // Fleet UPSERT + cleanup-by-import-tag
     if (insertStmts.length > 0) {
-      await executeFleetSwap(db, userID, insertStmts);
+      await executeFleetSwap(db, userID, insertStmts, importTag);
     }
     const imported = insertStmts.length;
 
