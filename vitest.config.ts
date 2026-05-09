@@ -18,7 +18,11 @@ export default defineWorkersConfig(async () => {
     test: {
       globals: true,
       include: ["test/**/*.test.ts"],
-      hookTimeout: 30000,
+      // 60s — applyD1Migrations runs all 30+ migrations from scratch in
+      // each suite's beforeAll. Local runs finish in <10s but GitHub
+      // Actions runners are slower; 30s started timing out 18+ suites
+      // simultaneously after migration 0231 pushed the count to 31.
+      hookTimeout: 60000,
       // vitest-pool-workers' isolated-storage feature flakes occasionally
       // with "Network connection lost" on heavy D1 workloads (gdpr-cascade
       // is the most common victim). --max-workers=1 --no-isolate flags in
