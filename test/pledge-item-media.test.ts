@@ -211,6 +211,36 @@ describe("pledge_item_media + Hangar API title-fallback", () => {
       ).run();
     });
 
+    it("hides paint captures with double-space dash that match a paint by name", async () => {
+      // Real-world title shape from RSI hangar — note the DOUBLE space
+      // after the dash (data quirk we need to tolerate).
+      await env.DB.prepare(
+        `INSERT OR IGNORE INTO image_captures (url, source, title, kind, promoted, seen_count)
+         VALUES ('https://media.example.com/apollo-double-space.jpg', 'hangar_sync',
+                 'Apollo -  Alliance Aid Red & Gold Paint', 'Skin', 0, 9999)`,
+      ).run();
+      const cap = await env.DB.prepare(
+        "SELECT id FROM image_captures WHERE title = 'Apollo -  Alliance Aid Red & Gold Paint'",
+      ).first<{ id: number }>();
+      expect(cap).toBeTruthy();
+
+      // Seed the matching paint with an imagedelivery URL
+      await env.DB.prepare(
+        `INSERT OR IGNORE INTO paints (name, slug, image_url, game_version_id)
+         VALUES ('Apollo Alliance Aid Red & Gold Livery', 'apollo-alliance-aid-red-gold',
+                 'https://imagedelivery.net/abc/test-paint/public', 1)`,
+      ).run();
+
+      const res = await SELF.fetch(
+        "http://localhost/api/admin/image-captures?promoted=0&kind=Skin",
+        { headers: await authHeaders(adminToken) },
+      );
+      expect(res.status).toBe(200);
+      const body = (await res.json()) as { captures: Array<{ id: number }> };
+      // Should be HIDDEN — paint already has CDN image
+      expect(body.captures.find((c) => c.id === cap!.id)).toBeUndefined();
+    });
+
     it("hides captures with media; show_all=1 reveals them", async () => {
       // Seed an image_capture with high seen_count so it sorts to page 1
       await env.DB.prepare(

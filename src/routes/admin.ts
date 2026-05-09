@@ -728,6 +728,12 @@ export function adminRoutes() {
     // (1) Linked vehicle has imagedelivery URL
     // (2) Matching paint by name has imagedelivery URL
     // (3) Title matches a pledge_item_media entry
+    //
+    // Title normalization for paint match: RSI's hangar markup
+    // sometimes includes a stray double-space after the dash (e.g.
+    // "Apollo -  Alliance Aid Red & Gold Paint") so we collapse
+    // whitespace, strip the dash, and case-fold both sides before
+    // comparison.
     const alreadyHaveClause = !showAll
       ? `AND NOT EXISTS (
            SELECT 1 FROM vehicles v2
@@ -736,7 +742,8 @@ export function adminRoutes() {
          )
          AND NOT EXISTS (
            SELECT 1 FROM paints p2
-           WHERE p2.name = REPLACE(REPLACE(ic.title, ' - ', ' '), ' Paint', ' Livery')
+           WHERE LOWER(REPLACE(REPLACE(REPLACE(p2.name, '  ', ' '), '  ', ' '), '  ', ' '))
+               = LOWER(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(ic.title, ' - ', ' '), '  ', ' '), '  ', ' '), '  ', ' '), ' Paint', ' Livery'))
              AND p2.image_url LIKE 'https://imagedelivery.net%'
          )
          AND NOT EXISTS (
@@ -753,8 +760,14 @@ export function adminRoutes() {
     const { results } = await db
       .prepare(`SELECT ic.*,
         v.image_url as current_vehicle_image,
-        (SELECT p.id FROM paints p WHERE p.name = REPLACE(REPLACE(ic.title, ' - ', ' '), ' Paint', ' Livery') LIMIT 1) as matched_paint_id,
-        (SELECT p.image_url FROM paints p WHERE p.name = REPLACE(REPLACE(ic.title, ' - ', ' '), ' Paint', ' Livery') LIMIT 1) as matched_paint_image,
+        (SELECT p.id FROM paints p
+           WHERE LOWER(REPLACE(REPLACE(REPLACE(p.name, '  ', ' '), '  ', ' '), '  ', ' '))
+               = LOWER(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(ic.title, ' - ', ' '), '  ', ' '), '  ', ' '), '  ', ' '), ' Paint', ' Livery'))
+           LIMIT 1) as matched_paint_id,
+        (SELECT p.image_url FROM paints p
+           WHERE LOWER(REPLACE(REPLACE(REPLACE(p.name, '  ', ' '), '  ', ' '), '  ', ' '))
+               = LOWER(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(ic.title, ' - ', ' '), '  ', ' '), '  ', ' '), '  ', ' '), ' Paint', ' Livery'))
+           LIMIT 1) as matched_paint_image,
         (SELECT lm.id FROM loot_map lm WHERE LOWER(lm.name) = LOWER(ic.title) LIMIT 1) as matched_loot_id,
         (SELECT vc.id FROM vehicle_components vc WHERE LOWER(vc.name) = LOWER(ic.title) LIMIT 1) as matched_component_id,
         (SELECT pim.id FROM pledge_item_media pim WHERE pim.title_lower = LOWER(ic.title) LIMIT 1) as matched_item_media_id
