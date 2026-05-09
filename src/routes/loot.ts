@@ -8,6 +8,7 @@ import {
   getLootLocationSummary,
   getLootLocationDetail,
   getUserLootCollection,
+  getUserCraftedByLootUuid,
   addToLootCollection,
   setLootCollectionQuantity,
   removeFromLootCollection,
@@ -66,11 +67,22 @@ export function lootRoutes() {
     );
   });
 
-  // Auth middleware for collection and wishlist
+  // Auth middleware for collection, wishlist, and crafted counters
   app.use("/collection", requireUser);
   app.use("/collection/*", requireUser);
   app.use("/wishlist", requireUser);
   app.use("/wishlist/*", requireUser);
+  app.use("/crafted", requireUser);
+
+  // GET /api/loot/crafted — per-uuid crafted totals for the current user.
+  // Sums user_blueprints.crafted_quantity + user_blueprint_builds.crafted_quantity,
+  // joined to loot items via blueprint output_item → loot_map.class_name
+  // across both LIVE and PTU channels.
+  app.get("/crafted", async (c) => {
+    const user = getAuthUser(c);
+    const map = await getUserCraftedByLootUuid(c.env.DB, user.id);
+    return c.json(map);
+  });
 
   // GET /api/loot/collection — current user's collected loot_map_ids
   app.get("/collection", async (c) => {

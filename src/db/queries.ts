@@ -1418,6 +1418,73 @@ export async function getUserLootCollection(db: D1Database, userId: string): Pro
 }
 
 /**
+ * Per-loot-uuid sum of crafted counters across both the deprecated
+ * `user_blueprints.crafted_quantity` parent counter and every named
+ * `user_blueprint_builds.crafted_quantity` child counter, joined to
+ * loot items via blueprint output_item → loot_map.class_name.
+ *
+ * Covers both LIVE (loot_map + crafting_blueprints) and PTU
+ * (ptu_loot_map + ptu_crafting_blueprints). One uuid per channel —
+ * the same class_name in both channels resolves to two distinct uuids.
+ *
+ * Note on double-counting: migration 0226 backfilled
+ * user_blueprints.crafted_quantity into a new "Default Build" child
+ * row without zeroing the parent. Rows that existed pre-0226 with
+ * both a parent counter AND a quality_config will report inflated
+ * totals here. Acceptable trade-off — once users move their saves
+ * forward in the new UI the per-build counters become the source of
+ * truth and the parent counter goes unused.
+ */
+export async function getUserCraftedByLootUuid(
+  db: D1Database,
+  userId: string,
+): Promise<Record<string, number>> {
+  const result = await db
+    .prepare(
+      `WITH crafted_totals AS (
+         SELECT blueprint_uuid, SUM(crafted_quantity) AS qty
+         FROM (
+           SELECT blueprint_uuid, crafted_quantity
+             FROM user_blueprints
+            WHERE user_id = ?1 AND crafted_quantity > 0
+              AND blueprint_uuid IS NOT NULL
+           UNION ALL
+           SELECT blueprint_uuid, crafted_quantity
+             FROM user_blueprint_builds
+            WHERE user_id = ?1 AND crafted_quantity > 0
+         )
+         GROUP BY blueprint_uuid
+       ),
+       bp AS (
+         SELECT uuid, output_item FROM crafting_blueprints
+         UNION ALL
+         SELECT uuid, output_item FROM ptu_crafting_blueprints
+       )
+       SELECT lm.uuid AS loot_uuid, SUM(ct.qty) AS crafted
+         FROM crafted_totals ct
+         JOIN bp ON bp.uuid = ct.blueprint_uuid
+         JOIN loot_map lm ON LOWER(lm.class_name) = LOWER(bp.output_item)
+        WHERE bp.output_item IS NOT NULL
+        GROUP BY lm.uuid
+       UNION ALL
+       SELECT plm.uuid AS loot_uuid, SUM(ct.qty) AS crafted
+         FROM crafted_totals ct
+         JOIN bp ON bp.uuid = ct.blueprint_uuid
+         JOIN ptu_loot_map plm ON LOWER(plm.class_name) = LOWER(bp.output_item)
+        WHERE bp.output_item IS NOT NULL
+        GROUP BY plm.uuid`,
+    )
+    .bind(userId)
+    .all<{ loot_uuid: string; crafted: number }>();
+
+  const out: Record<string, number> = {};
+  for (const row of result.results) {
+    out[row.loot_uuid] = (out[row.loot_uuid] ?? 0) + row.crafted;
+  }
+  return out;
+}
+
+/**
  * Resolve a best-effort LIVE loot_map_id for the given uuid. Returns
  * null if the item only exists in PTU. Legacy column on
  * user_loot_collection / user_loot_wishlist — kept for any consumers

@@ -253,7 +253,7 @@ const EFFECT_LABELS = {
   WheezingAudioMask: 'Wheezing Audio',
 }
 
-export default function DetailPanel({ uuid, manufacturerName, collectionQty, onSetCollectionQty, wishlisted, onToggleWishlist, isAuthed, onClose }) {
+export default function DetailPanel({ uuid, manufacturerName, collectionQty, craftedQty = 0, onSetCollectionQty, wishlisted, onToggleWishlist, isAuthed, onClose }) {
   const { data: item, loading } = useLootItem(uuid)
 
   if (!uuid) return null
@@ -373,6 +373,23 @@ export default function DetailPanel({ uuid, manufacturerName, collectionQty, onS
                     </>
                   )}
                 </div>
+              </div>
+            )}
+
+            {/* Crafted counter — read-only sum of all crafted_quantity values
+                across user_blueprints + user_blueprint_builds whose
+                output_item maps to this loot item. Mutated from /crafting,
+                shown here as a passive indicator. */}
+            {isAuthed && craftedQty > 0 && (
+              <div className="flex items-center gap-2 px-2.5 py-1.5 rounded border border-emerald-500/30 bg-emerald-500/10 text-emerald-300/90">
+                <Package className="w-3.5 h-3.5" />
+                <span className="text-xs font-mono">{craftedQty}</span>
+                <span className="text-[10px] font-display uppercase tracking-wide opacity-75">
+                  Crafted
+                </span>
+                <span className="ml-auto text-[10px] opacity-60">
+                  via My Blueprints
+                </span>
               </div>
             )}
 

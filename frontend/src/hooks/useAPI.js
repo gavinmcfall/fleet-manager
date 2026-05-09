@@ -379,6 +379,15 @@ export function useLootWishlist(isAuthed) {
   return useAPI('/loot/wishlist', { skip: !isAuthed })
 }
 
+/**
+ * Per-loot-uuid crafted counter map for the signed-in user.
+ * Returns { [uuid]: number } — uuids missing from the map have zero
+ * crafted. Sums user_blueprints.crafted_quantity + every named build.
+ */
+export function useLootCrafted(isAuthed) {
+  return useAPI('/loot/crafted', { skip: !isAuthed })
+}
+
 export async function toggleLootWishlist(uuid, isCurrentlyWishlisted) {
   return apiFetch(isCurrentlyWishlisted ? 'DELETE' : 'POST', `/loot/wishlist/${uuid}`)
 }

@@ -8,7 +8,7 @@ import {
 } from 'lucide-react'
 import {
   useLoot, useLootCollection, toggleLootCollection,
-  useLootWishlist, toggleLootWishlist,
+  useLootWishlist, toggleLootWishlist, useLootCrafted,
   setLootCollectionQuantity, setLootWishlistQuantity,
 } from '../../hooks/useAPI'
 import { useSession } from '../../lib/auth-client'
@@ -126,6 +126,7 @@ export default function LootDB() {
   const { data: allItems, loading, error, refetch } = useLoot()
   const { data: collectionIds, refetch: refetchCollection } = useLootCollection(isAuthed)
   const { data: wishlistItems, refetch: refetchWishlist } = useLootWishlist(isAuthed)
+  const { data: craftedMap } = useLootCrafted(isAuthed)
 
   // Map<loot_uuid, quantity> — uuid-keyed since 0225 so the lookup
   // works across LIVE and PTU channels (loot_map ids differ between
@@ -949,9 +950,10 @@ export default function LootDB() {
       <DetailPanel
         uuid={detailUuid}
         manufacturerName={detailItemMeta?.manufacturer_name ?? null}
-        collectionQty={collected.get(detailItemId) ?? 0}
+        collectionQty={collected.get(detailUuid) ?? 0}
+        craftedQty={craftedMap?.[detailUuid] ?? 0}
         onSetCollectionQty={handleSetCollectionQty}
-        wishlisted={wishlistIds.has(detailItemId)}
+        wishlisted={wishlistIds.has(detailUuid)}
         onToggleWishlist={handleToggleWishlist}
         isAuthed={isAuthed}
         onClose={() => { setDetailUuid(null); if (routeUuid) navigate('/loot', { replace: true }) }}
