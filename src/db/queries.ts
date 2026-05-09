@@ -504,6 +504,76 @@ export async function getUserOwnedModuleTitles(db: D1Database, userId: string): 
   return result.results.map((r) => r.title);
 }
 
+export interface HangarItemRow {
+  id: number;
+  title: string;
+  kind: string | null;
+  manufacturer_code: string | null;
+  manufacturer_name: string | null;
+  image_url: string | null;
+  custom_name: string | null;
+  serial: string | null;
+  is_nameable: number;
+  sort_order: number;
+  pledge_id: number;
+  rsi_pledge_id: number;
+  pledge_name: string;
+  pledge_value: string | null;
+  pledge_value_cents: number | null;
+  pledge_currency: string | null;
+  pledge_date_parsed: string | null;
+}
+
+/**
+ * Every pledge item the user owns, joined to its parent pledge so
+ * each row carries the pledge's name + value + date for display.
+ * Powers the /hangar page — a literal mirror of RSI's hangar grid.
+ *
+ * Ordering: newest pledges first (pledge_date_parsed DESC), then by
+ * the item's sort_order inside that pledge (preserves RSI's intra-
+ * pledge ordering — Ship first, then Insurance, then attributed gear).
+ *
+ * Returns NULL kind values verbatim so the UI can surface them as
+ * "Uncategorised" without losing the row.
+ */
+export async function getUserHangarItems(
+  db: D1Database,
+  userId: string,
+): Promise<HangarItemRow[]> {
+  const result = await db
+    .prepare(
+      `SELECT
+         upi.id,
+         upi.title,
+         upi.kind,
+         upi.manufacturer_code,
+         upi.manufacturer_name,
+         upi.image_url,
+         upi.custom_name,
+         upi.serial,
+         upi.is_nameable,
+         upi.sort_order,
+         upi.user_pledge_id AS pledge_id,
+         up.rsi_pledge_id,
+         up.name AS pledge_name,
+         up.value AS pledge_value,
+         up.value_cents AS pledge_value_cents,
+         up.currency AS pledge_currency,
+         up.pledge_date_parsed
+       FROM user_pledge_items upi
+       JOIN user_pledges up ON up.id = upi.user_pledge_id
+       WHERE upi.user_id = ?
+       ORDER BY
+         COALESCE(up.pledge_date_parsed, '0000-00-00') DESC,
+         up.id DESC,
+         upi.sort_order ASC,
+         upi.id ASC`,
+    )
+    .bind(userId)
+    .all<HangarItemRow>();
+  return result.results;
+}
+
 // ============================================================
 // Paint Operations
 // ============================================================

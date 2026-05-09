@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useRef, Suspense, lazy } from 'react'
 import { Routes, Route, NavLink, Navigate, useLocation, useNavigate } from 'react-router-dom'
-import { Rocket, BarChart3, Shield, Upload, RefreshCw, Database, Settings as SettingsIcon, ChevronDown, ChevronRight, ChevronLeft, History, Menu, X, LogOut, LogIn, User, Wrench, Users, Building2, FileText, Search, MapPin, Palette, ShoppingCart, Hammer, Briefcase, Scale, Crosshair, BookOpen, Layers, TrendingUp, Languages, Heart, FlaskConical, SlidersHorizontal, Bookmark, Sparkles, Shirt, Zap, Thermometer, Gauge, Radar, Target, Navigation } from 'lucide-react'
+import { Rocket, BarChart3, Shield, Upload, RefreshCw, Database, Settings as SettingsIcon, ChevronDown, ChevronRight, ChevronLeft, History, Menu, X, LogOut, LogIn, User, Wrench, Users, Building2, FileText, Search, MapPin, Palette, ShoppingCart, Hammer, Briefcase, Scale, Crosshair, BookOpen, Layers, TrendingUp, Languages, Heart, FlaskConical, SlidersHorizontal, Bookmark, Sparkles, Shirt, Zap, Thermometer, Gauge, Radar, Target, Navigation, Package } from 'lucide-react'
 import LoadingState from './components/LoadingState'
 import ErrorBoundary from './components/ErrorBoundary'
 import RequireAuth from './components/RequireAuth'
@@ -18,6 +18,7 @@ import ForgotPassword from './pages/ForgotPassword'
 import ResetPassword from './pages/ResetPassword'
 
 const FleetTable = lazy(() => import('./pages/FleetTable'))
+const Hangar = lazy(() => import('./pages/Hangar'))
 const Insurance = lazy(() => import('./pages/Insurance'))
 const Insights = lazy(() => import('./pages/Insights'))
 const Analysis = lazy(() => import('./pages/Analysis'))
@@ -136,6 +137,7 @@ const authNavItems = [
     icon: Rocket,
     items: [
       { to: '/fleet', icon: Rocket, label: 'Fleet' },
+      { to: '/hangar', icon: Package, label: 'Hangar' },
       { to: '/insurance', icon: Shield, label: 'Insurance' },
       {
         to: '/analysis',
@@ -743,6 +745,7 @@ export default function App() {
                       <Route path="/loadout/:slug" element={<RequireAuth><Suspense fallback={<LoadingState fullScreen />}><Loadout /></Suspense></RequireAuth>} />
                       <Route path="/fps-loadout" element={<RequireAuth><RequireFeature flag="fpsLoadout"><Suspense fallback={<LoadingState fullScreen />}><FpsLoadout /></Suspense></RequireFeature></RequireAuth>} />
                       <Route path="/fleet" element={<RequireAuth><FleetTable /></RequireAuth>} />
+                      <Route path="/hangar" element={<RequireAuth><Suspense fallback={<LoadingState fullScreen />}><Hangar /></Suspense></RequireAuth>} />
                       <Route path="/insurance" element={<RequireAuth><Insurance /></RequireAuth>} />
                       <Route path="/insights" element={<RequireAuth><Insights /></RequireAuth>} />
                       <Route path="/analysis" element={<RequireAuth><Analysis /></RequireAuth>} />

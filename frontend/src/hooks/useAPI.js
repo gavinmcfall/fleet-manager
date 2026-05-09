@@ -388,6 +388,15 @@ export function useLootCrafted(isAuthed) {
   return useAPI('/loot/crafted', { skip: !isAuthed })
 }
 
+/**
+ * Hangar inventory — every user_pledge_items row joined to its parent
+ * pledge. Returns `{ items, counts, total }`. counts is keyed by kind
+ * with NULL bucketed under 'uncategorised'.
+ */
+export function useHangar() {
+  return useAPI('/hangar')
+}
+
 export async function toggleLootWishlist(uuid, isCurrentlyWishlisted) {
   return apiFetch(isCurrentlyWishlisted ? 'DELETE' : 'POST', `/loot/wishlist/${uuid}`)
 }
