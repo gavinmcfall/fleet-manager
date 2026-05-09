@@ -157,12 +157,20 @@ describe("Scenario: incremental PTU build (build 1 → build 2)", () => {
       .first<{ is_deleted: number }>();
     expect(cut?.is_deleted).toBe(1);
 
-    // Sanity: getLootItems still returns the soft-deleted row (current behavior;
-    // future filter on is_deleted would change this). Confirms the row physically
-    // remains in the table.
+    // getLootItems now filters is_deleted = 0 (added in batch D / TODO #18) — the
+    // soft-deleted row is correctly hidden from the public API even though it
+    // remains in the table for audit / rollback.
     const ptu = await getLootItems(env.DB, true);
     const ptuNames = ptu.map((i: { name: string }) => i.name);
-    expect(ptuNames).toContain("Will Be Cut");
+    expect(ptuNames).not.toContain("Will Be Cut");
+    expect(ptuNames).toContain("Build 2 Addition");
+    expect(ptuNames).toContain("Stable Across Builds");
+
+    // Confirm the row physically remains in the table even though hidden.
+    const stillThere = await env.DB
+      .prepare(`SELECT 1 FROM ptu_loot_map WHERE uuid = 'only-build1'`)
+      .first();
+    expect(stillThere).not.toBeNull();
   });
 });
 

@@ -29,6 +29,35 @@ async function requireUser(c: Context<HonoEnv>, next: Next): Promise<Response | 
 }
 
 /**
+ * Resolve a loot_map row by uuid, trying LIVE first then PTU shadow.
+ *
+ * Used by collection/wishlist mutation routes so PTU testers don't 404
+ * when marking PTU-only items. The id returned may be a PTU id when the
+ * item exists only in ptu_loot_map — that's a known limitation: the row
+ * gets stored against a PTU id, so a later GET on LIVE channel won't
+ * surface it. The cleaner fix is a uuid column on user_loot_collection /
+ * user_loot_wishlist (deferred — requires migration). For 99% of items
+ * (which exist in BOTH tables), the LIVE id is what gets stored, so
+ * cross-channel views work.
+ */
+async function resolveLootMapId(
+  db: D1Database,
+  uuid: string,
+): Promise<{ id: number; channel: "live" | "ptu" } | null> {
+  const live = await db
+    .prepare("SELECT id FROM loot_map WHERE uuid = ? LIMIT 1")
+    .bind(uuid)
+    .first<{ id: number }>();
+  if (live) return { id: live.id, channel: "live" };
+  const ptu = await db
+    .prepare("SELECT id FROM ptu_loot_map WHERE uuid = ? LIMIT 1")
+    .bind(uuid)
+    .first<{ id: number }>();
+  if (ptu) return { id: ptu.id, channel: "ptu" };
+  return null;
+}
+
+/**
  * /api/loot — Loot/item finder (public browsing, auth-gated collection tracking)
  */
 export function lootRoutes() {
@@ -61,10 +90,7 @@ export function lootRoutes() {
     const user = getAuthUser(c);
     const uuid = c.req.param("uuid");
 
-    const row = await c.env.DB
-      .prepare("SELECT id FROM loot_map WHERE uuid = ? LIMIT 1")
-      .bind(uuid)
-      .first<{ id: number }>();
+    const row = await resolveLootMapId(c.env.DB, uuid);
     if (!row) return c.json({ error: "Item not found" }, 404);
 
     await addToLootCollection(c.env.DB, user.id, row.id);
@@ -79,10 +105,7 @@ export function lootRoutes() {
     const uuid = c.req.param("uuid");
     const { quantity } = c.req.valid("json");
 
-    const row = await c.env.DB
-      .prepare("SELECT id FROM loot_map WHERE uuid = ? LIMIT 1")
-      .bind(uuid)
-      .first<{ id: number }>();
+    const row = await resolveLootMapId(c.env.DB, uuid);
     if (!row) return c.json({ error: "Item not found" }, 404);
 
     if (quantity === 0) {
@@ -98,10 +121,7 @@ export function lootRoutes() {
     const user = getAuthUser(c);
     const uuid = c.req.param("uuid");
 
-    const row = await c.env.DB
-      .prepare("SELECT id FROM loot_map WHERE uuid = ? LIMIT 1")
-      .bind(uuid)
-      .first<{ id: number }>();
+    const row = await resolveLootMapId(c.env.DB, uuid);
     if (!row) return c.json({ error: "Item not found" }, 404);
 
     await removeFromLootCollection(c.env.DB, user.id, row.id);
@@ -122,10 +142,7 @@ export function lootRoutes() {
     const user = getAuthUser(c);
     const uuid = c.req.param("uuid");
 
-    const row = await c.env.DB
-      .prepare("SELECT id FROM loot_map WHERE uuid = ? LIMIT 1")
-      .bind(uuid)
-      .first<{ id: number }>();
+    const row = await resolveLootMapId(c.env.DB, uuid);
     if (!row) return c.json({ error: "Item not found" }, 404);
 
     await addToLootWishlist(c.env.DB, user.id, row.id);
@@ -140,10 +157,7 @@ export function lootRoutes() {
     const uuid = c.req.param("uuid");
     const { quantity } = c.req.valid("json");
 
-    const row = await c.env.DB
-      .prepare("SELECT id FROM loot_map WHERE uuid = ? LIMIT 1")
-      .bind(uuid)
-      .first<{ id: number }>();
+    const row = await resolveLootMapId(c.env.DB, uuid);
     if (!row) return c.json({ error: "Item not found" }, 404);
 
     if (quantity === 0) {
@@ -159,10 +173,7 @@ export function lootRoutes() {
     const user = getAuthUser(c);
     const uuid = c.req.param("uuid");
 
-    const row = await c.env.DB
-      .prepare("SELECT id FROM loot_map WHERE uuid = ? LIMIT 1")
-      .bind(uuid)
-      .first<{ id: number }>();
+    const row = await resolveLootMapId(c.env.DB, uuid);
     if (!row) return c.json({ error: "Item not found" }, 404);
 
     await removeFromLootWishlist(c.env.DB, user.id, row.id);

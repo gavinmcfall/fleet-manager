@@ -1089,6 +1089,10 @@ export async function getLootItems(db: D1Database, isPTU = false): Promise<LootI
           'Char_Head_Eyes','Char_Body','Char_Head_Eyelash',
           'Currency','MobiGlas'
         )
+        -- Hide rows the pipeline marked deleted in a recent patch. The
+        -- column defaults to 0 so historical rows are unaffected; the
+        -- filter is defensive for when CIG drops items in 4.x.x patches.
+        AND COALESCE(lm.is_deleted, 0) = 0
         -- F248: hide placeholder items + NPC-only Vanduul ship components
         -- that clutter the main grid. Kept lootable VCK-1 blade variants
         -- (category='weapon') and excluded only the Vanduul ship components /
