@@ -535,6 +535,11 @@ export interface HangarItemRow {
  *
  * Returns NULL kind values verbatim so the UI can surface them as
  * "Uncategorised" without losing the row.
+ *
+ * Image fallback: when `upi.image_url` is NULL (extension didn't
+ * capture one — common for newer hangar decorations + FPS gear), we
+ * LEFT JOIN `pledge_item_media` by lowercase title and use its
+ * `cf_image_url` instead. Scrape value still wins when present.
  */
 export async function getUserHangarItems(
   db: D1Database,
@@ -548,7 +553,7 @@ export async function getUserHangarItems(
          upi.kind,
          upi.manufacturer_code,
          upi.manufacturer_name,
-         upi.image_url,
+         COALESCE(NULLIF(upi.image_url, ''), pim.cf_image_url) AS image_url,
          upi.custom_name,
          upi.serial,
          upi.is_nameable,
@@ -562,6 +567,7 @@ export async function getUserHangarItems(
          up.pledge_date_parsed
        FROM user_pledge_items upi
        JOIN user_pledges up ON up.id = upi.user_pledge_id
+       LEFT JOIN pledge_item_media pim ON pim.title_lower = LOWER(upi.title)
        WHERE upi.user_id = ?
        ORDER BY
          COALESCE(up.pledge_date_parsed, '0000-00-00') DESC,

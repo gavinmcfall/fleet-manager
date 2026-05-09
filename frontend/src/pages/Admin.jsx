@@ -534,6 +534,213 @@ function ImageCapturePanel() {
   )
 }
 
+/**
+ * Item Media Library — manages pledge_item_media: one canonical
+ * CF-hosted image per pledge-item title. Used as the fallback source
+ * for /api/hangar when the extension's scrape didn't capture a URL.
+ *
+ * Two views: existing entries (with reference_count + delete) and
+ * top gap titles (sorted by missing_count, with quick-add form).
+ */
+function ItemMediaPanel() {
+  const [view, setView] = useState('entries') // 'entries' | 'gaps'
+  const [entries, setEntries] = useState([])
+  const [gaps, setGaps] = useState([])
+  const [loading, setLoading] = useState(false)
+  const [uploadFor, setUploadFor] = useState(null) // { title } | null
+  const [sourceUrl, setSourceUrl] = useState('')
+  const [notes, setNotes] = useState('')
+  const [submitting, setSubmitting] = useState(false)
+  const [submitError, setSubmitError] = useState(null)
+
+  const refetch = useCallback(async () => {
+    setLoading(true)
+    try {
+      const [eRes, gRes] = await Promise.all([
+        fetch('/api/admin/item-media', { credentials: 'same-origin' }),
+        fetch('/api/admin/item-media/gap-titles', { credentials: 'same-origin' }),
+      ])
+      const eData = await eRes.json()
+      const gData = await gRes.json()
+      setEntries(eData.items || [])
+      setGaps(gData.titles || [])
+    } catch { /* ignore */ }
+    setLoading(false)
+  }, [])
+
+  useEffect(() => { refetch() }, [refetch])
+
+  const handleUpload = async (e) => {
+    e.preventDefault()
+    if (!uploadFor || !sourceUrl) return
+    setSubmitting(true)
+    setSubmitError(null)
+    try {
+      const res = await fetch('/api/admin/item-media', {
+        method: 'POST',
+        credentials: 'same-origin',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ title: uploadFor.title, source_url: sourceUrl, notes: notes || undefined }),
+      })
+      if (!res.ok) {
+        const err = await res.json().catch(() => ({}))
+        throw new Error(err.error || `HTTP ${res.status}`)
+      }
+      setUploadFor(null)
+      setSourceUrl('')
+      setNotes('')
+      await refetch()
+    } catch (err) {
+      setSubmitError(err.message)
+    }
+    setSubmitting(false)
+  }
+
+  const handleDelete = async (id) => {
+    if (!confirm('Remove this item-media entry? Hangar UI will fall back to the placeholder for items with this title.')) return
+    await fetch(`/api/admin/item-media/${id}`, {
+      method: 'DELETE',
+      credentials: 'same-origin',
+      headers: { 'Content-Length': '0' },
+    })
+    setEntries(prev => prev.filter(e => e.id !== id))
+  }
+
+  return (
+    <PanelSection title="Item Media Library" icon={Image}>
+      <div className="px-4 pt-3 pb-2 flex items-center gap-2">
+        <button
+          onClick={() => setView('entries')}
+          className={`px-2.5 py-1 text-xs rounded transition-colors cursor-pointer ${view === 'entries' ? 'bg-sc-accent/20 text-sc-accent border border-sc-accent/30' : 'bg-white/[0.04] text-gray-500 border border-white/[0.06] hover:text-gray-300'}`}
+        >Entries <span className="text-gray-600 ml-1">{entries.length}</span></button>
+        <button
+          onClick={() => setView('gaps')}
+          className={`px-2.5 py-1 text-xs rounded transition-colors cursor-pointer ${view === 'gaps' ? 'bg-sc-accent/20 text-sc-accent border border-sc-accent/30' : 'bg-white/[0.04] text-gray-500 border border-white/[0.06] hover:text-gray-300'}`}
+        >Gap Titles <span className="text-gray-600 ml-1">{gaps.length}</span></button>
+      </div>
+
+      {loading ? (
+        <div className="p-8 text-center text-gray-600 text-sm">Loading...</div>
+      ) : view === 'entries' ? (
+        entries.length === 0 ? (
+          <div className="p-8 text-center text-gray-600 text-sm">No item-media entries yet. Switch to Gap Titles to seed images for the highest-impact items.</div>
+        ) : (
+          <div className="overflow-x-auto">
+            <table className="w-full text-sm">
+              <thead>
+                <tr className="text-[10px] text-gray-500 uppercase tracking-wider border-b border-white/[0.06]">
+                  <th className="px-3 py-2 text-left">Image</th>
+                  <th className="px-3 py-2 text-left">Title</th>
+                  <th className="px-3 py-2 text-center">References</th>
+                  <th className="px-3 py-2 text-left">Uploaded</th>
+                  <th className="px-3 py-2 text-right">Actions</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-white/[0.04]">
+                {entries.map(e => (
+                  <tr key={e.id} className="hover:bg-white/[0.02] transition-colors">
+                    <td className="px-3 py-2">
+                      <div className="w-20 h-14 rounded overflow-hidden bg-white/[0.04]">
+                        <img src={e.cf_image_url} alt="" className="w-full h-full object-cover" onError={ev => { ev.target.style.display = 'none' }} />
+                      </div>
+                    </td>
+                    <td className="px-3 py-2 text-gray-200 truncate max-w-[300px]">{e.title}</td>
+                    <td className="px-3 py-2 text-center text-sc-accent font-mono">{e.reference_count}</td>
+                    <td className="px-3 py-2 text-[11px] text-gray-500 font-mono">{e.uploaded_at?.replace('T', ' ').slice(0, 16) || '—'}</td>
+                    <td className="px-3 py-2 text-right">
+                      <button
+                        onClick={() => handleDelete(e.id)}
+                        className="px-2 py-1 text-xs bg-sc-danger/10 hover:bg-sc-danger/20 border border-sc-danger/30 text-sc-danger rounded cursor-pointer"
+                      >Delete</button>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        )
+      ) : (
+        gaps.length === 0 ? (
+          <div className="p-8 text-center text-gray-600 text-sm">No gap titles — every item without a scrape image_url already has a media entry.</div>
+        ) : (
+          <div className="overflow-x-auto">
+            <table className="w-full text-sm">
+              <thead>
+                <tr className="text-[10px] text-gray-500 uppercase tracking-wider border-b border-white/[0.06]">
+                  <th className="px-3 py-2 text-left">Title</th>
+                  <th className="px-3 py-2 text-left">Kind</th>
+                  <th className="px-3 py-2 text-center">Missing</th>
+                  <th className="px-3 py-2 text-right">Action</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-white/[0.04]">
+                {gaps.map((g, i) => (
+                  <tr key={`${g.title}-${i}`} className="hover:bg-white/[0.02] transition-colors">
+                    <td className="px-3 py-2 text-gray-200 truncate max-w-[400px]">{g.title}</td>
+                    <td className="px-3 py-2 text-[11px] font-mono text-gray-500">{g.kind || '—'}</td>
+                    <td className="px-3 py-2 text-center text-amber-400 font-mono">{g.missing_count}</td>
+                    <td className="px-3 py-2 text-right">
+                      <button
+                        onClick={() => { setUploadFor(g); setSourceUrl(''); setNotes(''); setSubmitError(null) }}
+                        className="px-2 py-1 text-xs bg-sc-accent/10 hover:bg-sc-accent/20 border border-sc-accent/30 text-sc-accent rounded cursor-pointer"
+                      >Add image</button>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        )
+      )}
+
+      {/* Upload dialog — pasting a public source URL is enough; CF Images
+          fetches it server-side. */}
+      {uploadFor && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 cursor-pointer" onClick={() => !submitting && setUploadFor(null)}>
+          <form
+            onSubmit={handleUpload}
+            onClick={e => e.stopPropagation()}
+            className="bg-sc-darker border border-white/10 rounded-lg p-5 w-full max-w-lg space-y-3 cursor-default"
+          >
+            <h3 className="text-sm font-display uppercase tracking-wider text-gray-300">Add image for "{uploadFor.title}"</h3>
+            <div>
+              <label className="block text-[11px] text-gray-500 mb-1">Source image URL</label>
+              <input
+                type="url"
+                value={sourceUrl}
+                onChange={e => setSourceUrl(e.target.value)}
+                required
+                placeholder="https://..."
+                className="w-full px-2 py-1.5 text-sm bg-black/40 border border-white/10 rounded text-gray-200 focus:border-sc-accent/50 outline-none"
+              />
+              <div className="text-[10px] text-gray-600 mt-1">CF Images fetches this URL server-side and stores the result.</div>
+            </div>
+            <div>
+              <label className="block text-[11px] text-gray-500 mb-1">Notes (optional)</label>
+              <input
+                type="text"
+                value={notes}
+                onChange={e => setNotes(e.target.value)}
+                placeholder="e.g. RSI store screenshot 2026-05"
+                className="w-full px-2 py-1.5 text-sm bg-black/40 border border-white/10 rounded text-gray-200 focus:border-sc-accent/50 outline-none"
+              />
+            </div>
+            {submitError && (
+              <div className="text-xs text-sc-danger bg-sc-danger/10 border border-sc-danger/20 rounded px-2 py-1.5">{submitError}</div>
+            )}
+            <div className="flex gap-2 justify-end pt-1">
+              <button type="button" onClick={() => setUploadFor(null)} disabled={submitting} className="px-3 py-1.5 text-xs bg-white/[0.04] border border-white/10 rounded text-gray-400 hover:text-gray-200 cursor-pointer disabled:opacity-30">Cancel</button>
+              <button type="submit" disabled={submitting || !sourceUrl} className="px-3 py-1.5 text-xs bg-sc-accent/15 border border-sc-accent/40 rounded text-sc-accent hover:bg-sc-accent/25 cursor-pointer disabled:opacity-30">
+                {submitting ? 'Uploading…' : 'Upload to CF Images'}
+              </button>
+            </div>
+          </form>
+        </div>
+      )}
+    </PanelSection>
+  )
+}
+
 export default function Admin() {
   const { timezone } = useTimezone()
   const { data: syncHistory, loading, error, refetch } = useSyncStatus()
@@ -736,8 +943,11 @@ export default function Admin() {
         </div>
       )}
 
-      {/* Image Captures — at bottom, large panel */}
+      {/* Image Captures — large panel */}
       <ImageCapturePanel />
+
+      {/* Item Media Library — pledge-item title fallback for /api/hangar */}
+      <ItemMediaPanel />
     </div>
   )
 }

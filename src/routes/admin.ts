@@ -818,5 +818,174 @@ export function adminRoutes() {
     return c.json({ ok: true });
   });
 
+  // ── Pledge item media (cross-user fallback library) ───────────────
+  //
+  // pledge_item_media holds one canonical CF-hosted image per item
+  // title. /api/hangar uses it as a fallback when the extension's
+  // scrape didn't capture an image_url for that title.
+
+  /**
+   * GET /api/admin/item-media
+   * Lists every entry with reference counts so admins can prioritise
+   * which titles to seed with images. `gap` = how many user_pledge_items
+   * rows with this title are missing image_url right now.
+   */
+  routes.get("/item-media", async (c) => {
+    const db = c.env.DB;
+    const { results } = await db
+      .prepare(
+        `SELECT
+           pim.id, pim.title, pim.title_lower, pim.cf_image_id, pim.cf_image_url,
+           pim.source_capture_id, pim.uploaded_by, pim.uploaded_at, pim.notes,
+           (SELECT COUNT(*) FROM user_pledge_items upi
+              WHERE LOWER(upi.title) = pim.title_lower) AS reference_count
+         FROM pledge_item_media pim
+         ORDER BY pim.uploaded_at DESC`,
+      )
+      .all();
+    return c.json({ items: results });
+  });
+
+  /**
+   * GET /api/admin/item-media/gap-titles
+   * Top titles in user_pledge_items that have no image_url AND no
+   * pledge_item_media entry yet. Sorted by row count desc — these are
+   * the highest-impact items to seed.
+   */
+  routes.get("/item-media/gap-titles", async (c) => {
+    const db = c.env.DB;
+    const { results } = await db
+      .prepare(
+        `SELECT upi.title, COUNT(*) AS missing_count, upi.kind
+         FROM user_pledge_items upi
+         LEFT JOIN pledge_item_media pim ON pim.title_lower = LOWER(upi.title)
+         WHERE (upi.image_url IS NULL OR upi.image_url = '')
+           AND pim.id IS NULL
+         GROUP BY upi.title, upi.kind
+         ORDER BY missing_count DESC
+         LIMIT 100`,
+      )
+      .all();
+    return c.json({ titles: results });
+  });
+
+  /**
+   * POST /api/admin/item-media
+   * Body: { title, source_url, notes? }
+   * CF-uploads the source URL and inserts (or replaces) the
+   * pledge_item_media row keyed by lowercase title.
+   */
+  routes.post("/item-media",
+    validate("json", z.object({
+      title: z.string().trim().min(1).max(255),
+      source_url: z.string().url(),
+      notes: z.string().max(1000).optional(),
+    })),
+    async (c) => {
+      const { title, source_url, notes } = c.req.valid("json");
+      const token = c.env.CLOUDFLARE_IMAGES_TOKEN;
+      const accountHash = c.env.CF_ACCOUNT_HASH;
+      const accountId = c.env.CF_ACCOUNT_ID;
+      if (!token || !accountHash || !accountId) {
+        return c.json({ error: "CF Images credentials not configured" }, 500);
+      }
+
+      const cfImagesId = await uploadToCFImages(accountId, token, source_url, {
+        title,
+        source: "item_media_admin_upload",
+      });
+      const cfImageUrl = `https://imagedelivery.net/${accountHash}/${cfImagesId}/public`;
+      const userId = c.get("user")?.id ?? null;
+      const titleLower = title.toLowerCase();
+
+      // Upsert by title_lower so re-uploading the same title replaces
+      // (admin can swap a bad image for a better one).
+      await c.env.DB
+        .prepare(
+          `INSERT INTO pledge_item_media (title, title_lower, cf_image_id, cf_image_url, uploaded_by, notes)
+           VALUES (?, ?, ?, ?, ?, ?)
+           ON CONFLICT(title_lower) DO UPDATE SET
+             title = excluded.title,
+             cf_image_id = excluded.cf_image_id,
+             cf_image_url = excluded.cf_image_url,
+             uploaded_by = excluded.uploaded_by,
+             uploaded_at = datetime('now'),
+             notes = excluded.notes`,
+        )
+        .bind(title, titleLower, cfImagesId, cfImageUrl, userId, notes ?? null)
+        .run();
+
+      return c.json({ ok: true, cf_image_id: cfImagesId, cf_image_url: cfImageUrl });
+    },
+  );
+
+  /**
+   * POST /api/admin/image-captures/:id/promote-to-item-media
+   * Convenience: take an existing image_captures row and promote its
+   * URL into pledge_item_media for the same title. Skips re-upload
+   * when the capture URL is already on imagedelivery.net.
+   */
+  routes.post("/image-captures/:id/promote-to-item-media", async (c) => {
+    const id = parseInt(c.req.param("id"), 10);
+    const db = c.env.DB;
+    const cap = await db
+      .prepare("SELECT id, url, title FROM image_captures WHERE id = ?")
+      .bind(id)
+      .first<{ id: number; url: string; title: string | null }>();
+    if (!cap) return c.json({ error: "Capture not found" }, 404);
+    if (!cap.title || cap.title.trim() === "") {
+      return c.json({ error: "Capture has no title — cannot key item media" }, 400);
+    }
+
+    const token = c.env.CLOUDFLARE_IMAGES_TOKEN;
+    const accountHash = c.env.CF_ACCOUNT_HASH;
+    const accountId = c.env.CF_ACCOUNT_ID;
+    if (!token || !accountHash || !accountId) {
+      return c.json({ error: "CF Images credentials not configured" }, 500);
+    }
+
+    const cfImagesId = await uploadToCFImages(accountId, token, cap.url, {
+      title: cap.title,
+      source: "item_media_promoted_capture",
+      capture_id: String(cap.id),
+    });
+    const cfImageUrl = `https://imagedelivery.net/${accountHash}/${cfImagesId}/public`;
+    const userId = c.get("user")?.id ?? null;
+    const titleLower = cap.title.toLowerCase();
+
+    await db.batch([
+      db
+        .prepare(
+          `INSERT INTO pledge_item_media (title, title_lower, cf_image_id, cf_image_url, source_capture_id, uploaded_by)
+           VALUES (?, ?, ?, ?, ?, ?)
+           ON CONFLICT(title_lower) DO UPDATE SET
+             title = excluded.title,
+             cf_image_id = excluded.cf_image_id,
+             cf_image_url = excluded.cf_image_url,
+             source_capture_id = excluded.source_capture_id,
+             uploaded_by = excluded.uploaded_by,
+             uploaded_at = datetime('now')`,
+        )
+        .bind(cap.title, titleLower, cfImagesId, cfImageUrl, cap.id, userId),
+      db.prepare("UPDATE image_captures SET promoted = 1 WHERE id = ?").bind(id),
+    ]);
+
+    return c.json({ ok: true, cf_image_id: cfImagesId, cf_image_url: cfImageUrl });
+  });
+
+  /**
+   * DELETE /api/admin/item-media/:id
+   * Removes the lookup entry. CF Images object stays — orphans get
+   * cleaned up by a separate sweeper, not this endpoint.
+   */
+  routes.delete("/item-media/:id",
+    validate("param", z.object({ id: z.coerce.number().int().positive() })),
+    async (c) => {
+      const { id } = c.req.valid("param");
+      await c.env.DB.prepare("DELETE FROM pledge_item_media WHERE id = ?").bind(id).run();
+      return c.json({ ok: true });
+    },
+  );
+
   return routes;
 }
