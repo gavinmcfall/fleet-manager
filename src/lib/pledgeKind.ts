@@ -9,19 +9,22 @@
  * skus, etc.). The DATA was still scraped — only the classifier
  * label is missing — so any UI that filters by kind misses these.
  *
- * Design rule: precision over recall. A wrong label corrupts
- * downstream filters more than NULL does. Only return a non-null
- * value when the title contains an unambiguous token. Anything else
- * stays NULL.
+ * Design rule: precision over recall for canonical kinds. Anything
+ * that doesn't match a specific rule lands in "Other" — never NULL —
+ * so the Hangar UI's filter chips always cover 100% of items.
  *
  * Returns one of the canonical `kind` values that already appear in
  * the production distribution (e.g., "FPS Equipment", "Hangar
- * decoration", "Skin") so this stays consistent with rows that DO get
- * RSI's scraped value.
+ * decoration", "Skin", "Other") so this stays consistent with rows
+ * that DO get RSI's scraped value.
  *
  * Rule order matters: decorative items run first so "Helmet Statue"
  * lands as decoration, not armour. Within FPS Equipment we don't
  * need fine-grained sub-typing — RSI uses one bucket and we match.
+ *
+ * Returns null only when the title itself is missing — there's
+ * nothing to classify in that case, and the row stays NULL so the
+ * data-quality issue stays visible.
  */
 export function inferKind(title: string | null | undefined): string | null {
   if (!title || typeof title !== "string") return null;
@@ -95,5 +98,8 @@ export function inferKind(title: string | null | undefined): string | null {
     return "FPS Equipment";
   }
 
-  return null;
+  // Catch-all: title exists but doesn't match any canonical bucket.
+  // Items like CCU upgrade tokens, digital downloads, ship name
+  // reservations, schematics, "Sneak-Peek", "Legacy Alpha" land here.
+  return "Other";
 }

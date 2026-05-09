@@ -21,6 +21,7 @@ const KIND_STYLES = {
   Component: 'bg-cyan-500/10 text-cyan-300 border-cyan-500/30',
   'Hangar decoration': 'bg-pink-400/10 text-pink-200 border-pink-400/30',
   Credits: 'bg-yellow-400/10 text-yellow-200 border-yellow-400/30',
+  Other: 'bg-slate-500/10 text-slate-300 border-slate-500/30',
   uncategorised: 'bg-white/5 text-gray-300 border-white/15',
 }
 

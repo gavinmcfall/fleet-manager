@@ -12,6 +12,7 @@ export const KIND_ORDER = [
   'Component',
   'Hangar decoration',
   'Credits',
+  'Other',
 ]
 
 const KIND_LABELS = {

@@ -132,35 +132,39 @@ describe("inferKind", () => {
     });
   });
 
-  describe("returns null for genuinely uncategorisable titles", () => {
+  describe("Other — fallback for titles outside the canonical taxonomy", () => {
     it.each([
       ["TBD Fabricator"],
-      [""],
       ["Aurora MR LN"],
       ["Star Citizen Digital Download"],
       ["Squadron 42 Digital Download"],
       ["Digital Star Map"],
+      ["Digital Game Soundtrack"],
       ["Upgrade - 315p Explorer To Nomad"],
+      ["Upgrade - Cutlass Black To C1 Spirit"],
       ["Carrack Name Reservation"],
       ["Schematic RSI Polaris"],
+      ["Schematic Drake Caterpillar"],
       ["Sneak-Peek"],
       ["Legacy Alpha"],
-      ["Spectrum-Badge"],  // standalone forum badge — not classified
+      ["Spectrum-Badge"], // forum badge, not a hangar decoration
       ["Engine Tuning Kit"],
       ["BB-12 Manned Maneuvering Unit"],
-    ])("returns null for %s", (title) => {
-      expect(inferKind(title)).toBeNull();
+    ])("classifies %s as Other", (title) => {
+      expect(inferKind(title)).toBe("Other");
     });
   });
 
-  describe("preserves null on empty input", () => {
-    it("returns null when title is empty", () => {
-      expect(inferKind("")).toBeNull();
-    });
-
-    it("returns null for non-string input", () => {
+  describe("returns null only when title is missing", () => {
+    it("null title", () => {
       expect(inferKind(null as unknown as string)).toBeNull();
+    });
+    it("undefined title", () => {
       expect(inferKind(undefined as unknown as string)).toBeNull();
     });
+    it("empty string title", () => {
+      expect(inferKind("")).toBeNull();
+    });
   });
+
 });
