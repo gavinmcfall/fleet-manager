@@ -750,6 +750,14 @@ export function adminRoutes() {
            WHERE pim.title_norm = ic.title_norm
              AND ic.title_norm != ''
          )
+         /* Manual admin override — when an admin clicks "Pick paint"
+            in the captures panel and picks the canonical row from the
+            paint master list, manual_paint_id is set. The capture
+            drops out of the unseen view immediately. */
+         AND NOT EXISTS (
+           SELECT 1 FROM paints pmp
+           WHERE pmp.id = ic.manual_paint_id
+         )
          /* Ship-name divergence resolver: pledge titles like
             "Ares - Aspire Paint" don't title_norm-match
             "Ares Star Fighter Aspire Livery" because the pledge
@@ -783,8 +791,47 @@ export function adminRoutes() {
     const { results } = await db
       .prepare(`SELECT ic.*,
         v.image_url as current_vehicle_image,
-        (SELECT p.id FROM paints p
-           WHERE p.title_norm = ic.title_norm LIMIT 1) as matched_paint_id,
+        /* Resolved paint match. Priority cascade:
+             1. Manual admin override (manual_paint_id)
+             2. title_norm equality
+             3. ship + variant cross-table SQL match
+           First non-null wins. Used by the captures panel to show a
+           "Matched: <paint name>" badge or "Unmatched [Pick paint]"
+           button. */
+        COALESCE(
+          (SELECT pm1.id FROM paints pm1
+             WHERE pm1.id = ic.manual_paint_id LIMIT 1),
+          (SELECT pm2.id FROM paints pm2
+             WHERE pm2.title_norm = ic.title_norm
+               AND ic.title_norm != '' LIMIT 1),
+          (SELECT pm3.id FROM paints pm3
+             JOIN paint_vehicles pv ON pv.paint_id = pm3.id
+             JOIN vehicles vp ON vp.id = pv.vehicle_id
+             WHERE ic.kind = 'Skin'
+               AND ic.title LIKE '% - %'
+               AND pm3.image_url LIKE 'https://imagedelivery.net%'
+               AND LOWER(pm3.name) LIKE '%' || LOWER(TRIM(REPLACE(REPLACE(SUBSTR(ic.title, INSTR(ic.title, ' - ') + 3), ' Paint', ''), ' Livery', ''))) || '%'
+               AND LOWER(vp.name) LIKE '%' || LOWER(TRIM(SUBSTR(ic.title, 1, INSTR(ic.title, ' - ') - 1))) || '%'
+             LIMIT 1)
+        ) as matched_paint_id,
+        (SELECT p.name FROM paints p
+           WHERE p.id = COALESCE(
+             (SELECT pm1.id FROM paints pm1
+                WHERE pm1.id = ic.manual_paint_id LIMIT 1),
+             (SELECT pm2.id FROM paints pm2
+                WHERE pm2.title_norm = ic.title_norm
+                  AND ic.title_norm != '' LIMIT 1),
+             (SELECT pm3.id FROM paints pm3
+                JOIN paint_vehicles pv ON pv.paint_id = pm3.id
+                JOIN vehicles vp ON vp.id = pv.vehicle_id
+                WHERE ic.kind = 'Skin'
+                  AND ic.title LIKE '% - %'
+                  AND pm3.image_url LIKE 'https://imagedelivery.net%'
+                  AND LOWER(pm3.name) LIKE '%' || LOWER(TRIM(REPLACE(REPLACE(SUBSTR(ic.title, INSTR(ic.title, ' - ') + 3), ' Paint', ''), ' Livery', ''))) || '%'
+                  AND LOWER(vp.name) LIKE '%' || LOWER(TRIM(SUBSTR(ic.title, 1, INSTR(ic.title, ' - ') - 1))) || '%'
+                LIMIT 1)
+           )
+           LIMIT 1) as matched_paint_name,
         (SELECT p.image_url FROM paints p
            WHERE p.title_norm = ic.title_norm LIMIT 1) as matched_paint_image,
         (SELECT lm.id FROM loot_map lm WHERE LOWER(lm.name) = LOWER(ic.title) LIMIT 1) as matched_loot_id,
@@ -867,6 +914,86 @@ export function adminRoutes() {
     await db.prepare("UPDATE image_captures SET promoted = 1 WHERE id = ?").bind(id).run();
     return c.json({ ok: true });
   });
+
+  /**
+   * GET /api/admin/paints/search?q=<term>
+   *
+   * Master paint list search — used by the captures panel "Pick paint"
+   * dialog when an admin is manually linking an unmatched capture to
+   * its canonical paint row.
+   *
+   * Matches `q` against `name`, `class_name`, and `slug` (LIKE %q%).
+   * Returns up to 50 rows ordered by image-availability (paints with
+   * a CDN image first) then name.
+   */
+  routes.get("/paints/search", async (c) => {
+    const q = (c.req.query("q") || "").trim();
+    if (!q) return c.json({ error: "q is required" }, 400);
+
+    const like = `%${q.toLowerCase()}%`;
+    const { results } = await c.env.DB
+      .prepare(
+        `SELECT p.id, p.name, p.class_name, p.slug,
+                p.image_url IS NOT NULL AND p.image_url LIKE 'https://imagedelivery.net%' AS has_image,
+                (SELECT GROUP_CONCAT(v.name, ', ')
+                   FROM paint_vehicles pv
+                   JOIN vehicles v ON v.id = pv.vehicle_id
+                  WHERE pv.paint_id = p.id) AS vehicle_names
+           FROM paints p
+          WHERE LOWER(p.name) LIKE ?
+             OR LOWER(p.class_name) LIKE ?
+             OR LOWER(p.slug) LIKE ?
+          ORDER BY has_image DESC, p.name ASC
+          LIMIT 50`,
+      )
+      .bind(like, like, like)
+      .all<{ has_image: number }>();
+    // Normalise SQLite's 0/1 boolean encoding to JSON booleans for the UI.
+    const paints = results.map((p) => ({ ...p, has_image: p.has_image === 1 }));
+    return c.json({ paints });
+  });
+
+  /**
+   * PATCH /api/admin/image-captures/:id/paint-match
+   * Body: { paint_id: number | null }
+   *
+   * Set or clear the manual paint override for a capture. When non-null,
+   * the captures filter treats the row as already-covered and drops it
+   * out of the default unseen view.
+   *
+   * paint_id=null clears the link (admin un-matched). 404s on unknown
+   * paint_id so we don't end up with dangling references.
+   */
+  routes.patch("/image-captures/:id/paint-match",
+    validate("json", z.object({
+      paint_id: z.number().int().positive().nullable(),
+    })),
+    async (c) => {
+      const id = parseInt(c.req.param("id"), 10);
+      const { paint_id } = c.req.valid("json");
+      const db = c.env.DB;
+
+      const cap = await db
+        .prepare("SELECT id FROM image_captures WHERE id = ?")
+        .bind(id)
+        .first();
+      if (!cap) return c.json({ error: "Capture not found" }, 404);
+
+      if (paint_id !== null) {
+        const paint = await db
+          .prepare("SELECT id FROM paints WHERE id = ?")
+          .bind(paint_id)
+          .first();
+        if (!paint) return c.json({ error: "Paint not found" }, 404);
+      }
+
+      await db
+        .prepare("UPDATE image_captures SET manual_paint_id = ? WHERE id = ?")
+        .bind(paint_id, id)
+        .run();
+      return c.json({ ok: true });
+    },
+  );
 
   /**
    * DELETE /api/admin/image-captures/:id
