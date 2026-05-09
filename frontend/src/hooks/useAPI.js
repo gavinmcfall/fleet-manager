@@ -523,8 +523,13 @@ export function useUserBlueprints() {
   return useAPI('/blueprints')
 }
 
-export async function saveUserBlueprint({ craftingBlueprintId, nickname, qualityConfig }) {
-  return postJSON('/blueprints', { craftingBlueprintId, nickname, qualityConfig })
+export async function saveUserBlueprint({ blueprintUuid, craftingBlueprintId, nickname, qualityConfig }) {
+  // Prefer uuid (channel-stable); craftingBlueprintId is supported as a
+  // legacy fallback. The route enforces that at least one is supplied.
+  const body = { nickname, qualityConfig }
+  if (blueprintUuid) body.blueprintUuid = blueprintUuid
+  if (craftingBlueprintId != null) body.craftingBlueprintId = craftingBlueprintId
+  return postJSON('/blueprints', body)
 }
 
 export async function updateUserBlueprint(id, { nickname, craftedQuantity, qualityConfig }) {

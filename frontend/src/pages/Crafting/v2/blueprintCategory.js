@@ -84,52 +84,93 @@ export function shipComponentLabel(type) {
 }
 
 /**
- * Per-category sub-filter axis configuration. The browser uses this to
- * render a chip row beneath the search input. Each axis declares:
- *  - key: filter state slot
+ * Per-category sub-filter axes. Each category has an ARRAY of axes
+ * (some have one, some two). The browser renders one chip row per axis.
+ *
+ * Each axis declares:
+ *  - key: filter state slot (must be unique across all axes)
  *  - label: legend
  *  - extract: bp → string|number|null (the value to count by)
  *  - format: optional (value) => display label override
  *  - order: optional explicit ordering (otherwise descending by count)
+ *
+ * Sources:
+ *  - fps_weapon weapon type → bp.sub_type (rifle/lmg/sniper/...)
+ *  - fps_armour role → bp.sub_type (combat/hunter/...)
+ *  - fps_armour weight → bp.base_stats.armour_weight (Light/Medium/Heavy/Personal)
+ *    populated server-side from fps_armour.sub_type, which CIG overloads
+ *    to mean "weight class" rather than category role
+ *  - fps_ammo type → bp.sub_type (ballistic/laser/...)
+ *  - ship_weapon size → bp.base_stats.ship_size from vehicle_components.size,
+ *    falling back to parseSize() when base_stats is missing
+ *  - ship_weapon damage type → bp.base_stats.damage_type (Energy/Physical/Distortion)
+ *    from component_weapons.damage_type
+ *  - ship_component → bp.type
  */
+function shipSize(bp) {
+  return bp?.base_stats?.ship_size ?? parseSize(bp)
+}
+
 export const SUB_FILTERS = {
-  fps_weapon: {
-    key: 'fps_weapon_subtype',
-    label: 'Weapon type',
-    extract: (bp) => bp.sub_type || null,
-    order: ['rifle', 'sniper', 'lmg', 'smg', 'shotgun', 'pistol'],
-  },
-  fps_armour: {
-    key: 'fps_armour_role',
-    label: 'Role',
-    extract: (bp) => bp.sub_type || null,
-    order: [
-      'combat', 'engineer', 'hunter', 'stealth', 'flightsuit',
-      'undersuit', 'medic', 'miner', 'salvager', 'explorer',
-      'environment', 'cosmonaut', 'racer', 'radiation',
-    ],
-  },
-  fps_ammo: {
-    key: 'ammo_type',
-    label: 'Ammo type',
-    extract: (bp) => bp.sub_type || null,
-    order: ['ballistic', 'electron', 'laser', 'plasma', 'shotgun'],
-  },
-  ship_weapon: {
-    key: 'ship_weapon_size',
-    label: 'Size',
-    extract: parseSize,
-    format: (v) => `S${v}`,
-    order: [1, 2, 3, 4, 5, 6, 7],
-  },
-  ship_component: {
-    key: 'ship_component_type',
-    label: 'Component',
-    extract: (bp) => bp.type,
-    format: shipComponentLabel,
-    order: [
-      'cooler', 'powerplant', 'shield', 'radar', 'quantumdrive',
-      'mininglaser', 'tractorbeam', 'salvage',
-    ],
-  },
+  fps_weapon: [
+    {
+      key: 'fps_weapon_subtype',
+      label: 'Weapon type',
+      extract: (bp) => bp.sub_type || null,
+      order: ['rifle', 'sniper', 'lmg', 'smg', 'shotgun', 'pistol'],
+    },
+  ],
+  fps_armour: [
+    {
+      key: 'fps_armour_role',
+      label: 'Role',
+      extract: (bp) => bp.sub_type || null,
+      order: [
+        'combat', 'engineer', 'hunter', 'stealth', 'flightsuit',
+        'undersuit', 'medic', 'miner', 'salvager', 'explorer',
+        'environment', 'cosmonaut', 'racer', 'radiation',
+      ],
+    },
+    {
+      key: 'fps_armour_weight',
+      label: 'Weight',
+      extract: (bp) => bp?.base_stats?.armour_weight || null,
+      order: ['Light', 'Medium', 'Heavy', 'SuperHeavy', 'Personal'],
+    },
+  ],
+  fps_ammo: [
+    {
+      key: 'ammo_type',
+      label: 'Ammo type',
+      extract: (bp) => bp.sub_type || null,
+      order: ['ballistic', 'electron', 'laser', 'plasma', 'shotgun'],
+    },
+  ],
+  ship_weapon: [
+    {
+      key: 'ship_weapon_size',
+      label: 'Size',
+      extract: shipSize,
+      format: (v) => `S${v}`,
+      order: [1, 2, 3, 4, 5, 6, 7],
+    },
+    {
+      key: 'ship_weapon_damage',
+      label: 'Damage type',
+      extract: (bp) => bp?.base_stats?.damage_type || null,
+      // Sourced from CIG; common values: Energy, Physical, Distortion.
+    },
+  ],
+  ship_component: [
+    {
+      key: 'ship_component_type',
+      label: 'Component',
+      extract: (bp) => bp.type,
+      format: shipComponentLabel,
+      order: [
+        'cooler', 'powerplant', 'shield', 'radar', 'quantumdrive',
+        'mininglaser', 'tractorbeam', 'salvage',
+      ],
+    },
+  ],
 }

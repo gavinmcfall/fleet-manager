@@ -1008,10 +1008,12 @@ return cachedJson(c, `gd:crafting`, async () => {
           }
         }
 
-        // Vehicle weapons (ship-mounted cannons/repeaters/gatlings). These
-        // join through vehicle_components — component_weapons keys on
-        // component_id, not class_name directly.
-        const vehicleWeaponResult = await db.prepare(`SELECT vc.class_name, vc.name,
+        // Vehicle weapons (ship-mounted cannons/repeaters/gatlings). Joined
+        // through vehicle_components → component_weapons. The
+        // vehicle_components row carries the canonical `size` (S1-S7) used
+        // by the Ship Weapons size filter — surface it as `ship_size` so
+        // the frontend doesn't have to parse class names.
+        const vehicleWeaponResult = await db.prepare(`SELECT vc.class_name, vc.name, vc.size AS ship_size,
                   cw.rounds_per_minute, cw.damage_per_shot, cw.dps,
                   cw.effective_range, cw.projectile_speed, cw.damage_type, cw.fire_modes
            FROM ${t("component_weapons")} cw
@@ -1022,6 +1024,7 @@ return cachedJson(c, `gd:crafting`, async () => {
           if (weaponTags.includes(cn) && !baseStatsMap.has(cn)) {
             baseStatsMap.set(cn, {
               item_name: w.name,
+              ship_size: w.ship_size,
               rounds_per_minute: w.rounds_per_minute,
               damage: w.damage_per_shot,
               dps: w.dps,
@@ -1051,8 +1054,13 @@ return cachedJson(c, `gd:crafting`, async () => {
         for (const a of armourResult.results) {
           const cn = (a.class_name as string).toLowerCase()
           if (armourTags.includes(cn) && !baseStatsMap.has(cn)) {
+            // fps_armour.sub_type stores the WEIGHT (Light/Medium/Heavy/
+            // Personal). Surface it as `armour_weight` so the FPS Armour
+            // filter row can offer a Weight axis distinct from the BP's
+            // own sub_type (which holds the role: combat/hunter/...).
             baseStatsMap.set(cn, {
               item_name: a.name,
+              armour_weight: a.sub_type,
               sub_type: a.sub_type,
               resist_physical: a.resist_physical,
               resist_energy: a.resist_energy,
@@ -1066,6 +1074,9 @@ return cachedJson(c, `gd:crafting`, async () => {
         for (const h of helmetResult.results) {
           const cn = (h.class_name as string).toLowerCase()
           if (armourTags.includes(cn) && !baseStatsMap.has(cn)) {
+            // Helmets share the armour BP type but live in fps_helmets;
+            // they don't carry a weight value of their own (no sub_type
+            // column with weight data). Leave armour_weight unset.
             baseStatsMap.set(cn, { item_name: h.name })
           }
         }

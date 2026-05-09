@@ -171,36 +171,73 @@ export function blueprintRoutes() {
     },
   );
 
-  // ── POST / — save quality-sim config for a blueprint ────────────
-  // Legacy route used by the quality simulator. Implicitly marks the
-  // blueprint as owned because saving a sim config means the user is
-  // working with this blueprint.
+  // ── POST / — save quality-sim config (uuid-keyed) ───────────────
+  // Used by the quality simulator. Accepts blueprintUuid (preferred,
+  // channel-stable) OR craftingBlueprintId (legacy fallback). Saving a
+  // config implicitly marks the BP as owned. UPSERT collapses cleanly
+  // even for PTU-only BPs whose LIVE FK is null.
   routes.post(
     "/",
     validate(
       "json",
-      z.object({
-        craftingBlueprintId: z.number().int().positive(),
-        nickname: z.string().max(100).nullable().optional(),
-        qualityConfig: z
-          .record(z.string(), z.number().int().min(0).max(1000))
-          .nullable()
-          .optional(),
-      }),
+      z
+        .object({
+          blueprintUuid: z.string().uuid().optional(),
+          craftingBlueprintId: z.number().int().positive().optional(),
+          nickname: z.string().max(100).nullable().optional(),
+          qualityConfig: z
+            .record(z.string(), z.number().int().min(0).max(1000))
+            .nullable()
+            .optional(),
+        })
+        .refine((v) => v.blueprintUuid || v.craftingBlueprintId, {
+          message: "blueprintUuid or craftingBlueprintId required",
+        }),
     ),
     async (c) => {
       const db = c.env.DB;
       const userId = getAuthUser(c).id;
-      const { craftingBlueprintId, nickname, qualityConfig } =
+      const { blueprintUuid, craftingBlueprintId, nickname, qualityConfig } =
         c.req.valid("json");
 
       const configJson = qualityConfig ? JSON.stringify(qualityConfig) : null;
 
-      // Look up the uuid for the new uniqueness key.
-      const bp = await db
-        .prepare("SELECT uuid FROM crafting_blueprints WHERE id = ?")
-        .bind(craftingBlueprintId)
-        .first<{ uuid: string }>();
+      // Resolve uuid + LIVE id from whichever input was provided. We
+      // accept the BP whether it lives in LIVE or PTU — the route
+      // queries both tables.
+      let resolvedUuid = blueprintUuid ?? null;
+      let liveId: number | null = null;
+      if (blueprintUuid) {
+        const live = await db
+          .prepare("SELECT id FROM crafting_blueprints WHERE uuid = ? LIMIT 1")
+          .bind(blueprintUuid)
+          .first<{ id: number }>();
+        liveId = live?.id ?? null;
+      } else if (craftingBlueprintId) {
+        liveId = craftingBlueprintId;
+        // Try LIVE first, then PTU shadow.
+        const live = await db
+          .prepare("SELECT uuid FROM crafting_blueprints WHERE id = ? LIMIT 1")
+          .bind(craftingBlueprintId)
+          .first<{ uuid: string }>();
+        if (live?.uuid) {
+          resolvedUuid = live.uuid;
+        } else {
+          const ptu = await db
+            .prepare(
+              "SELECT uuid FROM ptu_crafting_blueprints WHERE id = ? LIMIT 1",
+            )
+            .bind(craftingBlueprintId)
+            .first<{ uuid: string }>();
+          resolvedUuid = ptu?.uuid ?? null;
+          // PTU id space differs — don't pin liveId to a PTU value.
+          if (!live) liveId = null;
+        }
+      }
+
+      if (!resolvedUuid) {
+        return c.json({ error: "Blueprint not found" }, 404);
+      }
 
       await db
         .prepare(
@@ -209,22 +246,17 @@ export function blueprintRoutes() {
               nickname, quality_config_json, is_owned, source, updated_at)
            VALUES (?, ?, ?, ?, ?, 1, 'manual', datetime('now'))
            ON CONFLICT(user_id, blueprint_uuid) DO UPDATE SET
-             nickname = COALESCE(excluded.nickname, user_blueprints.nickname),
-             quality_config_json =
-               COALESCE(excluded.quality_config_json, user_blueprints.quality_config_json),
+             nickname = excluded.nickname,
+             quality_config_json = excluded.quality_config_json,
+             crafting_blueprint_id =
+               COALESCE(user_blueprints.crafting_blueprint_id, excluded.crafting_blueprint_id),
              is_owned = 1,
              updated_at = datetime('now')`,
         )
-        .bind(
-          userId,
-          craftingBlueprintId,
-          bp?.uuid ?? null,
-          nickname ?? null,
-          configJson,
-        )
+        .bind(userId, liveId, resolvedUuid, nickname ?? null, configJson)
         .run();
 
-      return c.json({ ok: true });
+      return c.json({ ok: true, blueprintUuid: resolvedUuid });
     },
   );
 

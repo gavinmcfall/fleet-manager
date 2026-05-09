@@ -59,15 +59,17 @@ export default function CraftingV2() {
   const [activeType, setActiveType] = useState(readStoredType)
   const [search, setSearch] = useState('')
   const [stateFilter, setStateFilter] = useState('all') // 'all' | 'owned' | 'wishlist' | 'sim'
-  // Per-tab sub-filter selection — keyed by axis.key from SUB_FILTERS.
-  // Value is a string ('all') OR a stringified value matching one of the
-  // computed buckets. Reset when switching tabs.
-  const [subFilter, setSubFilter] = useState('all')
+  // Per-tab sub-filter selections — keyed by axis.key from SUB_FILTERS.
+  // Each axis has its own selected value ('all' or a stringified bucket).
+  // Reset when switching tabs.
+  const [subFilters, setSubFilters] = useState({})
+  const setSubFilter = (axisKey, value) =>
+    setSubFilters(prev => ({ ...prev, [axisKey]: value }))
   const compare = useCompareTray()
 
-  // Reset sub-filter when the user changes tabs — different tabs have
-  // different axes, the value wouldn't transfer meaningfully.
-  useEffect(() => { setSubFilter('all') }, [activeType])
+  // Reset sub-filter selections when the user changes tabs — different
+  // tabs have different axes, the values wouldn't transfer meaningfully.
+  useEffect(() => { setSubFilters({}) }, [activeType])
 
   useEffect(() => { localStorage.setItem(VIEW_STORAGE_KEY, view) }, [view])
   useEffect(() => { localStorage.setItem(TYPE_STORAGE_KEY, activeType) }, [activeType])
@@ -125,38 +127,40 @@ export default function CraftingV2() {
     return data.blueprints.filter(bp => deriveCategory(bp) === activeType)
   }, [data, activeType])
 
-  // Per-tab sub-filter axis (e.g. weapon type, armour role, ship size).
-  const axis = SUB_FILTERS[activeType]
+  // Per-tab sub-filter axes (1+ per category).
+  const axes = SUB_FILTERS[activeType] ?? []
 
-  // Bucket counts for the sub-filter chip row.
-  const subBuckets = useMemo(() => {
-    if (!axis) return []
-    const counts = new Map()
-    for (const bp of categoryBlueprints) {
-      const v = axis.extract(bp)
-      if (v == null || v === '') continue
-      const key = String(v)
-      counts.set(key, (counts.get(key) ?? 0) + 1)
-    }
-    // Order: explicit `axis.order` first (only present buckets), then any
-    // remainders sorted by descending count.
-    const seen = new Set()
-    const rows = []
-    if (axis.order) {
-      for (const v of axis.order) {
+  // Compute bucket counts once per axis. Each axis row in the UI reads
+  // from its own entry in this map.
+  const bucketsByAxis = useMemo(() => {
+    const out = {}
+    for (const axis of axes) {
+      const counts = new Map()
+      for (const bp of categoryBlueprints) {
+        const v = axis.extract(bp)
+        if (v == null || v === '') continue
         const key = String(v)
-        if (counts.has(key)) {
-          rows.push({ key, value: v, count: counts.get(key) })
-          seen.add(key)
+        counts.set(key, (counts.get(key) ?? 0) + 1)
+      }
+      const seen = new Set()
+      const rows = []
+      if (axis.order) {
+        for (const v of axis.order) {
+          const key = String(v)
+          if (counts.has(key)) {
+            rows.push({ key, value: v, count: counts.get(key) })
+            seen.add(key)
+          }
         }
       }
+      const remainder = [...counts.entries()]
+        .filter(([k]) => !seen.has(k))
+        .sort(([, a], [, b]) => b - a)
+        .map(([k, c]) => ({ key: k, value: k, count: c }))
+      out[axis.key] = [...rows, ...remainder]
     }
-    const remainder = [...counts.entries()]
-      .filter(([k]) => !seen.has(k))
-      .sort(([, a], [, b]) => b - a)
-      .map(([k, c]) => ({ key: k, value: k, count: c }))
-    return [...rows, ...remainder]
-  }, [axis, categoryBlueprints])
+    return out
+  }, [axes, categoryBlueprints])
 
   const blueprints = useMemo(() => {
     return categoryBlueprints.filter(bp => {
@@ -164,9 +168,13 @@ export default function CraftingV2() {
       if (stateFilter === 'wishlist' && !(bp.uuid && wishlistSet.has(bp.uuid))) return false
       if (stateFilter === 'sim' && !(bp.uuid && simSet.has(bp.uuid))) return false
 
-      if (subFilter !== 'all' && axis) {
-        const v = axis.extract(bp)
-        if (String(v) !== subFilter) return false
+      // Apply each axis filter if a specific bucket is selected.
+      for (const axis of axes) {
+        const sel = subFilters[axis.key]
+        if (sel && sel !== 'all') {
+          const v = axis.extract(bp)
+          if (String(v) !== sel) return false
+        }
       }
 
       if (normSearch) {
@@ -180,7 +188,7 @@ export default function CraftingV2() {
       }
       return true
     })
-  }, [categoryBlueprints, stateFilter, ownedSet, wishlistSet, simSet, subFilter, axis, normSearch])
+  }, [categoryBlueprints, stateFilter, ownedSet, wishlistSet, simSet, subFilters, axes, normSearch])
 
   const handleQualitySim = (bp) => navigate(`/crafting/${bp.id}?tab=quality`)
 
@@ -300,27 +308,35 @@ export default function CraftingV2() {
         </FilterChip>
       </div>
 
-      {/* Per-tab sub-filter chips (e.g. weapon type, armour role, ship size, component) */}
-      {axis && subBuckets.length > 0 && (
-        <div className="flex items-center gap-1.5 mb-4 flex-wrap font-mono text-[10px] uppercase tracking-[0.05em]">
-          <span className="text-[var(--text-subtle)] mr-1">{axis.label}:</span>
-          <FilterChip active={subFilter === 'all'} onClick={() => setSubFilter('all')}>
-            All <span className="opacity-60">· {categoryBlueprints.length}</span>
-          </FilterChip>
-          {subBuckets.map(({ key, value, count }) => {
-            const label = axis.format ? axis.format(value) : String(value)
-            return (
-              <FilterChip
-                key={key}
-                active={subFilter === key}
-                onClick={() => setSubFilter(key)}
-              >
-                {label} <span className="opacity-60">· {count}</span>
-              </FilterChip>
-            )
-          })}
-        </div>
-      )}
+      {/* Per-tab sub-filter chip rows — one row per axis */}
+      {axes.map(axis => {
+        const buckets = bucketsByAxis[axis.key] ?? []
+        if (buckets.length === 0) return null
+        const sel = subFilters[axis.key] ?? 'all'
+        return (
+          <div
+            key={axis.key}
+            className="flex items-center gap-1.5 mb-3 flex-wrap font-mono text-[10px] uppercase tracking-[0.05em]"
+          >
+            <span className="text-[var(--text-subtle)] mr-1">{axis.label}:</span>
+            <FilterChip active={sel === 'all'} onClick={() => setSubFilter(axis.key, 'all')}>
+              All <span className="opacity-60">· {categoryBlueprints.length}</span>
+            </FilterChip>
+            {buckets.map(({ key, value, count }) => {
+              const label = axis.format ? axis.format(value) : String(value)
+              return (
+                <FilterChip
+                  key={key}
+                  active={sel === key}
+                  onClick={() => setSubFilter(axis.key, key)}
+                >
+                  {label} <span className="opacity-60">· {count}</span>
+                </FilterChip>
+              )
+            })}
+          </div>
+        )
+      })}
 
       {/* Grid or list */}
       {blueprints.length === 0 ? (

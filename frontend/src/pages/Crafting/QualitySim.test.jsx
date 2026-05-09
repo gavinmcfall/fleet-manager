@@ -2,9 +2,12 @@ import { describe, it, expect, vi } from 'vitest'
 import { render, screen, fireEvent } from '@testing-library/react'
 import QualitySim from './QualitySim'
 
-// saveUserBlueprint is only called by the Save Config button — not under test here.
+// useUserBlueprints / saveUserBlueprint / deleteUserBlueprint are only called
+// by the Save panel and saved-config hydration — not under test here.
 vi.mock('../../hooks/useAPI', () => ({
   saveUserBlueprint: vi.fn(),
+  deleteUserBlueprint: vi.fn(),
+  useUserBlueprints: () => ({ data: { items: [] }, refetch: vi.fn() }),
 }))
 
 const makeBp = (id, slotName) => ({
