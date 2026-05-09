@@ -473,14 +473,16 @@ return cachedJson(c, `gd:trade`, async () => {
   // rather than the whole page. See plan:
   // /home/gavin/.claude/plans/curious-popping-toucan.md
   app.get("/poi/:slug", async (c) => {
+    const isPTU = isPTUChannel(getActiveChannel(c));
     const slug = c.req.param("slug")
     const resolved = resolvePOISlug(slug)
     const db = c.env.DB
     // cachedJson auto-404s on null return — we use that when the slug
     // doesn't resolve to any star_map_locations row. Empty-state POIs still
     // return a populated object (location + zero-count sections).
+    // Cache key auto-namespaces by channel via the cache layer.
     return cachedJson(c, `gd:poi:${cacheSlug(slug)}`, () =>
-      getPOIDetail(db, slug, resolved),
+      getPOIDetail(db, slug, resolved, isPTU),
     )
   })
 
@@ -488,10 +490,11 @@ return cachedJson(c, `gd:trade`, async () => {
   // a given parent. Powers the `/poi/at/:parentSlug` "see all" page referenced
   // from the sibling section's truncated warning.
   app.get("/poi/:slug/children", async (c) => {
+    const isPTU = isPTUChannel(getActiveChannel(c));
     const slug = c.req.param("slug")
     const db = c.env.DB
     return cachedJson(c, `gd:poi-children:${cacheSlug(slug)}`, () =>
-      getPOIChildren(db, slug),
+      getPOIChildren(db, slug, isPTU),
     )
   })
 

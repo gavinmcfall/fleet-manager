@@ -2274,11 +2274,13 @@ type POILocationRow = {
 async function getPOILocationRow(
   db: D1Database,
   canonicalSlug: string,
+  isPTU = false,
 ): Promise<POILocationRow | null> {
+  const sml = isPTU ? "ptu_star_map_locations" : "star_map_locations";
   return (await db
     .prepare(
       `SELECT id, uuid, slug, name, location_type, parent_uuid, description
-       FROM star_map_locations
+       FROM ${sml}
        WHERE slug = ?
        LIMIT 1`,
     )
@@ -2302,9 +2304,11 @@ async function getPOILocationRow(
 async function resolvePOILocationFuzzy(
   db: D1Database,
   inputSlug: string,
+  isPTU = false,
 ): Promise<POILocationRow | null> {
+  const sml = isPTU ? "ptu_star_map_locations" : "star_map_locations";
   // 1. exact
-  let row = await getPOILocationRow(db, inputSlug);
+  let row = await getPOILocationRow(db, inputSlug, isPTU);
   if (row) return row;
 
   // 2. case-insensitive exact
@@ -2312,7 +2316,7 @@ async function resolvePOILocationFuzzy(
   row = (await db
     .prepare(
       `SELECT id, uuid, slug, name, location_type, parent_uuid, description
-       FROM star_map_locations
+       FROM ${sml}
        WHERE LOWER(slug) = ?
        LIMIT 1`,
     )
@@ -2330,7 +2334,7 @@ async function resolvePOILocationFuzzy(
   row = (await db
     .prepare(
       `SELECT id, uuid, slug, name, location_type, parent_uuid, description
-       FROM star_map_locations
+       FROM ${sml}
        WHERE LOWER(REPLACE(REPLACE(slug, '-', ''), '_', '')) = ?
           OR LOWER(REPLACE(name, ' ', '')) = ?
        ORDER BY LENGTH(slug) ASC
@@ -2347,7 +2351,7 @@ async function resolvePOILocationFuzzy(
   row = (await db
     .prepare(
       `SELECT id, uuid, slug, name, location_type, parent_uuid, description
-       FROM star_map_locations
+       FROM ${sml}
        WHERE LOWER(REPLACE(REPLACE(slug, '-', ''), '_', '')) LIKE ?
        ORDER BY LENGTH(slug) ASC
        LIMIT 1`,
@@ -2364,13 +2368,15 @@ async function resolvePOILocationFuzzy(
 async function getPOIHierarchy(
   db: D1Database,
   startUuid: string | null,
+  isPTU = false,
 ): Promise<Array<{ slug: string; name: string }>> {
+  const sml = isPTU ? "ptu_star_map_locations" : "star_map_locations";
   const chain: Array<{ slug: string; name: string }> = [];
   let cursor = startUuid;
   for (let i = 0; i < 6 && cursor; i++) {
     const row = (await db
       .prepare(
-        `SELECT slug, name, parent_uuid FROM star_map_locations WHERE uuid = ?`,
+        `SELECT slug, name, parent_uuid FROM ${sml} WHERE uuid = ?`,
       )
       .bind(cursor)
       .first()) as { slug: string; name: string; parent_uuid: string | null } | null;
@@ -2390,35 +2396,37 @@ async function getPOIHierarchy(
 async function getPOIShops(
   db: D1Database,
   locationName: string,
+  isPTU = false,
 ): Promise<POIShopSummary[]> {
+  const t = (n: string) => (isPTU ? `ptu_${n}` : n);
   const { results } = await db
     .prepare(
       `SELECT s.id, s.slug, s.name, s.shop_type,
          (
            SELECT COUNT(DISTINCT ti.item_uuid)
-           FROM terminal_inventory ti
-           JOIN terminals t ON t.id = ti.terminal_id
+           FROM ${t("terminal_inventory")} ti
+           JOIN ${t("terminals")} t ON t.id = ti.terminal_id
            WHERE t.shop_id = s.id
              AND ti.latest_source IS NOT NULL
              AND (ti.latest_buy_price > 0 OR ti.latest_sell_price > 0)
          ) AS item_count,
          (
            SELECT MIN(ti.latest_buy_price)
-           FROM terminal_inventory ti
-           JOIN terminals t ON t.id = ti.terminal_id
+           FROM ${t("terminal_inventory")} ti
+           JOIN ${t("terminals")} t ON t.id = ti.terminal_id
            WHERE t.shop_id = s.id
              AND ti.latest_source IS NOT NULL
              AND ti.latest_buy_price > 0
          ) AS min_price,
          (
            SELECT MAX(ti.latest_buy_price)
-           FROM terminal_inventory ti
-           JOIN terminals t ON t.id = ti.terminal_id
+           FROM ${t("terminal_inventory")} ti
+           JOIN ${t("terminals")} t ON t.id = ti.terminal_id
            WHERE t.shop_id = s.id
              AND ti.latest_source IS NOT NULL
              AND ti.latest_buy_price > 0
          ) AS max_price
-       FROM shops s
+       FROM ${t("shops")} s
        WHERE s.location_label = ?
          AND COALESCE(s.shop_type, '') != 'admin'
          AND s.name NOT LIKE 'Stanton%'
@@ -2454,13 +2462,15 @@ async function getPOIShops(
 async function getPOILootPools(
   db: D1Database,
   containerSlug: string,
+  isPTU = false,
 ): Promise<POILootPool[]> {
+  const t = (n: string) => (isPTU ? `ptu_${n}` : n);
   // Pool shape first — group by (loot_table, container_type) to get distinct pools
   const { results: poolRows } = await db
     .prepare(
       `SELECT DISTINCT lil.loot_table, lil.container_type,
          COALESCE(lil.rolls, 1) AS rolls
-       FROM loot_item_locations lil
+       FROM ${t("loot_item_locations")} lil
        WHERE lil.source_type = 'container'
          AND lil.location_key = ?
          AND lil.loot_table IS NOT NULL`,
@@ -2475,8 +2485,8 @@ async function getPOILootPools(
       .prepare(
         `SELECT lm.uuid, lm.name, lm.category, lm.rarity,
            MAX(COALESCE(lil.per_roll, 0)) AS per_roll
-         FROM loot_item_locations lil
-         JOIN loot_map lm ON lm.id = lil.loot_map_id
+         FROM ${t("loot_item_locations")} lil
+         JOIN ${t("loot_map")} lm ON lm.id = lil.loot_map_id
          WHERE lil.source_type = 'container'
            AND lil.location_key = ?
            AND lil.loot_table = ?
@@ -2520,7 +2530,9 @@ async function getPOIMissions(
   db: D1Database,
   canonicalSlug: string,
   locationName: string,
+  isPTU = false,
 ): Promise<POIMissionSummary[]> {
+  const m_ = isPTU ? "ptu_missions" : "missions";
   // Convert "stanton2-orison" form to possible location_ref values CIG emits.
   // Patterns seen in staging: `starmapobject.stanton2`, `stanton2_l5`, etc.
   // Also try without the `starmapobject.` prefix.
@@ -2543,7 +2555,7 @@ async function getPOIMissions(
          END AS reward_amount,
          COALESCE(m.is_dynamic_reward, 0) AS is_dynamic_reward,
          0 AS likely
-       FROM missions m
+       FROM ${m_} m
        WHERE m.location_ref IN (${placeholders})
          AND COALESCE(m.not_for_release, 0) = 0
        ORDER BY reward_amount DESC
@@ -2565,7 +2577,7 @@ async function getPOIMissions(
          END AS reward_amount,
          COALESCE(m.is_dynamic_reward, 0) AS is_dynamic_reward,
          1 AS likely
-       FROM missions m
+       FROM ${m_} m
        WHERE m.locality = ?
          AND m.location_ref IS NULL
          AND COALESCE(m.not_for_release, 0) = 0
@@ -2615,12 +2627,15 @@ async function getPOIMissions(
 export async function getPOIChildren(
   db: D1Database,
   parentSlug: string,
+  isPTU = false,
 ): Promise<{
   parent: { slug: string; name: string } | null;
   children: POISibling[];
 } | null> {
+  const sml = isPTU ? "ptu_star_map_locations" : "star_map_locations";
+  const sh = isPTU ? "ptu_shops" : "shops";
   const parent = (await db
-    .prepare(`SELECT id, uuid, slug, name FROM star_map_locations WHERE slug = ? LIMIT 1`)
+    .prepare(`SELECT id, uuid, slug, name FROM ${sml} WHERE slug = ? LIMIT 1`)
     .bind(parentSlug)
     .first()) as { id: number; uuid: string; slug: string; name: string } | null;
   if (!parent) return null;
@@ -2629,9 +2644,9 @@ export async function getPOIChildren(
     .prepare(
       `SELECT MIN(sml.id) AS id, sml.slug, sml.name, sml.location_type,
          EXISTS(
-           SELECT 1 FROM shops s WHERE s.location_label = sml.name LIMIT 1
+           SELECT 1 FROM ${sh} s WHERE s.location_label = sml.name LIMIT 1
          ) AS has_activity
-       FROM star_map_locations sml
+       FROM ${sml} sml
        WHERE sml.parent_uuid = ?
          AND sml.slug NOT LIKE '%-clusterparent%'
          AND sml.slug NOT LIKE '%_clusterparent%'
@@ -2658,10 +2673,13 @@ async function getPOISiblings(
   db: D1Database,
   parentUuid: string | null,
   selfId: number,
+  isPTU = false,
 ): Promise<{ siblings: POISibling[]; truncated: boolean }> {
   if (!parentUuid) {
     return { siblings: [], truncated: false };
   }
+  const sml = isPTU ? "ptu_star_map_locations" : "star_map_locations";
+  const sh = isPTU ? "ptu_shops" : "shops";
   // F407: dedupe by name (CIG emits duplicate "Prospect Point" rows for
   // different zone variants) and filter out `*-clusterparent` internal
   // routing rows — they're hierarchy nodes, not player-visitable POIs.
@@ -2669,9 +2687,9 @@ async function getPOISiblings(
     .prepare(
       `SELECT MIN(sml.id) AS id, sml.slug, sml.name, sml.location_type,
          EXISTS(
-           SELECT 1 FROM shops s WHERE s.location_label = sml.name LIMIT 1
+           SELECT 1 FROM ${sh} s WHERE s.location_label = sml.name LIMIT 1
          ) AS has_activity
-       FROM star_map_locations sml
+       FROM ${sml} sml
        WHERE sml.parent_uuid = ?
          AND sml.id != ?
          AND sml.slug NOT LIKE '%-clusterparent%'
@@ -2707,17 +2725,18 @@ export async function getPOIDetail(
   db: D1Database,
   inputSlug: string,
   resolved: { canonical: string; container: string | null },
+  isPTU = false,
 ): Promise<POIDetail | null> {
   // 1. Resolve the location row. Try canonical → input → fuzzy (F118):
   //    case-insensitive, non-alphanum-stripped, and suffix-match against
   //    fully-qualified slugs so "rock-cracker" resolves to the canonical
   //    "asteroidclusterbase-nyx-rockcracker" entry.
-  let row = await getPOILocationRow(db, resolved.canonical);
+  let row = await getPOILocationRow(db, resolved.canonical, isPTU);
   if (!row && resolved.canonical !== inputSlug) {
-    row = await getPOILocationRow(db, inputSlug);
+    row = await getPOILocationRow(db, inputSlug, isPTU);
   }
   if (!row) {
-    row = await resolvePOILocationFuzzy(db, inputSlug);
+    row = await resolvePOILocationFuzzy(db, inputSlug, isPTU);
   }
   if (!row) return null;
 
@@ -2726,11 +2745,11 @@ export async function getPOIDetail(
   const containerSlugForLoot = resolved.container ?? inputSlug;
 
   const [hierarchyR, shopsR, lootR, missionsR, siblingsR] = await Promise.all([
-    getPOIHierarchy(db, row.parent_uuid).catch(() => [] as Array<{ slug: string; name: string }>),
-    getPOIShops(db, row.name).catch(() => null),
-    getPOILootPools(db, containerSlugForLoot).catch(() => null),
-    getPOIMissions(db, row.slug, row.name).catch(() => null),
-    getPOISiblings(db, row.parent_uuid, row.id).catch(() => null),
+    getPOIHierarchy(db, row.parent_uuid, isPTU).catch(() => [] as Array<{ slug: string; name: string }>),
+    getPOIShops(db, row.name, isPTU).catch(() => null),
+    getPOILootPools(db, containerSlugForLoot, isPTU).catch(() => null),
+    getPOIMissions(db, row.slug, row.name, isPTU).catch(() => null),
+    getPOISiblings(db, row.parent_uuid, row.id, isPTU).catch(() => null),
   ]);
 
   const shops: POISectionEnvelope<POIShopSummary> = shopsR
