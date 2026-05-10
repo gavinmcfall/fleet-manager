@@ -470,35 +470,33 @@ function ImageCapturePanel() {
                       <span className="text-[11px] bg-white/[0.04] px-2 py-0.5 rounded text-gray-400">{cap.kind || '—'}</span>
                     </td>
 
-                    {/* Paint match — for Skin captures, surface the
-                        resolved canonical paint (or a "Pick paint"
-                        button when nothing auto-matched). */}
+                    {/* Reference match — surface the resolved canonical
+                        row (paint / fps_weapon / fps_armour / fps_helmet /
+                        vehicle_component) or expose pickers per kind. */}
                     <td className="px-3 py-2">
-                      {cap.kind !== 'Skin' ? (
-                        <span className="text-[10px] text-gray-700">—</span>
-                      ) : cap.matched_paint_id ? (
+                      {cap.matched_kind ? (
                         <div className="flex items-center gap-1.5">
-                          <span className="text-[10px] px-1.5 py-px rounded font-mono bg-emerald-500/10 text-emerald-400 border border-emerald-500/20" title="Matched to a canonical paint row">
-                            ✓
+                          <span className="text-[10px] px-1.5 py-px rounded font-mono bg-emerald-500/10 text-emerald-400 border border-emerald-500/20" title={`Matched to ${cap.matched_kind}`}>
+                            ✓ {cap.matched_kind.replace('_', ' ')}
                           </span>
-                          <span className="text-[11px] text-gray-300 truncate max-w-[180px]" title={cap.matched_paint_name || ''}>
-                            {cap.matched_paint_name || `paint #${cap.matched_paint_id}`}
+                          <span className="text-[11px] text-gray-300 truncate max-w-[150px]" title={cap.matched_name || ''}>
+                            {cap.matched_name || `#${cap.matched_id}`}
                           </span>
                           <button
-                            onClick={() => setPaintMatchFor({ id: cap.id, title: cap.title })}
+                            onClick={() => setPaintMatchFor({ id: cap.id, title: cap.title, kind: cap.kind, currentKind: cap.matched_kind })}
                             className="text-[10px] text-gray-500 hover:text-sc-accent cursor-pointer"
-                            title="Change paint match"
+                            title="Change match"
                           >
                             change
                           </button>
                         </div>
                       ) : (
                         <button
-                          onClick={() => setPaintMatchFor({ id: cap.id, title: cap.title })}
+                          onClick={() => setPaintMatchFor({ id: cap.id, title: cap.title, kind: cap.kind, currentKind: null })}
                           className="px-2 py-1 text-[10px] bg-amber-500/10 text-amber-400 border border-amber-500/20 rounded hover:bg-amber-500/20 transition-colors cursor-pointer"
-                          title="Pick a canonical paint row from the master list"
+                          title="Pick a canonical reference row"
                         >
-                          Pick paint
+                          Pick match
                         </button>
                       )}
                     </td>
@@ -593,28 +591,55 @@ function ImageCapturePanel() {
   )
 }
 
+/** All reference kinds the polymorphic match endpoint supports. */
+const MATCH_KIND_OPTIONS = [
+  { value: 'paint', label: 'Paint' },
+  { value: 'fps_weapon', label: 'FPS Weapon' },
+  { value: 'fps_armour', label: 'FPS Armour' },
+  { value: 'fps_helmet', label: 'FPS Helmet' },
+  { value: 'vehicle_component', label: 'Ship Component' },
+]
+
 /**
- * Modal: search the paints master list and pick a canonical row to
- * link a capture to. Renders inline on top of the captures table.
+ * Default kind for a new picker — guess from the capture's pledge
+ * `kind` so the admin lands on the right reference table without
+ * having to switch tabs.
+ */
+function defaultKindForCapture(captureKind) {
+  if (captureKind === 'Skin') return 'paint'
+  if (captureKind === 'Component') return 'vehicle_component'
+  // FPS Equipment is ambiguous — armour or weapon. Default to weapon
+  // since users own more weapons than armour pieces.
+  if (captureKind === 'FPS Equipment') return 'fps_weapon'
+  return 'paint'
+}
+
+/**
+ * Generic picker dialog that searches any supported reference table
+ * and links the capture polymorphically. The admin can switch kind
+ * tabs at the top — useful when "FPS Equipment" could be either a
+ * weapon or a piece of armour.
  */
 function PaintPickerDialog({ capture, onClose, onMatched }) {
-  const [query, setQuery] = useState(capture.title?.split(' - ')[0] || '')
+  const [kind, setKind] = useState(capture.currentKind || defaultKindForCapture(capture.kind))
+  const [query, setQuery] = useState(capture.title?.split(' - ')[0] || capture.title || '')
   const [results, setResults] = useState([])
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState(null)
   const [submitting, setSubmitting] = useState(false)
 
-  const search = useCallback(async (q) => {
+  const search = useCallback(async (q, k) => {
     if (!q || !q.trim()) { setResults([]); return }
     setLoading(true)
     setError(null)
     try {
-      const res = await fetch(`/api/admin/paints/search?q=${encodeURIComponent(q.trim())}`, {
-        credentials: 'same-origin',
-      })
+      const res = await fetch(
+        `/api/admin/match-search?kind=${encodeURIComponent(k)}&q=${encodeURIComponent(q.trim())}`,
+        { credentials: 'same-origin' },
+      )
       if (!res.ok) throw new Error(`HTTP ${res.status}`)
       const data = await res.json()
-      setResults(data.paints || [])
+      setResults(data.results || [])
     } catch (err) {
       setError(err.message)
       setResults([])
@@ -623,19 +648,19 @@ function PaintPickerDialog({ capture, onClose, onMatched }) {
   }, [])
 
   useEffect(() => {
-    const t = setTimeout(() => search(query), 250)
+    const t = setTimeout(() => search(query, kind), 250)
     return () => clearTimeout(t)
-  }, [query, search])
+  }, [query, kind, search])
 
-  const link = async (paintId) => {
+  const link = async (rowId) => {
     setSubmitting(true)
     setError(null)
     try {
-      const res = await fetch(`/api/admin/image-captures/${capture.id}/paint-match`, {
+      const res = await fetch(`/api/admin/image-captures/${capture.id}/match`, {
         method: 'PATCH',
         credentials: 'same-origin',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ paint_id: paintId }),
+        body: JSON.stringify({ kind, id: rowId }),
       })
       if (!res.ok) {
         const err = await res.json().catch(() => ({}))
@@ -651,11 +676,11 @@ function PaintPickerDialog({ capture, onClose, onMatched }) {
   const unlink = async () => {
     setSubmitting(true)
     try {
-      await fetch(`/api/admin/image-captures/${capture.id}/paint-match`, {
+      await fetch(`/api/admin/image-captures/${capture.id}/match`, {
         method: 'PATCH',
         credentials: 'same-origin',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ paint_id: null }),
+        body: JSON.stringify({ kind: null, id: null }),
       })
       onMatched()
     } catch (err) {
@@ -668,8 +693,24 @@ function PaintPickerDialog({ capture, onClose, onMatched }) {
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 cursor-pointer" onClick={() => !submitting && onClose()}>
       <div onClick={e => e.stopPropagation()} className="bg-sc-darker border border-white/10 rounded-lg w-full max-w-2xl max-h-[80vh] flex flex-col cursor-default">
         <div className="px-5 py-3 border-b border-white/[0.06]">
-          <h3 className="text-sm font-display uppercase tracking-wider text-gray-300">Pick paint for "{capture.title}"</h3>
-          <p className="text-[10px] text-gray-600 mt-1">Search by paint name, class_name, or slug. Linked paints drop out of the unseen view.</p>
+          <h3 className="text-sm font-display uppercase tracking-wider text-gray-300">Pick match for "{capture.title}"</h3>
+          <p className="text-[10px] text-gray-600 mt-1">Search the reference master list. Linked rows drop out of the unseen view.</p>
+        </div>
+        {/* Kind tabs */}
+        <div className="px-5 pt-3 flex items-center gap-1 flex-wrap">
+          {MATCH_KIND_OPTIONS.map(o => (
+            <button
+              key={o.value}
+              onClick={() => setKind(o.value)}
+              className={`px-2.5 py-1 text-[11px] rounded transition-colors cursor-pointer ${
+                kind === o.value
+                  ? 'bg-sc-accent/20 text-sc-accent border border-sc-accent/30'
+                  : 'bg-white/[0.04] text-gray-500 border border-white/[0.06] hover:text-gray-300'
+              }`}
+            >
+              {o.label}
+            </button>
+          ))}
         </div>
         <div className="px-5 pt-3">
           <input
@@ -677,7 +718,7 @@ function PaintPickerDialog({ capture, onClose, onMatched }) {
             type="text"
             value={query}
             onChange={e => setQuery(e.target.value)}
-            placeholder="e.g. red alert, pisces, bis2952"
+            placeholder="Search by name, class_name, or slug…"
             className="w-full px-2 py-1.5 text-sm bg-black/40 border border-white/10 rounded text-gray-200 focus:border-sc-accent/50 outline-none"
           />
         </div>
@@ -685,22 +726,22 @@ function PaintPickerDialog({ capture, onClose, onMatched }) {
           {loading ? (
             <div className="p-6 text-center text-gray-600 text-xs">Searching...</div>
           ) : results.length === 0 ? (
-            <div className="p-6 text-center text-gray-600 text-xs">{query.trim() ? 'No paints match.' : 'Type to search.'}</div>
+            <div className="p-6 text-center text-gray-600 text-xs">{query.trim() ? `No ${kind.replace('_', ' ')} rows match.` : 'Type to search.'}</div>
           ) : (
             <div className="space-y-1">
-              {results.map(p => (
+              {results.map(r => (
                 <button
-                  key={p.id}
-                  onClick={() => link(p.id)}
+                  key={r.id}
+                  onClick={() => link(r.id)}
                   disabled={submitting}
                   className="w-full text-left px-3 py-2 rounded hover:bg-white/[0.04] flex items-center gap-3 cursor-pointer disabled:opacity-50"
                 >
-                  <span className={`text-[10px] px-1.5 py-px rounded font-mono ${p.has_image ? 'bg-emerald-500/10 text-emerald-400 border border-emerald-500/20' : 'bg-white/[0.04] text-gray-600 border border-white/[0.06]'}`}>
-                    {p.has_image ? 'CDN' : 'no img'}
+                  <span className={`text-[10px] px-1.5 py-px rounded font-mono ${r.has_image ? 'bg-emerald-500/10 text-emerald-400 border border-emerald-500/20' : 'bg-white/[0.04] text-gray-600 border border-white/[0.06]'}`}>
+                    {r.has_image ? 'CDN' : 'no img'}
                   </span>
                   <div className="flex-1 min-w-0">
-                    <div className="text-sm text-gray-200 truncate">{p.name}</div>
-                    <div className="text-[10px] font-mono text-gray-500 truncate">{p.class_name}{p.vehicle_names ? ` · ${p.vehicle_names}` : ''}</div>
+                    <div className="text-sm text-gray-200 truncate">{r.name}</div>
+                    <div className="text-[10px] font-mono text-gray-500 truncate">{r.class_name}{r.vehicle_names ? ` · ${r.vehicle_names}` : ''}</div>
                   </div>
                 </button>
               ))}

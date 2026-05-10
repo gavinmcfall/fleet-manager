@@ -149,10 +149,12 @@ describe("Admin paint match", () => {
       const before = (await beforeRes.json()) as { captures: Array<{ id: number }> };
       expect(before.captures.find((c) => c.id === captureId)).toBeTruthy();
 
-      // Link it
+      // Link it via the polymorphic columns (the filter checks these)
       await env.DB.prepare(
-        "UPDATE image_captures SET manual_paint_id = ? WHERE id = ?",
-      ).bind(paintId, captureId).run();
+        `UPDATE image_captures
+            SET manual_paint_id = ?, manual_match_kind = 'paint', manual_match_id = ?
+          WHERE id = ?`,
+      ).bind(paintId, paintId, captureId).run();
 
       // Now hidden
       const afterRes = await SELF.fetch(
@@ -166,10 +168,12 @@ describe("Admin paint match", () => {
 
   describe("Captures response surfaces match info", () => {
     it("returns matched paint id + name for show_all view", async () => {
-      // Ensure linked
+      // Ensure linked via the polymorphic columns (the response cascade reads these)
       await env.DB.prepare(
-        "UPDATE image_captures SET manual_paint_id = ? WHERE id = ?",
-      ).bind(paintId, captureId).run();
+        `UPDATE image_captures
+            SET manual_paint_id = ?, manual_match_kind = 'paint', manual_match_id = ?
+          WHERE id = ?`,
+      ).bind(paintId, paintId, captureId).run();
 
       const res = await SELF.fetch(
         "http://localhost/api/admin/image-captures?promoted=0&show_all=1&kind=Skin",

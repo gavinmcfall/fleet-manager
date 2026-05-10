@@ -750,13 +750,14 @@ export function adminRoutes() {
            WHERE pim.title_norm = ic.title_norm
              AND ic.title_norm != ''
          )
-         /* Manual admin override — when an admin clicks "Pick paint"
-            in the captures panel and picks the canonical row from the
-            paint master list, manual_paint_id is set. The capture
-            drops out of the unseen view immediately. */
-         AND NOT EXISTS (
-           SELECT 1 FROM paints pmp
-           WHERE pmp.id = ic.manual_paint_id
+         /* Manual admin override — when an admin picks a canonical
+            row from any reference table via the "Pick <kind>" picker,
+            (manual_match_kind, manual_match_id) is set. We trust the
+            PATCH endpoint to have validated the row exists, so a
+            non-null kind+id pair means the capture is covered. */
+         AND NOT (
+           ic.manual_match_kind IS NOT NULL
+           AND ic.manual_match_id IS NOT NULL
          )
          /* Ship-name divergence resolver: pledge titles like
             "Ares - Aspire Paint" don't title_norm-match
@@ -798,40 +799,80 @@ export function adminRoutes() {
            First non-null wins. Used by the captures panel to show a
            "Matched: <paint name>" badge or "Unmatched [Pick paint]"
            button. */
-        COALESCE(
-          (SELECT pm1.id FROM paints pm1
-             WHERE pm1.id = ic.manual_paint_id LIMIT 1),
-          (SELECT pm2.id FROM paints pm2
-             WHERE pm2.title_norm = ic.title_norm
-               AND ic.title_norm != '' LIMIT 1),
-          (SELECT pm3.id FROM paints pm3
-             JOIN paint_vehicles pv ON pv.paint_id = pm3.id
-             JOIN vehicles vp ON vp.id = pv.vehicle_id
-             WHERE ic.kind = 'Skin'
-               AND ic.title LIKE '% - %'
-               AND pm3.image_url LIKE 'https://imagedelivery.net%'
-               AND LOWER(pm3.name) LIKE '%' || LOWER(TRIM(REPLACE(REPLACE(SUBSTR(ic.title, INSTR(ic.title, ' - ') + 3), ' Paint', ''), ' Livery', ''))) || '%'
-               AND LOWER(vp.name) LIKE '%' || LOWER(TRIM(SUBSTR(ic.title, 1, INSTR(ic.title, ' - ') - 1))) || '%'
-             LIMIT 1)
-        ) as matched_paint_id,
-        (SELECT p.name FROM paints p
-           WHERE p.id = COALESCE(
-             (SELECT pm1.id FROM paints pm1
-                WHERE pm1.id = ic.manual_paint_id LIMIT 1),
-             (SELECT pm2.id FROM paints pm2
-                WHERE pm2.title_norm = ic.title_norm
-                  AND ic.title_norm != '' LIMIT 1),
-             (SELECT pm3.id FROM paints pm3
-                JOIN paint_vehicles pv ON pv.paint_id = pm3.id
-                JOIN vehicles vp ON vp.id = pv.vehicle_id
-                WHERE ic.kind = 'Skin'
-                  AND ic.title LIKE '% - %'
-                  AND pm3.image_url LIKE 'https://imagedelivery.net%'
-                  AND LOWER(pm3.name) LIKE '%' || LOWER(TRIM(REPLACE(REPLACE(SUBSTR(ic.title, INSTR(ic.title, ' - ') + 3), ' Paint', ''), ' Livery', ''))) || '%'
-                  AND LOWER(vp.name) LIKE '%' || LOWER(TRIM(SUBSTR(ic.title, 1, INSTR(ic.title, ' - ') - 1))) || '%'
-                LIMIT 1)
-           )
-           LIMIT 1) as matched_paint_name,
+        /* Polymorphic resolved match. Cascade:
+             1. manual_match_kind/id (any kind)
+             2. paint title_norm equality (Skin only)
+             3. paint ship+variant SQL (Skin only)
+           matched_kind tells the UI which reference table the row
+           lives in so it can render appropriately. */
+        CASE
+          WHEN ic.manual_match_kind IS NOT NULL AND ic.manual_match_id IS NOT NULL
+            THEN ic.manual_match_kind
+          WHEN ic.kind = 'Skin' AND EXISTS (
+            SELECT 1 FROM paints p2
+            WHERE p2.title_norm = ic.title_norm AND ic.title_norm != ''
+          ) THEN 'paint'
+          WHEN ic.kind = 'Skin' AND ic.title LIKE '% - %' AND EXISTS (
+            SELECT 1 FROM paints p3
+            JOIN paint_vehicles pv ON pv.paint_id = p3.id
+            JOIN vehicles vp ON vp.id = pv.vehicle_id
+            WHERE p3.image_url LIKE 'https://imagedelivery.net%'
+              AND LOWER(p3.name) LIKE '%' || LOWER(TRIM(REPLACE(REPLACE(SUBSTR(ic.title, INSTR(ic.title, ' - ') + 3), ' Paint', ''), ' Livery', ''))) || '%'
+              AND LOWER(vp.name) LIKE '%' || LOWER(TRIM(SUBSTR(ic.title, 1, INSTR(ic.title, ' - ') - 1))) || '%'
+          ) THEN 'paint'
+          ELSE NULL
+        END AS matched_kind,
+        CASE
+          WHEN ic.manual_match_kind IS NOT NULL AND ic.manual_match_id IS NOT NULL
+            THEN ic.manual_match_id
+          WHEN ic.kind = 'Skin' THEN COALESCE(
+            (SELECT id FROM paints WHERE title_norm = ic.title_norm AND ic.title_norm != '' LIMIT 1),
+            (SELECT p3.id FROM paints p3
+               JOIN paint_vehicles pv ON pv.paint_id = p3.id
+               JOIN vehicles vp ON vp.id = pv.vehicle_id
+               WHERE ic.title LIKE '% - %'
+                 AND p3.image_url LIKE 'https://imagedelivery.net%'
+                 AND LOWER(p3.name) LIKE '%' || LOWER(TRIM(REPLACE(REPLACE(SUBSTR(ic.title, INSTR(ic.title, ' - ') + 3), ' Paint', ''), ' Livery', ''))) || '%'
+                 AND LOWER(vp.name) LIKE '%' || LOWER(TRIM(SUBSTR(ic.title, 1, INSTR(ic.title, ' - ') - 1))) || '%'
+               LIMIT 1)
+          )
+          ELSE NULL
+        END AS matched_id,
+        /* Per-kind name lookup. Adding a new MATCH_KINDS entry above
+           also requires a WHEN clause here. */
+        CASE
+          WHEN ic.manual_match_kind = 'paint' THEN (SELECT name FROM paints WHERE id = ic.manual_match_id)
+          WHEN ic.manual_match_kind = 'fps_weapon' THEN (SELECT name FROM fps_weapons WHERE id = ic.manual_match_id)
+          WHEN ic.manual_match_kind = 'fps_armour' THEN (SELECT name FROM fps_armour WHERE id = ic.manual_match_id)
+          WHEN ic.manual_match_kind = 'fps_helmet' THEN (SELECT name FROM fps_helmets WHERE id = ic.manual_match_id)
+          WHEN ic.manual_match_kind = 'vehicle_component' THEN (SELECT name FROM vehicle_components WHERE id = ic.manual_match_id)
+          WHEN ic.kind = 'Skin' THEN COALESCE(
+            (SELECT name FROM paints WHERE title_norm = ic.title_norm AND ic.title_norm != '' LIMIT 1),
+            (SELECT p3.name FROM paints p3
+               JOIN paint_vehicles pv ON pv.paint_id = p3.id
+               JOIN vehicles vp ON vp.id = pv.vehicle_id
+               WHERE ic.title LIKE '% - %'
+                 AND p3.image_url LIKE 'https://imagedelivery.net%'
+                 AND LOWER(p3.name) LIKE '%' || LOWER(TRIM(REPLACE(REPLACE(SUBSTR(ic.title, INSTR(ic.title, ' - ') + 3), ' Paint', ''), ' Livery', ''))) || '%'
+                 AND LOWER(vp.name) LIKE '%' || LOWER(TRIM(SUBSTR(ic.title, 1, INSTR(ic.title, ' - ') - 1))) || '%'
+               LIMIT 1)
+          )
+          ELSE NULL
+        END AS matched_name,
+        /* Backwards-compat fields used by the old paint-specific UI
+           bits — point to the same paint row when matched_kind='paint'. */
+        CASE WHEN (
+          (ic.manual_match_kind = 'paint' AND EXISTS (SELECT 1 FROM paints WHERE id = ic.manual_match_id))
+          OR (ic.kind = 'Skin' AND EXISTS (SELECT 1 FROM paints WHERE title_norm = ic.title_norm AND ic.title_norm != ''))
+        ) THEN COALESCE(
+          CASE WHEN ic.manual_match_kind = 'paint' THEN ic.manual_match_id ELSE NULL END,
+          (SELECT id FROM paints WHERE title_norm = ic.title_norm AND ic.title_norm != '' LIMIT 1)
+        ) END AS matched_paint_id,
+        (SELECT name FROM paints WHERE id = (
+          CASE WHEN ic.manual_match_kind = 'paint' THEN ic.manual_match_id ELSE
+            (SELECT id FROM paints WHERE title_norm = ic.title_norm AND ic.title_norm != '' LIMIT 1)
+          END
+        )) AS matched_paint_name,
         (SELECT p.image_url FROM paints p
            WHERE p.title_norm = ic.title_norm LIMIT 1) as matched_paint_image,
         (SELECT lm.id FROM loot_map lm WHERE LOWER(lm.name) = LOWER(ic.title) LIMIT 1) as matched_loot_id,
@@ -916,6 +957,114 @@ export function adminRoutes() {
   });
 
   /**
+   * Reference-table catalog for the polymorphic match endpoints.
+   *
+   * Adding a new kind here gives admins:
+   *   - search via /api/admin/match-search?kind=X&q=...
+   *   - match via PATCH /api/admin/image-captures/:id/match
+   *   - the Pick X button in the captures panel
+   *
+   * `cdnFilter` is included so paint search prioritises rows with
+   * imagedelivery.net URLs (the only kind with image_url today).
+   */
+  const MATCH_KINDS: Record<string, { table: string; cdnColumn: string | null }> = {
+    paint: { table: "paints", cdnColumn: "image_url" },
+    fps_weapon: { table: "fps_weapons", cdnColumn: null },
+    fps_armour: { table: "fps_armour", cdnColumn: null },
+    fps_helmet: { table: "fps_helmets", cdnColumn: null },
+    vehicle_component: { table: "vehicle_components", cdnColumn: null },
+  };
+
+  /**
+   * GET /api/admin/match-search?kind=<kind>&q=<term>
+   *
+   * Generalised reference-table search. `kind` selects the table;
+   * `q` matches against name / class_name / slug. Returns up to 50
+   * rows with id / name / class_name / slug / has_image where
+   * available. Used by the captures panel "Pick <kind>" picker
+   * across all supported kinds.
+   */
+  routes.get("/match-search", async (c) => {
+    const kind = (c.req.query("kind") || "").trim();
+    const q = (c.req.query("q") || "").trim();
+    if (!q) return c.json({ error: "q is required" }, 400);
+    const def = MATCH_KINDS[kind];
+    if (!def) return c.json({ error: `Unknown kind: ${kind}` }, 400);
+
+    const like = `%${q.toLowerCase()}%`;
+    const cdnExpr = def.cdnColumn
+      ? `${def.cdnColumn} IS NOT NULL AND ${def.cdnColumn} LIKE 'https://imagedelivery.net%'`
+      : `0`;
+    const { results } = await c.env.DB
+      .prepare(
+        `SELECT id, name, class_name, slug,
+                ${cdnExpr} AS has_image
+           FROM ${def.table}
+          WHERE LOWER(name) LIKE ?
+             OR LOWER(class_name) LIKE ?
+             OR LOWER(slug) LIKE ?
+          ORDER BY has_image DESC, name ASC
+          LIMIT 50`,
+      )
+      .bind(like, like, like)
+      .all<{ has_image: number }>();
+    return c.json({
+      results: results.map((r) => ({ ...r, has_image: r.has_image === 1 })),
+    });
+  });
+
+  /**
+   * PATCH /api/admin/image-captures/:id/match
+   * Body: { kind: string | null, id: number | null }
+   *
+   * Generalised manual match. kind=null+id=null clears. Otherwise
+   * validates kind is supported and the row exists in the target
+   * table before setting (manual_match_kind, manual_match_id).
+   */
+  routes.patch("/image-captures/:id/match",
+    validate("json", z.object({
+      kind: z.string().nullable(),
+      id: z.number().int().positive().nullable(),
+    })),
+    async (c) => {
+      const captureId = parseInt(c.req.param("id"), 10);
+      const { kind, id } = c.req.valid("json");
+      const db = c.env.DB;
+
+      const cap = await db
+        .prepare("SELECT id FROM image_captures WHERE id = ?")
+        .bind(captureId)
+        .first();
+      if (!cap) return c.json({ error: "Capture not found" }, 404);
+
+      const clearing = kind === null && id === null;
+      if (!clearing) {
+        if (kind === null || id === null) {
+          return c.json({ error: "kind and id must both be set or both null" }, 400);
+        }
+        const def = MATCH_KINDS[kind];
+        if (!def) return c.json({ error: `Unknown kind: ${kind}` }, 400);
+        const exists = await db
+          .prepare(`SELECT id FROM ${def.table} WHERE id = ?`)
+          .bind(id)
+          .first();
+        if (!exists) return c.json({ error: `${kind} not found` }, 404);
+      }
+
+      await db
+        .prepare(
+          `UPDATE image_captures
+              SET manual_match_kind = ?,
+                  manual_match_id = ?
+            WHERE id = ?`,
+        )
+        .bind(clearing ? null : kind, clearing ? null : id, captureId)
+        .run();
+      return c.json({ ok: true });
+    },
+  );
+
+  /**
    * GET /api/admin/paints/search?q=<term>
    *
    * Master paint list search — used by the captures panel "Pick paint"
@@ -987,9 +1136,18 @@ export function adminRoutes() {
         if (!paint) return c.json({ error: "Paint not found" }, 404);
       }
 
+      // Write to both legacy manual_paint_id (for any older code paths
+      // still reading it) and the new polymorphic columns. Both get
+      // cleared together when paint_id is null.
       await db
-        .prepare("UPDATE image_captures SET manual_paint_id = ? WHERE id = ?")
-        .bind(paint_id, id)
+        .prepare(
+          `UPDATE image_captures
+              SET manual_paint_id = ?,
+                  manual_match_kind = CASE WHEN ? IS NULL THEN NULL ELSE 'paint' END,
+                  manual_match_id = ?
+            WHERE id = ?`,
+        )
+        .bind(paint_id, paint_id, paint_id, id)
         .run();
       return c.json({ ok: true });
     },
