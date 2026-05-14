@@ -367,6 +367,76 @@ export function parseGlobalIniKeys(content: string): Set<string> {
 }
 
 // ---------------------------------------------------------------------------
+// Diff between two global.ini versions
+// ---------------------------------------------------------------------------
+
+export interface GlobalIniDiff {
+  added: string[];
+  removed: string[];
+  changed: { key: string; oldValue: string; newValue: string }[];
+}
+
+/**
+ * Parse an INI content blob into a Map of key → value. Comments (# or ;)
+ * and blank lines are skipped. Whitespace around the key is trimmed; the
+ * value is preserved verbatim from the first `=` to end of line (CRLF
+ * stripped). Duplicate keys keep their last occurrence.
+ */
+function parseIniMap(content: string): Map<string, string> {
+  const out = new Map<string, string>();
+  // Normalise CRLF first so the splitter doesn't leave \r in values.
+  const lines = content.replace(/\r\n/g, "\n").split("\n");
+  for (const line of lines) {
+    if (!line) continue;
+    const trimmed = line.trimStart();
+    if (trimmed.startsWith("#") || trimmed.startsWith(";")) continue;
+    const eqIdx = line.indexOf("=");
+    if (eqIdx === -1) continue;
+    const key = line.substring(0, eqIdx).trim();
+    if (!key) continue;
+    const value = line.substring(eqIdx + 1);
+    out.set(key, value);
+  }
+  return out;
+}
+
+/**
+ * Compare two global.ini contents and return key-level deltas.
+ *
+ * Used by `/api/localization/diff` and the Localization page's "What's
+ * changed in <version>" panel so users can see what shifted between the
+ * previous patch's localization and the current one before downloading
+ * their merged file.
+ *
+ * Returned arrays are sorted alphabetically for stable UI rendering.
+ */
+export function diffGlobalIni(oldContent: string, newContent: string): GlobalIniDiff {
+  const oldMap = parseIniMap(oldContent);
+  const newMap = parseIniMap(newContent);
+
+  const added: string[] = [];
+  const removed: string[] = [];
+  const changed: { key: string; oldValue: string; newValue: string }[] = [];
+
+  for (const [key, newValue] of newMap) {
+    if (!oldMap.has(key)) {
+      added.push(key);
+    } else if (oldMap.get(key) !== newValue) {
+      changed.push({ key, oldValue: oldMap.get(key) as string, newValue });
+    }
+  }
+  for (const key of oldMap.keys()) {
+    if (!newMap.has(key)) removed.push(key);
+  }
+
+  added.sort();
+  removed.sort();
+  changed.sort((a, b) => a.key.localeCompare(b.key));
+
+  return { added, removed, changed };
+}
+
+// ---------------------------------------------------------------------------
 // Config
 // ---------------------------------------------------------------------------
 

@@ -16,6 +16,7 @@ import FleetOrderSection from './FleetOrderSection'
 import ItemLabelsSection from './ItemLabelsSection'
 import EnhancementsSection from './EnhancementsSection'
 import PreviewDownloadSection from './PreviewDownloadSection'
+import WhatsChangedBanner from './WhatsChangedBanner'
 
 // ── Pill nav ────────────────────────────────────────────────────────
 
@@ -258,6 +259,10 @@ export default function LocalizationBuilder() {
           {notification.msg}
         </div>
       )}
+
+      {/* What's changed in the latest patch — renders nothing when
+          there's no previous version to compare against. */}
+      <WhatsChangedBanner />
 
       {/* Stat cards */}
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">

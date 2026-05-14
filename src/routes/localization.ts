@@ -10,6 +10,7 @@ import {
   type LocalizationConfig,
   DEFAULT_CONFIG,
   configFromRow,
+  diffGlobalIni,
   generateAsopOverrides,
   generateItemLabels,
   generateContrabandWarnings,
@@ -37,6 +38,74 @@ export function localizationRoutes() {
 
     return c.json(row ? configFromRow(row) : DEFAULT_CONFIG);
   });
+
+  // ── GET /diff — what's changed between two patch versions ─────────
+  //
+  // Returns key-level deltas (added / removed / changed) between two
+  // global.ini files stored in KV. Powers the "What's changed in
+  // <version>" panel on the Localization page so users can see what
+  // shifted before downloading their merged file.
+  //
+  // Without query params: from = previous LIVE version, to = current
+  // default LIVE version (the most natural patch-bump comparison).
+  // With ?from=&to= : explicit pair, useful for cross-comparisons.
+
+  routes.get("/diff",
+    validate("query", z.object({
+      from: z.string().min(1).max(100).optional(),
+      to: z.string().min(1).max(100).optional(),
+    })),
+    async (c) => {
+      const { from, to } = c.req.valid("query");
+      const db = c.env.DB;
+      const kv = c.env.LOCALIZATION_KV;
+
+      let fromCode = from;
+      let toCode = to;
+
+      if (!fromCode || !toCode) {
+        // Auto-resolve: current default and the LIVE version immediately
+        // before it (highest id below the current default's id).
+        const cur = await db
+          .prepare("SELECT id, code FROM game_versions WHERE channel = 'LIVE' AND is_default = 1 LIMIT 1")
+          .first<{ id: number; code: string }>();
+        if (!cur) return c.json({ error: "No default LIVE version set" }, 404);
+
+        const prev = await db
+          .prepare(
+            "SELECT code FROM game_versions WHERE channel = 'LIVE' AND id < ? ORDER BY id DESC LIMIT 1",
+          )
+          .bind(cur.id)
+          .first<{ code: string }>();
+        if (!prev) return c.json({ error: "No previous LIVE version to compare against" }, 404);
+
+        toCode = toCode ?? cur.code;
+        fromCode = fromCode ?? prev.code;
+      }
+
+      // Load both INIs from KV in parallel.
+      const [fromIni, toIni] = await Promise.all([
+        kv.get(`localization:global-ini:${fromCode}`),
+        kv.get(`localization:global-ini:${toCode}`),
+      ]);
+      if (fromIni === null) {
+        return c.json({ error: `No global.ini in KV for ${fromCode}` }, 404);
+      }
+      if (toIni === null) {
+        return c.json({ error: `No global.ini in KV for ${toCode}` }, 404);
+      }
+
+      const diff = diffGlobalIni(fromIni, toIni);
+      return c.json({
+        from: fromCode,
+        to: toCode,
+        added_count: diff.added.length,
+        removed_count: diff.removed.length,
+        changed_count: diff.changed.length,
+        ...diff,
+      });
+    },
+  );
 
   // ── PUT /config — save preferences ────────────────────────────────
 
