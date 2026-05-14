@@ -150,7 +150,7 @@ const authNavItems = [
         ],
       },
       { to: '/fps-loadout', icon: Shirt, label: 'FPS Loadout', featureFlag: 'fpsLoadout' },
-      { to: '/localization', icon: Languages, label: 'Localization', adminOnly: true },
+      { to: '/localization', icon: Languages, label: 'Localization' },
       { to: '/sync-import', icon: Upload, label: 'Sync & Import' },
     ],
   },
