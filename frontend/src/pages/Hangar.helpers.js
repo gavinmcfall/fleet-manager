@@ -17,6 +17,11 @@ export const KIND_ORDER = [
 
 const KIND_LABELS = {
   uncategorised: 'Uncategorised',
+  // Display label only — the DB kind stays 'Skin' (set by the
+  // hangar-sync import classifier so it matches RSI's own taxonomy).
+  // "Paints" is the user-facing term Gavin asked for, matching how
+  // they appear on Ship DB + /loadout selector.
+  Skin: 'Paints',
 }
 
 export function kindLabel(kind) {

@@ -54,6 +54,10 @@ describe('kindLabel', () => {
     expect(kindLabel('Ship')).toBe('Ship')
     expect(kindLabel('FPS Equipment')).toBe('FPS Equipment')
   })
+
+  it('relabels Skin to Paints for the user-facing chip', () => {
+    expect(kindLabel('Skin')).toBe('Paints')
+  })
 })
 
 describe('orderedKinds', () => {
