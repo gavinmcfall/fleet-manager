@@ -670,6 +670,25 @@ export function accountRoutes() {
     return c.json({ ok: true, message: "Account deleted" });
   });
 
+  /**
+   * GET /api/account/paints
+   *
+   * Returns the current user's paint ownership as a list of paint IDs.
+   * Frontend builds a Set<paint_id> for O(1) lookup when rendering paint
+   * cards on Ship DB, /fleet, and /loadout pages.
+   *
+   * Populated by the hangar-sync extension import (routes/import.ts writes
+   * matched paints into user_paints).
+   */
+  routes.get("/paints", async (c) => {
+    const user = getAuthUser(c);
+    const { results } = await c.env.DB
+      .prepare("SELECT paint_id FROM user_paints WHERE user_id = ?")
+      .bind(user.id)
+      .all<{ paint_id: number }>();
+    return c.json({ owned: results.map((r) => r.paint_id) });
+  });
+
   return routes;
 }
 

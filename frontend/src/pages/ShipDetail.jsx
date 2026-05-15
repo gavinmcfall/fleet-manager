@@ -5,7 +5,7 @@ import {
   Rocket, Zap, Box, Package, Palette, LayoutGrid, List,
   Tag, DollarSign, Calendar, PenLine, ArrowUpRight, CircleDot,
 } from 'lucide-react'
-import { useShip, useShipLoadout, useShipPaints, useShipSalvage, useWeaponRacks, useSuitLockers, useFleet, useFleetEntryUpgrades, useShipModules, useOwnedModules } from '../hooks/useAPI'
+import { useShip, useShipLoadout, useShipPaints, useShipSalvage, useWeaponRacks, useSuitLockers, useFleet, useFleetEntryUpgrades, useShipModules, useOwnedModules, useOwnedPaints } from '../hooks/useAPI'
 import ModulesSection from './Loadout/ModulesSection'
 import { useSession } from '../lib/auth-client'
 import ShipImage from '../components/ShipImage'
@@ -838,8 +838,9 @@ function WeaponsTab({ slug }) {
 
 // ─── Paints tab ───────────────────────────────────────────────────────────────
 
-function PaintsTab({ slug }) {
+function PaintsTab({ slug, isAuthed }) {
   const { data: paints, loading, error, refetch } = useShipPaints(slug)
+  const { ownedSet } = useOwnedPaints()
   const [view, setView] = useState('list')
 
   if (loading) return <LoadingState message="Loading paints..." />
@@ -854,10 +855,19 @@ function PaintsTab({ slug }) {
     )
   }
 
+  const ownedCount = isAuthed ? paints.filter(p => ownedSet.has(p.id)).length : 0
+
   return (
     <div className="panel overflow-hidden">
       <div className="panel-header flex items-center justify-between">
-        <span>Paints <span className="text-gray-500 font-normal">({paints.length})</span></span>
+        <span>
+          Paints <span className="text-gray-500 font-normal">({paints.length})</span>
+          {isAuthed && (
+            <span className="ml-2 text-xs font-normal text-emerald-400">
+              {ownedCount} owned
+            </span>
+          )}
+        </span>
         <div className="flex items-center gap-1">
           <button
             onClick={() => setView('list')}
@@ -880,16 +890,30 @@ function PaintsTab({ slug }) {
         <div className="divide-y divide-sc-border/30">
           {paints.map((paint) => {
             const thumb = paint.image_url_small || paint.image_url_medium || paint.image_url
+            const owned = isAuthed && ownedSet.has(paint.id)
             return (
               <div key={paint.id} className="flex items-center gap-4 px-4 py-3">
                 <div className="shrink-0 w-12 h-12 rounded overflow-hidden bg-sc-surface border border-sc-border/40 flex items-center justify-center">
                   {thumb
-                    ? <img src={thumb} alt={paint.name} className="w-full h-full object-cover" />
+                    ? <img src={thumb} alt={paint.name} className={`w-full h-full object-cover ${isAuthed && !owned ? 'opacity-50' : ''}`} />
                     : <Palette className="w-5 h-5 text-gray-600" />
                   }
                 </div>
-                <div className="min-w-0">
-                  <p className="text-sm font-mono text-gray-200">{paint.name}</p>
+                <div className="min-w-0 flex-1">
+                  <div className="flex items-center gap-2">
+                    <p className="text-sm font-mono text-gray-200">{paint.name}</p>
+                    {isAuthed && (
+                      owned ? (
+                        <span className="inline-flex items-center px-1.5 py-0.5 rounded text-[10px] font-display uppercase tracking-wide bg-emerald-500/15 text-emerald-300 border border-emerald-500/40">
+                          Owned
+                        </span>
+                      ) : (
+                        <span className="inline-flex items-center px-1.5 py-0.5 rounded text-[10px] font-display uppercase tracking-wide bg-white/5 text-gray-500 border border-white/10">
+                          Not collected
+                        </span>
+                      )
+                    )}
+                  </div>
                   {paint.description && (
                     <p className="text-xs text-gray-500 mt-0.5 line-clamp-2">{paint.description}</p>
                   )}
@@ -902,13 +926,22 @@ function PaintsTab({ slug }) {
         <div className="p-3 grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-3">
           {paints.map((paint) => {
             const thumb = paint.image_url_small || paint.image_url_medium || paint.image_url
+            const owned = isAuthed && ownedSet.has(paint.id)
             return (
-              <div key={paint.id} className="bg-sc-surface border border-sc-border/40 rounded overflow-hidden">
-                <div className="aspect-square flex items-center justify-center bg-sc-bg">
+              <div
+                key={paint.id}
+                className={`bg-sc-surface border rounded overflow-hidden ${owned ? 'border-emerald-500/40' : 'border-sc-border/40'}`}
+              >
+                <div className="aspect-square flex items-center justify-center bg-sc-bg relative">
                   {thumb
-                    ? <img src={thumb} alt={paint.name} className="w-full h-full object-cover" />
+                    ? <img src={thumb} alt={paint.name} className={`w-full h-full object-cover ${isAuthed && !owned ? 'opacity-50' : ''}`} />
                     : <Palette className="w-8 h-8 text-gray-600" />
                   }
+                  {owned && (
+                    <span className="absolute top-1 right-1 inline-flex items-center px-1.5 py-0.5 rounded text-[9px] font-display uppercase tracking-wide bg-emerald-500/80 text-white">
+                      Owned
+                    </span>
+                  )}
                 </div>
                 <div className="p-2">
                   <p className="text-xs font-mono text-gray-300 truncate" title={paint.name}>{paint.name}</p>
@@ -1287,7 +1320,7 @@ export default function ShipDetail() {
       {activeTab === 'weapons' && <WeaponsTab slug={slug} />}
       {activeTab === 'interior' && <InteriorTab ship={ship} />}
       {activeTab === 'performance' && <PerformanceTab ship={ship} />}
-      {activeTab === 'paints' && <PaintsTab slug={slug} />}
+      {activeTab === 'paints' && <PaintsTab slug={slug} isAuthed={isAuthed} />}
       {activeTab === 'salvage' && <SalvageTab slug={slug} />}
     </div>
   )
