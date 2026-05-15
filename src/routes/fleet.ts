@@ -207,6 +207,11 @@ async function getFleetList(
         COALESCE(rm.code, m.code) as manufacturer_code,
         it.label as insurance_label, it.duration_months, it.is_lifetime,
         p.name as paint_name,
+        p.slug as paint_slug,
+        p.image_url as paint_image_url,
+        p.image_url_medium as paint_image_url_medium,
+        p.image_url_small as paint_image_url_small,
+        p.image_url_large as paint_image_url_large,
         COALESCE(rps.key, ps.key) as production_status,
         COALESCE(latest_upg.new_value_cents, up.value_cents) as current_value_cents,
         CASE WHEN v.replaced_by_vehicle_id IS NOT NULL THEN v.name END as original_vehicle_name

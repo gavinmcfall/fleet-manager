@@ -198,20 +198,32 @@ export default function Loadout() {
       <div className="relative bg-sc-panel border-b border-sc-border">
         <div className="max-w-[1400px] mx-auto flex items-stretch">
           <div className="flex-1 h-44 flex-shrink-0 overflow-hidden relative hidden md:block">
-            {(ship?.image_url_large || ship?.image_url_medium || ship?.image_url) && (
-              <img
-                src={ship.image_url_large || ship.image_url_medium || ship.image_url}
-                alt={ship?.name || slug}
-                className="w-full h-full object-cover opacity-80"
-                onError={(e) => {
-                  if (ship.image_url_medium && e.target.src !== ship.image_url_medium) {
-                    e.target.src = ship.image_url_medium
-                  } else if (ship.image_url && e.target.src !== ship.image_url) {
-                    e.target.src = ship.image_url
-                  }
-                }}
-              />
-            )}
+            {(() => {
+              // Prefer the equipped paint's image when this is a fleet entry
+              // with a paint equipped; fall back to the ship's default image.
+              const paintImg = fleetEntry?.paint_image_url_large
+                || fleetEntry?.paint_image_url_medium
+                || fleetEntry?.paint_image_url
+              const shipImg = ship?.image_url_large || ship?.image_url_medium || ship?.image_url
+              const src = paintImg || shipImg
+              if (!src) return null
+              return (
+                <img
+                  src={src}
+                  alt={ship?.name || slug}
+                  className="w-full h-full object-cover opacity-80"
+                  onError={(e) => {
+                    if (paintImg && shipImg && e.target.src !== shipImg) {
+                      e.target.src = shipImg
+                    } else if (ship?.image_url_medium && e.target.src !== ship.image_url_medium) {
+                      e.target.src = ship.image_url_medium
+                    } else if (ship?.image_url && e.target.src !== ship.image_url) {
+                      e.target.src = ship.image_url
+                    }
+                  }}
+                />
+              )
+            })()}
             <div className="absolute inset-0 bg-gradient-to-r from-transparent via-transparent via-40% to-sc-panel" />
           </div>
           <div className="w-[420px] flex-shrink-0 px-4 py-3 flex flex-col justify-between">

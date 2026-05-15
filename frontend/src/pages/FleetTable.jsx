@@ -369,7 +369,7 @@ export default function FleetTable() {
                     <td className="table-cell">
                       <div className="flex items-center gap-3">
                         <ShipImage
-                          src={v.image_url}
+                          src={v.paint_image_url_medium || v.paint_image_url || v.image_url}
                           alt={v.vehicle_name}
                           aspectRatio="thumbnail-lg"
                           className="rounded border border-sc-border/50 shrink-0"
