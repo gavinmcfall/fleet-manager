@@ -243,6 +243,132 @@ export function adminRoutes() {
   });
 
   /**
+   * GET /api/admin/manufacturers
+   *
+   * List manufacturers for the Add Concept Ship dropdown. Dedupe by code
+   * (the table has multiple rows per manufacturer for shadow/legacy entries —
+   * e.g., Aegis Dynamics appears as AEG, FSKI, MXOX). The "AEG / DRAK / ORIG"
+   * canonical row is the one with `code` matching the manufacturer's
+   * traditional 3-4 letter abbreviation and a non-null slug; surface those.
+   */
+  routes.get("/manufacturers", async (c) => {
+    const result = await c.env.DB
+      .prepare(
+        `SELECT id, name, code, slug FROM manufacturers
+         WHERE code IS NOT NULL AND slug IS NOT NULL AND removed = 0
+         GROUP BY name
+         ORDER BY name`,
+      )
+      .all<{ id: number; name: string; code: string; slug: string }>();
+    return c.json(result.results);
+  });
+
+  /**
+   * POST /api/admin/vehicles/concept
+   *
+   * Add a concept ship — pledgeable on the RSI store but not yet in DataCore.
+   * Matches the existing pattern of concept ships (class_name IS NULL,
+   * is_pledgeable=1, nullable spec columns). Nightly RSI sync will enrich
+   * pledge_url, pledge_price, and image_url* once CIG adds the ship to the
+   * Ship Matrix.
+   *
+   * Body: {
+   *   name: required string,
+   *   slug: optional string (auto-derived from manufacturer.slug + name if absent),
+   *   manufacturer_id: required number,
+   *   focus, classification, description, pledge_url, image_url: optional
+   * }
+   */
+  routes.post("/vehicles/concept",
+    validate("json", z.object({
+      name: z.string().min(1).max(100),
+      slug: z.string().min(1).max(100).regex(/^[a-z0-9-]+$/, "slug must be lowercase letters, digits, and dashes").optional(),
+      manufacturer_id: z.number().int().positive(),
+      focus: z.string().max(50).optional(),
+      classification: z.string().max(50).optional(),
+      description: z.string().max(5000).optional(),
+      pledge_url: z.string().url().max(500).optional(),
+      image_url: z.string().url().max(500).optional(),
+    })),
+    async (c) => {
+      const body = c.req.valid("json");
+
+      // Verify manufacturer exists + grab slug/name for auto-derive
+      const mfr = await c.env.DB
+        .prepare("SELECT id, name, slug FROM manufacturers WHERE id = ?")
+        .bind(body.manufacturer_id)
+        .first<{ id: number; name: string; slug: string }>();
+      if (!mfr) {
+        return c.json({ error: `Manufacturer not found: ${body.manufacturer_id}` }, 404);
+      }
+
+      // Auto-derive slug if not provided: `<mfr.slug>-<name-kebab>`. Strip
+      // the manufacturer's first-word prefix from the ship name first so
+      // "Aegis Odin" → "aegs-odin" (not "aegs-aegis-odin").
+      const slug = body.slug ?? (() => {
+        const mfrFirstWord = mfr.name.split(/\s+/)[0]?.toLowerCase() ?? "";
+        let suffix = body.name.toLowerCase();
+        if (mfrFirstWord && suffix.startsWith(mfrFirstWord + " ")) {
+          suffix = suffix.slice(mfrFirstWord.length + 1);
+        }
+        suffix = suffix.replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "");
+        return `${mfr.slug}-${suffix}`;
+      })();
+
+      // Reject if slug already exists
+      const existing = await c.env.DB
+        .prepare("SELECT 1 FROM vehicles WHERE slug = ?")
+        .bind(slug)
+        .first();
+      if (existing) {
+        return c.json({ error: `Slug already exists: ${slug}` }, 409);
+      }
+
+      // Look up current default game_version_id
+      const version = await c.env.DB
+        .prepare("SELECT id FROM game_versions WHERE is_default = 1 LIMIT 1")
+        .first<{ id: number }>();
+      if (!version) {
+        return c.json({ error: "No default game version set" }, 500);
+      }
+
+      const uuid = crypto.randomUUID();
+
+      await c.env.DB
+        .prepare(
+          `INSERT INTO vehicles (
+             uuid, slug, name, manufacturer_id, focus, classification, description,
+             pledge_url, image_url, image_url_small, image_url_medium, image_url_large,
+             game_version_id, is_pledgeable, is_npc_only, is_paint_variant, removed, class_name
+           ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 1, 0, 0, 0, NULL)`,
+        )
+        .bind(
+          uuid,
+          slug,
+          body.name,
+          body.manufacturer_id,
+          body.focus ?? null,
+          body.classification ?? null,
+          body.description ?? null,
+          body.pledge_url ?? null,
+          body.image_url ?? null,
+          body.image_url ?? null,
+          body.image_url ?? null,
+          body.image_url ?? null,
+          version.id,
+        )
+        .run();
+
+      const inserted = await c.env.DB
+        .prepare("SELECT id, uuid, slug, name FROM vehicles WHERE slug = ?")
+        .bind(slug)
+        .first();
+
+      return c.json({ ok: true, vehicle: inserted }, 201);
+    },
+  );
+
+  /**
    * POST /api/admin/invites
    *
    * Generates a single-use invite token and returns the signup URL.

@@ -1,7 +1,173 @@
 import React, { useState, useEffect, useCallback } from 'react'
-import { Image, X } from 'lucide-react'
+import { Image, X, Rocket } from 'lucide-react'
 import PanelSection from '../../components/PanelSection'
 import ConfirmDialog from '../../components/ConfirmDialog'
+
+function AddConceptShipPanel() {
+  const [manufacturers, setManufacturers] = useState(null)
+  const [name, setName] = useState('')
+  const [slug, setSlug] = useState('')
+  const [slugDirty, setSlugDirty] = useState(false)
+  const [manufacturerId, setManufacturerId] = useState('')
+  const [focus, setFocus] = useState('')
+  const [classification, setClassification] = useState('')
+  const [description, setDescription] = useState('')
+  const [pledgeUrl, setPledgeUrl] = useState('')
+  const [imageUrl, setImageUrl] = useState('')
+  const [submitting, setSubmitting] = useState(false)
+  const [result, setResult] = useState(null)
+
+  useEffect(() => {
+    fetch('/api/admin/manufacturers', { credentials: 'same-origin' })
+      .then(r => r.ok ? r.json() : [])
+      .then(d => setManufacturers(Array.isArray(d) ? d : []))
+      .catch(() => setManufacturers([]))
+  }, [])
+
+  // Auto-derive slug from manufacturer.slug + name-kebab, unless admin has edited it.
+  // Strip the manufacturer's first-word prefix from the ship name first so
+  // "Aegis Odin" → "aegs-odin" (not "aegs-aegis-odin").
+  useEffect(() => {
+    if (slugDirty || !name || !manufacturerId || !manufacturers) return
+    const mfr = manufacturers.find(m => String(m.id) === String(manufacturerId))
+    if (!mfr) return
+    const mfrFirstWord = mfr.name.split(/\s+/)[0]?.toLowerCase() ?? ''
+    let suffix = name.toLowerCase()
+    if (mfrFirstWord && suffix.startsWith(mfrFirstWord + ' ')) {
+      suffix = suffix.slice(mfrFirstWord.length + 1)
+    }
+    suffix = suffix.replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '')
+    setSlug(`${mfr.slug}-${suffix}`)
+  }, [name, manufacturerId, manufacturers, slugDirty])
+
+  const handleSubmit = async (e) => {
+    e.preventDefault()
+    if (submitting) return
+    setSubmitting(true)
+    setResult(null)
+    try {
+      const res = await fetch('/api/admin/vehicles/concept', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        credentials: 'same-origin',
+        body: JSON.stringify({
+          name,
+          slug: slug || undefined,
+          manufacturer_id: Number(manufacturerId),
+          focus: focus || undefined,
+          classification: classification || undefined,
+          description: description || undefined,
+          pledge_url: pledgeUrl || undefined,
+          image_url: imageUrl || undefined,
+        }),
+      })
+      if (!res.ok) {
+        const err = await res.json().catch(() => ({}))
+        throw new Error(err.error || `HTTP ${res.status}`)
+      }
+      const data = await res.json()
+      setResult({ type: 'success', message: `Added ${data.vehicle.name} (${data.vehicle.slug})` })
+      setName(''); setSlug(''); setSlugDirty(false)
+      setFocus(''); setClassification(''); setDescription('')
+      setPledgeUrl(''); setImageUrl('')
+      setTimeout(() => setResult(null), 8000)
+    } catch (err) {
+      setResult({ type: 'error', message: err.message })
+    } finally {
+      setSubmitting(false)
+    }
+  }
+
+  return (
+    <PanelSection title="Add Concept Ship" icon={Rocket}>
+      <form onSubmit={handleSubmit} className="p-4 space-y-3">
+        <p className="text-xs text-gray-500">
+          For ships CIG sells before adding to game files. Creates a row with{' '}
+          <code className="text-gray-400">class_name=NULL</code> +{' '}
+          <code className="text-gray-400">is_pledgeable=1</code>. Nightly RSI sync
+          enriches pledge URL/price/images once CIG adds it to Ship Matrix.
+        </p>
+
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+          <label className="block">
+            <span className="text-xs font-medium text-gray-400">Name *</span>
+            <input type="text" required value={name} onChange={e => setName(e.target.value)}
+              placeholder="e.g. Aegis Odin"
+              className="mt-1 w-full px-3 py-2 bg-sc-darker border border-sc-border rounded text-sm text-gray-200 focus:outline-none focus:ring-1 focus:ring-sc-accent/50" />
+          </label>
+
+          <label className="block">
+            <span className="text-xs font-medium text-gray-400">Manufacturer *</span>
+            <select required value={manufacturerId} onChange={e => setManufacturerId(e.target.value)}
+              className="mt-1 w-full px-3 py-2 bg-sc-darker border border-sc-border rounded text-sm text-gray-200 focus:outline-none focus:ring-1 focus:ring-sc-accent/50">
+              <option value="">Select manufacturer…</option>
+              {manufacturers?.map(m => (
+                <option key={m.id} value={m.id}>{m.name} ({m.code})</option>
+              ))}
+            </select>
+          </label>
+
+          <label className="block sm:col-span-2">
+            <span className="text-xs font-medium text-gray-400">
+              Slug <span className="text-gray-600">(auto-derived; override if needed)</span>
+            </span>
+            <input type="text" value={slug}
+              onChange={e => { setSlug(e.target.value); setSlugDirty(true) }}
+              placeholder="aegs-odin"
+              className="mt-1 w-full px-3 py-2 bg-sc-darker border border-sc-border rounded text-sm text-gray-200 font-mono focus:outline-none focus:ring-1 focus:ring-sc-accent/50" />
+          </label>
+
+          <label className="block">
+            <span className="text-xs font-medium text-gray-400">Focus</span>
+            <input type="text" value={focus} onChange={e => setFocus(e.target.value)}
+              placeholder="Combat / Industrial / Exploration"
+              className="mt-1 w-full px-3 py-2 bg-sc-darker border border-sc-border rounded text-sm text-gray-200 focus:outline-none focus:ring-1 focus:ring-sc-accent/50" />
+          </label>
+
+          <label className="block">
+            <span className="text-xs font-medium text-gray-400">Classification</span>
+            <input type="text" value={classification} onChange={e => setClassification(e.target.value)}
+              placeholder="Combat / Industrial / Multi-Role"
+              className="mt-1 w-full px-3 py-2 bg-sc-darker border border-sc-border rounded text-sm text-gray-200 focus:outline-none focus:ring-1 focus:ring-sc-accent/50" />
+          </label>
+
+          <label className="block sm:col-span-2">
+            <span className="text-xs font-medium text-gray-400">Description</span>
+            <textarea value={description} onChange={e => setDescription(e.target.value)}
+              rows={2} placeholder="Short summary…"
+              className="mt-1 w-full px-3 py-2 bg-sc-darker border border-sc-border rounded text-sm text-gray-200 focus:outline-none focus:ring-1 focus:ring-sc-accent/50" />
+          </label>
+
+          <label className="block">
+            <span className="text-xs font-medium text-gray-400">Pledge URL</span>
+            <input type="url" value={pledgeUrl} onChange={e => setPledgeUrl(e.target.value)}
+              placeholder="https://robertsspaceindustries.com/pledge/ships/…"
+              className="mt-1 w-full px-3 py-2 bg-sc-darker border border-sc-border rounded text-sm text-gray-200 focus:outline-none focus:ring-1 focus:ring-sc-accent/50" />
+          </label>
+
+          <label className="block">
+            <span className="text-xs font-medium text-gray-400">Image URL</span>
+            <input type="url" value={imageUrl} onChange={e => setImageUrl(e.target.value)}
+              placeholder="https://… (CF Images, RSI CDN, or SC Wiki)"
+              className="mt-1 w-full px-3 py-2 bg-sc-darker border border-sc-border rounded text-sm text-gray-200 focus:outline-none focus:ring-1 focus:ring-sc-accent/50" />
+          </label>
+        </div>
+
+        <div className="flex items-center gap-3 pt-1">
+          <button type="submit" disabled={submitting || !name || !manufacturerId}
+            className="btn-primary text-sm px-4 py-2 disabled:opacity-50">
+            {submitting ? 'Adding…' : 'Add Concept Ship'}
+          </button>
+          {result && (
+            <p className={`text-xs font-mono ${result.type === 'success' ? 'text-sc-success' : 'text-sc-danger'}`}>
+              {result.message}
+            </p>
+          )}
+        </div>
+      </form>
+    </PanelSection>
+  )
+}
 
 /** Construct large RSI image URL from thumbnail URL */
 function rsiLargeUrl(thumbUrl) {
@@ -650,6 +816,7 @@ function ItemMediaPanel() {
 export default function AdminData() {
   return (
     <div className="space-y-6">
+      <AddConceptShipPanel />
       <ImageCapturePanel />
       <ItemMediaPanel />
     </div>
