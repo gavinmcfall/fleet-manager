@@ -62,6 +62,68 @@ export function fleetRoutes() {
     return c.json({ ok: true });
   });
 
+  // PATCH /api/vehicles/:id/paint — equip a paint on this fleet entry (or null to unset)
+  //
+  // Validation:
+  //   • paint_id null → unset (always allowed)
+  //   • paint_id non-null → paint must exist, be linked to this vehicle via
+  //     paint_vehicles, AND user must own it (user_paints row). The own-gate
+  //     keeps the UX honest: you only see what you've actually pledged for.
+  routes.patch("/:id/paint",
+    validate("param", IntIdParam),
+    validate("json", z.object({
+      paint_id: z.number().int().positive().nullable(),
+    })),
+    async (c) => {
+      const { id } = c.req.valid("param");
+      const db = c.env.DB;
+      const userID = getAuthUser(c).id;
+      const { paint_id } = c.req.valid("json");
+
+      // Confirm the fleet entry belongs to the user; capture vehicle_id for FK check.
+      const fleetEntry = await db
+        .prepare("SELECT id, vehicle_id FROM user_fleet WHERE id = ? AND user_id = ?")
+        .bind(id, userID)
+        .first<{ id: number; vehicle_id: number }>();
+
+      if (!fleetEntry) {
+        return c.json({ error: "Fleet entry not found" }, 404);
+      }
+
+      if (paint_id !== null) {
+        // Paint must be linked to this vehicle.
+        const link = await db
+          .prepare(
+            "SELECT 1 FROM paint_vehicles WHERE paint_id = ? AND vehicle_id = ?",
+          )
+          .bind(paint_id, fleetEntry.vehicle_id)
+          .first();
+        if (!link) {
+          return c.json(
+            { error: "Paint is not compatible with this vehicle" },
+            400,
+          );
+        }
+
+        // User must own the paint.
+        const owned = await db
+          .prepare("SELECT 1 FROM user_paints WHERE user_id = ? AND paint_id = ?")
+          .bind(userID, paint_id)
+          .first();
+        if (!owned) {
+          return c.json({ error: "You do not own this paint" }, 403);
+        }
+      }
+
+      await db
+        .prepare("UPDATE user_fleet SET equipped_paint_id = ? WHERE user_id = ? AND id = ?")
+        .bind(paint_id, userID, id)
+        .run();
+
+      return c.json({ ok: true });
+    },
+  );
+
   // GET /api/vehicles/:id/upgrades — get CCU chain for a fleet entry
   routes.get("/:id/upgrades",
     validate("param", IntIdParam),
