@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useMemo, useCallback } from 'react'
 import { useParams, useSearchParams, Link } from 'react-router-dom'
 import { RotateCcw, ShoppingCart, ChevronDown, ChevronRight } from 'lucide-react'
-import { useShip, useLoadoutComponents, useShipModules, useOwnedModules, useFleetLoadout, useLoadoutCart, saveFleetLoadout, resetFleetLoadout, addToLoadoutCart } from '../../hooks/useAPI'
+import { useShip, useLoadoutComponents, useShipModules, useOwnedModules, useFleetLoadout, useLoadoutCart, useFleet, saveFleetLoadout, resetFleetLoadout, addToLoadoutCart } from '../../hooks/useAPI'
 import LoadingState from '../../components/LoadingState'
 import ComponentPicker from './ComponentPicker'
 import StatsPanel from './StatsPanel'
@@ -13,6 +13,7 @@ import LockedPort from './LockedPort'
 import DamageBreakdown from './DamageBreakdown'
 import PowerPips from './PowerPips'
 import ModulesSection from './ModulesSection'
+import PaintsSection from './PaintsSection'
 import { PORT_TYPE_ICONS, PORT_CATEGORY_ORDER, getPortCategory, getPrimaryStat, aggregateCombatStats, fmtInt, fmtCompact, fmtDec1, fmtSpeed, getDamageType, DmgShape } from './loadoutHelpers'
 
 export default function Loadout() {
@@ -25,7 +26,16 @@ export default function Loadout() {
   const { data: modules } = useShipModules(slug)
   const { data: ownedModules } = useOwnedModules(slug)
   const { data: fleetLoadout, refetch: refetchFleetLoadout } = useFleetLoadout(fleetId)
+  const { data: fleetEntries, refetch: refetchFleet } = useFleet()
   const { data: cartData, loading: cartLoading, refetch: refetchCart } = useLoadoutCart()
+
+  // Resolve this fleet entry's currently-equipped paint (if any). Drives the
+  // PaintsSection highlight + the parent-page image swap (PR4).
+  const fleetEntry = useMemo(
+    () => (fleetEntries || []).find(e => e.id === fleetId) || null,
+    [fleetEntries, fleetId],
+  )
+  const equippedPaintId = fleetEntry?.equipped_paint_id ?? null
 
   const [overrides, setOverrides] = useState({})
   const [pickerPortId, setPickerPortId] = useState(null)
@@ -422,6 +432,18 @@ export default function Loadout() {
         {modules?.length > 0 && (
           <div className="mt-4">
             <ModulesSection modules={modules} ownedTitles={ownedModules} />
+          </div>
+        )}
+
+        {/* PAINTS (full-width, only when viewing a fleet entry) */}
+        {fleetId && (
+          <div className="mt-4">
+            <PaintsSection
+              shipSlug={slug}
+              fleetId={fleetId}
+              equippedPaintId={equippedPaintId}
+              onEquipped={refetchFleet}
+            />
           </div>
         )}
       </div>

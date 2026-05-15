@@ -329,6 +329,10 @@ export async function updateShipVisibility(fleetEntryId, updates) {
   return patchJSON(`/vehicles/${fleetEntryId}/visibility`, updates)
 }
 
+export async function equipFleetPaint(fleetEntryId, paintId) {
+  return patchJSON(`/vehicles/${fleetEntryId}/paint`, { paint_id: paintId })
+}
+
 export async function updateOrgSettings(slug, settings) {
   return patchJSON(`/orgs/${slug}`, settings)
 }
