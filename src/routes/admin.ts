@@ -245,21 +245,57 @@ export function adminRoutes() {
   /**
    * GET /api/admin/manufacturers
    *
-   * List manufacturers for the Add Concept Ship dropdown. Dedupe by code
-   * (the table has multiple rows per manufacturer for shadow/legacy entries —
-   * e.g., Aegis Dynamics appears as AEG, FSKI, MXOX). The "AEG / DRAK / ORIG"
-   * canonical row is the one with `code` matching the manufacturer's
-   * traditional 3-4 letter abbreviation and a non-null slug; surface those.
+   * List manufacturers for the Add Concept Ship dropdown. The table has
+   * multiple rows per manufacturer name — e.g., "Aegis Dynamics" appears
+   * with codes AEG (canonical ship brand), FSKI / MXOX / PRAR (weapon
+   * component sub-brands), and various PAINT_* codes. We want the
+   * ship-brand row.
+   *
+   * Picks the canonical row per name as "the one with the most non-paint
+   * vehicles." For Aegis Dynamics that's AEG (36 ships) over FSKI/etc.
+   * (0 ships). Excludes rows whose code starts with PAINT_.
+   *
+   * `ship_slug_prefix` is the most-common prefix used by existing ships
+   * of this manufacturer (e.g., Aegis → "aegs", MISC/Musashi → "misc")
+   * — NOT the manufacturer.slug column, which holds the lowercased code
+   * ("aeg", "mis") and doesn't match the ship slug convention.
    */
   routes.get("/manufacturers", async (c) => {
     const result = await c.env.DB
       .prepare(
-        `SELECT id, name, code, slug FROM manufacturers
-         WHERE code IS NOT NULL AND slug IS NOT NULL AND removed = 0
-         GROUP BY name
+        `SELECT id, name, code, slug, ship_slug_prefix, ship_count FROM (
+           SELECT m.id, m.name, m.code, m.slug,
+             (SELECT COUNT(*) FROM vehicles v
+                WHERE v.manufacturer_id = m.id AND v.is_paint_variant = 0) AS ship_count,
+             (SELECT substr(v.slug, 1, instr(v.slug, '-') - 1)
+              FROM vehicles v
+              WHERE v.manufacturer_id = m.id AND v.is_paint_variant = 0
+                AND v.slug LIKE '%-%'
+              GROUP BY substr(v.slug, 1, instr(v.slug, '-') - 1)
+              ORDER BY COUNT(*) DESC
+              LIMIT 1) AS ship_slug_prefix,
+             ROW_NUMBER() OVER (
+               PARTITION BY m.name
+               ORDER BY
+                 (SELECT COUNT(*) FROM vehicles v
+                    WHERE v.manufacturer_id = m.id AND v.is_paint_variant = 0) DESC,
+                 m.id ASC
+             ) AS rn
+           FROM manufacturers m
+           WHERE m.code IS NOT NULL
+             AND m.slug IS NOT NULL
+             AND m.removed = 0
+             AND m.code NOT LIKE 'PAINT_%'
+             AND m.code NOT LIKE 'SHOP_%'
+         )
+         WHERE rn = 1
+           AND ship_count > 0
          ORDER BY name`,
       )
-      .all<{ id: number; name: string; code: string; slug: string }>();
+      .all<{
+        id: number; name: string; code: string; slug: string;
+        ship_slug_prefix: string | null; ship_count: number
+      }>();
     return c.json(result.results);
   });
 
@@ -302,18 +338,34 @@ export function adminRoutes() {
         return c.json({ error: `Manufacturer not found: ${body.manufacturer_id}` }, 404);
       }
 
-      // Auto-derive slug if not provided: `<mfr.slug>-<name-kebab>`. Strip
-      // the manufacturer's first-word prefix from the ship name first so
-      // "Aegis Odin" → "aegs-odin" (not "aegs-aegis-odin").
-      const slug = body.slug ?? (() => {
+      // Auto-derive slug if not provided. Uses the most-common existing
+      // ship-slug prefix for this manufacturer (e.g. "aegs" for Aegis
+      // Dynamics — not the manufacturer.slug "aeg"). Falls back to
+      // manufacturer.slug when no ships exist yet. Strips the manufacturer's
+      // first-word from the ship name so "Aegis Odin" → "aegs-odin"
+      // (not "aegs-aegis-odin").
+      let slug = body.slug;
+      if (!slug) {
+        const prefixRow = await c.env.DB
+          .prepare(
+            `SELECT substr(v.slug, 1, instr(v.slug, '-') - 1) AS prefix
+             FROM vehicles v
+             WHERE v.manufacturer_id = ? AND v.is_paint_variant = 0 AND v.slug LIKE '%-%'
+             GROUP BY prefix
+             ORDER BY COUNT(*) DESC
+             LIMIT 1`,
+          )
+          .bind(body.manufacturer_id)
+          .first<{ prefix: string }>();
+        const prefix = prefixRow?.prefix ?? mfr.slug;
         const mfrFirstWord = mfr.name.split(/\s+/)[0]?.toLowerCase() ?? "";
         let suffix = body.name.toLowerCase();
         if (mfrFirstWord && suffix.startsWith(mfrFirstWord + " ")) {
           suffix = suffix.slice(mfrFirstWord.length + 1);
         }
         suffix = suffix.replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "");
-        return `${mfr.slug}-${suffix}`;
-      })();
+        slug = `${prefix}-${suffix}`;
+      }
 
       // Reject if slug already exists
       const existing = await c.env.DB

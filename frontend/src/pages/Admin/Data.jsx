@@ -24,20 +24,25 @@ function AddConceptShipPanel() {
       .catch(() => setManufacturers([]))
   }, [])
 
-  // Auto-derive slug from manufacturer.slug + name-kebab, unless admin has edited it.
-  // Strip the manufacturer's first-word prefix from the ship name first so
+  // Auto-derive slug, unless admin has edited it manually. Uses
+  // `ship_slug_prefix` from the API (most-common prefix among existing
+  // ships of this manufacturer — e.g., "aegs" for Aegis, "misc" for
+  // Musashi) rather than `manufacturer.slug` ("aeg", "mis") which is the
+  // lowercased code and doesn't match the ship-slug convention. Strips
+  // the manufacturer's first-word prefix from the ship name so
   // "Aegis Odin" → "aegs-odin" (not "aegs-aegis-odin").
   useEffect(() => {
     if (slugDirty || !name || !manufacturerId || !manufacturers) return
     const mfr = manufacturers.find(m => String(m.id) === String(manufacturerId))
     if (!mfr) return
+    const prefix = mfr.ship_slug_prefix || mfr.slug
     const mfrFirstWord = mfr.name.split(/\s+/)[0]?.toLowerCase() ?? ''
     let suffix = name.toLowerCase()
     if (mfrFirstWord && suffix.startsWith(mfrFirstWord + ' ')) {
       suffix = suffix.slice(mfrFirstWord.length + 1)
     }
     suffix = suffix.replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '')
-    setSlug(`${mfr.slug}-${suffix}`)
+    setSlug(`${prefix}-${suffix}`)
   }, [name, manufacturerId, manufacturers, slugDirty])
 
   const handleSubmit = async (e) => {
@@ -101,9 +106,14 @@ function AddConceptShipPanel() {
             <select required value={manufacturerId} onChange={e => setManufacturerId(e.target.value)}
               className="mt-1 w-full px-3 py-2 bg-sc-darker border border-sc-border rounded text-sm text-gray-200 focus:outline-none focus:ring-1 focus:ring-sc-accent/50">
               <option value="">Select manufacturer…</option>
-              {manufacturers?.map(m => (
-                <option key={m.id} value={m.id}>{m.name} ({m.code})</option>
-              ))}
+              {/* Sort by ship_count descending so the canonical brands (Anvil/Drake/RSI/Aegis…) appear first, with manufacturer code as disambiguator */}
+              {[...(manufacturers ?? [])]
+                .sort((a, b) => (b.ship_count || 0) - (a.ship_count || 0))
+                .map(m => (
+                  <option key={m.id} value={m.id}>
+                    {m.name}{m.code ? ` (${m.code})` : ''}
+                  </option>
+                ))}
             </select>
           </label>
 

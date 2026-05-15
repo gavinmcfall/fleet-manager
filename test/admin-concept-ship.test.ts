@@ -18,13 +18,23 @@ describe("Admin Add Concept Ship", () => {
     adminToken = admin.sessionToken;
 
     // Ensure a manufacturer row exists for the dropdown + insert path.
+    // Real Aegis Dynamics rows have manufacturer.slug = "aeg" (lowercased
+    // code), while ships use the "aegs-*" slug prefix from DataCore. The
+    // /api/admin/manufacturers endpoint computes ship_slug_prefix from
+    // existing ship slugs, so we seed a sample ship to populate it.
     const mfr = await env.DB.prepare(
       `INSERT INTO manufacturers (uuid, name, slug, code, game_version_id)
-       VALUES ('mfr-uuid-aeg', 'Aegis Dynamics', 'aegs', 'AEG', 1)
+       VALUES ('mfr-uuid-aeg', 'Aegis Dynamics', 'aeg', 'AEG', 1)
        ON CONFLICT(uuid) DO UPDATE SET slug=excluded.slug, code=excluded.code
        RETURNING id`,
     ).first<{ id: number }>();
     manufacturerId = mfr!.id;
+
+    // Seed a sample Aegis ship so ship_slug_prefix resolves to "aegs"
+    await env.DB.prepare(
+      `INSERT OR IGNORE INTO vehicles (uuid, slug, name, manufacturer_id, game_version_id, is_pledgeable, is_npc_only, is_paint_variant, removed)
+       VALUES ('veh-uuid-aegs-seed', 'aegs-avenger-stalker', 'Aegis Avenger Stalker', ?, 1, 1, 0, 0, 0)`,
+    ).bind(manufacturerId).run();
   });
 
   describe("GET /api/admin/manufacturers", () => {
@@ -33,16 +43,21 @@ describe("Admin Add Concept Ship", () => {
       expect([401, 403]).toContain(res.status);
     });
 
-    it("returns active manufacturers with code + slug", async () => {
+    it("returns ship-bearing manufacturers with code, slug, and ship_slug_prefix", async () => {
       const res = await SELF.fetch("https://example.com/api/admin/manufacturers", {
         headers: await authHeaders(adminToken),
       });
       expect(res.status).toBe(200);
-      const list = await res.json() as Array<{ id: number; name: string; code: string; slug: string }>;
+      const list = await res.json() as Array<{
+        id: number; name: string; code: string; slug: string;
+        ship_slug_prefix: string | null; ship_count: number;
+      }>;
       expect(Array.isArray(list)).toBe(true);
       const aeg = list.find(m => m.code === "AEG");
       expect(aeg).toBeDefined();
-      expect(aeg?.slug).toBe("aegs");
+      expect(aeg?.slug).toBe("aeg");
+      expect(aeg?.ship_slug_prefix).toBe("aegs"); // from the seeded aegs-* ship
+      expect(aeg?.ship_count).toBeGreaterThan(0);
     });
   });
 
