@@ -144,6 +144,10 @@ async function syncCommodities(
     const sell = p.price_sell || null;
     if (!buy && !sell) continue;
 
+    // game_version_id MUST be in the SET clause — otherwise the row stays
+    // stuck at the OLD version_id when a new patch lands (the UNIQUE is on
+    // terminal_id+item_uuid). See project_terminal_inventory_upsert_bug.md
+    // for the 2026-05-16 outage this fixes.
     stmts.push(
       db
         .prepare(
@@ -154,7 +158,8 @@ async function syncCommodities(
            latest_buy_price = excluded.latest_buy_price,
            latest_sell_price = excluded.latest_sell_price,
            latest_source = 'uex',
-           latest_observed_at = datetime('now')`,
+           latest_observed_at = datetime('now'),
+           game_version_id = excluded.game_version_id`,
         )
         .bind(ourTermId, itemUuid, p.commodity_name, buy, sell, gvId),
     );
@@ -186,6 +191,7 @@ async function syncItems(
     const sell = p.price_sell || null;
     if (!buy && !sell) continue;
 
+    // game_version_id MUST be in the SET clause — see comment in syncCommodities.
     stmts.push(
       db
         .prepare(
@@ -196,7 +202,8 @@ async function syncItems(
            latest_buy_price = excluded.latest_buy_price,
            latest_sell_price = excluded.latest_sell_price,
            latest_source = 'uex',
-           latest_observed_at = datetime('now')`,
+           latest_observed_at = datetime('now'),
+           game_version_id = excluded.game_version_id`,
         )
         .bind(ourTermId, p.item_uuid, p.item_name, buy, sell, gvId),
     );
