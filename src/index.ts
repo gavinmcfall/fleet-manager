@@ -503,6 +503,10 @@ async function runScheduledSync(cron: string, env: Env): Promise<void> {
       const { syncUexPrices } = await import("./lib/uex");
       const result = await syncUexPrices(env.DB, "commodities", env.SC_BRIDGE_CACHE);
       console.log(`[cron] UEX sync done: ${result.commodities} commodities, ${result.errors.length} errors`);
+      if (result.errors.length > 0) {
+        console.error(`[cron] UEX commodity errors:`, result.errors);
+      }
+      logEvent("cron_complete", { task: "uex_commodities", commodities: result.commodities, errors: result.errors.length, errorContent: result.errors });
       break;
     }
     case "30 5 * * *": {
@@ -511,6 +515,10 @@ async function runScheduledSync(cron: string, env: Env): Promise<void> {
       const { syncUexPrices: syncUexItemPrices } = await import("./lib/uex");
       const result = await syncUexItemPrices(env.DB, "items", env.SC_BRIDGE_CACHE);
       console.log(`[cron] UEX sync done: ${result.items} items, ${result.errors.length} errors`);
+      if (result.errors.length > 0) {
+        console.error(`[cron] UEX items errors:`, result.errors);
+      }
+      logEvent("cron_complete", { task: "uex_items", items: result.items, errors: result.errors.length, errorContent: result.errors });
       break;
     }
     default:
