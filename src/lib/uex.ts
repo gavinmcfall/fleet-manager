@@ -114,7 +114,7 @@ export async function syncUexPrices(
   return result;
 }
 
-async function syncCommodities(
+export async function syncCommodities(
   db: D1Database,
   uexToOurs: Map<number, number>,
   gvId: number,
@@ -173,7 +173,7 @@ async function syncCommodities(
   return stmts.length;
 }
 
-async function syncItems(
+export async function syncItems(
   db: D1Database,
   uexToOurs: Map<number, number>,
   gvId: number,
