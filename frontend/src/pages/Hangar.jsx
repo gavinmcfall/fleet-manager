@@ -9,7 +9,7 @@ import EmptyState from '../components/EmptyState'
 import SearchInput from '../components/SearchInput'
 import {
   buildItemFilter, cleanPledgeName, formatPledgeValue,
-  kindLabel, orderedKinds,
+  kindLabel, orderedKinds, normaliseMediaUrl,
 } from './Hangar.helpers'
 
 /** Per-kind colour palette — stays subdued so the page reads as a list, not a circus. */
@@ -50,7 +50,7 @@ function HangarItemCard({ item }) {
       <div className="aspect-[16/9] bg-gradient-to-br from-sc-darker to-black/40 flex items-center justify-center overflow-hidden">
         {item.image_url ? (
           <img
-            src={item.image_url}
+            src={normaliseMediaUrl(item.image_url)}
             alt=""
             loading="lazy"
             className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300"
@@ -96,7 +96,7 @@ function HangarItemRow({ item }) {
     <div className="flex items-center gap-3 px-3 py-2 bg-white/[0.02] border border-white/[0.05] rounded hover:border-sc-accent/20 transition-all">
       <div className="w-12 h-7 flex-shrink-0 bg-sc-darker rounded overflow-hidden flex items-center justify-center">
         {item.image_url ? (
-          <img src={item.image_url} alt="" loading="lazy" className="w-full h-full object-cover" onError={(e) => { e.currentTarget.style.display = 'none' }} />
+          <img src={normaliseMediaUrl(item.image_url)} alt="" loading="lazy" className="w-full h-full object-cover" onError={(e) => { e.currentTarget.style.display = 'none' }} />
         ) : (
           <ImageOff className="w-3 h-3 text-gray-700" aria-hidden="true" />
         )}

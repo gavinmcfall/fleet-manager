@@ -1,7 +1,7 @@
 import { describe, it, expect } from 'vitest'
 import {
   buildItemFilter, cleanPledgeName, formatPledgeValue,
-  kindLabel, orderedKinds, KIND_ORDER,
+  kindLabel, orderedKinds, KIND_ORDER, normaliseMediaUrl,
 } from './Hangar.helpers'
 
 describe('cleanPledgeName', () => {
@@ -57,6 +57,28 @@ describe('kindLabel', () => {
 
   it('relabels Skin to Paints for the user-facing chip', () => {
     expect(kindLabel('Skin')).toBe('Paints')
+  })
+})
+
+describe('normaliseMediaUrl', () => {
+  it('returns absolute URLs unchanged', () => {
+    expect(normaliseMediaUrl('https://media.robertsspaceindustries.com/x/y.jpg'))
+      .toBe('https://media.robertsspaceindustries.com/x/y.jpg')
+  })
+
+  it('prepends https://media.robertsspaceindustries.com to /media/ paths', () => {
+    expect(normaliseMediaUrl('/media/d8ktckex1ucmrr/subscribers_vault_thumbnail/Banu3.jpg'))
+      .toBe('https://media.robertsspaceindustries.com/media/d8ktckex1ucmrr/subscribers_vault_thumbnail/Banu3.jpg')
+  })
+
+  it('returns empty/null unchanged', () => {
+    expect(normaliseMediaUrl('')).toBe('')
+    expect(normaliseMediaUrl(null)).toBe(null)
+    expect(normaliseMediaUrl(undefined)).toBe(undefined)
+  })
+
+  it('leaves other relative or weird strings untouched', () => {
+    expect(normaliseMediaUrl('cf-image-id-only')).toBe('cf-image-id-only')
   })
 })
 

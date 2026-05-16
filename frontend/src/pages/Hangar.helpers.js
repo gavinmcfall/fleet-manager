@@ -71,6 +71,29 @@ export function orderedKinds(counts) {
   return result
 }
 
+/**
+ * Normalise an RSI media URL to an absolute form. The hangar-sync extension
+ * sometimes captures the URL as a path-relative `/media/...` (RSI's <img src>
+ * is relative on some pages). Rendered straight into <img src>, that resolves
+ * against the current origin (scbridge.app) and 404s.
+ *
+ * Returns the URL unchanged if it's already absolute or empty. Otherwise
+ * prepends https://media.robertsspaceindustries.com.
+ *
+ * Discovered 2026-05-16 — all of Gavin's Merchantman/Polaris/Dragonfly
+ * Yellowjacket/Nox Kue ship pledge items had `/media/...` URLs and
+ * rendered as broken images. Affects ships, paints, and any item where
+ * the extension scraped from a context that used path-relative img tags.
+ * Long-term fix is in the extension parser (queued); this is the render
+ * fallback so existing rows render correctly without a re-sync.
+ */
+export function normaliseMediaUrl(url) {
+  if (!url) return url
+  if (url.startsWith('http://') || url.startsWith('https://')) return url
+  if (url.startsWith('/media/')) return `https://media.robertsspaceindustries.com${url}`
+  return url
+}
+
 /** Filter predicate factory used by the page-level useMemo. */
 export function buildItemFilter({ search, kindFilter, mfrFilter }) {
   const needle = (search ?? '').trim().toLowerCase()
