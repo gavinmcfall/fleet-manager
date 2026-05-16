@@ -91,7 +91,16 @@ export async function syncProductionStatuses(db: D1Database): Promise<{ checked:
         .replace(/-2949-.*$/, "")
         .replace(/-2950-.*$/, "")
         .replace(/-2951-.*$/, "");
-      const baseTarget = targetMap.get(base);
+      let baseTarget = targetMap.get(base);
+      // 4.8 new-ship fallback: our slug is class-name-derived (orig-m80,
+      // misc-starlite, drak-pitbull). Fleetyards may not include mfr prefix.
+      // Try stripping leading mfr-code segment (everything up to first '-').
+      if (!baseTarget) {
+        const hyphen = base.indexOf("-");
+        if (hyphen > 0) {
+          baseTarget = targetMap.get(base.slice(hyphen + 1));
+        }
+      }
       if (baseTarget && row.production_status_id !== baseTarget) {
         updates.push(
           db
