@@ -232,8 +232,17 @@ export function findPaintLocal(map: PaintMap, rsiTitle: string): number | null {
 
 // --- Buyback name parsers ---
 
-/** Strip SC manufacturer prefix from a ship name */
-const MFR_PREFIX = /^(Anvil Aerospace|Aegis Dynamics|Origin Jumpworks|Drake Interplanetary|Crusader Industries|Musashi Industrial|Consolidated Outland|Argo Astronautics|Roberts Space Industries|Kruger Intergalaktik|Greycat Industrial|Anvil|Aegis|AEGIS|RSI|Origin|Drake|Crusader|CNOU|MISC|Argo|Tumbril|Greycat|Aopoa|AOPOA|Esperia|Gatac|Banu|Kruger)\s+/i;
+/** Strip SC manufacturer prefix from a ship name.
+ *
+ * IMPORTANT: keep in sync with the manufacturers table. Missing entries silently
+ * break hangar-sync matching — RSI sends ship titles WITHOUT the manufacturer
+ * prefix (e.g. "Guardian MX" not "Mirai Guardian MX"), so we depend on the
+ * stripped form being indexed in nameToSlug.
+ *
+ * Issue #161 (2026-05-17): Mirai/Vanduul/Xian were missing, causing all Mirai
+ * ships (Fury, Guardian MX, Pulse, etc.) to fail hangar-sync matching.
+ */
+const MFR_PREFIX = /^(Anvil Aerospace|Aegis Dynamics|Origin Jumpworks|Drake Interplanetary|Crusader Industries|Musashi Industrial|Consolidated Outland|Argo Astronautics|Roberts Space Industries|Kruger Intergalaktik|Greycat Industrial|Mirai|Vanduul|Xi'?an|Anvil|Aegis|AEGIS|RSI|Origin|Drake|Crusader|CNOU|MISC|MRAI|VNCL|XNAA|Argo|Tumbril|Greycat|Aopoa|AOPOA|Esperia|Gatac|Banu|Kruger)\s+/i;
 
 export function stripManufacturer(name: string): string {
   return name.replace(MFR_PREFIX, "").trim();
