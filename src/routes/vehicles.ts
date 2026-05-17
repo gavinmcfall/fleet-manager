@@ -79,7 +79,7 @@ export function vehicleRoutes<E extends HonoEnv>() {
           `SELECT v.id, v.uuid, v.slug, v.name, v.class_name,
             v.size, v.size_label, v.focus, v.classification, v.description,
             v.length, v.beam, v.height, v.mass, v.cargo,
-            v.crew_min, v.crew_max, v.speed_scm, v.speed_max, v.health,
+            v.crew_min, v.crew_max, v.speed_scm, v.speed_max, v.hull_hp, v.hull_damage_normalization,
             v.vehicle_inventory, v.pledge_price, v.on_sale,
             v.image_url, v.image_url_small, v.image_url_medium, v.image_url_large,
             v.pledge_url, v.price_auec, v.acquisition_type, v.acquisition_source_name,
