@@ -115,6 +115,16 @@ export function findVehicleSlugLocal(
     }
   }
 
+  // Try punctuation-stripped name lookup — "A.T.L.S." → "atls", matches DB "Argo ATLS" via stripped name index.
+  // Some pledge titles use periods that DB names don't.
+  if (displayName) {
+    const stripped = displayName.replace(/[^\w\s-]/g, "").replace(/\s+/g, " ").trim();
+    if (stripped !== displayName && stripped) {
+      const found = map.nameToSlug.get(stripped.toLowerCase());
+      if (found) return found;
+    }
+  }
+
   // Try arabic→roman Mk normalization: "F7A Hornet Mk 1" → "F7A Hornet Mk I"
   if (displayName) {
     const normalized = normalizeMkNumeral(displayName);
@@ -151,6 +161,25 @@ export function findVehicleSlugLocal(
       if (map.slugToID.has(reorderedSlug)) return reorderedSlug;
       const reorderedCompact = compactSlug(reorderedSlug);
       const compactFound = map.compactToSlug.get(reorderedCompact);
+      if (compactFound) return compactFound;
+    }
+  }
+
+  // Try dropping LAST word — handles RSI sending extra suffix words the DB doesn't have:
+  //   "Tumbril Nova Tank" → "Tumbril Nova" (DB has no "Tank")
+  //   "Drake Dragonfly Black" → "Drake Dragonfly" (Black is base in DB)
+  //   "Drake Dragonfly Star Kitten Edition" → "Drake Dragonfly Star Kitten" (no "Edition")
+  //   "RSI Ursa Rover" → "RSI Ursa" (Rover was dropped from DB name)
+  if (displayName) {
+    const words = displayName.split(/\s+/);
+    if (words.length >= 2) {
+      const dropped = words.slice(0, -1).join(" ");
+      const found = map.nameToSlug.get(dropped.toLowerCase());
+      if (found) return found;
+      const droppedSlug = slugFromName(dropped);
+      if (map.slugToID.has(droppedSlug)) return droppedSlug;
+      const droppedCompact = compactSlug(droppedSlug);
+      const compactFound = map.compactToSlug.get(droppedCompact);
       if (compactFound) return compactFound;
     }
   }
@@ -242,7 +271,7 @@ export function findPaintLocal(map: PaintMap, rsiTitle: string): number | null {
  * Issue #161 (2026-05-17): Mirai/Vanduul/Xian were missing, causing all Mirai
  * ships (Fury, Guardian MX, Pulse, etc.) to fail hangar-sync matching.
  */
-const MFR_PREFIX = /^(Anvil Aerospace|Aegis Dynamics|Origin Jumpworks|Drake Interplanetary|Crusader Industries|Musashi Industrial|Consolidated Outland|Argo Astronautics|Roberts Space Industries|Kruger Intergalaktik|Greycat Industrial|Mirai|Vanduul|Xi'?an|Anvil|Aegis|AEGIS|RSI|Origin|Drake|Crusader|CNOU|MISC|MRAI|VNCL|XNAA|Argo|Tumbril|Greycat|Aopoa|AOPOA|Esperia|Gatac|Banu|Kruger)\s+/i;
+const MFR_PREFIX = /^(Anvil Aerospace|Aegis Dynamics|Origin Jumpworks|Drake Interplanetary|Crusader Industries|Musashi Industrial|Consolidated Outland|Argo Astronautics|Roberts Space Industries|Kruger Intergalaktik|Greycat Industrial|C\.O\.|Mirai|Vanduul|Xi'?an|Anvil|Aegis|AEGIS|RSI|Origin|Drake|Crusader|CNOU|MISC|MRAI|VNCL|XNAA|Argo|Tumbril|Greycat|Aopoa|AOPOA|Esperia|Gatac|Banu|Kruger)\s+/i;
 
 export function stripManufacturer(name: string): string {
   return name.replace(MFR_PREFIX, "").trim();

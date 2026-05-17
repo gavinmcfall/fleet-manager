@@ -88,4 +88,84 @@ describe("fleet-import — manufacturer prefix stripping (issue #161)", () => {
       });
     }
   });
+
+  /** Issue #161 follow-up — the 11 OTHER missing ships in TheWhiteWolves' hangar.
+   * Each represents a distinct matcher gap. The fixes:
+   *   - C.O. in MFR_PREFIX (HoverQuad, Nomad)
+   *   - Period-stripping fallback (A.T.L.S.)
+   *   - Drop-last-word fallback (Nova Tank, Dragonfly Black, Star Kitten Edition, Ursa Rover, Ares Inferno, Ares Ion)
+   *   - mfr-prefixed candidate slugs in import.ts caller (C8R Pisces → anvl-c8r-pisces-rescue) — tested via candidate prefix here
+   */
+  describe("Issue #161 follow-up — 11 other naming mismatches", () => {
+    function makeFullMap(): VehicleMap {
+      const ships = [
+        // C.O. (CNOU)
+        { id: 10, slug: "cnou-hoverquad", name: "C.O. HoverQuad" },
+        { id: 11, slug: "cnou-nomad", name: "C.O. Nomad" },
+        // Argo ATLS
+        { id: 20, slug: "argo-atls", name: "Argo ATLS" },
+        // Crusader Ares variants — DB names normalised to RSI convention (drop "Star Fighter" middle word)
+        { id: 30, slug: "crus-starfighter-inferno", name: "Crusader Ares Inferno" },
+        { id: 31, slug: "crus-starfighter-ion", name: "Crusader Ares Ion" },
+        // Drake Dragonfly family (no Black variant — Black is base in DB)
+        { id: 40, slug: "drak-dragonfly", name: "Drake Dragonfly" },
+        { id: 41, slug: "drak-dragonfly-pink", name: "Drake Dragonfly Star Kitten" },
+        // RSI Ursa
+        { id: 50, slug: "rsi-ursa-rover", name: "RSI Ursa" },
+        // Tumbril Nova
+        { id: 60, slug: "tmbl-nova", name: "Tumbril Nova" },
+        // Anvil C8R Pisces (DB has trailing "Rescue", pledge title doesn't)
+        { id: 70, slug: "anvl-c8r-pisces-rescue", name: "Anvil C8R Pisces Rescue" },
+      ];
+      const slugToID = new Map<string, number>();
+      const nameToSlug = new Map<string, string>();
+      const compactToSlug = new Map<string, string>();
+      for (const s of ships) {
+        slugToID.set(s.slug, s.id);
+        nameToSlug.set(s.name.toLowerCase(), s.slug);
+        const stripped = stripManufacturer(s.name);
+        if (stripped.toLowerCase() !== s.name.toLowerCase()) {
+          nameToSlug.set(stripped.toLowerCase(), s.slug);
+        }
+        // compactToSlug is built from compact slug
+        const compact = s.slug.replace(/-/g, "");
+        compactToSlug.set(compact, s.slug);
+      }
+      return { slugToID, nameToSlug, compactToSlug };
+    }
+
+    const cases = [
+      // C.O. ships (fixed by C\.O\. in MFR_PREFIX → "HoverQuad" indexed)
+      { title: "HoverQuad",                   expected: "cnou-hoverquad", note: "C.O. strip" },
+      { title: "Nomad",                       expected: "cnou-nomad",     note: "C.O. strip" },
+      // Period-stripped name match
+      { title: "A.T.L.S.",                    expected: "argo-atls",      note: "period strip" },
+      // Drop-last-word fallback
+      { title: "Nova Tank",                   expected: "tmbl-nova",      note: "drop Tank" },
+      { title: "Dragonfly Black",             expected: "drak-dragonfly", note: "drop Black (base variant)" },
+      { title: "Dragonfly Star Kitten Edition", expected: "drak-dragonfly-pink", note: "drop Edition" },
+      { title: "Ursa Rover",                  expected: "rsi-ursa-rover", note: "drop Rover" },
+      // Ares variants: rely on DB rename ("Star Fighter" dropped) so stripManufacturer-indexed "Ares Inferno"/"Ares Ion" match
+      { title: "Ares Inferno",                expected: "crus-starfighter-inferno", note: "DB renamed to drop Star Fighter" },
+      { title: "Ares Ion",                    expected: "crus-starfighter-ion",     note: "same as Inferno" },
+    ];
+
+    for (const c of cases) {
+      it(`matches "${c.title}" → "${c.expected}" (${c.note})`, () => {
+        const map = makeFullMap();
+        const slug = findVehicleSlugLocal(map, [], c.title);
+        expect(slug).toBe(c.expected);
+      });
+    }
+
+    // C8R Pisces requires the mfr-prefixed candidate slug passed by import.ts caller.
+    // Simulate the caller's candidate generation:
+    it('matches "C8R Pisces" via mfr-prefixed candidate "anvl-c8r-pisces" → prefix-matches DB "anvl-c8r-pisces-rescue"', () => {
+      const map = makeFullMap();
+      // Candidate added by import.ts: `${mfr_lower}-${nameSlug}` = "anvl-c8r-pisces"
+      const candidates = ["c8r-pisces", "anvl-c8r-pisces"];
+      const slug = findVehicleSlugLocal(map, candidates, "C8R Pisces");
+      expect(slug).toBe("anvl-c8r-pisces-rescue");
+    });
+  });
 });

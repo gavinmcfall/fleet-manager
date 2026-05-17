@@ -294,6 +294,14 @@ export function importRoutes() {
         const compactName = compactSlug(nameSlug);
 
         const candidates = [codeSlug, nameSlug, compactCode, compactName];
+        // Also try {mfr_code_lower}-{name_slug} so prefix-match can hit DB slugs
+        // like "anvl-c8r-pisces-rescue" when pledge title is "C8R Pisces" with mfr=ANVL.
+        // Issue #161 follow-up.
+        if (typeof item.manufacturerCode === "string" && item.manufacturerCode) {
+          const mfrLower = item.manufacturerCode.toLowerCase();
+          candidates.push(`${mfrLower}-${nameSlug}`);
+          candidates.push(`${mfrLower}${compactName}`);
+        }
         const matchedSlug = findVehicleSlugLocal(vehicleMap, candidates, displayName);
         // Enrich the already-captured ship image with its matched slug
         if (item.image && matchedSlug) {
