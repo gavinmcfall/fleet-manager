@@ -15,6 +15,7 @@ import type { HonoEnv } from "./types";
  */
 export const VERSIONED_TABLES = [
   // Vehicle children → vehicles → manufacturers
+  "vehicle_storage",
   "vehicle_weapon_racks", "vehicle_suit_lockers", "vehicle_ports",
   "vehicle_modules", "vehicle_roles", "vehicle_careers",
   "salvageable_ships",
