@@ -7,6 +7,7 @@ import {
 } from 'lucide-react'
 import { useShip, useShipLoadout, useShipPaints, useShipSalvage, useWeaponRacks, useSuitLockers, useFleet, useFleetEntryUpgrades, useShipModules, useOwnedModules, useOwnedPaints } from '../hooks/useAPI'
 import ModulesSection from './Loadout/ModulesSection'
+import StorageBreakdown from './Ships/StorageBreakdown'
 import { useSession } from '../lib/auth-client'
 import ShipImage from '../components/ShipImage'
 import StatusBadge from '../components/StatusBadge'
@@ -584,8 +585,6 @@ function OverviewTab({ ship, isAuthed }) {
             <SpecRow label="Classification" value={ship.classification} />
             <SpecRow label="Size" value={ship.size_label} />
             <SpecRow label="Crew" value={crewValue} />
-            <SpecRow label="Cargo" value={ship.cargo > 0 ? `${ship.cargo} SCU` : null} />
-            <SpecRow label="Internal Storage" value={ship.vehicle_inventory ? `${(ship.vehicle_inventory / 1000000).toLocaleString(undefined, { maximumFractionDigits: 2 })} SCU` : null} />
             {/* Speed */}
             <SpecRow label="SCM Speed" value={ship.speed_scm ? `${ship.speed_scm} m/s` : null} />
             <SpecRow label="SCM Boost Back" value={ship.boost_speed_back ? `${ship.boost_speed_back} m/s` : null} />
@@ -609,6 +608,13 @@ function OverviewTab({ ship, isAuthed }) {
             <SpecRow label="Claim Time" value={ship.claim_time != null ? `${ship.claim_time} min` : null} />
             <SpecRow label="Expedited Claim" value={ship.expedited_claim_time != null ? `${ship.expedited_claim_time} min` : null} />
             <SpecRow label="Expedite Cost" value={ship.expedited_claim_cost != null ? `${ship.expedited_claim_cost.toLocaleString()} aUEC` : null} />
+          </div>
+        </div>
+
+        <div className="panel">
+          <div className="panel-header">Storage</div>
+          <div className="p-4">
+            <StorageBreakdown storage={ship.storage} summary={ship} />
           </div>
         </div>
 
