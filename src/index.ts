@@ -485,11 +485,21 @@ async function runScheduledSync(cron: string, env: Env): Promise<void> {
       logEvent("cron_trigger", { schedule: cron, task: "session_cleanup" });
       await cleanExpiredSessions(env);
       break;
-    case "45 3 * * *":
+    case "45 3 * * *": {
       console.log("[cron] RSI API images");
       logEvent("cron_trigger", { schedule: cron, task: "rsi_images" });
       await triggerRSISync(env);
+      // Migrate a batch of paint images from RSI CDN to CF Images. Self-
+      // throttling — closes the gap chunk-by-chunk so no operator has to
+      // POST /api/admin/images/paint-bulk-upload after each patch.
+      const { closePaintImageGap } = await import("./sync/paintImageGap");
+      const gap = await closePaintImageGap(env);
+      logEvent("cron_complete", {
+        task: "paint_image_gap",
+        ...gap,
+      });
       break;
+    }
     case "0 4 * * *": {
       console.log("[cron] Fleetyards production status sync");
       logEvent("cron_trigger", { schedule: cron, task: "fleetyards_status" });
