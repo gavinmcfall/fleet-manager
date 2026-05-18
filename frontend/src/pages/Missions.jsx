@@ -8,6 +8,7 @@ import ErrorState from '../components/ErrorState'
 import SearchInput from '../components/SearchInput'
 import StatCard from '../components/StatCard'
 import { FACTION_LOGOS, getFactionLogo, GUILD_LABELS, cleanMissionDescription, humanizeFactionSlug, humanizeScopeSlug, humanizeStandingSlug, humanizeComparison, formatRepReward, formatRepRequirement, humanizeMissionStem, humanizeMissionGiverSlug } from '../lib/missionConstants'
+import { MissionTitle } from '../components/MissionTitle'
 
 function Pill({ active, onClick, children }) {
   return (
@@ -425,7 +426,7 @@ function EntryRow({ entry, repFocus, isHighlighted, highlightRef, prerequisites,
     <div ref={highlightRef} className={`border-b border-sc-border/30 last:border-0 ${isHighlighted ? 'bg-sc-accent/[0.06] ring-1 ring-sc-accent/20 rounded' : ''}`}>
       <button onClick={() => setExpanded(!expanded)} className="w-full text-left px-4 py-3 flex items-center gap-3 hover:bg-white/[0.02] transition-colors">
         <div className="flex-1 min-w-0">
-          <span className="text-sm text-gray-200">{entry.title}</span>
+          <span className="text-sm text-gray-200"><MissionTitle title={entry.title} /></span>
           {entry.variantCount > 1 && (
             <span className="text-[10px] text-sc-accent ml-2 font-mono tabular-nums" title={`${entry.variantCount} variants across locations — CIG emits one mission per planet/moon`}>
               × {entry.variantCount}
