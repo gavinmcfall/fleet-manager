@@ -3,18 +3,40 @@ import { Trash2 } from 'lucide-react'
 import PanelSection from '../../components/PanelSection'
 import ConfirmDialog from '../../components/ConfirmDialog'
 
+// Aligned with the real `cachedJson()` call sites in src/routes/* (verified
+// 2026-05-18 — prior labels like `gd:vehicles`, `gd:loot`, `gd:factions`,
+// `gd:contracts` matched ZERO actual keys, silently no-op'd on purge).
+//
 // "All Cache" lives at the BOTTOM so the default (first) selection is the
 // safer "All Game Data" prefix — the default previously was "All Cache" which
 // made a single mis-click nuke the entire KV namespace (F274).
 const CACHE_PREFIXES = [
   { value: 'gd:',            label: 'All Game Data' },
+  // Game Data sub-prefixes (gd:* keys live under here)
   { value: 'gd:npc-loadout', label: 'NPC Loadouts' },
-  { value: 'gd:vehicles',    label: 'Vehicles' },
-  { value: 'gd:shops',       label: 'Shops' },
-  { value: 'gd:loot',        label: 'Loot' },
-  { value: 'gd:missions',    label: 'Missions' },
-  { value: 'gd:factions',    label: 'Factions' },
-  { value: 'gd:contracts',   label: 'Contracts' },
+  { value: 'gd:shops',       label: 'Shops + inventory' },
+  { value: 'gd:missions',    label: 'Missions + mission-givers' },
+  { value: 'gd:mission-giver',label: 'Mission Givers' },
+  { value: 'gd:faction',     label: 'Factions' },
+  { value: 'gd:poi',         label: 'POIs' },
+  { value: 'gd:weapon-racks',label: 'Weapon Racks' },
+  { value: 'gd:suit-lockers',label: 'Suit Lockers' },
+  { value: 'gd:crafting',    label: 'Crafting' },
+  { value: 'gd:trade',       label: 'Trade Commodities' },
+  { value: 'gd:mining',      label: 'Mining' },
+  { value: 'gd:law',         label: 'Law' },
+  { value: 'gd:careers',     label: 'Careers' },
+  { value: 'gd:reputation',  label: 'Reputation' },
+  { value: 'gd:fps-gear',    label: 'FPS Gear' },
+  // Top-level non-gd prefixes
+  { value: 'ships:',         label: 'Ships (list + detail)' },
+  { value: 'paints:',        label: 'Paints' },
+  { value: 'loadout:',       label: 'Loadouts (components + modules)' },
+  { value: 'loot:',          label: 'Loot (items, sets, locations)' },
+  { value: 'contracts:',     label: 'Contracts (Wikelo/GFS/Ruto)' },
+  { value: 'components:',    label: 'Components' },
+  { value: 'patches:',       label: 'Patches' },
+  { value: 'localization:',  label: 'Localization' },
   { value: '',               label: 'All Cache (danger)' },
 ]
 
