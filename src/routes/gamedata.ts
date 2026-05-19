@@ -792,7 +792,7 @@ return cachedJson(c, `gd:loc-shops:${cacheSlug(slug)}`, async () => {
     const t = (n: string) => resolveTable(n, isPTU);
     const db = c.env.DB
 return cachedJson(c, `gd:missions`, async () => {
-      const [typesResult, giversResult, missionsResult, prereqResult, repReqResult] = await Promise.all([
+      const [typesResult, giversResult, missionsResult, prereqResult, repReqResult, repChangeResult] = await Promise.all([
         db.prepare(`SELECT mt.* FROM ${t("mission_types")} mt
            
            WHERE mt.name != '<= PLACEHOLDER =>'
@@ -865,6 +865,14 @@ return cachedJson(c, `gd:missions`, async () => {
                   mrr.comparison, mrr.standing_slug
            FROM ${t("mission_reputation_requirements")} mrr`,
         ).all(),
+        // PART K K13: structured per-mission rep changes (mig 0242). Replaces the
+        // opaque rep_fail / rep_abandon summary strings for the UI's RepCostBadges
+        // component. Empty until the K8 re-extract lands rows — until then the
+        // raw rep_fail / rep_abandon strings on each mission row remain the source.
+        db.prepare(`SELECT mrc.mission_id, mrc.scope_slug, mrc.event,
+                  mrc.size_code, mrc.direction, mrc.rep_amount
+           FROM ${t("mission_rep_changes")} mrc`,
+        ).all(),
       ])
 
       // Build prerequisites map: mission_id → array of required missions
@@ -891,6 +899,22 @@ return cachedJson(c, `gd:missions`, async () => {
         })
       }
 
+      // PART K K13: rep_changes map: mission_id → structured (scope, event, size, direction, rep_amount) rows.
+      // Populated by the next K8 extractor run; until then the map is empty and the UI
+      // falls back to parsing the raw rep_fail / rep_abandon strings on each mission row.
+      const rep_changes: Record<number, { scope_slug: string; event: string; size_code: string; direction: string; rep_amount: number | null }[]> = {}
+      for (const row of repChangeResult.results) {
+        const mid = row.mission_id as number
+        if (!rep_changes[mid]) rep_changes[mid] = []
+        rep_changes[mid].push({
+          scope_slug: row.scope_slug as string,
+          event: row.event as string,
+          size_code: row.size_code as string,
+          direction: row.direction as string,
+          rep_amount: row.rep_amount as number | null,
+        })
+      }
+
       // F300: 11 mission descriptions contain `~serviceBeacon(InitiatorName)`
       // and similar runtime-bound templates that CIG resolves per-pickup.
       // Collapse to `{Key}` placeholders here at the API layer so every
@@ -913,6 +937,7 @@ return cachedJson(c, `gd:missions`, async () => {
         missions,
         prerequisites,
         rep_requirements,
+        rep_changes,
       }
     })
   })
